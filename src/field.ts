@@ -226,15 +226,11 @@ export class Field {
     p.wasFiring = input.fire;
   }
 
-  /** One plain shot (a spread during Fever). */
+  /** One plain shot. Fever only makes you fire faster; the pattern never changes. */
   private volley(cooldown: number): void {
     const p = this.player;
     this.shots.push({ x: p.x, y: p.y - 10, vx: 0, charged: false, dead: false });
-    if (this.fever > 0) {
-      const spread = this.fairy.feverSpread === 5 ? [-150, -75, 75, 150] : [-90, 90];
-      for (const vx of spread) this.shots.push({ x: p.x + Math.sign(vx) * 4, y: p.y - 8, vx, charged: false, dead: false });
-    }
-    p.cooldown = cooldown * (this.fever > 0 ? 0.5 : 1);
+    p.cooldown = cooldown / (this.fever > 0 ? C.FEVER_FIRE_RATE : 1);
   }
 
   /**

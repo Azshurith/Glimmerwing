@@ -39,6 +39,8 @@ export const GUARDIAN_WANDER = 2.5;
 export const GUARDIAN_ATTACK = 6;
 
 export const FEVER_TIME = 6;
+/** During Fever you fire this many times faster (autofire and tapping alike). The shot pattern doesn't change. */
+export const FEVER_FIRE_RATE = 2;
 /** Most stars a single chain can send during Fever. */
 export const FEVER_STAR_CAP = 12;
 /** When the first moonseed arrives each round, then how often after that. */
