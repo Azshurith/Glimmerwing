@@ -3,6 +3,7 @@ import { CpuPilot } from './ai';
 import { FAIRIES, Fairy, fairyById } from './characters';
 import { Field, FieldSnapshot } from './field';
 import { Net, PeerMsg } from './net';
+import { Sfx, Sound } from './audio';
 import { Input } from './input';
 import { loadProgress, Progress, resetProgress, saveProgress } from './progress';
 import { PALETTE, Renderer, SelectCard } from './render';
@@ -56,7 +57,19 @@ export class Game {
   /** Set by the page: open the online lobby. */
   onWantOnline?: () => void;
 
-  constructor(private input: Input, private r: Renderer) {}
+  constructor(private input: Input, private r: Renderer, private sound: Sound) {}
+
+  /** Play what each meadow asked for. Offline, sounds lean toward their meadow and the CPU's are quieter. */
+  private drainSfx(): void {
+    this.fields.forEach((f, i) => {
+      const pan = this.online ? 0 : i === 0 ? -0.35 : 0.35;
+      const vol = this.mode === 'cpu' && i === 1 ? 0.45 : 1;
+      for (const e of f.sfx) this.sound.play(e.k, e.p, pan, vol);
+      f.sfx = [];
+    });
+  }
+
+  private ui(k: Sfx): void { this.sound.play(k); }
 
   /** Called by the page buttons and the title screen. */
   start(mode: Mode): void {
@@ -162,10 +175,12 @@ export class Game {
     keys.forEach(([l, r, u, d, ok], i) => {
       const pk = this.pickers[i];
       if (pk.done) { if (any(l) || any(r) || any(u) || any(d)) pk.done = false; return; }
+      const was = pk.index;
       if (any(l)) pk.index = (pk.index + FAIRIES.length - 1) % FAIRIES.length;
       if (any(r)) pk.index = (pk.index + 1) % FAIRIES.length;
       if (any(u) || any(d)) pk.index = (pk.index + COLS) % FAIRIES.length;
-      if (any(ok) && !cards[pk.index].locked) { pk.done = true; this.picks[i] = FAIRIES[pk.index]; }
+      if (pk.index !== was) this.ui('tick');
+      if (any(ok) && !cards[pk.index].locked) { pk.done = true; this.picks[i] = FAIRIES[pk.index]; this.ui('ok'); }
     });
     // Tap a card to pick it for player one.
     const tap = this.input.tap;
@@ -256,6 +271,8 @@ export class Game {
   step(dt: number): void {
     this.time += dt;
     const pr = this.input.pressed;
+    this.drainSfx();
+    if (pr.has('KeyM')) this.sound.toggleMute();
     if (this.mode === 'online') {
       this.pollNet(dt);
       if (!this.net) return;
@@ -278,7 +295,7 @@ export class Game {
       this.tickOnline(dt);
     }
     if (this.phase === 'countdown') {
-      if (this.phaseT > 2) { this.phase = 'playing'; this.phaseT = 0; }
+      if (this.phaseT > 2) { this.phase = 'playing'; this.phaseT = 0; this.ui('start'); }
       return;
     }
     if (this.phase === 'roundOver' || this.phase === 'matchOver') {
@@ -344,6 +361,8 @@ export class Game {
     // The round is decided: the meadows keep drifting behind the banner, but no more hits land.
     for (const f of this.fields) f.settled = true;
     this.roundWinner = dead0 && dead1 ? -1 : dead0 ? 1 : 0;
+    // Versus on one screen always has a winner to cheer; otherwise it's about you.
+    this.ui(this.mode === 'versus' ? (this.roundWinner < 0 ? 'lose' : 'win') : this.roundWinner === 0 ? 'win' : 'lose');
     if (this.roundWinner >= 0) this.wins[this.roundWinner as 0 | 1]++;
 
     // Only human players earn progress.

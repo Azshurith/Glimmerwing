@@ -1,4 +1,5 @@
 import * as C from './config';
+import type { Sfx } from './audio';
 import { Fairy, fairyById } from './characters';
 import { rollWave } from './waves';
 import {
@@ -33,6 +34,8 @@ export class Field {
   private crowsWoken = 0;
   private crowReturns: { at: number; level: number }[] = [];
   outbox: Outgoing[] = [];
+  /** Sound events this step, drained and played by the Game. */
+  sfx: { k: Sfx; p: number }[] = [];
   /** Power gauge, 0 to GAUGE_MAX: three levels of GAUGE_LEVEL each. */
   gauge = C.GAUGE_START;
   /** Seconds of Fever left. */
@@ -80,6 +83,8 @@ export class Field {
   }
 
   get alive(): boolean { return this.player.hull > 0; }
+
+  private snd(k: Sfx, p = 0): void { this.sfx.push({ k, p }); }
 
   /** 0 to 3: how far a charge can go right now. */
   get gaugeLevel(): number { return Math.min(3, Math.floor(this.gauge / C.GAUGE_LEVEL + 1e-6)); }
@@ -134,6 +139,7 @@ export class Field {
       if (this.alive && !this.settled && this.player.hull < C.MAX_HULL) {
         this.player.hull = Math.min(C.MAX_HULL, this.player.hull + o.level);
         this.popup(this.player.x, this.player.y - 22, o.level >= 2 ? '+1 heart' : '+½ heart');
+        this.snd('heal');
         this.spray(this.player.x, this.player.y, 8, '#ff9db8');
       }
       return;
@@ -192,6 +198,7 @@ export class Field {
           pattern: sender.guardian.pattern, cycleT: 0, cyclesLeft: 0,
         };
         this.popup(C.FIELD_W / 2, 90, `${sender.guardian.name} incoming`);
+        this.snd('bossIn');
       }
       return;
     }
@@ -271,6 +278,7 @@ export class Field {
       p.charge = 0; p.over = 0; p.hold = 0;
       this.shake = 4;
       this.popup(p.x, p.y - 24, this.fairy.bomb.name);
+      this.snd('bomb');
     }
     p.wasBlooming = !!input.bloom;
 
@@ -280,8 +288,11 @@ export class Field {
       p.hold += dt;
       // Charge climbs a level per CHARGE_TIME, but only as high as the power gauge allows.
       const cap = this.gaugeLevel;
+      const lvlBefore = Math.floor(p.charge + 1e-6);
       if (p.hold > C.HOLD_BEFORE_CHARGE && cap >= 1) p.charge = Math.min(cap, p.charge + (dt * (p.impair > 0 ? C.IMPAIR_CHARGE : 1)) / (C.CHARGE_TIME * this.fairy.charge));
       p.over = p.charge > 1 ? (p.charge - 1) / 2 : 0;
+      const lvlNow = Math.floor(p.charge + 1e-6);
+      if (lvlNow > lvlBefore) this.snd('charge', lvlNow);
     } else {
       if (p.wasFiring && p.charge >= 1) this.releaseCharge(Math.floor(p.charge + 1e-6));
       p.hold = 0;
@@ -297,6 +308,7 @@ export class Field {
   private volley(cooldown: number): void {
     const p = this.player;
     this.shots.push({ x: p.x, y: p.y - 10, vx: 0, charged: false, dead: false });
+    this.snd('shot');
     p.cooldown = (cooldown / (this.fever > 0 ? C.FEVER_FIRE_RATE : 1)) * (p.impair > 0 ? C.IMPAIR_FIRE : 1);
   }
 
@@ -324,6 +336,9 @@ export class Field {
     const p = this.player;
     this.fireChargeShot();
     this.popup(p.x, p.y - 14, this.fairy.chargeName);
+    this.snd('release', level);
+    if (level === 2) this.snd('extra');
+    if (level >= 3) this.snd('boss');
     this.shake = 3;
     if (level === 2) {
       this.gauge -= C.EXTRA_COST * C.GAUGE_LEVEL;
@@ -543,6 +558,7 @@ export class Field {
     j.dead = true;
     const c = this.chains.get(chainId);
     if (c) { c.pops++; c.x = j.x; c.y = j.y; }
+    this.snd('pop', c ? c.pops : 1);
     const sizeK = 1 + (j.maxHp - 1) * 0.12 + (j.kind === 'beetle' ? 0.25 : 0) + (j.size - 1) * 0.8;
     this.addBurst(j.x, j.y, chainId, (big ? C.CHARGED_BURST_RADIUS : C.BURST_RADIUS) * this.fairy.burst * sizeK);
     this.spray(j.x, j.y, 8, '#fff6d8');
@@ -567,10 +583,12 @@ export class Field {
         const lvl = Math.min(C.MAX_STAR_LEVEL, 2 + this.fairy.counterBoost);
         this.outbox.push({ kind: 'star', level: lvl, fromX: a.x, fromY: a.y });
         this.popup(a.x, a.y - 10, 'Reverse');
+        this.snd('reverse');
       } else {
         // Breaking a reverse star turns it into one of your Extra Attack critters.
         this.outbox.push({ kind: 'imp', level: 1, fromX: a.x, fromY: a.y, fairy: this.fairy.id });
         this.popup(a.x, a.y - 10, this.fairy.extra.name);
+        this.snd('extra');
         // Three or more reverse stars broken in one chain summon your guardian.
         const c = this.chains.get(id);
         if (c && ++c.reverses >= C.BOSS_CHAIN_REVERSES && !c.bossSent) {
@@ -635,6 +653,7 @@ export class Field {
         this.outbox.push({ kind: 'star', level: 1, fromX: c.x + off, fromY: c.y });
       }
       if (n >= 7) this.outbox.push({ kind: 'bramble', level: 1, fromX: c.x, fromY: c.y });
+      this.snd('send', n);
     }
     // A full gauge no longer fires itself: charge to level 3 to send the guardian.
   }
@@ -646,6 +665,7 @@ export class Field {
   private breakMoonseed(m: Puff): void {
     this.hitstop = C.HITSTOP;
     this.spray(m.x, m.y, 30, '#cfe9ff');
+    this.snd('shatter');
     this.startFever();
   }
 
@@ -658,6 +678,7 @@ export class Field {
     this.fever = C.FEVER_TIME * this.fairy.feverTime;
     this.fevers++;
     this.popup(C.FIELD_W / 2, C.FIELD_H / 2 - 20, 'Fever');
+    this.snd('fever');
     this.shake = 4;
     const r = this.fxRng;
     const cx = r.range(70, C.FIELD_W - 70);
@@ -933,6 +954,7 @@ export class Field {
         // A bomb negates a guardian's attack and clears it off the meadow outright.
         this.spray(L.x, L.y, 40, col);
         this.popup(L.x, L.y, `${L.guardian.name} dispelled`);
+        this.snd('banish');
         this.moth = null;
       } else {
         this.damageMoth(8, L.x, L.y);
@@ -942,6 +964,7 @@ export class Field {
 
   /** Breaking several incoming stars in quick succession rallies your guardian. */
   private clashFx(): void {
+    this.snd('clash');
     const L = this.moth;
     const x = L ? L.x : C.FIELD_W / 2, y = L ? L.y : 70;
     this.spray(x, y, 40, '#ffffff');
@@ -1019,6 +1042,7 @@ export class Field {
         L.hurt = 0;
         L.stun = C.GUARDIAN_STUN;
         this.popup(L.x, L.y - 18, 'Reeling');
+        this.snd('reel');
       }
     } else if (L.stage === 'exit') {
       // Exiting guardians don't reel, but shots push them away from where they hit.
@@ -1029,6 +1053,7 @@ export class Field {
       this.addBurst(L.x, L.y, id, 70);
       this.spray(L.x, L.y, 40, '#ffcf8a');
       this.popup(L.x, L.y, `${L.guardian.name} banished`);
+      this.snd('banish');
       this.shake = 8;
       this.moth = null;
     }
@@ -1046,6 +1071,7 @@ export class Field {
       stay: Math.max(C.CROW_STAY_MIN, C.CROW_STAY - (level - 1)),
     });
     this.popup(C.FIELD_W / 2, 80, msg);
+    this.snd('crow');
   }
 
   /**
@@ -1126,6 +1152,7 @@ export class Field {
       this.shake = 10;
       this.spray(p.x, p.y, 40, '#ff9fb8');
       this.popup(p.x, p.y - 20, 'Death’s touch');
+      this.snd('death');
       return;
     }
     const L = this.moth;
@@ -1138,6 +1165,7 @@ export class Field {
       this.shake = 7;
       this.spray(p.x, p.y, 24, '#ffffff');
       this.outbox.push({ kind: 'heal', level: C.HEAL_ON_ATTACK, fromX: p.x, fromY: p.y });
+      this.snd('hurt');
       return;
     }
     // Running into a critter: one heart, but never below half a heart; stunned, then impaired.
@@ -1152,6 +1180,7 @@ export class Field {
         p.charge = 0; p.over = 0; p.hold = 0;
         this.shake = 4;
         this.popup(p.x, p.y - 22, 'Stunned');
+        this.snd('stun');
         this.outbox.push({ kind: 'heal', level: C.HEAL_ON_ZAKO, fromX: p.x, fromY: p.y });
         return;
       }
