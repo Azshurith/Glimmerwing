@@ -49,6 +49,9 @@ export class Field {
   /** Seconds of Thornquake slowdown left. */
   slow = 0;
   private bombStungMoth = false;
+  /** For boss clashes: when I last sent a guardian, and when the rival's arrived. */
+  private bossSentAt = -99;
+  private bossArrivedAt = -99;
   /** Stats this round, read by the Game for unlocks. */
   bestChain = 0;
   fevers = 0;
@@ -157,14 +160,27 @@ export class Field {
       this.crowReturns.push({ at: this.time + (o.delay ?? 0), level: o.level });
       return;
     }
+    if (o.kind === 'clash') {
+      // The rival's guardian clashed with mine: the one I sent them is gone too.
+      if (this.moth) { this.clashFx(); this.moth = null; }
+      return;
+    }
     if (o.kind === 'moth') {
+      // Both players sent a boss at about the same time: they clash and cancel out.
+      if (this.time - this.bossSentAt < C.BOSS_CLASH_WINDOW) {
+        this.clashFx();
+        this.outbox.push({ kind: 'clash', level: 1, fromX: C.FIELD_W / 2, fromY: 0 });
+        return;
+      }
       if (!this.moth) {
+        this.bossArrivedAt = this.time;
         const sender = fairyById(o.fairy ?? 'pip');
         this.moth = {
           x: C.FIELD_W / 2, y: -40, hp: C.MOTH_HP, t: 0, fireT: 0, dead: false, guardian: sender.guardian, wing: sender.wing,
           angle: this.fxRng.range(0, Math.PI * 2), stage: 'enter', stageT: 0,
           dir: this.fxRng.next() < 0.5 ? 1 : -1, hurt: 0, stun: 0, vx: 0, rush: !!o.rush,
           swoop: -1, swoopIn: 1.8, postX: 0, postY: 0, toX: 0, toY: 0,
+          pattern: sender.guardian.pattern, cycleT: 0, cyclesLeft: 0,
         };
         this.popup(C.FIELD_W / 2, 90, `${sender.guardian.name} incoming`);
       }
@@ -737,7 +753,7 @@ export class Field {
       L.x += (tx - L.x) * k; L.y += (ty - L.y) * k;
       if (L.stageT >= C.GUARDIAN_ENTER) {
         L.stageT = 0;
-        if (L.rush) { L.stage = 'attack'; L.fireT = 0.3; } else L.stage = 'wander';
+        if (L.rush) { L.stage = 'attack'; L.cyclesLeft = 2 + (this.fxRng.next() < 0.5 ? 1 : 0); this.nextCycle(L); L.fireT = 0.3; } else L.stage = 'wander';
       }
     } else if (L.stage === 'wander') {
       // Float in a loop, clockwise or anticlockwise at random.
@@ -745,7 +761,11 @@ export class Field {
       const tx = cx + Math.cos(L.angle) * C.GUARDIAN_CIRCLE, ty = cy + Math.sin(L.angle) * C.GUARDIAN_CIRCLE * 0.45;
       const k = Math.min(1, dt * 5);
       L.x += (tx - L.x) * k; L.y += (ty - L.y) * k;
-      if (L.stageT >= C.GUARDIAN_WANDER) { L.stage = 'attack'; L.stageT = 0; L.fireT = 0.5; }
+      if (L.stageT >= C.GUARDIAN_WANDER) {
+        L.stage = 'attack'; L.stageT = 0;
+        L.cyclesLeft = 2 + (this.fxRng.next() < 0.5 ? 1 : 0);
+        this.nextCycle(L);
+      }
     } else if (L.stage === 'attack') {
       if (L.swoop >= 0) {
         // Slide down near the fairy, hang there, then glide back up to the post.
@@ -770,15 +790,21 @@ export class Field {
       }
       L.fireT -= dt;
       if (L.fireT <= 0 && this.alive) this.guardianFire(L);
+      // Each cycle runs one attack; after the last, it leaves.
+      L.cycleT -= dt;
+      if (L.cycleT <= 0) {
+        L.cyclesLeft--;
+        if (L.cyclesLeft > 0) this.nextCycle(L);
+      }
       L.swoopIn -= dt;
-      if (L.swoopIn <= 0 && this.alive && L.stageT < C.GUARDIAN_ATTACK - 1.5) {
+      if (L.swoopIn <= 0 && this.alive && (L.cyclesLeft > 1 || L.cycleT > 1.5)) {
         L.swoop = 0;
         L.postX = L.x; L.postY = L.y;
         L.toX = Math.min(C.FIELD_W - 30, Math.max(30, this.player.x));
         L.toY = Math.max(L.y, Math.min(C.FIELD_H - 50, this.player.y - C.GUARDIAN_SWOOP_GAP));
         return;
       }
-      if (L.stageT >= C.GUARDIAN_ATTACK) {
+      if (L.cyclesLeft <= 0) {
         L.stage = 'exit'; L.stageT = 0;
         // Head for whichever side it's nearer, unless shots push it the other way.
         L.vx = (L.x < cx ? -1 : 1) * (15 + this.fxRng.range(0, 15));
@@ -877,12 +903,42 @@ export class Field {
     const L = this.moth;
     if (L && !L.dead && !this.bombStungMoth && inside(L.x, L.y)) {
       this.bombStungMoth = true;
-      this.damageMoth(8, L.x, L.y);
+      if (L.stage === 'attack') {
+        // A bomb negates a guardian's attack and clears it off the meadow outright.
+        this.spray(L.x, L.y, 40, col);
+        this.popup(L.x, L.y, `${L.guardian.name} dispelled`);
+        this.moth = null;
+      } else {
+        this.damageMoth(8, L.x, L.y);
+      }
     }
   }
 
   /** Breaking several incoming stars in quick succession rallies your guardian. */
+  private clashFx(): void {
+    const L = this.moth;
+    const x = L ? L.x : C.FIELD_W / 2, y = L ? L.y : 70;
+    this.spray(x, y, 40, '#ffffff');
+    this.popup(C.FIELD_W / 2, 70, 'Bosses clash!');
+    this.shake = 6;
+  }
+
+  /** Start an attack cycle with a random pick from the guardian's repertoire. */
+  private nextCycle(L: Moth): void {
+    const list = L.guardian.patterns;
+    L.pattern = list[Math.floor(this.fxRng.next() * list.length)];
+    L.cycleT = C.GUARDIAN_CYCLE[L.pattern] ?? 2.5;
+    L.fireT = 0.35;
+  }
+
   private sendGuardian(how: string, rush = false): void {
+    // A rival's boss that just arrived and mine collide: both are cancelled.
+    if (this.moth && this.time - this.bossArrivedAt < C.BOSS_CLASH_WINDOW) {
+      this.clashFx();
+      this.moth = null;
+      return;
+    }
+    this.bossSentAt = this.time;
     this.outbox.push({ kind: 'moth', level: 1, fromX: C.FIELD_W / 2, fromY: C.FIELD_H / 2, fairy: this.fairy.id, rush });
     this.popup(C.FIELD_W / 2, C.FIELD_H / 2, how ? `${how}: ${this.fairy.guardian.name} sent` : `${this.fairy.guardian.name} sent`);
   }
@@ -892,7 +948,7 @@ export class Field {
     const shoot = (ang: number, speed: number) =>
       this.bullets.push({ x: L.x, y: L.y + 8, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, dead: false });
     const aim = Math.atan2(this.player.y - L.y, this.player.x - L.x);
-    switch (L.guardian.pattern) {
+    switch (L.pattern) {
       case 'aimed': // three-way aimed fan
         L.fireT = 1.3;
         for (const off of [-0.3, 0, 0.3]) shoot(aim + off, 110);

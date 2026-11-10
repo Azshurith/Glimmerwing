@@ -859,7 +859,7 @@ const STAR_COLORS: [number, number, number][] = [
 const placeholder: Fairy = {
   id: '', name: '', blurb: '', color: '', accent: '', wing: 'round',
   speed: 1, burst: 1, charge: 1, hitbox: 1, feverTime: 1, counterBoost: 0, unlock: null,
-  guardian: { name: '', color: '', pattern: 'aimed' },
+  guardian: { name: '', color: '', pattern: 'aimed', patterns: ['aimed'] },
   extra: { name: '', count: 2, flight: 'drop', look: 'spark' },
   chargeStyle: 'orb', chargeName: '', bomb: { name: '', color: '#fff', shape: 'petal', style: 'blast', time: 0.6, invuln: 2 },
 };

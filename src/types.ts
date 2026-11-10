@@ -144,7 +144,10 @@ export type GuardianPattern = 'aimed' | 'ring' | 'rapid' | 'rain' | 'spiral' | '
 export interface Guardian {
   name: string;
   color: string;
+  /** Signature attack. */
   pattern: GuardianPattern;
+  /** Its repertoire (signature first): each attack cycle picks one at random. */
+  patterns: GuardianPattern[];
 }
 
 export interface Moth {
@@ -169,6 +172,10 @@ export interface Moth {
   vx: number;
   /** Summoned by a reverse chain: skips the wander and attacks straight away. */
   rush: boolean;
+  /** The attack it's running now, time left in this cycle, and cycles left before it leaves. */
+  pattern: GuardianPattern;
+  cycleT: number;
+  cyclesLeft: number;
   /** Attack-phase swoop: seconds into the current swoop (-1 when not swooping), and the wait until the next. */
   swoop: number;
   swoopIn: number;
@@ -201,7 +208,8 @@ export interface Popup { x: number; y: number; text: string; age: number }
 
 /** Something one field sends to the other. */
 export interface Outgoing {
-  kind: AttackKind | 'moth' | 'crow';
+  /** clash: two bosses cancelled each other; remove the one I sent you. */
+  kind: AttackKind | 'moth' | 'crow' | 'clash';
   /** For a crow: seconds before it appears after arriving. */
   delay?: number;
   /** For a guardian or Extra Attack: which fairy sent it. */
