@@ -21,6 +21,12 @@ export class CpuPilot {
 
   constructor(private reaction = 0.12) {}
 
+  /** Hold fire long enough to reach `level` (the field caps it at the gauge level). */
+  private charge(f: Field, level: number): void {
+    if (f.gaugeLevel < 1) return;
+    this.chargeMode = C.HOLD_BEFORE_CHARGE + C.CHARGE_TIME * f.fairy.charge * level + 0.05;
+  }
+
   think(f: Field, dt: number): Controls {
     this.t += dt;
     const p = f.player;
@@ -87,8 +93,10 @@ export class CpuPilot {
       // Occasionally charge into a dense cluster.
       if (this.chargeMode <= 0 && puff) {
         const near = f.puffs.filter(j => Math.hypot(j.x - puff.x, j.y - puff.y) < 50).length;
-        if (near >= 5 && Math.random() < 0.5) this.chargeMode = C.HOLD_BEFORE_CHARGE + C.CHARGE_TIME + 0.05;
+        if (near >= 5 && Math.random() < 0.5) this.charge(f, f.gaugeLevel >= 3 ? 3 : f.gaugeLevel === 2 && Math.random() < 0.5 ? 2 : 1);
       }
+      // Sitting on a full gauge: go for the guardian before long.
+      if (this.chargeMode <= 0 && f.gaugeLevel >= 3 && Math.random() < dt * 0.4) this.charge(f, 3);
     }
 
     const close = threats.filter(th => Math.hypot(th.x - p.x, th.y - p.y) < 40).length;

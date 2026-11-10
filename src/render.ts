@@ -111,6 +111,7 @@ export class Renderer {
     for (const a of f.attacks) {
       if (a.kind === 'bramble') this.bramble(a.x, a.y, a.spin);
       else if (a.kind === 'comet') this.comet(a.x, a.y, time);
+      else if (a.kind === 'imp') this.imp(a.x, a.y, a.color ?? '#ffffff', time + a.spin, a.flight === 'seeker' && a.seekT > 0);
       else this.star(a.x, a.y, a.spin, a.level, a.hp, a.vx, a.vy, a.flight === 'seeker' && a.seekT > 0);
     }
     for (const c of f.crows) this.crow(c.x, c.y, c.state === 'dive' ? Math.atan2(c.vy, c.vx) - Math.PI / 2 : 0, time, c.hp / C.CROW_HP);
@@ -135,7 +136,7 @@ export class Renderer {
     if (f.alive) {
       const p = f.player;
       const blink = p.invuln > 0 && Math.floor(p.invuln * 14) % 2 === 0;
-      if (!blink) this.fairy(f.fairy, p.x, p.y, 1, time, p.charge);
+      if (!blink) this.fairy(f.fairy, p.x, p.y, 1, time, Math.min(1, p.charge));
       if (!blink && p.over > 0) {
         ctx.strokeStyle = f.fairy.guardian.color; ctx.lineWidth = 2; ctx.globalAlpha = 0.9;
         ctx.beginPath(); ctx.arc(p.x, p.y, 21, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p.over); ctx.stroke();
@@ -174,11 +175,11 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
 
-    this.hud(f, wins);
+    this.hud(f, wins, time);
     ctx.restore();
   }
 
-  private hud(f: Field, wins: number): void {
+  private hud(f: Field, wins: number, time: number): void {
     const ctx = this.ctx;
     const color = f.fairy.color;
     for (let i = 0; i < C.MAX_HULL; i++) this.heart(10 + i * 12, 10, i < f.player.hull ? color : 'rgba(246,240,255,0.18)');
@@ -201,9 +202,40 @@ export class Renderer {
       ctx.fillStyle = tempo > 1.5 ? '#ffb36b' : PALETTE.dim;
       ctx.fillText(`Tempo ${tempo.toFixed(1)}×`, C.FIELD_W - 10, C.FIELD_H - 10);
     }
+    // Power gauge: three levels. A full gauge pulses MAX so the rival can see a guardian coming.
     const w = C.FIELD_W - 20;
+    const lv = Math.min(3, Math.floor(f.gauge / C.GAUGE_LEVEL + 1e-6));
+    const full = lv >= 3;
     ctx.fillStyle = 'rgba(246,240,255,0.15)'; ctx.fillRect(10, C.FIELD_H - 5, w, 2.5);
-    ctx.fillStyle = PALETTE.moth; ctx.fillRect(10, C.FIELD_H - 5, w * (f.gauge / C.GAUGE_MAX), 2.5);
+    ctx.fillStyle = full ? f.fairy.guardian.color : PALETTE.moth;
+    ctx.globalAlpha = full ? 0.7 + 0.3 * Math.sin(time * 8) : 1;
+    ctx.fillRect(10, C.FIELD_H - 5, w * (f.gauge / C.GAUGE_MAX), 2.5);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(16,11,36,0.9)';
+    for (let i = 1; i < 3; i++) ctx.fillRect(10 + (w * i) / 3 - 0.5, C.FIELD_H - 6, 1, 4.5);
+    ctx.textAlign = 'left'; ctx.font = `italic 600 9px ${FONT}`;
+    ctx.fillStyle = full ? f.fairy.guardian.color : lv === 0 ? 'rgba(246,240,255,0.35)' : PALETTE.dim;
+    ctx.fillText(full ? 'MAX' : `Lv ${lv}`, 10, C.FIELD_H - 10);
+  }
+
+  /** An Extra Attack critter: a small glowing body with fluttering wings in the sender's colour. */
+  private imp(x: number, y: number, color: string, t: number, lining: boolean): void {
+    const ctx = this.ctx;
+    ctx.save();
+    if (lining) {
+      ctx.strokeStyle = color; ctx.globalAlpha = 0.25; ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.lineTo(x, C.FIELD_H); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+    }
+    const flap = 0.55 + 0.45 * Math.abs(Math.sin(t * 14));
+    ctx.fillStyle = color; ctx.globalAlpha = 0.55;
+    ctx.beginPath(); ctx.ellipse(x - 5, y - 1, 5 * flap, 3, -0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + 5, y - 1, 5 * flap, 3, 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1; ctx.shadowColor = color; ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.arc(x, y, 3.6, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.fillStyle = '#1a1033';
+    ctx.fillRect(x - 1.8, y - 1, 1.2, 1.2); ctx.fillRect(x + 0.6, y - 1, 1.2, 1.2);
+    ctx.restore();
   }
 
   /** Little five-petal flower used for the bloom stock. */
@@ -613,6 +645,7 @@ const placeholder: Fairy = {
   id: '', name: '', blurb: '', color: '', accent: '', wing: 'round',
   speed: 1, burst: 1, charge: 1, hitbox: 1, feverTime: 1, feverSpread: 3, counterBoost: 0, unlock: null,
   guardian: { name: '', color: '', pattern: 'aimed' },
+  extra: { name: '', count: 2, flight: 'drop' },
 };
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

@@ -153,9 +153,9 @@ export class Game {
     const cards = this.cards();
     const before = { ...this.pickers[0] };
     const keys: [string[], string[], string[], string[], string[]][] = this.mode !== 'versus'
-      ? [[['ArrowLeft', 'KeyA'], ['ArrowRight', 'KeyD'], ['ArrowUp', 'KeyW'], ['ArrowDown', 'KeyS'], ['Space', 'Enter', 'KeyZ', 'KeyF']]]
+      ? [[['ArrowLeft', 'KeyA'], ['ArrowRight', 'KeyD'], ['ArrowUp', 'KeyW'], ['ArrowDown', 'KeyS'], ['Space', 'Enter', 'KeyZ', 'KeyG']]]
       : [
-          [['KeyA'], ['KeyD'], ['KeyW'], ['KeyS'], ['KeyF']],
+          [['KeyA'], ['KeyD'], ['KeyW'], ['KeyS'], ['KeyG']],
           [['ArrowLeft'], ['ArrowRight'], ['ArrowUp'], ['ArrowDown'], ['Enter', 'Slash']],
         ];
     const any = (codes: string[]) => codes.some(c => pr.has(c));
@@ -265,7 +265,7 @@ export class Game {
     if (this.phase === 'title') {
       if (this.notice) { if (pr.size) this.notice = ''; return; }
       if (pr.has('Digit3')) { this.onWantOnline?.(); return; }
-      if (pr.has('Digit1') || pr.has('Space') || pr.has('Enter') || pr.has('Pointer')) this.start('cpu');
+      if (pr.has('Digit1') || pr.has('Space') || pr.has('Enter') || pr.has('KeyG') || pr.has('Pointer')) this.start('cpu');
       else if (pr.has('Digit2')) this.start('versus');
       return;
     }
@@ -282,7 +282,7 @@ export class Game {
       return;
     }
     if (this.phase === 'roundOver' || this.phase === 'matchOver') {
-      const go = this.phaseT > 1.2 && (pr.has('Space') || pr.has('Enter') || pr.has('KeyF') || pr.has('Pointer'));
+      const go = this.phaseT > 1.2 && (pr.has('Space') || pr.has('Enter') || pr.has('KeyG') || pr.has('Pointer'));
       if (go || (this.phase === 'roundOver' && this.phaseT > 3.5)) {
         if (this.phase === 'matchOver') { this.start(this.mode); return; }
         // Online, the host deals the next round and the guest follows.
@@ -385,7 +385,7 @@ export class Game {
       const sx = FIELD_X[tr.from] + tr.o.fromX, sy = tr.o.fromY;
       const ex = FIELD_X[1 - tr.from] + Math.min(C.FIELD_W - 12, Math.max(12, tr.o.fromX)), ey = -10;
       const x = sx + (ex - sx) * k, y = sy + (ey - sy) * k - Math.sin(k * Math.PI) * 40;
-      r.transit(x, y, tr.o.kind === 'moth' ? (FAIRIES.find(f => f.id === tr.o.fairy)?.guardian.color ?? PALETTE.moth) : tr.o.kind === 'bramble' ? PALETTE.bramble : tr.o.kind === 'crow' ? '#ff9fb8' : tr.o.kind === 'comet' ? '#ff6f9c' : PALETTE.star);
+      r.transit(x, y, tr.o.kind === 'moth' ? (FAIRIES.find(f => f.id === tr.o.fairy)?.guardian.color ?? PALETTE.moth) : tr.o.kind === 'bramble' ? PALETTE.bramble : tr.o.kind === 'crow' ? '#ff9fb8' : tr.o.kind === 'imp' ? (FAIRIES.find(f => f.id === tr.o.fairy)?.color ?? PALETTE.star) : tr.o.kind === 'comet' ? '#ff6f9c' : PALETTE.star);
     }
 
     const names = this.mode === 'cpu' ? ['You', `CPU ${this.picks[1].name}`]

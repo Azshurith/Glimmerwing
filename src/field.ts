@@ -10,7 +10,7 @@ import {
 interface ChainInfo { pops: number; live: number; x: number; y: number; charged: boolean }
 
 const attackRadius = (a: Attack) =>
-  a.kind === 'bramble' ? C.BRAMBLE_RADIUS : a.kind === 'comet' ? C.COMET_RADIUS : C.STAR_RADIUS;
+  a.kind === 'bramble' ? C.BRAMBLE_RADIUS : a.kind === 'comet' ? C.COMET_RADIUS : a.kind === 'imp' ? C.IMP_RADIUS : C.STAR_RADIUS;
 
 const dist2 = (ax: number, ay: number, bx: number, by: number) =>
   (ax - bx) * (ax - bx) + (ay - by) * (ay - by);
@@ -35,7 +35,8 @@ export class Field {
   private rallyReady = 0;
   private crowReturns: { at: number; level: number }[] = [];
   outbox: Outgoing[] = [];
-  gauge = 0;
+  /** Power gauge, 0 to GAUGE_MAX: three levels of GAUGE_LEVEL each. */
+  gauge = C.GAUGE_START;
   /** Seconds of Fever left. */
   fever = 0;
   /** Seconds until the next moonseed formation; the warning shows near the end. */
@@ -73,6 +74,9 @@ export class Field {
   }
 
   get alive(): boolean { return this.player.hull > 0; }
+
+  /** 0 to 3: how far a charge can go right now. */
+  get gaugeLevel(): number { return Math.min(3, Math.floor(this.gauge / C.GAUGE_LEVEL + 1e-6)); }
 
   /**
    * How fast the meadow runs right now. It climbs through each round and
@@ -117,6 +121,21 @@ export class Field {
   // ---- incoming from the opponent ----------------------------------------
 
   receive(o: Outgoing): void {
+    if (o.kind === 'imp') {
+      // The rival's Extra Attack: small critters that fly the sender's pattern.
+      const sender = fairyById(o.fairy ?? 'pip');
+      const flight = sender.extra.flight, sp = C.IMP_SPEED;
+      const x = Math.min(C.FIELD_W - 12, Math.max(12, o.fromX));
+      let vx = 0, vy = sp, seekT = 0;
+      if (flight === 'seeker') { vy = 0; seekT = C.SEEK_TIME + this.fxRng.range(0, 0.4); }
+      if (flight === 'slant') { const d = x < C.FIELD_W / 2 ? 1 : -1; vx = d * sp * 0.8; vy = sp * 0.8; }
+      if (flight === 'zig') seekT = this.fxRng.range(0.3, 0.7); // time to the first turn
+      this.attacks.push({
+        x, y: -12, vx, vy, flight, seekT, plunge: sp * 1.8, kind: 'imp', level: 1, hp: C.IMP_HP,
+        spin: this.fxRng.range(0, Math.PI * 2), dead: false, color: sender.color,
+      });
+      return;
+    }
     if (o.kind === 'crow') {
       this.crowsWoken = 1;
       this.crowReturns.push({ at: this.time + (o.delay ?? 0), level: o.level });
@@ -192,33 +211,54 @@ export class Field {
 
     // Tap to shoot; hold to charge a pulse torpedo, release to launch it.
     if (input.fire) {
-      if (!p.wasFiring && p.cooldown <= 0) {
-        this.shots.push({ x: p.x, y: p.y - 10, vx: 0, charged: false, dead: false });
-        if (this.fever > 0) {
-          const spread = this.fairy.feverSpread === 5 ? [-150, -75, 75, 150] : [-90, 90];
-          for (const vx of spread) this.shots.push({ x: p.x + Math.sign(vx) * 4, y: p.y - 8, vx, charged: false, dead: false });
-        }
-        p.cooldown = C.FIRE_COOLDOWN * (this.fever > 0 ? 0.5 : 1);
-      }
+      if (!p.wasFiring && p.cooldown <= 0) this.volley(C.FIRE_COOLDOWN);
       p.hold += dt;
-      if (p.hold > C.HOLD_BEFORE_CHARGE) p.charge = Math.min(1, p.charge + dt / (C.CHARGE_TIME * this.fairy.charge));
-      // Keep holding past a full charge to overcharge, if you have half a gauge to spend.
-      if (p.charge >= 1 && this.gauge >= C.GAUGE_MAX * C.OVERCHARGE_COST) p.over = Math.min(1, p.over + dt / C.OVERCHARGE_TIME);
+      // Charge climbs a level per CHARGE_TIME, but only as high as the power gauge allows.
+      const cap = this.gaugeLevel;
+      if (p.hold > C.HOLD_BEFORE_CHARGE && cap >= 1) p.charge = Math.min(cap, p.charge + dt / (C.CHARGE_TIME * this.fairy.charge));
+      p.over = p.charge > 1 ? (p.charge - 1) / 2 : 0;
     } else {
-      if (p.wasFiring && p.over >= 1) {
-        this.gauge -= C.GAUGE_MAX * C.OVERCHARGE_COST;
-        this.sendGuardian('Overcharge');
-        this.spray(p.x, p.y - 10, 24, this.fairy.guardian.color);
-        this.shake = 5;
-      } else if (p.wasFiring && p.charge >= 1) {
-        this.shots.push({ x: p.x, y: p.y - 12, vx: 0, charged: true, dead: false });
-        this.shake = 3;
-      }
+      if (p.wasFiring && p.charge >= 1) this.releaseCharge(Math.floor(p.charge + 1e-6));
       p.hold = 0;
       p.charge = 0;
       p.over = 0;
+      // Autofire: a steady stream of plain shots, no charging.
+      if (input.auto && p.cooldown <= 0) this.volley(C.AUTO_FIRE_COOLDOWN);
     }
     p.wasFiring = input.fire;
+  }
+
+  /** One plain shot (a spread during Fever). */
+  private volley(cooldown: number): void {
+    const p = this.player;
+    this.shots.push({ x: p.x, y: p.y - 10, vx: 0, charged: false, dead: false });
+    if (this.fever > 0) {
+      const spread = this.fairy.feverSpread === 5 ? [-150, -75, 75, 150] : [-90, 90];
+      for (const vx of spread) this.shots.push({ x: p.x + Math.sign(vx) * 4, y: p.y - 8, vx, charged: false, dead: false });
+    }
+    p.cooldown = cooldown * (this.fever > 0 ? 0.5 : 1);
+  }
+
+  /** Let go of a charge: the torpedo always, plus an Extra Attack at level 2 or the guardian at level 3. */
+  private releaseCharge(level: number): void {
+    const p = this.player;
+    this.shots.push({ x: p.x, y: p.y - 12, vx: 0, charged: true, dead: false });
+    this.shake = 3;
+    if (level === 2) {
+      this.gauge -= C.EXTRA_COST * C.GAUGE_LEVEL;
+      const ex = this.fairy.extra;
+      for (let i = 0; i < ex.count; i++) {
+        const fromX = C.FIELD_W * (i + 1) / (ex.count + 1);
+        this.outbox.push({ kind: 'imp', level: 1, fromX, fromY: p.y, fairy: this.fairy.id });
+      }
+      this.popup(p.x, p.y - 26, ex.name);
+      this.spray(p.x, p.y - 10, 14, this.fairy.color);
+    } else if (level >= 3) {
+      this.gauge -= C.BOSS_COST * C.GAUGE_LEVEL;
+      this.sendGuardian('Boss');
+      this.spray(p.x, p.y - 10, 24, this.fairy.guardian.color);
+      this.shake = 5;
+    }
   }
 
   // ---- swarms ------------------------------------------------------------------
@@ -346,14 +386,21 @@ export class Field {
       const hitR = s.charged ? 10 : 3;
 
       for (const j of this.puffs) {
-        if (!j.dead && dist2(s.x, s.y, j.x, j.y) < (C.PUFF_RADIUS * j.size + hitR) ** 2) {
-          s.dead = true;
-          if (j.moonseed) { this.spray(s.x, s.y, 3, '#cfe9ff'); break; }
-          if (j.shell > 0) { j.shell -= s.charged ? 2 : 1; this.spray(s.x, s.y, 4, '#d9f1ff'); break; }
-          if (!s.charged && j.hp > 1) { j.hp--; this.spray(s.x, s.y, 3, '#fff6d8'); break; }
-          this.popPuff(j, this.newChain(j.x, j.y, s.charged), s.charged);
-          break;
+        if (j.dead || dist2(s.x, s.y, j.x, j.y) >= (C.PUFF_RADIUS * j.size + hitR) ** 2) continue;
+        if (j.moonseed) { s.dead = true; this.spray(s.x, s.y, 3, '#cfe9ff'); break; }
+        if (s.charged && s.popped) {
+          // Past its first hit, a torpedo ploughs on and clears what it touches,
+          // but those pops don't burst or count toward a chain.
+          j.dead = true;
+          this.spray(j.x, j.y, 6, '#fff6d8');
+          continue;
         }
+        // Plain shots stop at the first critter; a torpedo carries on.
+        if (s.charged) s.popped = true; else s.dead = true;
+        if (j.shell > 0) { j.shell -= s.charged ? 2 : 1; this.spray(s.x, s.y, 4, '#d9f1ff'); break; }
+        if (!s.charged && j.hp > 1) { j.hp--; this.spray(s.x, s.y, 3, '#fff6d8'); break; }
+        this.popPuff(j, this.newChain(j.x, j.y, s.charged), s.charged);
+        break;
       }
       if (s.dead) continue;
 
@@ -419,8 +466,14 @@ export class Field {
   /** Hitting an incoming attack. Spores bounce back at a higher level. */
   private hitAttack(a: Attack, dmg: number, chainId: number | null): void {
     a.hp -= dmg;
-    if (a.hp > 0) { this.spray(a.x, a.y, 3, a.kind === 'star' ? '#ffe27a' : '#b98ae0'); return; }
+    if (a.hp > 0) { this.spray(a.x, a.y, 3, a.kind === 'imp' ? a.color ?? '#fff' : a.kind === 'star' ? '#ffe27a' : '#b98ae0'); return; }
     a.dead = true;
+    // Extra Attack critters just pop: nothing to bat back.
+    if (a.kind === 'imp') {
+      this.spray(a.x, a.y, 10, a.color ?? '#fff');
+      this.gauge = Math.min(C.GAUGE_MAX, this.gauge + 2);
+      return;
+    }
     // Countering doesn't add to the chain count; the counter itself is the reward.
     const id = chainId ?? this.newChain(a.x, a.y, false);
     if (a.kind === 'bramble') {
@@ -459,7 +512,7 @@ export class Field {
         }
       }
       for (const a of this.attacks) {
-        if (!a.dead && a.kind === 'star' && !b.hits.has(a) && dist2(b.x, b.y, a.x, a.y) < r * r) {
+        if (!a.dead && (a.kind === 'star' || a.kind === 'imp') && !b.hits.has(a) && dist2(b.x, b.y, a.x, a.y) < r * r) {
           b.hits.add(a);
           this.hitAttack(a, 1, b.chainId);
         }
@@ -499,10 +552,7 @@ export class Field {
       }
       if (n >= 7) this.outbox.push({ kind: 'bramble', level: 1, fromX: c.x, fromY: c.y });
     }
-    if (this.gauge >= C.GAUGE_MAX) {
-      this.gauge = 0;
-      this.sendGuardian('');
-    }
+    // A full gauge no longer fires itself: charge to level 3 to send the guardian.
   }
 
   /**
@@ -543,6 +593,15 @@ export class Field {
   private updateAttacks(dt: number): void {
     for (const a of this.attacks) {
       a.spin += dt * (a.kind === 'bramble' ? 1.5 : 4 + a.level);
+      if (a.flight === 'zig') {
+        // Right-angle turns: fall, dart sideways, fall again.
+        a.seekT -= dt;
+        if (a.seekT <= 0) {
+          a.seekT = this.fxRng.range(0.35, 0.8);
+          if (a.vx === 0) { a.vx = (this.player.x < a.x ? -1 : 1) * C.IMP_SPEED * 1.1; a.vy = 0; }
+          else { a.vx = 0; a.vy = C.IMP_SPEED; }
+        }
+      }
       if (a.flight === 'seeker' && a.seekT > 0) {
         // Line up: ease into the top of the meadow while sliding over the fairy.
         a.seekT -= dt;

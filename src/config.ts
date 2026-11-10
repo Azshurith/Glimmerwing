@@ -16,6 +16,8 @@ export const PLAYER_RADIUS = 6;
 
 export const SHOT_SPEED = 430;
 export const FIRE_COOLDOWN = 0.11;
+/** Autofire: time between shots while the autofire button is held. */
+export const AUTO_FIRE_COOLDOWN = 0.13;
 export const HOLD_BEFORE_CHARGE = 0.2;
 export const CHARGE_TIME = 0.85;
 
@@ -80,9 +82,23 @@ export const CROW_STAY_MIN = 4;
 export const CROW_RETURN = 8;       // seconds before a driven-off crow reappears (level 1)
 export const CROW_RETURN_MIN = 2;
 
-/** Overcharge: hold past a full charge to spend half a gauge and send your guardian. */
-export const OVERCHARGE_TIME = 1.2;
-export const OVERCHARGE_COST = 0.5;
+/**
+ * Power gauge and charge shots, as in Twinkle Star Sprites. The gauge has
+ * three levels and fills as you pop critters. Holding fire charges up one
+ * level per CHARGE_TIME, as far as the gauge allows; letting go fires:
+ *   Lv 1  a piercing charged torpedo (free)
+ *   Lv 2  the torpedo plus your fairy's Extra Attack sent to the rival
+ *   Lv 3  the torpedo plus your guardian (the Boss Attack)
+ * Below level 1 you can't charge at all.
+ */
+export const GAUGE_LEVEL = GAUGE_MAX / 3;
+export const GAUGE_START = GAUGE_LEVEL;  // each round starts at level 1
+export const EXTRA_COST = 0.5;           // in gauge levels
+export const BOSS_COST = 2;
+/** Extra Attack critters. */
+export const IMP_HP = 2;
+export const IMP_RADIUS = 7;
+export const IMP_SPEED = 95;
 /** Rally: break this many incoming stars within the window to send your guardian. */
 export const RALLY_COUNT = 4;
 export const RALLY_WINDOW = 4;
@@ -109,7 +125,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '2';          // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '3';          // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout

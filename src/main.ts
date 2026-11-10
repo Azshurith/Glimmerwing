@@ -26,6 +26,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b =>
 let last = performance.now();
 let acc = 0;
 function frame(now: number) {
+  input.pollPads();
   acc += Math.min(0.25, (now - last) / 1000);
   last = now;
   while (acc >= C.STEP) {
