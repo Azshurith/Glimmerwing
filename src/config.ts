@@ -112,8 +112,12 @@ export const TEMPO_MAX = 2;
 
 /** Petal bloom: clears bullets and stray stars, pops small fry with no chain credit. */
 export const BLOOMS_PER_ROUND = 2;
-export const BLOOM_TIME = 0.6;
-export const BLOOM_INVULN = 2;
+/** Bramblewick's Thornquake slows her meadow's critters, attacks and bullets (not her) like Kim's bomb. */
+export const BOMB_SLOW = 0.5;
+export const BOMB_SLOW_TIME = 1.6;
+/** Umbra's Duskfall: the hole sits here and drags hazards in before it bursts. */
+export const HOLE_Y = 110;
+export const HOLE_PULL = 160;
 
 /** Star flights: chance a star is a seeker or a slant (the rest drop straight). */
 export const SEEKER_CHANCE = 0.25;
@@ -125,7 +129,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '4';          // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '5';          // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout

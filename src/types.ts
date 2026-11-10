@@ -38,8 +38,27 @@ export interface Shot {
 /** Each fairy's charge shot. */
 export type ChargeStyle = 'orb' | 'thorn' | 'needles' | 'twin' | 'flare' | 'crescent';
 
-/** Each fairy's bomb (petal bloom): same effect, her own look and name. */
-export interface Bomb { name: string; color: string; shape: 'petal' | 'leaf' | 'shard' | 'heart' | 'ember' | 'moon' }
+/**
+ * Each fairy's bomb (petal bloom). Every bomb makes her briefly untouchable
+ * and clears hazards, but how it sweeps the meadow, how long it takes and
+ * how long she's safe differ, as in Twinkle Star Sprites:
+ *   dash    a streak across her row leaving a wake, then a full-field flash
+ *   blast   a huge explosion from her that also slows her meadow down
+ *   vortex  a frost storm that spirals out from the centre
+ *   fan     a cone of petals straight ahead: partial, but the longest safety
+ *   beam    a lance that sweeps from left to right over everything above her
+ *   hole    a black hole that drags hazards in, then bursts in lightning
+ */
+export type BombStyle = 'dash' | 'blast' | 'vortex' | 'fan' | 'beam' | 'hole';
+export interface Bomb {
+  name: string; color: string;
+  shape: 'petal' | 'leaf' | 'shard' | 'heart' | 'ember' | 'moon';
+  style: BombStyle;
+  /** Seconds the sweep takes. */
+  time: number;
+  /** Seconds she's untouchable. */
+  invuln: number;
+}
 
 export type CritterKind = 'puff' | 'beetle' | 'spinner';
 

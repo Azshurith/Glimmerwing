@@ -44,6 +44,9 @@ export class Field {
   /** Seconds left on the current petal bloom's sweep, and its centre. */
   bloom = 0;
   bloomAt = { x: 0, y: 0 };
+  /** Seconds of Thornquake slowdown left. */
+  slow = 0;
+  private bombStungMoth = false;
   /** Stats this round, read by the Game for unlocks. */
   bestChain = 0;
   fevers = 0;
@@ -92,7 +95,9 @@ export class Field {
     // Everything that comes at you runs on the tempo; your fairy and shots
     // get half the boost so you can keep up without it feeling floaty.
     const tempo = this.tempo;
-    const world = dt * tempo;
+    // Thornquake slows everything coming at you (not your fairy or shots).
+    this.slow = Math.max(0, this.slow - dt);
+    const world = dt * tempo * (this.slow > 0 ? C.BOMB_SLOW : 1);
     const own = dt * (1 + (tempo - 1) * 0.5);
     // Sudden death speeds the critters up on top of the tempo.
     if (!this.surged && this.time >= C.SURGE_TIME) {
@@ -198,9 +203,12 @@ export class Field {
     // Petal bloom: once per press, if you have one left.
     if (input.bloom && !p.wasBlooming && p.blooms > 0 && this.bloom <= 0) {
       p.blooms--;
-      this.bloom = C.BLOOM_TIME;
+      const bomb = this.fairy.bomb;
+      this.bloom = bomb.time;
       this.bloomAt = { x: p.x, y: p.y };
-      p.invuln = Math.max(p.invuln, C.BLOOM_INVULN);
+      this.bombStungMoth = false;
+      p.invuln = Math.max(p.invuln, bomb.invuln);
+      if (bomb.style === 'blast') this.slow = C.BOMB_SLOW_TIME;
       p.charge = 0; p.over = 0; p.hold = 0;
       this.shake = 4;
       this.popup(p.x, p.y - 24, this.fairy.bomb.name);
@@ -665,27 +673,88 @@ export class Field {
 
 
   /**
-   * A petal bloom sweeps outward from where it was set off. It clears bullets,
-   * stars, brambles and comets, pops small fry (two hits or fewer) without
-   * starting a chain or sending anything, and stings a guardian. Shells,
-   * moonseeds and crows shrug it off.
+   * Is a point inside the area a fairy's bomb has swept so far? `k` runs 0 to 1
+   * over the bomb. Exported shape so the renderer and the field agree.
+   */
+  static bombCovers(style: string, k: number, ox: number, oy: number, px: number, py: number): boolean {
+    const W = C.FIELD_W;
+    switch (style) {
+      case 'dash': {
+        // A streak along her row from the left wall, then a full-field flash.
+        if (k >= 0.65) return true;
+        const head = (k / 0.65) * (W + 40) - 20;
+        return Math.abs(py - oy) < 70 && px < head;
+      }
+      case 'blast': {
+        const R = 30 + 400 * k;
+        return dist2(ox, oy, px, py) < R * R;
+      }
+      case 'vortex': {
+        // Three frost arms spiral out from the middle of the meadow.
+        const cx = W / 2, cy = C.FIELD_H / 2, R = 30 + 260 * k;
+        if (dist2(cx, cy, px, py) > R * R) return false;
+        const turned = k * Math.PI * 2.4;
+        const a = (Math.atan2(py - cy, px - cx) + Math.PI * 4) % (Math.PI * 2 / 3);
+        return a < turned || turned >= Math.PI * 2 / 3;
+      }
+      case 'fan': {
+        // A cone straight ahead of her, 65 degrees either side of up.
+        const R = 40 + 360 * k;
+        if (dist2(ox, oy, px, py) > R * R) return false;
+        const a = Math.atan2(py - oy, px - ox) + Math.PI / 2;
+        return Math.abs(a) < 1.13 || dist2(ox, oy, px, py) < 30 * 30;
+      }
+      case 'beam': {
+        // A lance swinging from pointing left, up over her, to pointing right.
+        const beam = -Math.PI + k * Math.PI;
+        const a = Math.atan2(py - oy, px - ox);
+        return (a <= beam + 0.06 && a >= -Math.PI) || dist2(ox, oy, px, py) < 24 * 24;
+      }
+      case 'hole': {
+        // The hole swallows what reaches it, then bursts in lightning across the meadow.
+        const cx = W / 2, cy = C.HOLE_Y;
+        const R = k < 0.5 ? 26 : 26 + ((k - 0.5) / 0.5) * 380;
+        return dist2(cx, cy, px, py) < R * R;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * A bomb clears bullets and incoming attacks, pops small fry (two hits or
+   * fewer) without starting a chain or sending anything, and stings a
+   * guardian once. Shells, moonseeds and crows shrug it off. Each fairy's
+   * bomb covers the meadow in its own way (see Bomb in types).
    */
   private updateBloom(dt: number): void {
     if (this.bloom <= 0) return;
+    const bomb = this.fairy.bomb;
     this.bloom = Math.max(0, this.bloom - dt);
-    const k = 1 - this.bloom / C.BLOOM_TIME;
-    const R = 30 + 330 * k;
+    const k = 1 - this.bloom / bomb.time;
     const { x, y } = this.bloomAt;
-    const inside = (px: number, py: number) => dist2(x, y, px, py) < R * R;
-    for (const b of this.bullets) if (!b.dead && inside(b.x, b.y)) { b.dead = true; this.spray(b.x, b.y, 2, '#ffd1e6'); }
-    for (const a of this.attacks) if (!a.dead && inside(a.x, a.y)) { a.dead = true; this.spray(a.x, a.y, 4, '#ffd1e6'); }
+    const col = bomb.color;
+    if (bomb.style === 'hole' && k < 0.5) {
+      // Duskfall drags bullets and attacks toward the hole first.
+      const cx = C.FIELD_W / 2, cy = C.HOLE_Y;
+      const pull = (o: { x: number; y: number }) => {
+        const d = Math.hypot(cx - o.x, cy - o.y) || 1;
+        const step = Math.min(d, C.HOLE_PULL * dt);
+        o.x += ((cx - o.x) / d) * step; o.y += ((cy - o.y) / d) * step;
+      };
+      for (const b of this.bullets) pull(b);
+      for (const a of this.attacks) pull(a);
+    }
+    const inside = (px: number, py: number) => Field.bombCovers(bomb.style, k, x, y, px, py);
+    for (const b of this.bullets) if (!b.dead && inside(b.x, b.y)) { b.dead = true; this.spray(b.x, b.y, 2, col); }
+    for (const a of this.attacks) if (!a.dead && inside(a.x, a.y)) { a.dead = true; this.spray(a.x, a.y, 4, col); }
     for (const j of this.puffs) {
       if (!j.dead && !j.moonseed && j.shell <= 0 && j.hp <= 2 && j.x > -50 && inside(j.x, j.y)) {
-        j.dead = true; this.spray(j.x, j.y, 5, '#ffd1e6');
+        j.dead = true; this.spray(j.x, j.y, 5, col);
       }
     }
     const L = this.moth;
-    if (L && !L.dead && this.bloom + dt >= C.BLOOM_TIME * 0.5 && this.bloom < C.BLOOM_TIME * 0.5 && inside(L.x, L.y)) {
+    if (L && !L.dead && !this.bombStungMoth && inside(L.x, L.y)) {
+      this.bombStungMoth = true;
       this.damageMoth(8, L.x, L.y);
     }
   }
