@@ -1008,7 +1008,14 @@ export class Field {
       if (!a.dead && hit(a.x, a.y, r * 0.8)) { a.dead = true; struck = true; }
     }
     for (const b of this.bullets) if (!b.dead && hit(b.x, b.y, 3)) { b.dead = true; struck = true; }
-    for (const c of this.crows) if (hit(c.x, c.y, C.CROW_RADIUS * 0.8)) struck = true;
+    // The hollow crow is the meadow's Death: its touch knocks you out on the spot.
+    if (this.crows.some(c => c.hp > 0 && hit(c.x, c.y, C.CROW_RADIUS * 0.8))) {
+      p.hull = 0;
+      this.shake = 10;
+      this.spray(p.x, p.y, 40, '#ff9fb8');
+      this.popup(p.x, p.y - 20, 'Death’s touch');
+      return;
+    }
     const L = this.moth;
     if (L && Math.abs(p.x - L.x) < 30 && Math.abs(p.y - L.y) < 14) struck = true;
     if (struck) {

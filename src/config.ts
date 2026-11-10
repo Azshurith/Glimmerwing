@@ -85,9 +85,9 @@ export const SURGE_SPEED = 1.35;
  * Sudden death, part two: the Hollow Crow (the meadow's Death). One crow per
  * round. It wakes in one meadow, hunts for a while, then crosses into the
  * other, back and forth. Drive it off and it returns sooner, in your
- * rival's meadow, and faster.
+ * rival's meadow, and faster. Its touch is an instant knockout, like Death's.
  */
-export const CROW_TIME = 120;
+export const CROW_TIME = 102;            // about when Death appears in Twinkle Star Sprites
 export const CROW_WARNING = 3;
 export const CROW_RADIUS = 9;
 export const CROW_HP = 14;
@@ -156,7 +156,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '9';          // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '10';          // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout
