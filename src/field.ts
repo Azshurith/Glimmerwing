@@ -44,6 +44,8 @@ export class Field {
   /** Seconds left on the current petal bloom's sweep, and its centre. */
   bloom = 0;
   bloomAt = { x: 0, y: 0 };
+  /** Set once the round is decided: the meadow keeps animating, but nothing can hurt the fairy. */
+  settled = false;
   /** Seconds of Thornquake slowdown left. */
   slow = 0;
   private bombStungMoth = false;
@@ -911,7 +913,7 @@ export class Field {
 
   private checkPlayerHits(): void {
     const p = this.player;
-    if (!this.alive || p.invuln > 0) return;
+    if (!this.alive || p.invuln > 0 || this.settled) return;
     const pr = C.PLAYER_RADIUS * this.fairy.hitbox;
     const hit = (x: number, y: number, r: number) => dist2(p.x, p.y, x, y) < (r + pr) ** 2;
     let struck = false;
