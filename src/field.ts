@@ -7,10 +7,10 @@ import {
   Particle, Player, Popup, Rng, Shot,
 } from './types';
 
-interface ChainInfo { pops: number; live: number; x: number; y: number; charged: boolean }
+interface ChainInfo { pops: number; live: number; x: number; y: number; charged: boolean; reverses: number; bossSent: boolean }
 
 const attackRadius = (a: Attack) =>
-  a.kind === 'bramble' ? C.BRAMBLE_RADIUS : a.kind === 'comet' ? C.COMET_RADIUS : C.STAR_RADIUS;
+  a.kind === 'bramble' ? C.BRAMBLE_RADIUS : a.kind === 'comet' ? C.COMET_RADIUS : a.kind === 'imp' ? C.IMP_RADIUS : C.STAR_RADIUS;
 
 const dist2 = (ax: number, ay: number, bx: number, by: number) =>
   (ax - bx) * (ax - bx) + (ay - by) * (ay - by);
@@ -31,11 +31,10 @@ export class Field {
   moth: Moth | null = null;
   crows: Crow[] = [];
   private crowsWoken = 0;
-  private reflections: number[] = [];
-  private rallyReady = 0;
   private crowReturns: { at: number; level: number }[] = [];
   outbox: Outgoing[] = [];
-  gauge = 0;
+  /** Power gauge, 0 to GAUGE_MAX: three levels of GAUGE_LEVEL each. */
+  gauge = C.GAUGE_START;
   /** Seconds of Fever left. */
   fever = 0;
   /** Seconds until the next moonseed formation; the warning shows near the end. */
@@ -73,6 +72,9 @@ export class Field {
   }
 
   get alive(): boolean { return this.player.hull > 0; }
+
+  /** 0 to 3: how far a charge can go right now. */
+  get gaugeLevel(): number { return Math.min(3, Math.floor(this.gauge / C.GAUGE_LEVEL + 1e-6)); }
 
   /**
    * How fast the meadow runs right now. It climbs through each round and
@@ -117,6 +119,21 @@ export class Field {
   // ---- incoming from the opponent ----------------------------------------
 
   receive(o: Outgoing): void {
+    if (o.kind === 'imp') {
+      // The rival's Extra Attack: small critters that fly the sender's pattern.
+      const sender = fairyById(o.fairy ?? 'pip');
+      const flight = sender.extra.flight, sp = C.IMP_SPEED;
+      const x = Math.min(C.FIELD_W - 12, Math.max(12, o.fromX));
+      let vx = 0, vy = sp, seekT = 0;
+      if (flight === 'seeker') { vy = 0; seekT = C.SEEK_TIME + this.fxRng.range(0, 0.4); }
+      if (flight === 'slant') { const d = x < C.FIELD_W / 2 ? 1 : -1; vx = d * sp * 0.8; vy = sp * 0.8; }
+      if (flight === 'zig') seekT = this.fxRng.range(0.3, 0.7); // time to the first turn
+      this.attacks.push({
+        x, y: -12, vx, vy, flight, seekT, plunge: sp * 1.8, kind: 'imp', level: 1, hp: C.IMP_HP,
+        spin: this.fxRng.range(0, Math.PI * 2), dead: false, color: sender.color,
+      });
+      return;
+    }
     if (o.kind === 'crow') {
       this.crowsWoken = 1;
       this.crowReturns.push({ at: this.time + (o.delay ?? 0), level: o.level });
@@ -186,39 +203,80 @@ export class Field {
       p.invuln = Math.max(p.invuln, C.BLOOM_INVULN);
       p.charge = 0; p.over = 0; p.hold = 0;
       this.shake = 4;
-      this.popup(p.x, p.y - 24, 'Bloom');
+      this.popup(p.x, p.y - 24, this.fairy.bomb.name);
     }
     p.wasBlooming = !!input.bloom;
 
     // Tap to shoot; hold to charge a pulse torpedo, release to launch it.
     if (input.fire) {
-      if (!p.wasFiring && p.cooldown <= 0) {
-        this.shots.push({ x: p.x, y: p.y - 10, vx: 0, charged: false, dead: false });
-        if (this.fever > 0) {
-          const spread = this.fairy.feverSpread === 5 ? [-150, -75, 75, 150] : [-90, 90];
-          for (const vx of spread) this.shots.push({ x: p.x + Math.sign(vx) * 4, y: p.y - 8, vx, charged: false, dead: false });
-        }
-        p.cooldown = C.FIRE_COOLDOWN * (this.fever > 0 ? 0.5 : 1);
-      }
+      if (!p.wasFiring && p.cooldown <= 0) this.volley(C.FIRE_COOLDOWN);
       p.hold += dt;
-      if (p.hold > C.HOLD_BEFORE_CHARGE) p.charge = Math.min(1, p.charge + dt / (C.CHARGE_TIME * this.fairy.charge));
-      // Keep holding past a full charge to overcharge, if you have half a gauge to spend.
-      if (p.charge >= 1 && this.gauge >= C.GAUGE_MAX * C.OVERCHARGE_COST) p.over = Math.min(1, p.over + dt / C.OVERCHARGE_TIME);
+      // Charge climbs a level per CHARGE_TIME, but only as high as the power gauge allows.
+      const cap = this.gaugeLevel;
+      if (p.hold > C.HOLD_BEFORE_CHARGE && cap >= 1) p.charge = Math.min(cap, p.charge + dt / (C.CHARGE_TIME * this.fairy.charge));
+      p.over = p.charge > 1 ? (p.charge - 1) / 2 : 0;
     } else {
-      if (p.wasFiring && p.over >= 1) {
-        this.gauge -= C.GAUGE_MAX * C.OVERCHARGE_COST;
-        this.sendGuardian('Overcharge');
-        this.spray(p.x, p.y - 10, 24, this.fairy.guardian.color);
-        this.shake = 5;
-      } else if (p.wasFiring && p.charge >= 1) {
-        this.shots.push({ x: p.x, y: p.y - 12, vx: 0, charged: true, dead: false });
-        this.shake = 3;
-      }
+      if (p.wasFiring && p.charge >= 1) this.releaseCharge(Math.floor(p.charge + 1e-6));
       p.hold = 0;
       p.charge = 0;
       p.over = 0;
+      // Autofire: a steady stream of plain shots, no charging.
+      if (input.auto && p.cooldown <= 0) this.volley(C.AUTO_FIRE_COOLDOWN);
     }
     p.wasFiring = input.fire;
+  }
+
+  /** One plain shot (a spread during Fever). */
+  private volley(cooldown: number): void {
+    const p = this.player;
+    this.shots.push({ x: p.x, y: p.y - 10, vx: 0, charged: false, dead: false });
+    if (this.fever > 0) {
+      const spread = this.fairy.feverSpread === 5 ? [-150, -75, 75, 150] : [-90, 90];
+      for (const vx of spread) this.shots.push({ x: p.x + Math.sign(vx) * 4, y: p.y - 8, vx, charged: false, dead: false });
+    }
+    p.cooldown = cooldown * (this.fever > 0 ? 0.5 : 1);
+  }
+
+  /**
+   * Every fairy's charge shot is her own (Twinkle Star Sprites style). All of
+   * them pierce: the first critter each one hits starts a chain, the rest are
+   * cleared without one.
+   */
+  private fireChargeShot(): void {
+    const p = this.player, style = this.fairy.chargeStyle;
+    const shot = (dx: number, vx: number, r: number, sp: number, dmg: number, life?: number) =>
+      this.shots.push({ x: p.x + dx, y: p.y - 12, vx, charged: true, dead: false, r, sp, dmg, life, style });
+    switch (style) {
+      case 'orb': shot(0, 0, 10, 0.75, 6); break;                       // a steady ball of light
+      case 'thorn': shot(0, 0, 14, 0.55, 8); break;                     // slow, fat and heavy
+      case 'needles': for (const vx of [-70, 0, 70]) shot(0, vx, 5, 1.15, 3); break; // a fast fan of three
+      case 'twin': shot(-9, 0, 7, 0.9, 4); shot(9, 0, 7, 0.9, 4); break; // two side by side
+      case 'flare': for (const vx of [-180, -90, 0, 90, 180]) shot(0, vx, 9, 0.8, 3, 0.32); break; // short-range cone
+      case 'crescent': shot(0, 0, 24, 0.6, 6); break;                   // a wide sweeping arc
+    }
+  }
+
+  /** Let go of a charge: the torpedo always, plus an Extra Attack at level 2 or the guardian at level 3. */
+  private releaseCharge(level: number): void {
+    const p = this.player;
+    this.fireChargeShot();
+    this.popup(p.x, p.y - 14, this.fairy.chargeName);
+    this.shake = 3;
+    if (level === 2) {
+      this.gauge -= C.EXTRA_COST * C.GAUGE_LEVEL;
+      const ex = this.fairy.extra;
+      for (let i = 0; i < ex.count; i++) {
+        const fromX = C.FIELD_W * (i + 1) / (ex.count + 1);
+        this.outbox.push({ kind: 'imp', level: 1, fromX, fromY: p.y, fairy: this.fairy.id });
+      }
+      this.popup(p.x, p.y - 26, ex.name);
+      this.spray(p.x, p.y - 10, 14, this.fairy.color);
+    } else if (level >= 3) {
+      this.gauge -= C.BOSS_COST * C.GAUGE_LEVEL;
+      this.sendGuardian('Boss');
+      this.spray(p.x, p.y - 10, 24, this.fairy.guardian.color);
+      this.shake = 5;
+    }
   }
 
   // ---- swarms ------------------------------------------------------------------
@@ -340,20 +398,29 @@ export class Field {
 
   private updateShots(dt: number): void {
     for (const s of this.shots) {
-      s.y -= C.SHOT_SPEED * (s.charged ? 0.75 : 1) * dt;
+      s.y -= C.SHOT_SPEED * (s.sp ?? (s.charged ? 0.75 : 1)) * dt;
       s.x += s.vx * dt;
+      if (s.life !== undefined) { s.life -= dt; if (s.life <= 0) { s.dead = true; continue; } }
       if (s.y < -10 || s.x < -10 || s.x > C.FIELD_W + 10) { s.dead = true; continue; }
-      const hitR = s.charged ? 10 : 3;
+      const hitR = s.r ?? (s.charged ? 10 : 3);
+      const power = s.dmg ?? (s.charged ? 6 : 1);
 
       for (const j of this.puffs) {
-        if (!j.dead && dist2(s.x, s.y, j.x, j.y) < (C.PUFF_RADIUS * j.size + hitR) ** 2) {
-          s.dead = true;
-          if (j.moonseed) { this.spray(s.x, s.y, 3, '#cfe9ff'); break; }
-          if (j.shell > 0) { j.shell -= s.charged ? 2 : 1; this.spray(s.x, s.y, 4, '#d9f1ff'); break; }
-          if (!s.charged && j.hp > 1) { j.hp--; this.spray(s.x, s.y, 3, '#fff6d8'); break; }
-          this.popPuff(j, this.newChain(j.x, j.y, s.charged), s.charged);
-          break;
+        if (j.dead || dist2(s.x, s.y, j.x, j.y) >= (C.PUFF_RADIUS * j.size + hitR) ** 2) continue;
+        if (j.moonseed) { s.dead = true; this.spray(s.x, s.y, 3, '#cfe9ff'); break; }
+        if (s.charged && s.popped) {
+          // Past its first hit, a torpedo ploughs on and clears what it touches,
+          // but those pops don't burst or count toward a chain.
+          j.dead = true;
+          this.spray(j.x, j.y, 6, '#fff6d8');
+          continue;
         }
+        // Plain shots stop at the first critter; a torpedo carries on.
+        if (s.charged) s.popped = true; else s.dead = true;
+        if (j.shell > 0) { j.shell -= s.charged ? 2 : 1; this.spray(s.x, s.y, 4, '#d9f1ff'); break; }
+        if (!s.charged && j.hp > 1) { j.hp--; this.spray(s.x, s.y, 3, '#fff6d8'); break; }
+        this.popPuff(j, this.newChain(j.x, j.y, s.charged), s.charged);
+        break;
       }
       if (s.dead) continue;
 
@@ -362,7 +429,7 @@ export class Field {
         if (!a.dead && dist2(s.x, s.y, a.x, a.y) < (r + hitR) ** 2) {
           s.dead = true;
           if (a.kind === 'comet') { this.spray(s.x, s.y, 2, '#ffb3c8'); break; }
-          this.hitAttack(a, s.charged ? 3 : 1, null);
+          this.hitAttack(a, s.charged ? Math.max(1, Math.round(power / 2)) : 1, null);
           break;
         }
       }
@@ -371,7 +438,7 @@ export class Field {
       for (const c of this.crows) {
         if (c.hp > 0 && dist2(s.x, s.y, c.x, c.y) < (C.CROW_RADIUS + hitR + 2) ** 2) {
           s.dead = true;
-          c.hp -= s.charged ? 4 : 1;
+          c.hp -= s.charged ? Math.max(1, Math.round(power * 2 / 3)) : 1;
           this.spray(s.x, s.y, 2, '#ff9fb8');
           if (c.hp <= 0) {
             this.spray(c.x, c.y, 20, '#ff9fb8');
@@ -390,14 +457,14 @@ export class Field {
       const L = this.moth;
       if (L && !L.dead && Math.abs(s.x - L.x) < 34 && Math.abs(s.y - L.y) < 16) {
         s.dead = true;
-        this.damageMoth(s.charged ? 6 : 1, s.x, s.y);
+        this.damageMoth(power, s.x, s.y);
       }
     }
   }
 
   private newChain(x: number, y: number, charged: boolean): number {
     const id = this.nextChain++;
-    this.chains.set(id, { pops: 0, live: 0, x, y, charged });
+    this.chains.set(id, { pops: 0, live: 0, x, y, charged, reverses: 0, bossSent: false });
     return id;
   }
 
@@ -419,8 +486,14 @@ export class Field {
   /** Hitting an incoming attack. Spores bounce back at a higher level. */
   private hitAttack(a: Attack, dmg: number, chainId: number | null): void {
     a.hp -= dmg;
-    if (a.hp > 0) { this.spray(a.x, a.y, 3, a.kind === 'star' ? '#ffe27a' : '#b98ae0'); return; }
+    if (a.hp > 0) { this.spray(a.x, a.y, 3, a.kind === 'imp' ? a.color ?? '#fff' : a.kind === 'star' ? '#ffe27a' : '#b98ae0'); return; }
     a.dead = true;
+    // Extra Attack critters just pop: nothing to bat back.
+    if (a.kind === 'imp') {
+      this.spray(a.x, a.y, 10, a.color ?? '#fff');
+      this.gauge = Math.min(C.GAUGE_MAX, this.gauge + 2);
+      return;
+    }
     // Countering doesn't add to the chain count; the counter itself is the reward.
     const id = chainId ?? this.newChain(a.x, a.y, false);
     if (a.kind === 'bramble') {
@@ -430,16 +503,21 @@ export class Field {
     } else {
       this.addBurst(a.x, a.y, id, C.BURST_RADIUS);
       this.spray(a.x, a.y, 6, '#ffe27a');
-      if (a.level < C.MAX_STAR_LEVEL) {
-        const lvl = Math.min(C.MAX_STAR_LEVEL, a.level + 1 + this.fairy.counterBoost);
+      if (a.level < 2) {
+        // A plain star goes back as a flashing reverse star, tougher.
+        const lvl = Math.min(C.MAX_STAR_LEVEL, 2 + this.fairy.counterBoost);
         this.outbox.push({ kind: 'star', level: lvl, fromX: a.x, fromY: a.y });
-        this.popup(a.x, a.y - 10, 'Counter');
-        this.noteReflection();
+        this.popup(a.x, a.y - 10, 'Reverse');
       } else {
-        // Breaking a fully-powered star hurls an unbreakable comet back.
-        this.outbox.push({ kind: 'comet', level: a.level, fromX: a.x, fromY: a.y });
-        this.popup(a.x, a.y - 10, 'Comet');
-        this.noteReflection();
+        // Breaking a reverse star turns it into one of your Extra Attack critters.
+        this.outbox.push({ kind: 'imp', level: 1, fromX: a.x, fromY: a.y, fairy: this.fairy.id });
+        this.popup(a.x, a.y - 10, this.fairy.extra.name);
+        // Three or more reverse stars broken in one chain summon your guardian.
+        const c = this.chains.get(id);
+        if (c && ++c.reverses >= C.BOSS_CHAIN_REVERSES && !c.bossSent) {
+          c.bossSent = true;
+          this.sendGuardian('Reverse chain');
+        }
       }
     }
   }
@@ -459,7 +537,7 @@ export class Field {
         }
       }
       for (const a of this.attacks) {
-        if (!a.dead && a.kind === 'star' && !b.hits.has(a) && dist2(b.x, b.y, a.x, a.y) < r * r) {
+        if (!a.dead && (a.kind === 'star' || a.kind === 'imp') && !b.hits.has(a) && dist2(b.x, b.y, a.x, a.y) < r * r) {
           b.hits.add(a);
           this.hitAttack(a, 1, b.chainId);
         }
@@ -499,10 +577,7 @@ export class Field {
       }
       if (n >= 7) this.outbox.push({ kind: 'bramble', level: 1, fromX: c.x, fromY: c.y });
     }
-    if (this.gauge >= C.GAUGE_MAX) {
-      this.gauge = 0;
-      this.sendGuardian('');
-    }
+    // A full gauge no longer fires itself: charge to level 3 to send the guardian.
   }
 
   /**
@@ -543,6 +618,15 @@ export class Field {
   private updateAttacks(dt: number): void {
     for (const a of this.attacks) {
       a.spin += dt * (a.kind === 'bramble' ? 1.5 : 4 + a.level);
+      if (a.flight === 'zig') {
+        // Right-angle turns: fall, dart sideways, fall again.
+        a.seekT -= dt;
+        if (a.seekT <= 0) {
+          a.seekT = this.fxRng.range(0.35, 0.8);
+          if (a.vx === 0) { a.vx = (this.player.x < a.x ? -1 : 1) * C.IMP_SPEED * 1.1; a.vy = 0; }
+          else { a.vx = 0; a.vy = C.IMP_SPEED; }
+        }
+      }
       if (a.flight === 'seeker' && a.seekT > 0) {
         // Line up: ease into the top of the meadow while sliding over the fairy.
         a.seekT -= dt;
@@ -611,16 +695,6 @@ export class Field {
   }
 
   /** Breaking several incoming stars in quick succession rallies your guardian. */
-  private noteReflection(): void {
-    this.reflections.push(this.time);
-    this.reflections = this.reflections.filter(t => this.time - t <= C.RALLY_WINDOW);
-    if (this.reflections.length >= C.RALLY_COUNT && this.time >= this.rallyReady) {
-      this.reflections = [];
-      this.rallyReady = this.time + C.RALLY_COOLDOWN;
-      this.sendGuardian('Rally');
-    }
-  }
-
   private sendGuardian(how: string): void {
     this.outbox.push({ kind: 'moth', level: 1, fromX: C.FIELD_W / 2, fromY: C.FIELD_H / 2, fairy: this.fairy.id });
     this.popup(C.FIELD_W / 2, C.FIELD_H / 2, how ? `${how}: ${this.fairy.guardian.name} sent` : `${this.fairy.guardian.name} sent`);
@@ -856,7 +930,7 @@ export class Field {
     this.time += dt;
     const tempo = this.tempo, world = dt * tempo, own = dt * (1 + (tempo - 1) * 0.5);
     this.shake = Math.max(0, this.shake - dt * 30);
-    for (const s of this.shots) { s.y -= C.SHOT_SPEED * (s.charged ? 0.75 : 1) * own; s.x += s.vx * own; }
+    for (const s of this.shots) { s.y -= C.SHOT_SPEED * (s.sp ?? (s.charged ? 0.75 : 1)) * own; s.x += s.vx * own; }
     for (const a of this.attacks) { a.x += a.vx * world; a.y += a.vy * world; }
     for (const b of this.bullets) { b.x += b.vx * world; b.y += b.vy * world; }
     for (const c of this.crows) { c.x += c.vx * world; c.y += c.vy * world; }

@@ -4,8 +4,10 @@ export interface Controls {
   up: boolean;
   down: boolean;
   fire: boolean;
-  /** Petal bloom: the panic button. */
+  /** Petal bloom: the panic button (B). */
   bloom?: boolean;
+  /** Autofire (C): rapid plain shots while held. Holding fire (A) instead charges. */
+  auto?: boolean;
   /** Optional absolute target (touch input), in field coordinates. */
   target?: { x: number; y: number } | null;
 }
@@ -18,14 +20,26 @@ export interface Player {
   cooldown: number;
   hold: number;
   charge: number;
-  /** Overcharge, 0 to 1, built by holding past a full charge. */
+  /** Charge shown as a ring past level 1: 0 at level 1, 0.5 at level 2, 1 at level 3. */
   over: number;
   wasFiring: boolean;
   wasBlooming: boolean;
   blooms: number;
 }
 
-export interface Shot { x: number; y: number; vx: number; charged: boolean; dead: boolean }
+export interface Shot {
+  x: number; y: number; vx: number; charged: boolean; dead: boolean;
+  /** A charged shot that has made its first hit ploughs on through the rest. */
+  popped?: boolean;
+  /** Charged shots differ by fairy: hit radius, speed (x SHOT_SPEED), damage, range in seconds, look. */
+  r?: number; sp?: number; dmg?: number; life?: number; style?: ChargeStyle;
+}
+
+/** Each fairy's charge shot. */
+export type ChargeStyle = 'orb' | 'thorn' | 'needles' | 'twin' | 'flare' | 'crescent';
+
+/** Each fairy's bomb (petal bloom): same effect, her own look and name. */
+export interface Bomb { name: string; color: string; shape: 'petal' | 'leaf' | 'shard' | 'heart' | 'ember' | 'moon' }
 
 export type CritterKind = 'puff' | 'beetle' | 'spinner';
 
@@ -60,7 +74,7 @@ export interface Burst {
   hits: Set<object>;
 }
 
-export type AttackKind = 'star' | 'bramble' | 'comet';
+export type AttackKind = 'star' | 'bramble' | 'comet' | 'imp';
 
 export interface Attack {
   x: number; y: number;
@@ -80,9 +94,19 @@ export interface Attack {
   seekT: number;
   /** Plunge speed a seeker switches to once it's lined up. */
   plunge: number;
+  /** Extra Attack critters wear the sender's colour. */
+  color?: string;
 }
 
-export type StarFlight = 'drop' | 'seeker' | 'slant';
+export type StarFlight = 'drop' | 'seeker' | 'slant' | 'zig';
+
+/** A fairy's Extra Attack: a few small critters sent with a level 2 charge. */
+export interface Extra {
+  name: string;
+  count: 2 | 3 | 4;
+  /** drop: straight down. seeker: line up over the fairy, then plunge. slant: diagonals off the walls. zig: right-angle turns. */
+  flight: StarFlight;
+}
 
 export type GuardianPattern = 'aimed' | 'ring' | 'rapid' | 'rain' | 'spiral' | 'sweep';
 
