@@ -2,12 +2,21 @@ import * as C from './config';
 import { Game } from './game';
 import { Input } from './input';
 import { Lobby } from './lobby';
+import { Sound } from './audio';
 import { Renderer } from './render';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 const input = new Input(canvas);
-const game = new Game(input, renderer);
+const sound = new Sound();
+const game = new Game(input, renderer, sound);
+// Browsers only start audio after a gesture.
+for (const ev of ['keydown', 'pointerdown', 'touchstart'] as const) window.addEventListener(ev, () => sound.unlock(), { passive: true });
+const muteBtn = document.getElementById('mute') as HTMLButtonElement | null;
+const showMute = () => { if (muteBtn) { muteBtn.textContent = sound.muted ? 'Sound off' : 'Sound on'; muteBtn.setAttribute('aria-pressed', String(!sound.muted)); } };
+muteBtn?.addEventListener('click', () => { sound.unlock(); sound.toggleMute(); showMute(); muteBtn.blur(); });
+window.addEventListener('keydown', e => { if (e.code === 'KeyM') setTimeout(showMute); });
+showMute();
 const lobby = new Lobby(game);
 game.onWantOnline = () => lobby.open();
 document.querySelector<HTMLButtonElement>('[data-online]')?.addEventListener('click', e => { lobby.open(); (e.currentTarget as HTMLButtonElement).blur(); });
