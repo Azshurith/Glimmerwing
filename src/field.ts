@@ -753,7 +753,7 @@ export class Field {
       L.x += (tx - L.x) * k; L.y += (ty - L.y) * k;
       if (L.stageT >= C.GUARDIAN_ENTER) {
         L.stageT = 0;
-        if (L.rush) { L.stage = 'attack'; L.cyclesLeft = 2 + (this.fxRng.next() < 0.5 ? 1 : 0); this.nextCycle(L); L.fireT = 0.3; } else L.stage = 'wander';
+        if (L.rush) { L.stage = 'attack'; L.cyclesLeft = C.GUARDIAN_CYCLES_MIN + Math.floor(this.fxRng.next() * (C.GUARDIAN_CYCLES_MAX - C.GUARDIAN_CYCLES_MIN + 1)); this.nextCycle(L); L.fireT = 0.3; } else L.stage = 'wander';
       }
     } else if (L.stage === 'wander') {
       // Float in a loop, clockwise or anticlockwise at random.
@@ -763,7 +763,7 @@ export class Field {
       L.x += (tx - L.x) * k; L.y += (ty - L.y) * k;
       if (L.stageT >= C.GUARDIAN_WANDER) {
         L.stage = 'attack'; L.stageT = 0;
-        L.cyclesLeft = 2 + (this.fxRng.next() < 0.5 ? 1 : 0);
+        L.cyclesLeft = C.GUARDIAN_CYCLES_MIN + Math.floor(this.fxRng.next() * (C.GUARDIAN_CYCLES_MAX - C.GUARDIAN_CYCLES_MIN + 1));
         this.nextCycle(L);
       }
     } else if (L.stage === 'attack') {
