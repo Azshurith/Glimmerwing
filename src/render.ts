@@ -126,7 +126,8 @@ export class Renderer {
     }
     for (const c of f.crows) this.crow(c.x, c.y, c.state === 'dive' ? Math.atan2(c.vy, c.vx) - Math.PI / 2 : 0, time, c.hp / C.CROW_HP);
     if (f.crowWarning) this.cue('A crow stirs', '#ff9fb8', time, 76);
-    if (f.moth) this.guardian(f.moth.x + (f.moth.stage === 'attack' && f.moth.stageT < 0.6 ? Math.sin(time * 90) * 2 : 0), f.moth.y, f.moth.t, f.moth.hp / C.MOTH_HP, f.moth.guardian.color, f.moth.wing as WingShape);
+    // A reeling guardian blinks and shudders.
+    if (f.moth && !(f.moth.stun > 0 && Math.floor(time * 24) % 2 === 0)) this.guardian(f.moth.x + ((f.moth.stage === 'attack' && f.moth.stageT < 0.6) || f.moth.stun > 0 ? Math.sin(time * 90) * 2 : 0), f.moth.y, f.moth.t, f.moth.hp / C.MOTH_HP, f.moth.guardian.color, f.moth.wing as WingShape);
 
     ctx.fillStyle = '#ff7aa8';
     for (const b of f.bullets) { ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill(); }
