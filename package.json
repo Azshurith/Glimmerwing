@@ -1,0 +1,17 @@
+{
+  "name": "glimmerwing",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "build": "tsc -p . && node build.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.5"
+  },
+  "type": "module"
+}

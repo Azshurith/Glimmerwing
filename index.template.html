@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Glimmerwing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,600;1,9..144,700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f1ecfa; --ink: #2a1d52; --muted: #5d5280; --btn: #2a1d52; --btn-ink: #f6f0ff; --edge: #c9bde6;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #100b24; --ink: #f6f0ff; --muted: #a99fc8; --btn: #ffd86b; --btn-ink: #100b24; --edge: #2f2557;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #100b24; --ink: #f6f0ff; --muted: #a99fc8; --btn: #ffd86b; --btn-ink: #100b24; --edge: #2f2557;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
+  font-family: "Fraunces", Georgia, "Times New Roman", serif;
+  display: flex; flex-direction: column; align-items: center; gap: 1rem;
+  padding: 1rem;
+}
+header { width: 100%; max-width: 1000px; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .75rem; }
+h1 { margin: 0; font-size: clamp(1.6rem, 4.5vw, 2.6rem); font-weight: 700; font-style: italic; letter-spacing: -0.01em; }
+.modes { display: flex; gap: .5rem; }
+button {
+  font: inherit; font-size: .9rem; font-weight: 600; border: 0; border-radius: 999px;
+  padding: .6rem 1.1rem; background: var(--btn); color: var(--btn-ink); cursor: pointer;
+}
+button.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--btn); }
+button:focus-visible, canvas:focus-visible { outline: 3px solid #ffd36e; outline-offset: 3px; }
+.stage { width: 100%; max-width: 1000px; }
+canvas {
+  display: block; width: 100%; aspect-ratio: 504 / 320; border-radius: 14px;
+  touch-action: none; background: #100b24; box-shadow: 0 0 0 1px var(--edge);
+}
+button.link { background: none; color: var(--muted); padding: .2rem 0; text-decoration: underline; font-weight: 400; font-size: .8rem; border-radius: 0; }
+.help { width: 100%; max-width: 1000px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .5rem 2rem; font-size: .88rem; line-height: 1.6; color: var(--muted); }
+.help p { margin: 0; }
+.help strong { color: var(--ink); font-weight: 600; }
+kbd { font: inherit; padding: 0 .35em; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--edge); color: var(--ink); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Glimmerwing</h1>
+  <div class="modes">
+    <button data-mode="cpu">Play the CPU</button>
+    <button data-mode="versus" class="ghost">Two players</button>
+  </div>
+</header>
+<div class="stage"><canvas id="game" tabindex="0" aria-label="Glimmerwing playfield"></canvas></div>
+<section class="help">
+  <p><strong>How to win.</strong> Pop a dandelion puff and its pollen burst pops its neighbours. Chains of three or more send falling stars into your rival’s meadow; seven or more add a thorny bramble. Fill the gauge at the bottom to send your fairy’s guardian. You can also send one early: hold fire past a full charge to overcharge (costs half a gauge), or break four incoming stars within four seconds for a rally. Guardians drift in and shadow you, lock in place to attack, then sink out through the bottom.</p>
+  <p><strong>Bat stars back.</strong> A star’s colour shows the hits it needs: rose takes four, orange three, gold two, pale one. Break it to send it back tougher, up to three times. The longer a round runs, the faster everything comes at you (watch the tempo in the corner), and each new round of a match starts faster. Lose all five hearts and you lose the round; best of three takes the match.</p>
+  <p><strong>Fever.</strong> About half a minute in, “Moonseed rising” flashes and a pale crescent orb drifts in with the next puffs. Shots bounce off it; catch it in a pollen burst to break it. That starts Fever: a spread shot, a rush of puffs, a gauge that fills twice as fast, and every chain sends one star per pop after the first, so a 5-chain sends four.</p>
+  <p><strong>Tough puffs and late rounds.</strong> A puff’s seed tips show the shots it takes, dropping a step with each hit: moonsilver five, amber four, sky three, mint two, cream one. Any pollen burst pops it outright. Some waves come wrapped in dew bubbles that pop first, big puffs leave extra-wide bursts, and watch for waves that sneak up from below. Beetles cut diagonals inside a glassy shell that has to break first; spinners corkscrew down. Waves also swoop in from a corner, sweep across in a line, or drop in squeezing columns, and some ring a tough leader with small fry: pop the leader to clear the lot. Tougher critters leave bigger bursts. Break a rose star and it flies back as an unbreakable comet you can only dodge. If a round runs past about a minute and a half, hollow crows wake in both meadows and start diving at you. Shoot one enough to drive it off, but it comes back faster.</p>
+  <p><strong>Fairies.</strong> Three fairies are ready from the start. Win matches, chain big, and beat the CPU cleanly to unlock three more. Progress is saved in this browser. <button class="link" id="reset">Reset progress</button></p>
+  <p><strong>Controls.</strong> Vs CPU: arrows or <kbd>WASD</kbd>, tap <kbd>Space</kbd> to shoot, hold to charge. On touch, drag to steer and hold to charge. Two players: <kbd>WASD</kbd> + <kbd>F</kbd> and arrows + <kbd>Enter</kbd>. <kbd>P</kbd> pauses.</p>
+</section>
+<script>/*__BUNDLE__*/</script>
+</body>
+</html>
