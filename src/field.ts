@@ -164,6 +164,7 @@ export class Field {
           x: C.FIELD_W / 2, y: -40, hp: C.MOTH_HP, t: 0, fireT: 0, dead: false, guardian: sender.guardian, wing: sender.wing,
           angle: this.fxRng.range(0, Math.PI * 2), stage: 'enter', stageT: 0,
           dir: this.fxRng.next() < 0.5 ? 1 : -1, hurt: 0, stun: 0, vx: 0, rush: !!o.rush,
+          swoop: -1, swoopIn: 1.8, postX: 0, postY: 0, toX: 0, toY: 0,
         };
         this.popup(C.FIELD_W / 2, 90, `${sender.guardian.name} incoming`);
       }
@@ -746,8 +747,37 @@ export class Field {
       L.x += (tx - L.x) * k; L.y += (ty - L.y) * k;
       if (L.stageT >= C.GUARDIAN_WANDER) { L.stage = 'attack'; L.stageT = 0; L.fireT = 0.5; }
     } else if (L.stage === 'attack') {
+      if (L.swoop >= 0) {
+        // Slide down near the fairy, hang there, then glide back up to the post.
+        L.swoop += dt;
+        const down = C.GUARDIAN_SWOOP_DOWN, hold = down + C.GUARDIAN_SWOOP_HOLD, back = hold + C.GUARDIAN_SWOOP_BACK;
+        const ease = (k: number) => k * k * (3 - 2 * k);
+        if (L.swoop < down) {
+          const k = ease(L.swoop / down);
+          L.x = L.postX + (L.toX - L.postX) * k; L.y = L.postY + (L.toY - L.postY) * k;
+        } else if (L.swoop < hold) {
+          L.x = L.toX; L.y = L.toY;
+        } else if (L.swoop < back) {
+          const k = ease((L.swoop - hold) / C.GUARDIAN_SWOOP_BACK);
+          L.x = L.toX + (L.postX - L.toX) * k; L.y = L.toY + (L.postY - L.toY) * k;
+        } else {
+          L.x = L.postX; L.y = L.postY;
+          L.swoop = -1;
+          L.swoopIn = C.GUARDIAN_SWOOP_EVERY + this.fxRng.range(-0.5, 0.5);
+          L.fireT = 0.4;
+        }
+        return; // no firing mid-swoop, and it finishes the swoop before leaving
+      }
       L.fireT -= dt;
       if (L.fireT <= 0 && this.alive) this.guardianFire(L);
+      L.swoopIn -= dt;
+      if (L.swoopIn <= 0 && this.alive && L.stageT < C.GUARDIAN_ATTACK - 1.5) {
+        L.swoop = 0;
+        L.postX = L.x; L.postY = L.y;
+        L.toX = Math.min(C.FIELD_W - 30, Math.max(30, this.player.x));
+        L.toY = Math.max(L.y, Math.min(C.FIELD_H - 50, this.player.y - C.GUARDIAN_SWOOP_GAP));
+        return;
+      }
       if (L.stageT >= C.GUARDIAN_ATTACK) {
         L.stage = 'exit'; L.stageT = 0;
         // Head for whichever side it's nearer, unless shots push it the other way.

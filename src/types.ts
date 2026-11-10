@@ -169,6 +169,11 @@ export interface Moth {
   vx: number;
   /** Summoned by a reverse chain: skips the wander and attacks straight away. */
   rush: boolean;
+  /** Attack-phase swoop: seconds into the current swoop (-1 when not swooping), and the wait until the next. */
+  swoop: number;
+  swoopIn: number;
+  /** Where it returns to after a swoop, and where it swoops to. */
+  postX: number; postY: number; toX: number; toY: number;
 }
 
 export interface Crow {
