@@ -8,6 +8,9 @@ import {
   Particle, Player, Popup, Rng, Shot,
 } from './types';
 
+/** Which bomb sound each bomb style plays (see Sound.play 'bomb'). */
+const BOMB_SOUND: Record<string, number> = { dash: 0, blast: 1, vortex: 2, fan: 3, beam: 4, hole: 5 };
+
 interface ChainInfo { pops: number; live: number; x: number; y: number; charged: boolean; reverses: number; bossSent: boolean }
 
 const attackRadius = (a: Attack) =>
@@ -278,7 +281,7 @@ export class Field {
       p.charge = 0; p.over = 0; p.hold = 0;
       this.shake = 4;
       this.popup(p.x, p.y - 24, this.fairy.bomb.name);
-      this.snd('bomb');
+      this.snd('bomb', BOMB_SOUND[bomb.style]);
     }
     p.wasBlooming = !!input.bloom;
 
