@@ -112,7 +112,14 @@ export class Renderer {
       if (a.kind === 'bramble') this.bramble(a.x, a.y, a.spin);
       else if (a.kind === 'comet') this.comet(a.x, a.y, time);
       else if (a.kind === 'imp') this.imp(a.x, a.y, a.color ?? '#ffffff', time + a.spin, a.flight === 'seeker' && a.seekT > 0);
-      else this.star(a.x, a.y, a.spin, a.level, a.hp, a.vx, a.vy, a.flight === 'seeker' && a.seekT > 0);
+      else {
+        this.star(a.x, a.y, a.spin, a.level, a.hp, a.vx, a.vy, a.flight === 'seeker' && a.seekT > 0);
+        // Reverse stars flash: break one and it becomes your Extra Attack.
+        if (a.level >= 2 && Math.sin(time * 18) > 0) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.4;
+          ctx.beginPath(); ctx.arc(a.x, a.y, C.STAR_RADIUS + 4, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
     }
     for (const c of f.crows) this.crow(c.x, c.y, c.state === 'dive' ? Math.atan2(c.vy, c.vx) - Math.PI / 2 : 0, time, c.hp / C.CROW_HP);
     if (f.crowWarning) this.cue('A crow stirs', '#ff9fb8', time, 76);
@@ -125,7 +132,7 @@ export class Renderer {
       ctx.fillStyle = color; ctx.shadowColor = color;
       if (s.charged) {
         ctx.shadowBlur = 14;
-        ctx.beginPath(); ctx.arc(s.x, s.y, 6, 0, Math.PI * 2); ctx.fill();
+        this.chargeShot(s.x, s.y, s.vx, s.r ?? 10, s.style ?? 'orb', s.life, time);
       } else {
         ctx.shadowBlur = 4;
         ctx.beginPath(); ctx.arc(s.x, s.y, 2, 0, Math.PI * 2); ctx.fill();
@@ -149,13 +156,14 @@ export class Renderer {
       const R = 30 + 330 * k;
       ctx.save(); ctx.translate(f.bloomAt.x, f.bloomAt.y);
       ctx.globalAlpha = 1 - k;
-      ctx.fillStyle = 'rgba(255,209,230,0.12)';
+      const bomb = f.fairy.bomb;
+      ctx.fillStyle = bomb.color; ctx.globalAlpha = (1 - k) * 0.14;
       ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#ffd1e6';
+      ctx.globalAlpha = 1 - k;
       for (let i = 0; i < 24; i++) {
         const a = (Math.PI * 2 * i) / 24 + k * 2;
         ctx.save(); ctx.translate(Math.cos(a) * R, Math.sin(a) * R); ctx.rotate(a);
-        ctx.beginPath(); ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
+        this.bombPiece(bomb.shape, k);
         ctx.restore();
       }
       ctx.restore();
@@ -183,7 +191,7 @@ export class Renderer {
     const ctx = this.ctx;
     const color = f.fairy.color;
     for (let i = 0; i < C.MAX_HULL; i++) this.heart(10 + i * 12, 10, i < f.player.hull ? color : 'rgba(246,240,255,0.18)');
-    for (let i = 0; i < C.BLOOMS_PER_ROUND; i++) this.blossom(74 + i * 11, 10, i < f.player.blooms ? '#ffd1e6' : 'rgba(246,240,255,0.15)');
+    for (let i = 0; i < C.BLOOMS_PER_ROUND; i++) this.blossom(74 + i * 11, 10, i < f.player.blooms ? f.fairy.bomb.color : 'rgba(246,240,255,0.15)');
     ctx.textAlign = 'right'; ctx.font = `600 9px ${FONT}`; ctx.fillStyle = PALETTE.dim;
     ctx.fillText(f.fairy.name, C.FIELD_W - 34, 13);
     for (let i = 0; i < C.ROUNDS_TO_WIN; i++) {
@@ -216,6 +224,58 @@ export class Renderer {
     ctx.textAlign = 'left'; ctx.font = `italic 600 9px ${FONT}`;
     ctx.fillStyle = full ? f.fairy.guardian.color : lv === 0 ? 'rgba(246,240,255,0.35)' : PALETTE.dim;
     ctx.fillText(full ? 'MAX' : `Lv ${lv}`, 10, C.FIELD_H - 10);
+  }
+
+  /** One piece of a bomb's ring, drawn at the origin, pointing outward. */
+  private bombPiece(shape: string, k: number): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    switch (shape) {
+      case 'leaf': ctx.moveTo(-7, 0); ctx.quadraticCurveTo(0, -5, 7, 0); ctx.quadraticCurveTo(0, 5, -7, 0); break;
+      case 'shard': ctx.moveTo(-6, 0); ctx.lineTo(0, -2.5); ctx.lineTo(8, 0); ctx.lineTo(0, 2.5); ctx.closePath(); break;
+      case 'heart': ctx.arc(-1.5, -1.6, 2.2, 0, Math.PI * 2); ctx.arc(-1.5, 1.6, 2.2, 0, Math.PI * 2); ctx.moveTo(-1, -3.5); ctx.lineTo(5, 0); ctx.lineTo(-1, 3.5); break;
+      case 'ember': ctx.arc(0, 0, 2.5 + 2 * (1 - k), 0, Math.PI * 2); break;
+      case 'moon': ctx.arc(0, 0, 5, -Math.PI / 2, Math.PI / 2); ctx.arc(-2, 0, 4, Math.PI / 2, -Math.PI / 2, true); break;
+      default: ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
+
+  /** A fairy's charge shot, by style. */
+  private chargeShot(x: number, y: number, vx: number, r: number, style: string, life: number | undefined, t: number): void {
+    const ctx = this.ctx;
+    switch (style) {
+      case 'needles': {
+        const a = Math.atan2(-1, vx / 500);
+        ctx.save(); ctx.translate(x, y); ctx.rotate(a + Math.PI / 2);
+        ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(2.2, 3); ctx.lineTo(-2.2, 3); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        break;
+      }
+      case 'thorn':
+        ctx.beginPath();
+        for (let i = 0; i < 16; i++) {
+          const a = (Math.PI * 2 * i) / 16 + t * 3, rr = i % 2 ? r * 0.45 : r * 0.75;
+          ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+        }
+        ctx.closePath(); ctx.fill();
+        break;
+      case 'flare':
+        ctx.globalAlpha = Math.max(0.2, Math.min(1, (life ?? 0.3) / 0.25));
+        ctx.beginPath(); ctx.arc(x, y, r * 0.75, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        break;
+      case 'crescent':
+        ctx.lineWidth = 4; ctx.strokeStyle = ctx.fillStyle as string; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(x, y + r * 0.7, r, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+        ctx.lineCap = 'butt';
+        break;
+      case 'twin':
+        ctx.beginPath(); ctx.ellipse(x, y, r * 0.55, r * 0.95, 0, 0, Math.PI * 2); ctx.fill();
+        break;
+      default:
+        ctx.beginPath(); ctx.arc(x, y, r * 0.6, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
   /** An Extra Attack critter: a small glowing body with fluttering wings in the sender's colour. */
@@ -646,6 +706,7 @@ const placeholder: Fairy = {
   speed: 1, burst: 1, charge: 1, hitbox: 1, feverTime: 1, feverSpread: 3, counterBoost: 0, unlock: null,
   guardian: { name: '', color: '', pattern: 'aimed' },
   extra: { name: '', count: 2, flight: 'drop' },
+  chargeStyle: 'orb', chargeName: '', bomb: { name: '', color: '#fff', shape: 'petal' },
 };
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

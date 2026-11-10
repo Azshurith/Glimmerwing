@@ -99,10 +99,8 @@ export const BOSS_COST = 2;
 export const IMP_HP = 2;
 export const IMP_RADIUS = 7;
 export const IMP_SPEED = 95;
-/** Rally: break this many incoming stars within the window to send your guardian. */
-export const RALLY_COUNT = 4;
-export const RALLY_WINDOW = 4;
-export const RALLY_COOLDOWN = 20;
+/** Break this many reverse stars within one chain to send your guardian (the TSS reverse-chain Boss Attack). */
+export const BOSS_CHAIN_REVERSES = 3;
 
 /** Tempo: the meadow speeds up the longer a round (and a match) goes on. */
 export const TEMPO_RAMP_TIME = 120;   // seconds to reach the full in-round ramp
@@ -125,7 +123,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '3';          // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '4';          // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout

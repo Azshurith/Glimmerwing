@@ -29,9 +29,17 @@ export interface Player {
 
 export interface Shot {
   x: number; y: number; vx: number; charged: boolean; dead: boolean;
-  /** A charged torpedo that has made its first hit ploughs on through the rest. */
+  /** A charged shot that has made its first hit ploughs on through the rest. */
   popped?: boolean;
+  /** Charged shots differ by fairy: hit radius, speed (x SHOT_SPEED), damage, range in seconds, look. */
+  r?: number; sp?: number; dmg?: number; life?: number; style?: ChargeStyle;
 }
+
+/** Each fairy's charge shot. */
+export type ChargeStyle = 'orb' | 'thorn' | 'needles' | 'twin' | 'flare' | 'crescent';
+
+/** Each fairy's bomb (petal bloom): same effect, her own look and name. */
+export interface Bomb { name: string; color: string; shape: 'petal' | 'leaf' | 'shard' | 'heart' | 'ember' | 'moon' }
 
 export type CritterKind = 'puff' | 'beetle' | 'spinner';
 
