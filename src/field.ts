@@ -131,15 +131,24 @@ export class Field {
       const sender = fairyById(o.fairy ?? 'pip');
       const flight = sender.extra.flight, sp = C.IMP_SPEED;
       const x = Math.min(C.FIELD_W - 12, Math.max(12, o.fromX));
-      let vx = 0, vy = sp, seekT = 0;
+      let vx = 0, vy = sp, seekT = 0, y = -12, sx = x;
       if (flight === 'seeker') { vy = 0; seekT = C.SEEK_TIME + this.fxRng.range(0, 0.4); }
+      if (flight === 'lateral') {
+        // Comes in from a side wall near the fairy's height and bursts partway across.
+        const fromLeft = this.fxRng.next() < 0.5;
+        sx = fromLeft ? -12 : C.FIELD_W + 12;
+        y = Math.min(C.FIELD_H - 30, Math.max(30, this.player.y + this.fxRng.range(-60, 10)));
+        vx = (fromLeft ? 1 : -1) * C.LATERAL_SPEED; vy = 0;
+        seekT = this.fxRng.range(1.0, 1.6); // fuse
+      }
+      if (flight === 'bounce') { vx = (this.fxRng.next() < 0.5 ? -1 : 1) * 50; vy = 20; seekT = C.BURR_HOP_EVERY; }
+      if (flight === 'bat') { vy = sp * 0.7; seekT = C.BAT_WEAVE + this.fxRng.range(0, 0.4); }
       if (flight === 'slant') { const d = x < C.FIELD_W / 2 ? 1 : -1; vx = d * sp * 0.8; vy = sp * 0.8; }
       if (flight === 'zig') seekT = this.fxRng.range(0.3, 0.7); // time to the first turn
       if (flight === 'homing') { seekT = C.HOMING_TIME; vy = sp * 0.85; }
-      if (flight === 'flutter') seekT = this.fxRng.range(0, Math.PI * 2); // weave phase
       this.attacks.push({
-        x, y: -12, vx, vy, flight, seekT, plunge: sp * 1.8, kind: 'imp', level: 1, hp: 1,
-        spin: this.fxRng.range(0, Math.PI * 2), dead: false, color: sender.color, look: sender.extra.look,
+        x: sx, y, vx, vy, flight, seekT, plunge: sp * 1.8, kind: 'imp', level: 1, hp: 1,
+        spin: this.fxRng.range(0, Math.PI * 2), dead: false, color: sender.color, look: sender.extra.look, t: 0,
       });
       return;
     }
@@ -646,11 +655,41 @@ export class Field {
         if (a.y > this.player.y - 16) a.seekT = 0;
         if (a.seekT <= 0 && a.vy < C.IMP_SPEED * 0.5) a.vy = C.IMP_SPEED * 0.8;
       }
-      if (a.flight === 'flutter') {
-        // Weave side to side like a bat while dropping.
-        a.seekT += dt;
-        a.vx = Math.cos(a.seekT * 4.5) * 110;
-        a.vy = C.IMP_SPEED * (0.75 + 0.35 * Math.max(0, Math.sin(a.seekT * 9)));
+      if (a.flight === 'lateral') {
+        // Streak across with a little bob, then burst into a ring of sparks.
+        a.t = (a.t ?? 0) + dt;
+        a.x += a.vx * dt;
+        a.y += Math.cos(a.t * 8) * 18 * dt;
+        a.seekT -= dt;
+        if (a.seekT <= 0) {
+          a.dead = true;
+          for (let i = 0; i < C.SPARK_BULLETS; i++) {
+            const ang = (Math.PI * 2 * i) / C.SPARK_BULLETS;
+            this.bullets.push({ x: a.x, y: a.y, vx: Math.cos(ang) * C.SPARK_SPEED, vy: Math.sin(ang) * C.SPARK_SPEED, dead: false });
+          }
+          this.spray(a.x, a.y, 14, a.color ?? '#ffd86b');
+        }
+        continue;
+      }
+      if (a.flight === 'bounce') {
+        // Little hops under gravity: it rises a bit, falls further, and drifts down overall.
+        a.vy += C.BURR_GRAVITY * dt;
+        a.seekT -= dt;
+        if (a.seekT <= 0) { a.seekT = C.BURR_HOP_EVERY; a.vy = -C.BURR_HOP; }
+      }
+      if (a.flight === 'bat') {
+        // Weave down like a bat, then lock on to where the fairy is and dive straight there.
+        a.t = (a.t ?? 0) + dt;
+        if (a.seekT > 0) {
+          a.seekT -= dt;
+          a.vx = Math.cos(a.t * 4.5) * 100;
+          a.vy = C.IMP_SPEED * (0.55 + 0.3 * Math.max(0, Math.sin(a.t * 9)));
+          if (a.seekT <= 0) {
+            const d = Math.hypot(this.player.x - a.x, this.player.y - a.y) || 1;
+            a.vx = ((this.player.x - a.x) / d) * C.BAT_DIVE;
+            a.vy = ((this.player.y - a.y) / d) * C.BAT_DIVE;
+          }
+        }
       }
       if (a.flight === 'seeker' && a.seekT > 0) {
         // Line up: ease into the top of the meadow while sliding over the fairy.
@@ -663,7 +702,12 @@ export class Field {
       }
       a.x += a.vx * dt;
       a.y += a.vy * dt;
-      if (a.x < 8 || a.x > C.FIELD_W - 8) a.vx *= -1;
+      if (a.flight === 'bat' && a.seekT <= 0) {
+        // A diving bat doesn't bounce off walls; it just leaves.
+        if (a.x < -20 || a.x > C.FIELD_W + 20 || a.y < -30) a.dead = true;
+      } else if (a.x < 8 || a.x > C.FIELD_W - 8) {
+        a.vx = Math.abs(a.vx) * (a.x < 8 ? 1 : -1);
+      }
       if (a.y > C.FIELD_H + 20) a.dead = true;
     }
   }
