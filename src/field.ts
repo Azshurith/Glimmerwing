@@ -136,7 +136,7 @@ export class Field {
       if (flight === 'homing') { seekT = C.HOMING_TIME; vy = sp * 0.85; }
       if (flight === 'flutter') seekT = this.fxRng.range(0, Math.PI * 2); // weave phase
       this.attacks.push({
-        x, y: -12, vx, vy, flight, seekT, plunge: sp * 1.8, kind: 'imp', level: 1, hp: C.IMP_HP,
+        x, y: -12, vx, vy, flight, seekT, plunge: sp * 1.8, kind: 'imp', level: 1, hp: 1,
         spin: this.fxRng.range(0, Math.PI * 2), dead: false, color: sender.color, look: sender.extra.look,
       });
       return;
@@ -434,6 +434,8 @@ export class Field {
         const r = attackRadius(a);
         if (!a.dead && dist2(s.x, s.y, a.x, a.y) < (r + hitR) ** 2) {
           s.dead = true;
+          // Extra Attack critters can't be shot down: shots fly straight through them.
+          if (a.kind === 'imp') continue;
           if (a.kind === 'comet') { this.spray(s.x, s.y, 2, '#ffb3c8'); break; }
           this.hitAttack(a, s.charged ? Math.max(1, Math.round(power / 2)) : 1, null);
           break;
@@ -492,14 +494,8 @@ export class Field {
   /** Hitting an incoming attack. Spores bounce back at a higher level. */
   private hitAttack(a: Attack, dmg: number, chainId: number | null): void {
     a.hp -= dmg;
-    if (a.hp > 0) { this.spray(a.x, a.y, 3, a.kind === 'imp' ? a.color ?? '#fff' : a.kind === 'star' ? '#ffe27a' : '#b98ae0'); return; }
+    if (a.hp > 0) { this.spray(a.x, a.y, 3, a.kind === 'star' ? '#ffe27a' : '#b98ae0'); return; }
     a.dead = true;
-    // Extra Attack critters just pop: nothing to bat back.
-    if (a.kind === 'imp') {
-      this.spray(a.x, a.y, 10, a.color ?? '#fff');
-      this.gauge = Math.min(C.GAUGE_MAX, this.gauge + 2);
-      return;
-    }
     // Countering doesn't add to the chain count; the counter itself is the reward.
     const id = chainId ?? this.newChain(a.x, a.y, false);
     if (a.kind === 'bramble') {
@@ -543,7 +539,7 @@ export class Field {
         }
       }
       for (const a of this.attacks) {
-        if (!a.dead && (a.kind === 'star' || a.kind === 'imp') && !b.hits.has(a) && dist2(b.x, b.y, a.x, a.y) < r * r) {
+        if (!a.dead && a.kind === 'star' && !b.hits.has(a) && dist2(b.x, b.y, a.x, a.y) < r * r) {
           b.hits.add(a);
           this.hitAttack(a, 1, b.chainId);
         }
