@@ -383,7 +383,7 @@ export class Game {
     r.field(this.fields[1], FIELD_X[1], this.wins[1], this.time);
 
     for (const tr of this.transits) {
-      if (tr.o.kind === 'clash') continue;
+      if (tr.o.kind === 'clash' || tr.o.kind === 'heal') continue;
       const k = tr.t / C.TRANSIT_TIME;
       const sx = FIELD_X[tr.from] + tr.o.fromX, sy = tr.o.fromY;
       const ex = FIELD_X[1 - tr.from] + Math.min(C.FIELD_W - 12, Math.max(12, tr.o.fromX)), ey = -10;

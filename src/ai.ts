@@ -100,7 +100,7 @@ export class CpuPilot {
     }
 
     const close = threats.filter(th => Math.hypot(th.x - p.x, th.y - p.y) < 40).length;
-    if (p.blooms > 0 && p.invuln <= 0 && (close >= 3 || (close >= 2 && p.hull <= 2))) out.bloom = true;
+    if (p.blooms > 0 && p.invuln <= 0 && (close >= 3 || (close >= 2 && p.hull <= 4))) out.bloom = true;
 
     // A gentle figure-of-eight weave around the chosen spot, so it never sits still.
     // (Held perfectly still on the line while shooting at a star, since stars are narrow.)

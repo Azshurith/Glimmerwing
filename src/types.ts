@@ -15,8 +15,18 @@ export interface Controls {
 export interface Player {
   x: number;
   y: number;
+  /** Life in half-hearts (MAX_HULL = 10 is five hearts). */
   hull: number;
   invuln: number;
+  /** Seconds left stunned (frozen) after running into a critter. */
+  stun: number;
+  /** Seconds left slowed and weakened after a stun. */
+  impair: number;
+  /** Seconds left in which critters pass through harmlessly. */
+  zakoGrace: number;
+  /** Last input pattern while stunned, to count mashing, and how long this stun has lasted. */
+  mash: number;
+  stunAge: number;
   cooldown: number;
   hold: number;
   charge: number;
@@ -209,7 +219,8 @@ export interface Popup { x: number; y: number; text: string; age: number }
 /** Something one field sends to the other. */
 export interface Outgoing {
   /** clash: two bosses cancelled each other; remove the one I sent you. */
-  kind: AttackKind | 'moth' | 'crow' | 'clash';
+  /** heal: the rival got hit; recover `level` half-hearts. */
+  kind: AttackKind | 'moth' | 'crow' | 'clash' | 'heal';
   /** For a crow: seconds before it appears after arriving. */
   delay?: number;
   /** For a guardian or Extra Attack: which fairy sent it. */
