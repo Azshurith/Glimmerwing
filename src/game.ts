@@ -341,6 +341,8 @@ export class Game {
   }
 
   private endRound(dead0: boolean, dead1: boolean): void {
+    // The round is decided: the meadows keep drifting behind the banner, but no more hits land.
+    for (const f of this.fields) f.settled = true;
     this.roundWinner = dead0 && dead1 ? -1 : dead0 ? 1 : 0;
     if (this.roundWinner >= 0) this.wins[this.roundWinner as 0 | 1]++;
 

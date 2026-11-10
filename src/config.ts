@@ -99,8 +99,7 @@ export const GAUGE_LEVEL = GAUGE_MAX / 3;
 export const GAUGE_START = GAUGE_LEVEL;  // each round starts at level 1
 export const EXTRA_COST = 0.5;           // in gauge levels
 export const BOSS_COST = 2;
-/** Extra Attack critters. */
-export const IMP_HP = 2;
+/** Extra Attack critters: they can't be shot or burst, only dodged (or cleared by a bomb). */
 export const IMP_RADIUS = 7;
 export const IMP_SPEED = 95;
 /** Homing critters steer after the fairy for this long, turning at most this fast (radians a second). */
@@ -134,7 +133,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '6';          // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '7';          // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout
