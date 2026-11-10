@@ -793,7 +793,8 @@ export class Field {
       // Each cycle runs one attack; after the last, it leaves.
       L.cycleT -= dt;
       if (L.cycleT <= 0) {
-        L.cyclesLeft--;
+        // Unless guardians are set to leave, it just rolls on to its next attack.
+        if (C.GUARDIAN_LEAVES) L.cyclesLeft--;
         if (L.cyclesLeft > 0) this.nextCycle(L);
       }
       L.swoopIn -= dt;

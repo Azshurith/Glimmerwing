@@ -52,6 +52,12 @@ export const GUARDIAN_WANDER = 2;
  */
 export const GUARDIAN_CYCLES_MIN = 3;
 export const GUARDIAN_CYCLES_MAX = 4;
+/**
+ * When false, a guardian never leaves on its own: it keeps cycling through
+ * its attacks until it's banished with shots or dispelled with a bomb.
+ * Set true to have it leave after GUARDIAN_CYCLES_MIN-_MAX cycles.
+ */
+export const GUARDIAN_LEAVES = false;
 export const GUARDIAN_CYCLE: Record<string, number> = { aimed: 1.8, ring: 2.1, rapid: 1.6, rain: 2.4, spiral: 2.6, sweep: 2.1 };
 /** Two bosses sent within this many seconds of each other clash and cancel out. */
 export const BOSS_CLASH_WINDOW = 1.5;
@@ -174,7 +180,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '13';          // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '14';          // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout
