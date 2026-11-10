@@ -113,18 +113,25 @@ export interface Attack {
   seekT: number;
   /** Plunge speed a seeker switches to once it's lined up. */
   plunge: number;
-  /** Extra Attack critters wear the sender's colour. */
+  /** Extra Attack critters wear the sender's colour and look. */
   color?: string;
+  look?: string;
 }
 
-export type StarFlight = 'drop' | 'seeker' | 'slant' | 'zig';
+export type StarFlight = 'drop' | 'seeker' | 'slant' | 'zig' | 'homing' | 'flutter';
 
 /** A fairy's Extra Attack: a few small critters sent with a level 2 charge. */
 export interface Extra {
   name: string;
   count: 2 | 3 | 4;
-  /** drop: straight down. seeker: line up over the fairy, then plunge. slant: diagonals off the walls. zig: right-angle turns. */
+  /**
+   * drop: straight down. seeker: line up over the fairy, then plunge.
+   * slant: diagonals off the walls. zig: right-angle turns.
+   * homing: steers after the fairy for a while. flutter: weaves side to side like a bat.
+   */
   flight: StarFlight;
+  /** How the critter looks. */
+  look: 'spark' | 'burr' | 'glimmer' | 'dart' | 'cinder' | 'moth';
 }
 
 export type GuardianPattern = 'aimed' | 'ring' | 'rapid' | 'rain' | 'spiral' | 'sweep';

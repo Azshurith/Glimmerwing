@@ -101,6 +101,9 @@ export const BOSS_COST = 2;
 export const IMP_HP = 2;
 export const IMP_RADIUS = 7;
 export const IMP_SPEED = 95;
+/** Homing critters steer after the fairy for this long, turning at most this fast (radians a second). */
+export const HOMING_TIME = 2.6;
+export const HOMING_TURN = 2.4;
 /** Break this many reverse stars within one chain to send your guardian (the TSS reverse-chain Boss Attack). */
 export const BOSS_CHAIN_REVERSES = 3;
 
@@ -129,7 +132,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '5';          // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '6';          // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout

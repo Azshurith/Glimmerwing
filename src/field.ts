@@ -133,9 +133,11 @@ export class Field {
       if (flight === 'seeker') { vy = 0; seekT = C.SEEK_TIME + this.fxRng.range(0, 0.4); }
       if (flight === 'slant') { const d = x < C.FIELD_W / 2 ? 1 : -1; vx = d * sp * 0.8; vy = sp * 0.8; }
       if (flight === 'zig') seekT = this.fxRng.range(0.3, 0.7); // time to the first turn
+      if (flight === 'homing') { seekT = C.HOMING_TIME; vy = sp * 0.85; }
+      if (flight === 'flutter') seekT = this.fxRng.range(0, Math.PI * 2); // weave phase
       this.attacks.push({
         x, y: -12, vx, vy, flight, seekT, plunge: sp * 1.8, kind: 'imp', level: 1, hp: C.IMP_HP,
-        spin: this.fxRng.range(0, Math.PI * 2), dead: false, color: sender.color,
+        spin: this.fxRng.range(0, Math.PI * 2), dead: false, color: sender.color, look: sender.extra.look,
       });
       return;
     }
@@ -630,6 +632,27 @@ export class Field {
           if (a.vx === 0) { a.vx = (this.player.x < a.x ? -1 : 1) * C.IMP_SPEED * 1.1; a.vy = 0; }
           else { a.vx = 0; a.vy = C.IMP_SPEED; }
         }
+      }
+      if (a.flight === 'homing' && a.seekT > 0) {
+        // Steer toward the fairy, but only so sharply, and give up after a while.
+        a.seekT -= dt;
+        const want = Math.atan2(this.player.y - a.y, this.player.x - a.x);
+        const cur = Math.atan2(a.vy, a.vx);
+        let turn = want - cur;
+        while (turn > Math.PI) turn -= Math.PI * 2;
+        while (turn < -Math.PI) turn += Math.PI * 2;
+        const ang = cur + Math.max(-C.HOMING_TURN * dt, Math.min(C.HOMING_TURN * dt, turn));
+        const sp = C.IMP_SPEED * 0.95;
+        a.vx = Math.cos(ang) * sp; a.vy = Math.sin(ang) * sp;
+        // Once it's level with the fairy it commits and keeps going.
+        if (a.y > this.player.y - 16) a.seekT = 0;
+        if (a.seekT <= 0 && a.vy < C.IMP_SPEED * 0.5) a.vy = C.IMP_SPEED * 0.8;
+      }
+      if (a.flight === 'flutter') {
+        // Weave side to side like a bat while dropping.
+        a.seekT += dt;
+        a.vx = Math.cos(a.seekT * 4.5) * 110;
+        a.vy = C.IMP_SPEED * (0.75 + 0.35 * Math.max(0, Math.sin(a.seekT * 9)));
       }
       if (a.flight === 'seeker' && a.seekT > 0) {
         // Line up: ease into the top of the meadow while sliding over the fairy.

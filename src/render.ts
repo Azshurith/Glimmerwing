@@ -111,13 +111,16 @@ export class Renderer {
     for (const a of f.attacks) {
       if (a.kind === 'bramble') this.bramble(a.x, a.y, a.spin);
       else if (a.kind === 'comet') this.comet(a.x, a.y, time);
-      else if (a.kind === 'imp') this.imp(a.x, a.y, a.color ?? '#ffffff', time + a.spin, a.flight === 'seeker' && a.seekT > 0);
+      else if (a.kind === 'imp') this.imp(a.x, a.y, a.color ?? '#ffffff', time + a.spin, a.flight === 'seeker' && a.seekT > 0, a.look ?? 'spark', a.vx, a.vy);
       else {
         this.star(a.x, a.y, a.spin, a.level, a.hp, a.vx, a.vy, a.flight === 'seeker' && a.seekT > 0);
-        // Reverse stars flash: break one and it becomes your Extra Attack.
-        if (a.level >= 2 && Math.sin(time * 18) > 0) {
-          ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.4;
+        // Reverse stars flash purple and green: break one and it becomes your Extra Attack.
+        if (a.level >= 2) {
+          const purple = Math.floor(time * 12) % 2 === 0;
+          ctx.strokeStyle = purple ? 'rgba(190,120,255,0.95)' : 'rgba(120,255,160,0.95)'; ctx.lineWidth = 2;
+          ctx.shadowColor = ctx.strokeStyle as string; ctx.shadowBlur = 8;
           ctx.beginPath(); ctx.arc(a.x, a.y, C.STAR_RADIUS + 4, 0, Math.PI * 2); ctx.stroke();
+          ctx.shadowBlur = 0;
         }
       }
     }
@@ -373,8 +376,8 @@ export class Renderer {
     }
   }
 
-  /** An Extra Attack critter: a small glowing body with fluttering wings in the sender's colour. */
-  private imp(x: number, y: number, color: string, t: number, lining: boolean): void {
+  /** An Extra Attack critter, drawn in the sender's colour and her critter's look. */
+  private imp(x: number, y: number, color: string, t: number, lining: boolean, look: string, vx: number, vy: number): void {
     const ctx = this.ctx;
     ctx.save();
     if (lining) {
@@ -382,16 +385,72 @@ export class Renderer {
       ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.lineTo(x, C.FIELD_H); ctx.stroke();
       ctx.setLineDash([]); ctx.globalAlpha = 1;
     }
+    ctx.translate(x, y);
+    ctx.fillStyle = color; ctx.strokeStyle = color; ctx.shadowColor = color;
+    const eyes = (dy = -1) => {
+      ctx.shadowBlur = 0; ctx.fillStyle = '#1a1033';
+      ctx.fillRect(-1.8, dy, 1.2, 1.2); ctx.fillRect(0.6, dy, 1.2, 1.2);
+    };
     const flap = 0.55 + 0.45 * Math.abs(Math.sin(t * 14));
-    ctx.fillStyle = color; ctx.globalAlpha = 0.55;
-    ctx.beginPath(); ctx.ellipse(x - 5, y - 1, 5 * flap, 3, -0.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(x + 5, y - 1, 5 * flap, 3, 0.5, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1; ctx.shadowColor = color; ctx.shadowBlur = 8;
-    ctx.beginPath(); ctx.arc(x, y, 3.6, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0; ctx.fillStyle = '#1a1033';
-    ctx.fillRect(x - 1.8, y - 1, 1.2, 1.2); ctx.fillRect(x + 0.6, y - 1, 1.2, 1.2);
+    switch (look) {
+      case 'burr': {
+        // A spiky seed burr, rolling.
+        ctx.rotate(t * 3); ctx.shadowBlur = 6; ctx.beginPath();
+        for (let i = 0; i < 18; i++) { const a = (Math.PI * 2 * i) / 18, r = i % 2 ? 4 : 7.5; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+        ctx.closePath(); ctx.fill(); ctx.rotate(-t * 3); eyes(-1);
+        break;
+      }
+      case 'glimmer': {
+        // A spinning crystal.
+        const w = 3 + 2.5 * Math.abs(Math.cos(t * 6));
+        ctx.shadowBlur = 10; ctx.beginPath();
+        ctx.moveTo(0, -7); ctx.lineTo(w, 0); ctx.lineTo(0, 7); ctx.lineTo(-w, 0); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 0.7;
+        ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(w * 0.4, -1); ctx.lineTo(0, 1); ctx.closePath(); ctx.fill();
+        break;
+      }
+      case 'dart': {
+        // A petal pointing where it's flying.
+        ctx.rotate(Math.atan2(vy, vx) - Math.PI / 2);
+        ctx.shadowBlur = 6; ctx.beginPath();
+        ctx.moveTo(0, 8); ctx.quadraticCurveTo(6, 0, 0, -7); ctx.quadraticCurveTo(-6, 0, 0, 8); ctx.fill();
+        ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(0, -13); ctx.lineWidth = 1.2; ctx.stroke();
+        break;
+      }
+      case 'cinder': {
+        // A flickering ember.
+        const fl = 1 + 0.25 * Math.sin(t * 30);
+        ctx.shadowBlur = 12; ctx.beginPath();
+        ctx.moveTo(0, -9 * fl); ctx.quadraticCurveTo(6, -1, 0, 5); ctx.quadraticCurveTo(-6, -1, 0, -9 * fl); ctx.fill();
+        ctx.fillStyle = '#fff3c4'; ctx.beginPath(); ctx.arc(0, 1, 2.2, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'moth': {
+        // A dusk moth: broad flapping wings, dark body.
+        ctx.globalAlpha = 0.85;
+        for (const s of [-1, 1]) {
+          ctx.beginPath(); ctx.moveTo(0, -1);
+          ctx.quadraticCurveTo(s * 11 * flap, -9, s * 10 * flap, 2);
+          ctx.quadraticCurveTo(s * 6 * flap, 6, 0, 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1; ctx.fillStyle = '#2a1846';
+        ctx.beginPath(); ctx.ellipse(0, 0, 2, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = color; ctx.fillRect(-1.6, -2, 1.1, 1.1); ctx.fillRect(0.5, -2, 1.1, 1.1);
+        break;
+      }
+      default: {
+        // A hearth spark: glowing body, fluttering wings, little rays.
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath(); ctx.ellipse(-5, -1, 5 * flap, 3, -0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(5, -1, 5 * flap, 3, 0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1; ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.arc(0, 0, 3.6, 0, Math.PI * 2); ctx.fill();
+        eyes();
+      }
+    }
     ctx.restore();
   }
+
 
   /** Little five-petal flower used for the bloom stock. */
   private blossom(x: number, y: number, color: string): void {
@@ -800,7 +859,7 @@ const placeholder: Fairy = {
   id: '', name: '', blurb: '', color: '', accent: '', wing: 'round',
   speed: 1, burst: 1, charge: 1, hitbox: 1, feverTime: 1, counterBoost: 0, unlock: null,
   guardian: { name: '', color: '', pattern: 'aimed' },
-  extra: { name: '', count: 2, flight: 'drop' },
+  extra: { name: '', count: 2, flight: 'drop', look: 'spark' },
   chargeStyle: 'orb', chargeName: '', bomb: { name: '', color: '#fff', shape: 'petal', style: 'blast', time: 0.6, invuln: 2 },
 };
 
