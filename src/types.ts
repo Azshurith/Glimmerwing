@@ -4,6 +4,8 @@ export interface Controls {
   up: boolean;
   down: boolean;
   fire: boolean;
+  /** Petal bloom: the panic button. */
+  bloom?: boolean;
   /** Optional absolute target (touch input), in field coordinates. */
   target?: { x: number; y: number } | null;
 }
@@ -19,6 +21,8 @@ export interface Player {
   /** Overcharge, 0 to 1, built by holding past a full charge. */
   over: number;
   wasFiring: boolean;
+  wasBlooming: boolean;
+  blooms: number;
 }
 
 export interface Shot { x: number; y: number; vx: number; charged: boolean; dead: boolean }
@@ -27,6 +31,8 @@ export type CritterKind = 'puff' | 'beetle' | 'spinner';
 
 export interface Puff {
   kind: CritterKind;
+  /** Which formation it came in with (0 for Fever rushes, which never hold up the next wave). */
+  wave?: number;
   /** Hits left on a beetle's shell. Shots and bursts break the shell before the body. */
   shell: number;
   maxHp: number;
@@ -64,7 +70,19 @@ export interface Attack {
   hp: number;
   spin: number;
   dead: boolean;
+  /**
+   * How a star flies: 'drop' falls straight down, 'seeker' slides across the
+   * top to line up with the fairy and then plunges, 'slant' cuts a diagonal
+   * and glances off the walls.
+   */
+  flight: StarFlight;
+  /** Seconds a seeker still spends lining up before it plunges. */
+  seekT: number;
+  /** Plunge speed a seeker switches to once it's lined up. */
+  plunge: number;
 }
+
+export type StarFlight = 'drop' | 'seeker' | 'slant';
 
 export type GuardianPattern = 'aimed' | 'ring' | 'rapid' | 'rain' | 'spiral' | 'sweep';
 
@@ -90,7 +108,11 @@ export interface Moth {
 export interface Crow {
   x: number; y: number;
   vx: number; vy: number;
-  state: 'circle' | 'dive' | 'climb';
+  state: 'circle' | 'dive' | 'climb' | 'leave';
+  /** Starts at 1 and rises each time it's driven off: faster, quicker to return. */
+  level: number;
+  /** Seconds left before it crosses to the other meadow. */
+  stay: number;
   t: number;
   seed: number;
   hp: number;
@@ -108,7 +130,9 @@ export interface Popup { x: number; y: number; text: string; age: number }
 
 /** Something one field sends to the other. */
 export interface Outgoing {
-  kind: AttackKind | 'moth';
+  kind: AttackKind | 'moth' | 'crow';
+  /** For a crow: seconds before it appears after arriving. */
+  delay?: number;
   /** For a guardian: which fairy sent it. */
   fairy?: string;
   level: number;

@@ -1,16 +1,18 @@
 import * as C from './config';
 import { CpuPilot } from './ai';
-import { FAIRIES, Fairy } from './characters';
-import { Field } from './field';
+import { FAIRIES, Fairy, fairyById } from './characters';
+import { Field, FieldSnapshot } from './field';
+import { Net, PeerMsg } from './net';
 import { Input } from './input';
 import { loadProgress, Progress, resetProgress, saveProgress } from './progress';
 import { PALETTE, Renderer, SelectCard } from './render';
 import { Controls, Outgoing } from './types';
 
-type Mode = 'cpu' | 'versus';
+type Mode = 'cpu' | 'versus' | 'online';
 type Phase = 'title' | 'select' | 'countdown' | 'playing' | 'roundOver' | 'matchOver';
 
-interface Transit { o: Outgoing; from: 0 | 1; t: number }
+/** `ghost` transits are only drawn: online, the real attack is delivered on the rival's screen. */
+interface Transit { o: Outgoing; from: 0 | 1; t: number; ghost?: boolean }
 interface Picker { index: number; done: boolean }
 
 const FIELD_X = [0, C.FIELD_W + C.GAP] as const;
@@ -39,13 +41,58 @@ export class Game {
   private newlyUnlocked: Fairy[] = [];
   time = 0;
 
+  // ---- online ----
+  // Online, field 0 is always this player's meadow and field 1 mirrors the rival's.
+  // Each browser runs only its own meadow and streams snapshots of it; attacks
+  // and knockouts travel as messages. The host picks round seeds and calls results.
+  private net: Net | null = null;
+  /** Counts rounds this session so stale messages from an earlier round are ignored. */
+  private roundNo = 0;
+  private snapT = 0;
+  private sentDead = false;
+  private remoteDead = false;
+  private endT = -1;
+  private notice = '';
+  /** Set by the page: open the online lobby. */
+  onWantOnline?: () => void;
+
   constructor(private input: Input, private r: Renderer) {}
 
   /** Called by the page buttons and the title screen. */
   start(mode: Mode): void {
+    if (mode !== 'online' && this.net) this.disconnect();
     this.mode = mode;
     this.phase = 'select';
-    this.pickers = [{ index: this.pickers[0].index, done: false }, { index: this.pickers[1].index, done: mode === 'cpu' }];
+    this.paused = false;
+    // Online, the rival's cursor is whatever they last told us.
+    const rival = mode === 'online' ? this.pickers[1].done : mode === 'cpu';
+    this.pickers = [{ index: this.pickers[0].index, done: false }, { index: this.pickers[1].index, done: rival }];
+    if (mode === 'online') this.sendSelection();
+  }
+
+  /** Called by the lobby once the server has paired us with a rival. */
+  startOnline(net: Net): void {
+    this.net = net;
+    this.roundNo = 0;
+    this.notice = '';
+    this.pickers[1] = { index: 1, done: false };
+    this.start('online');
+  }
+
+  get online(): boolean { return this.mode === 'online' && this.net !== null; }
+
+  private disconnect(notice = ''): void {
+    if (this.net) { this.net.leave(); this.net.close(); }
+    this.net = null;
+    this.notice = notice;
+    this.mode = 'cpu';
+    this.phase = 'title';
+    this.transits = [];
+  }
+
+  private sendSelection(): void {
+    const pk = this.pickers[0];
+    this.net?.peer({ k: 'sel', i: pk.index, done: pk.done, id: FAIRIES[pk.index].id });
   }
 
   resetProgress(): void {
@@ -66,7 +113,7 @@ export class Game {
     }));
   }
 
-  private beginMatch(): void {
+  private beginMatch(seed?: number): void {
     if (this.mode === 'cpu') {
       // The CPU flies a random fairy from the whole roster, locked ones included,
       // so you can see what you're working toward.
@@ -76,13 +123,25 @@ export class Game {
     this.wins = [0, 0];
     this.matchBestChain = 0;
     this.newlyUnlocked = [];
-    this.newRound();
+    this.newRound(seed);
   }
 
-  private newRound(): void {
-    const seed = (Math.random() * 2 ** 31) | 0;
+  private newRound(seed = (Math.random() * 2 ** 31) | 0): void {
     const roundIndex = this.wins[0] + this.wins[1];
-    this.fields = [new Field(seed, this.picks[0], roundIndex), new Field(seed, this.picks[1], roundIndex)];
+    if (this.online) {
+      // The host deals each round; the guest follows when the 'round' message lands.
+      if (this.net!.isHost) this.net!.peer({ k: 'round', seed, wins: [this.wins[1], this.wins[0]] });
+      this.roundNo++;
+      this.snapT = 0;
+      this.sentDead = false;
+      this.remoteDead = false;
+      this.endT = -1;
+    }
+    // The seed also decides which meadow the Hollow Crow wakes in. Online, field 0 is
+    // ours on both screens, so "side A" means the host's meadow.
+    const sideA = (seed & 1) === 0;
+    const crowHere = this.online ? (this.net!.isHost ? sideA : !sideA) : sideA;
+    this.fields = [new Field(seed, this.picks[0], roundIndex, crowHere), new Field(seed, this.picks[1], roundIndex, !crowHere)];
     this.transits = [];
     this.cpu = new CpuPilot();
     this.phase = 'countdown';
@@ -92,7 +151,8 @@ export class Game {
   private stepSelect(): void {
     const pr = this.input.pressed;
     const cards = this.cards();
-    const keys: [string[], string[], string[], string[], string[]][] = this.mode === 'cpu'
+    const before = { ...this.pickers[0] };
+    const keys: [string[], string[], string[], string[], string[]][] = this.mode !== 'versus'
       ? [[['ArrowLeft', 'KeyA'], ['ArrowRight', 'KeyD'], ['ArrowUp', 'KeyW'], ['ArrowDown', 'KeyS'], ['Space', 'Enter', 'KeyZ', 'KeyF']]]
       : [
           [['KeyA'], ['KeyD'], ['KeyW'], ['KeyS'], ['KeyF']],
@@ -116,16 +176,95 @@ export class Game {
         if (!cards[hit].locked) { this.pickers[0].done = true; this.picks[0] = FAIRIES[hit]; }
       }
     }
-    if (pr.has('Escape')) { this.phase = 'title'; return; }
-    if (this.pickers[0].done && this.pickers[1].done) this.beginMatch();
+    if (this.mode === 'online' && (before.index !== this.pickers[0].index || before.done !== this.pickers[0].done)) this.sendSelection();
+    if (pr.has('Escape')) { if (this.online) this.disconnect(); else this.phase = 'title'; return; }
+    if (this.pickers[0].done && this.pickers[1].done) {
+      // Online, only the host starts the match; the guest waits for the first round.
+      if (!this.online || this.net!.isHost) this.beginMatch();
+    }
+  }
+
+  // ---- online messages ------------------------------------------------------
+
+  private pollNet(dt: number): void {
+    const net = this.net;
+    if (!net) return;
+    for (const ev of net.poll(dt)) {
+      if (ev.t === 'peerLeft') { this.disconnect('Your rival left the meadow'); return; }
+      if (ev.t === 'closed') { this.disconnect('Lost the connection to the server'); return; }
+      if (ev.t === 'msg') this.onPeer(ev.d);
+    }
+  }
+
+  private onPeer(m: PeerMsg): void {
+    const live = this.phase !== 'title' && this.phase !== 'select';
+    switch (m.k) {
+      case 'sel':
+        this.pickers[1] = { index: m.i, done: m.done };
+        if (m.done) this.picks[1] = fairyById(m.id);
+        break;
+      case 'round':
+        if (this.net!.isHost) break;
+        // Wins arrive from the host's point of view, already swapped to ours.
+        if (this.phase === 'select') { this.pickers[0].done = true; this.beginMatch(m.seed); }
+        else { this.wins = m.wins; this.newRound(m.seed); }
+        break;
+      case 'snap':
+        if (live && m.r === this.roundNo) this.fields[1].applySnapshot(m.s as FieldSnapshot);
+        break;
+      case 'atk':
+        if (this.phase === 'playing' && m.r === this.roundNo) {
+          // The attack already spent half the round trip getting here; start it that far along.
+          const head = Math.min(this.net!.rtt / 2, C.TRANSIT_TIME * 0.6);
+          this.transits.push({ o: m.o, from: 1, t: head });
+        }
+        break;
+      case 'dead':
+        if (m.r === this.roundNo) this.remoteDead = true;
+        break;
+      case 'end':
+        if (!this.net!.isHost && this.phase === 'playing') this.endRound(m.guestDead, m.hostDead);
+        break;
+    }
+  }
+
+  /** Online upkeep every step once a round exists: mirror the rival, stream our meadow. */
+  private tickOnline(dt: number): void {
+    this.fields[1].drift(dt);
+    if (++this.snapT >= C.SNAP_EVERY) {
+      this.snapT = 0;
+      this.net!.peer({ k: 'snap', r: this.roundNo, s: this.fields[0].snapshot() });
+    }
+  }
+
+  /** Online round end: report our own knockout; the host settles the result. */
+  private checkOnlineEnd(dt: number): void {
+    const net = this.net!;
+    const localDead = !this.fields[0].alive;
+    if (localDead && !this.sentDead) { this.sentDead = true; net.peer({ k: 'dead', r: this.roundNo }); }
+    if (!net.isHost) return;
+    if ((localDead || this.remoteDead) && this.endT < 0) this.endT = C.END_GRACE;
+    if (this.endT >= 0) {
+      this.endT -= dt;
+      if (this.endT <= 0) {
+        net.peer({ k: 'end', hostDead: localDead, guestDead: this.remoteDead });
+        this.endRound(localDead, this.remoteDead);
+      }
+    }
   }
 
   step(dt: number): void {
     this.time += dt;
     const pr = this.input.pressed;
-    if ((pr.has('Escape') || pr.has('KeyP')) && this.phase === 'playing') this.paused = !this.paused;
+    if (this.mode === 'online') {
+      this.pollNet(dt);
+      if (!this.net) return;
+    }
+    if ((pr.has('Escape') || pr.has('KeyP')) && this.phase === 'playing' && this.mode !== 'online') this.paused = !this.paused;
 
     if (this.phase === 'title') {
+      if (this.notice) { if (pr.size) this.notice = ''; return; }
+      if (pr.has('Digit3')) { this.onWantOnline?.(); return; }
       if (pr.has('Digit1') || pr.has('Space') || pr.has('Enter') || pr.has('Pointer')) this.start('cpu');
       else if (pr.has('Digit2')) this.start('versus');
       return;
@@ -134,6 +273,10 @@ export class Game {
     if (this.paused) return;
     this.phaseT += dt;
 
+    if (this.online) {
+      if (this.phase !== 'playing' && pr.has('Escape')) { this.disconnect(); return; }
+      this.tickOnline(dt);
+    }
     if (this.phase === 'countdown') {
       if (this.phaseT > 2) { this.phase = 'playing'; this.phaseT = 0; }
       return;
@@ -142,11 +285,15 @@ export class Game {
       const go = this.phaseT > 1.2 && (pr.has('Space') || pr.has('Enter') || pr.has('KeyF') || pr.has('Pointer'));
       if (go || (this.phase === 'roundOver' && this.phaseT > 3.5)) {
         if (this.phase === 'matchOver') { this.start(this.mode); return; }
-        this.newRound();
+        // Online, the host deals the next round and the guest follows.
+        if (!this.online || this.net!.isHost) this.newRound();
       }
-      this.fields[0].update(dt, IDLE); this.fields[1].update(dt, IDLE);
+      this.fields[0].update(dt, IDLE);
+      if (!this.online) this.fields[1].update(dt, IDLE);
       return;
     }
+
+    if (this.online) { this.stepOnline(dt); return; }
 
     // A moonseed break freezes both meadows for a beat.
     const hs = Math.max(this.fields[0].hitstop, this.fields[1].hitstop);
@@ -174,12 +321,31 @@ export class Game {
     if (dead0 || dead1) this.endRound(dead0, dead1);
   }
 
+  /** One playing step online: only our meadow is simulated here. */
+  private stepOnline(dt: number): void {
+    const me = this.fields[0];
+    // A moonseed break freezes only the meadow it broke in; the rival's keeps going on their screen.
+    if (me.hitstop > 0) { me.hitstop = Math.max(0, me.hitstop - dt); return; }
+    me.update(dt, this.input.solo());
+    for (const o of me.outbox) {
+      this.transits.push({ o, from: 0, t: 0, ghost: true });
+      this.net!.peer({ k: 'atk', r: this.roundNo, o });
+    }
+    me.outbox = [];
+    for (const tr of this.transits) {
+      tr.t += dt;
+      if (tr.t >= C.TRANSIT_TIME && !tr.ghost) me.receive(tr.o);
+    }
+    this.transits = this.transits.filter(tr => tr.t < C.TRANSIT_TIME);
+    this.checkOnlineEnd(dt);
+  }
+
   private endRound(dead0: boolean, dead1: boolean): void {
     this.roundWinner = dead0 && dead1 ? -1 : dead0 ? 1 : 0;
     if (this.roundWinner >= 0) this.wins[this.roundWinner as 0 | 1]++;
 
     // Only human players earn progress.
-    const humans = this.mode === 'cpu' ? [this.fields[0]] : this.fields;
+    const humans = this.mode === 'versus' ? this.fields : [this.fields[0]];
     for (const f of humans) {
       this.matchBestChain = Math.max(this.matchBestChain, f.bestChain);
       this.progress.fevers += f.fevers;
@@ -188,6 +354,9 @@ export class Game {
     if (over) this.recordMatch();
     this.phase = over ? 'matchOver' : 'roundOver';
     this.phaseT = 0;
+    this.transits = [];
+    // The rival will pick again too; wait to hear from them.
+    if (over && this.mode === 'online') this.pickers[1].done = false;
   }
 
   private recordMatch(): void {
@@ -216,32 +385,38 @@ export class Game {
       const sx = FIELD_X[tr.from] + tr.o.fromX, sy = tr.o.fromY;
       const ex = FIELD_X[1 - tr.from] + Math.min(C.FIELD_W - 12, Math.max(12, tr.o.fromX)), ey = -10;
       const x = sx + (ex - sx) * k, y = sy + (ey - sy) * k - Math.sin(k * Math.PI) * 40;
-      r.transit(x, y, tr.o.kind === 'moth' ? (FAIRIES.find(f => f.id === tr.o.fairy)?.guardian.color ?? PALETTE.moth) : tr.o.kind === 'bramble' ? PALETTE.bramble : tr.o.kind === 'comet' ? '#ff6f9c' : PALETTE.star);
+      r.transit(x, y, tr.o.kind === 'moth' ? (FAIRIES.find(f => f.id === tr.o.fairy)?.guardian.color ?? PALETTE.moth) : tr.o.kind === 'bramble' ? PALETTE.bramble : tr.o.kind === 'crow' ? '#ff9fb8' : tr.o.kind === 'comet' ? '#ff6f9c' : PALETTE.star);
     }
 
-    const names = this.mode === 'cpu'
-      ? ['You', `CPU ${this.picks[1].name}`]
+    const names = this.mode === 'cpu' ? ['You', `CPU ${this.picks[1].name}`]
+      : this.mode === 'online' ? ['You', `Rival ${this.picks[1].name}`]
       : [this.picks[0].name, this.picks[1].name];
+    const solo = this.mode !== 'versus';
     switch (this.phase) {
       case 'title':
         r.title(this.time);
+        if (this.notice) r.banner(this.notice, 'Press any key to continue', 0.7);
         break;
       case 'select': {
         const cards = this.cards();
-        const cursors = [{ index: this.pickers[0].index, color: this.pickers[0].done ? PALETTE.star : '#ffffff', label: this.mode === 'cpu' ? 'You' : 'P1', locked: cards[this.pickers[0].index].locked }];
-        if (this.mode === 'versus') cursors.push({ index: this.pickers[1].index, color: this.pickers[1].done ? PALETTE.star : '#ff9db8', label: 'P2', locked: cards[this.pickers[1].index].locked });
-        r.select(cards, cursors, this.mode === 'cpu' ? 'Choose your fairy' : 'Choose your fairies', this.time);
+        const cursors = [{ index: this.pickers[0].index, color: this.pickers[0].done ? PALETTE.star : '#ffffff', label: solo ? 'You' : 'P1', locked: cards[this.pickers[0].index].locked }];
+        // A rival may fly a fairy you haven't unlocked yet, so their cursor is never shown as locked.
+        if (this.mode !== 'cpu') cursors.push({ index: this.pickers[1].index, color: this.pickers[1].done ? PALETTE.star : '#ff9db8', label: this.mode === 'online' ? 'Rival' : 'P2', locked: this.mode === 'versus' && cards[this.pickers[1].index].locked });
+        const heading = this.mode === 'cpu' ? 'Choose your fairy'
+          : this.mode === 'versus' ? 'Choose your fairies'
+          : this.pickers[0].done && !this.pickers[1].done ? 'Waiting for your rival to choose…' : 'Choose your fairy';
+        r.select(cards, cursors, heading, this.time);
         break;
       }
       case 'countdown':
         r.banner(this.phaseT < 1 ? `${this.picks[0].name} vs ${this.picks[1].name}` : 'Fly', `Round ${this.wins[0] + this.wins[1] + 1}`, 0.35);
         break;
       case 'roundOver':
-        r.banner(this.roundWinner < 0 ? 'Draw' : `${names[this.roundWinner]} ${this.roundWinner === 0 && this.mode === 'cpu' ? 'take' : 'takes'} the round`, 'Next round starting', 0.5);
+        r.banner(this.roundWinner < 0 ? 'Draw' : `${names[this.roundWinner]} ${this.roundWinner === 0 && solo ? 'take' : 'takes'} the round`, 'Next round starting', 0.5);
         break;
       case 'matchOver': {
         const w = this.wins[0] > this.wins[1] ? 0 : 1;
-        const title = this.mode === 'cpu' ? (w === 0 ? 'You win' : `${names[1]} wins`) : `${names[w]} wins`;
+        const title = solo ? (w === 0 ? 'You win' : `${names[1]} wins`) : `${names[w]} wins`;
         const unlocked = this.newlyUnlocked.length ? `New fairy unlocked: ${this.newlyUnlocked.map(f => f.name).join(', ')}` : undefined;
         r.banner(title, 'Press Space or tap to choose again', 0.65, unlocked);
         break;
@@ -249,5 +424,6 @@ export class Game {
       default:
         if (this.paused) r.banner('Paused', 'Press P to resume', 0.6);
     }
+    if (this.online && this.phase !== 'title') r.note(`${Math.round(this.net!.rtt * 1000)}ms`, C.VIEW_W / 2, 10);
   }
 }

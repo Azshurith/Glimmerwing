@@ -42,7 +42,16 @@ button {
 }
 button.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--btn); }
 button:focus-visible, canvas:focus-visible { outline: 3px solid #ffd36e; outline-offset: 3px; }
-.stage { width: 100%; max-width: 1000px; }
+.stage { width: 100%; max-width: 1000px; position: relative; }
+#lobby { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(16,11,36,.72); border-radius: 14px; padding: 1rem; }
+#lobby[hidden] { display: none; }
+.lobby-card { width: min(100%, 26rem); background: var(--bg); color: var(--ink); border-radius: 14px; padding: 1.2rem 1.4rem; display: grid; gap: .8rem; box-shadow: 0 0 0 1px var(--edge), 0 12px 40px rgba(0,0,0,.35); text-align: center; }
+.lobby-card h2 { margin: 0; font-style: italic; font-size: 1.4rem; }
+.lobby-friend { display: grid; gap: .5rem; padding-top: .8rem; border-top: 1px solid var(--edge); }
+#lobby-join { display: flex; gap: .5rem; }
+#lobby-join-code { flex: 1; min-width: 0; font: inherit; font-size: 1rem; letter-spacing: .3em; text-align: center; text-transform: uppercase; padding: .5rem .8rem; border-radius: 999px; border: 2px solid var(--edge); background: transparent; color: var(--ink); }
+#lobby-code { font-size: 2.4rem; font-weight: 700; letter-spacing: .25em; color: var(--ink); }
+#lobby-status { margin: 0; min-height: 1.4em; font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
 canvas {
   display: block; width: 100%; aspect-ratio: 504 / 320; border-radius: 14px;
   touch-action: none; background: #100b24; box-shadow: 0 0 0 1px var(--edge);
@@ -60,16 +69,37 @@ kbd { font: inherit; padding: 0 .35em; border-radius: 4px; box-shadow: inset 0 0
   <div class="modes">
     <button data-mode="cpu">Play the CPU</button>
     <button data-mode="versus" class="ghost">Two players</button>
+    <button data-online class="ghost">Play online</button>
   </div>
 </header>
-<div class="stage"><canvas id="game" tabindex="0" aria-label="Glimmerwing playfield"></canvas></div>
+<div class="stage">
+  <canvas id="game" tabindex="0" aria-label="Glimmerwing playfield"></canvas>
+  <div id="lobby" role="dialog" aria-modal="true" aria-labelledby="lobby-title" hidden>
+    <div class="lobby-card">
+      <h2 id="lobby-title">Play online</h2>
+      <button id="lobby-quick">Find match</button>
+      <div class="lobby-friend">
+        <button id="lobby-host" class="ghost">Create friend room</button>
+        <form id="lobby-join">
+          <input id="lobby-join-code" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
+          <button class="ghost">Join</button>
+        </form>
+      </div>
+      <output id="lobby-code" hidden></output>
+      <p id="lobby-status" role="status" aria-live="polite"></p>
+      <button class="link" id="lobby-close">Cancel</button>
+    </div>
+  </div>
+</div>
 <section class="help">
   <p><strong>How to win.</strong> Pop a dandelion puff and its pollen burst pops its neighbours. Chains of three or more send falling stars into your rival’s meadow; seven or more add a thorny bramble. Fill the gauge at the bottom to send your fairy’s guardian. You can also send one early: hold fire past a full charge to overcharge (costs half a gauge), or break four incoming stars within four seconds for a rally. Guardians drift in and shadow you, lock in place to attack, then sink out through the bottom.</p>
-  <p><strong>Bat stars back.</strong> A star’s colour shows the hits it needs: rose takes four, orange three, gold two, pale one. Break it to send it back tougher, up to three times. The longer a round runs, the faster everything comes at you (watch the tempo in the corner), and each new round of a match starts faster. Lose all five hearts and you lose the round; best of three takes the match.</p>
+  <p><strong>Bat stars back.</strong> A star’s colour shows the hits it needs: rose takes four, orange three, gold two, pale one. Break it to send it back tougher, up to three times. Most stars drop straight, but watch for seekers, which slide over you and then plunge (a faint line shows where), and slanted stars that cut diagonals and glance off the walls. The longer a round runs, the faster everything comes at you (watch the tempo in the corner), and each new round of a match starts faster. Lose all five hearts and you lose the round; best of three takes the match.</p>
   <p><strong>Fever.</strong> About half a minute in, “Moonseed rising” flashes and a pale crescent orb drifts in with the next puffs. Shots bounce off it; catch it in a pollen burst to break it. That starts Fever: a spread shot, a rush of puffs, a gauge that fills twice as fast, and every chain sends one star per pop after the first, so a 5-chain sends four.</p>
-  <p><strong>Tough puffs and late rounds.</strong> A puff’s seed tips show the shots it takes, dropping a step with each hit: moonsilver five, amber four, sky three, mint two, cream one. Any pollen burst pops it outright. Some waves come wrapped in dew bubbles that pop first, big puffs leave extra-wide bursts, and watch for waves that sneak up from below. Beetles cut diagonals inside a glassy shell that has to break first; spinners corkscrew down. Waves also swoop in from a corner, sweep across in a line, or drop in squeezing columns, and some ring a tough leader with small fry: pop the leader to clear the lot. Tougher critters leave bigger bursts. Break a rose star and it flies back as an unbreakable comet you can only dodge. If a round runs past about a minute and a half, hollow crows wake in both meadows and start diving at you. Shoot one enough to drive it off, but it comes back faster.</p>
+  <p><strong>Tough puffs and late rounds.</strong> A puff’s seed tips show the shots it takes, dropping a step with each hit: moonsilver five, amber four, sky three, mint two, cream one. Any pollen burst pops it outright. Some waves come wrapped in dew bubbles that pop first, big puffs leave extra-wide bursts, and watch for waves that sneak up from below. Beetles cut diagonals inside a glassy shell that has to break first; spinners corkscrew down. Waves also swoop in from a corner, sweep across in a line, or drop in squeezing columns, and some ring a tough leader with small fry: pop the leader to clear the lot. Tougher critters leave bigger bursts. Break a rose star and it flies back as an unbreakable comet you can only dodge. Waves don’t run on a clock: the next one comes in as soon as the last is popped or gone, so clearing fast brings the swarm faster. At about a hundred seconds every critter speeds up sharply, and soon after a hollow crow wakes in one meadow. It circles and dives at the fairy, then crosses into the other meadow, back and forth. Shoot it enough to drive it off and it reappears in your rival’s meadow, sooner and faster each time.</p>
+  <p><strong>Petal bloom.</strong> Two per round, shown as flowers by your hearts. A bloom sweeps your meadow clear of bullets and incoming stars, pops small fry, stings a guardian, and makes you untouchable for two seconds. It never starts a chain or sends anything, so it’s for getting out of trouble, not scoring.</p>
   <p><strong>Fairies.</strong> Three fairies are ready from the start. Win matches, chain big, and beat the CPU cleanly to unlock three more. Progress is saved in this browser. <button class="link" id="reset">Reset progress</button></p>
-  <p><strong>Controls.</strong> Vs CPU: arrows or <kbd>WASD</kbd>, tap <kbd>Space</kbd> to shoot, hold to charge. On touch, drag to steer and hold to charge. Two players: <kbd>WASD</kbd> + <kbd>F</kbd> and arrows + <kbd>Enter</kbd>. <kbd>P</kbd> pauses.</p>
+  <p><strong>Controls.</strong> Vs CPU: arrows or <kbd>WASD</kbd>, tap <kbd>Space</kbd> to shoot, hold to charge. On touch, drag to steer and hold to charge. Two players: <kbd>WASD</kbd>, <kbd>F</kbd> to shoot, <kbd>G</kbd> to bloom; arrows, <kbd>Enter</kbd> to shoot, right <kbd>Shift</kbd> to bloom. <kbd>X</kbd> or <kbd>Shift</kbd> sets off a petal bloom (on touch, tap a second finger). <kbd>P</kbd> pauses.</p>
+  <p><strong>Online.</strong> Press <em>Play online</em> (or <kbd>3</kbd>). <em>Find match</em> pairs you with the next player looking for a game; <em>Create friend room</em> gives you a four-letter code for a friend to join. Online you use the single-player controls, and your meadow is always on the left. <kbd>Esc</kbd> between rounds leaves.</p>
 </section>
 <script>/*__BUNDLE__*/</script>
 </body>

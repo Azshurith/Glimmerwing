@@ -2,6 +2,7 @@ import * as C from './config';
 import { Fairy, fairyById } from './characters';
 import { rollWave } from './waves';
 import {
+  StarFlight,
   Attack, Bullet, Burst, Controls, CritterKind, Crow, Puff, Moth, Outgoing,
   Particle, Player, Popup, Rng, Shot,
 } from './types';
@@ -32,7 +33,7 @@ export class Field {
   private crowsWoken = 0;
   private reflections: number[] = [];
   private rallyReady = 0;
-  private crowReturns: { at: number; speed: number }[] = [];
+  private crowReturns: { at: number; level: number }[] = [];
   outbox: Outgoing[] = [];
   gauge = 0;
   /** Seconds of Fever left. */
@@ -41,6 +42,9 @@ export class Field {
   nextMoonseed = C.MOONSEED_FIRST;
   /** Freeze time after a moonseed breaks; the Game pauses both fields while it runs. */
   hitstop = 0;
+  /** Seconds left on the current petal bloom's sweep, and its centre. */
+  bloom = 0;
+  bloomAt = { x: 0, y: 0 };
   /** Stats this round, read by the Game for unlocks. */
   bestChain = 0;
   fevers = 0;
@@ -49,17 +53,22 @@ export class Field {
 
   private waveRng: Rng;
   private fxRng: Rng;
+  /** Counts down to the next wave once the current one is gone. */
   private spawnT = 1.2;
+  private waveId = 0;
+  private waveT = 0;
+  private surged = false;
   private chains = new Map<number, ChainInfo>();
   private nextChain = 1;
 
-  constructor(seed: number, readonly fairy: Fairy, private roundIndex = 0) {
+  /** `crowFirst`: the Hollow Crow wakes in this meadow (exactly one of the two). */
+  constructor(seed: number, readonly fairy: Fairy, private roundIndex = 0, private crowFirst = false) {
     // Both fields get the same wave seed, so the swarms are identical and fair.
     this.waveRng = new Rng(seed);
     this.fxRng = new Rng(seed ^ 0x9e3779b9);
     this.player = {
       x: C.FIELD_W / 2, y: C.FIELD_H - 34, hull: C.MAX_HULL,
-      invuln: 0, cooldown: 0, hold: 0, charge: 0, over: 0, wasFiring: false,
+      invuln: 0, cooldown: 0, hold: 0, charge: 0, over: 0, wasFiring: false, wasBlooming: false, blooms: C.BLOOMS_PER_ROUND,
     };
   }
 
@@ -83,15 +92,23 @@ export class Field {
     const tempo = this.tempo;
     const world = dt * tempo;
     const own = dt * (1 + (tempo - 1) * 0.5);
+    // Sudden death speeds the critters up on top of the tempo.
+    if (!this.surged && this.time >= C.SURGE_TIME) {
+      this.surged = true;
+      this.popup(C.FIELD_W / 2, 70, 'The meadow quickens');
+      this.shake = 3;
+    }
+    const critters = world * (this.surged ? C.SURGE_SPEED : 1);
     if (this.alive) this.updatePlayer(own, input);
-    this.spawnWaves(world);
+    this.spawnWaves(critters);
     this.updateShots(own);
-    this.updatePuffs(world);
+    this.updatePuffs(critters);
     this.updateAttacks(world);
     this.updateMoth(world);
     this.updateBullets(world);
     this.updateCrows(world);
     this.updateBursts(dt);
+    this.updateBloom(dt);
     this.checkPlayerHits();
     this.updateFx(dt);
     this.cleanup();
@@ -100,6 +117,11 @@ export class Field {
   // ---- incoming from the opponent ----------------------------------------
 
   receive(o: Outgoing): void {
+    if (o.kind === 'crow') {
+      this.crowsWoken = 1;
+      this.crowReturns.push({ at: this.time + (o.delay ?? 0), level: o.level });
+      return;
+    }
     if (o.kind === 'moth') {
       if (!this.moth) {
         const sender = fairyById(o.fairy ?? 'pip');
@@ -110,12 +132,26 @@ export class Field {
     }
     // Attacks drop in at the same spot they were sent from, mirrored into this meadow.
     const x = Math.min(C.FIELD_W - 12, Math.max(12, o.fromX));
-    // Stars drop straight down trailing sparks; only brambles drift sideways.
     const speed = o.kind === 'bramble' ? 42 : o.kind === 'comet' ? C.COMET_SPEED : 70 + o.level * 32;
-    const vx = o.kind === 'bramble' ? (this.player.x - x) * 0.2 : 0;
+    let vx = o.kind === 'bramble' ? (this.player.x - x) * 0.2 : 0, vy = speed;
+    // Stars come in three flights; tougher (batted-back) stars lean toward the trickier ones.
+    let flight: StarFlight = 'drop';
+    if (o.kind === 'star') {
+      const roll = this.fxRng.next(), bias = (o.level - 1) * 0.1;
+      if (roll < C.SEEKER_CHANCE + bias) flight = 'seeker';
+      else if (roll < C.SEEKER_CHANCE + C.SLANT_CHANCE + bias * 2) flight = 'slant';
+    }
+    if (flight === 'slant') {
+      // Angle across the meadow, toward the far side from where it enters.
+      const dir = x < C.FIELD_W / 2 ? 1 : -1;
+      const ang = this.fxRng.range(0.35, 0.6);
+      vx = dir * Math.sin(ang) * speed * 1.1; vy = Math.cos(ang) * speed;
+    }
+    if (flight === 'seeker') { vx = 0; vy = 0; }
     this.attacks.push({
       x, y: -12,
-      vx, vy: speed,
+      vx, vy,
+      flight, seekT: flight === 'seeker' ? C.SEEK_TIME : 0, plunge: speed * 1.2,
       kind: o.kind, level: o.level,
       hp: o.kind === 'bramble' ? C.BRAMBLE_HP : o.kind === 'comet' ? Infinity : C.starHp(o.level),
       spin: this.fxRng.range(0, Math.PI * 2), dead: false,
@@ -141,6 +177,18 @@ export class Field {
     p.y = Math.min(C.FIELD_H - 14, Math.max(C.FIELD_H * 0.45, p.y + dy * C.PLAYER_SPEED * this.fairy.speed * slow * dt));
     p.invuln = Math.max(0, p.invuln - dt);
     p.cooldown = Math.max(0, p.cooldown - dt);
+
+    // Petal bloom: once per press, if you have one left.
+    if (input.bloom && !p.wasBlooming && p.blooms > 0 && this.bloom <= 0) {
+      p.blooms--;
+      this.bloom = C.BLOOM_TIME;
+      this.bloomAt = { x: p.x, y: p.y };
+      p.invuln = Math.max(p.invuln, C.BLOOM_INVULN);
+      p.charge = 0; p.over = 0; p.hold = 0;
+      this.shake = 4;
+      this.popup(p.x, p.y - 24, 'Bloom');
+    }
+    p.wasBlooming = !!input.bloom;
 
     // Tap to shoot; hold to charge a pulse torpedo, release to launch it.
     if (input.fire) {
@@ -180,14 +228,22 @@ export class Field {
   }
 
   private spawnWaves(dt: number): void {
+    // Formation flow: the next wave waits until every member of the current one
+    // has been popped or has left the meadow, then follows after a short beat.
+    this.waveT += dt;
+    const holding = this.waveId > 0 && this.waveT < C.WAVE_MAX_WAIT &&
+      this.puffs.some(j => j.wave === this.waveId && !j.dead);
+    if (holding) { this.spawnT = C.WAVE_GAP; return; }
     this.spawnT -= dt;
     if (this.spawnT > 0) return;
-    // The schedule only depends on time, so both meadows get a moonseed in the same formation.
+    // Both meadows draw the same sequence of waves from the shared seed; a faster
+    // clearer just meets them sooner. The moonseed rides the first wave after its time.
     const withMoonseed = this.time >= this.nextMoonseed;
     if (withMoonseed) this.nextMoonseed += C.MOONSEED_EVERY;
     const r = this.waveRng;
     const pressure = Math.min(1, this.time / 90);
-    this.spawnT = r.range(2.4, 3.4) - pressure * 1.1;
+    this.waveId++;
+    this.waveT = 0;
     const w = rollWave(r, pressure);
     const firstNew = this.puffs.length;
     const n = w.count;
@@ -219,7 +275,7 @@ export class Field {
       }
       if (path) { x = -100; y = -100; vx = 0; }
       const hp = w.hp[i];
-      this.puffs.push({ kind: w.kind, x, y, baseX: x, vx, vy, phase, dead: false, hp, maxHp: hp, shell, path, size });
+      this.puffs.push({ kind: w.kind, x, y, baseX: x, vx, vy, phase, dead: false, hp, maxHp: hp, shell, path, size, wave: this.waveId });
     }
     if (withMoonseed) {
       const m = this.puffs[firstNew + Math.floor((this.puffs.length - firstNew) / 2)];
@@ -320,7 +376,11 @@ export class Field {
           if (c.hp <= 0) {
             this.spray(c.x, c.y, 20, '#ff9fb8');
             this.popup(c.x, c.y, 'Crow driven off');
-            this.crowReturns.push({ at: this.time + C.CROW_RETURN, speed: c.speed * 1.25 });
+            // It comes back sooner and faster, in the rival's meadow.
+            this.outbox.push({
+              kind: 'crow', level: c.level + 1, fromX: c.x, fromY: c.y,
+              delay: Math.max(C.CROW_RETURN_MIN, C.CROW_RETURN - (c.level - 1) * 1.5),
+            });
           }
           break;
         }
@@ -483,6 +543,15 @@ export class Field {
   private updateAttacks(dt: number): void {
     for (const a of this.attacks) {
       a.spin += dt * (a.kind === 'bramble' ? 1.5 : 4 + a.level);
+      if (a.flight === 'seeker' && a.seekT > 0) {
+        // Line up: ease into the top of the meadow while sliding over the fairy.
+        a.seekT -= dt;
+        a.y += (26 - a.y) * Math.min(1, dt * 6);
+        const gap = this.player.x - a.x;
+        a.x += Math.sign(gap) * Math.min(Math.abs(gap), C.SEEK_SLIDE * dt);
+        if (a.seekT <= 0) { a.vx = 0; a.vy = a.plunge; }
+        continue;
+      }
       a.x += a.vx * dt;
       a.y += a.vy * dt;
       if (a.x < 8 || a.x > C.FIELD_W - 8) a.vx *= -1;
@@ -514,6 +583,32 @@ export class Field {
     }
   }
 
+
+  /**
+   * A petal bloom sweeps outward from where it was set off. It clears bullets,
+   * stars, brambles and comets, pops small fry (two hits or fewer) without
+   * starting a chain or sending anything, and stings a guardian. Shells,
+   * moonseeds and crows shrug it off.
+   */
+  private updateBloom(dt: number): void {
+    if (this.bloom <= 0) return;
+    this.bloom = Math.max(0, this.bloom - dt);
+    const k = 1 - this.bloom / C.BLOOM_TIME;
+    const R = 30 + 330 * k;
+    const { x, y } = this.bloomAt;
+    const inside = (px: number, py: number) => dist2(x, y, px, py) < R * R;
+    for (const b of this.bullets) if (!b.dead && inside(b.x, b.y)) { b.dead = true; this.spray(b.x, b.y, 2, '#ffd1e6'); }
+    for (const a of this.attacks) if (!a.dead && inside(a.x, a.y)) { a.dead = true; this.spray(a.x, a.y, 4, '#ffd1e6'); }
+    for (const j of this.puffs) {
+      if (!j.dead && !j.moonseed && j.shell <= 0 && j.hp <= 2 && j.x > -50 && inside(j.x, j.y)) {
+        j.dead = true; this.spray(j.x, j.y, 5, '#ffd1e6');
+      }
+    }
+    const L = this.moth;
+    if (L && !L.dead && this.bloom + dt >= C.BLOOM_TIME * 0.5 && this.bloom < C.BLOOM_TIME * 0.5 && inside(L.x, L.y)) {
+      this.damageMoth(8, L.x, L.y);
+    }
+  }
 
   /** Breaking several incoming stars in quick succession rallies your guardian. */
   private noteReflection(): void {
@@ -582,33 +677,51 @@ export class Field {
     }
   }
 
+  /** Both meadows see the warning: the crow is about to wake in one of them. */
   get crowWarning(): boolean {
-    const next = C.CROW_TIMES[this.crowsWoken];
-    return next !== undefined && next - this.time < C.CROW_WARNING;
+    return !this.crowsWoken && C.CROW_TIME - this.time < C.CROW_WARNING;
+  }
+
+  private addCrow(level: number, msg: string): void {
+    this.crows.push({
+      x: C.FIELD_W / 2, y: -20, vx: 0, vy: 0, state: 'climb', t: 0, seed: this.time, hp: C.CROW_HP,
+      level, speed: C.CROW_SPEED + (level - 1) * C.CROW_SPEED_STEP,
+      stay: Math.max(C.CROW_STAY_MIN, C.CROW_STAY - (level - 1)),
+    });
+    this.popup(C.FIELD_W / 2, 80, msg);
   }
 
   /**
-   * Sudden death. Crows wake on a fixed clock in both meadows, can't be hurt,
-   * circle overhead and dive at the fairy every few seconds.
+   * Sudden death. One Hollow Crow per round wakes in one meadow, circles and
+   * dives at the fairy, then crosses into the other meadow; back and forth
+   * until the round ends. Drive it off and it reappears in the rival's
+   * meadow, sooner and faster each time.
    */
   private updateCrows(dt: number): void {
-    const next = C.CROW_TIMES[this.crowsWoken];
-    if (next !== undefined && this.time >= next) {
-      this.crowsWoken++;
-      this.crows.push({ x: this.crowsWoken % 2 ? -12 : C.FIELD_W + 12, y: 40, vx: 0, vy: 0, state: 'circle', t: 0, seed: this.crowsWoken * 1.7, hp: C.CROW_HP, speed: 170 + this.crowsWoken * 20 });
-      this.popup(C.FIELD_W / 2, 80, 'A hollow crow wakes');
+    if (!this.crowsWoken && this.time >= C.CROW_TIME) {
+      this.crowsWoken = 1;
+      if (this.crowFirst) this.addCrow(1, 'A hollow crow wakes');
+      else this.popup(C.FIELD_W / 2, 80, 'A crow wakes next door');
     }
-    // Driven-off crows come back after a while, a little faster each time.
     for (const ret of this.crowReturns) {
-      if (this.time >= ret.at) {
-        this.crows.push({ x: C.FIELD_W / 2, y: -20, vx: 0, vy: 0, state: 'climb', t: 0, seed: ret.at, hp: C.CROW_HP, speed: ret.speed });
-        this.popup(C.FIELD_W / 2, 80, 'The crow returns');
-      }
+      if (this.time >= ret.at) this.addCrow(ret.level, ret.level > 1 ? 'The crow returns, faster' : 'The crow crosses over');
     }
     this.crowReturns = this.crowReturns.filter(r => this.time < r.at);
     const p = this.player;
     for (const c of this.crows) {
       c.t += dt;
+      c.stay -= dt;
+      // Done hunting here: finish any dive, then fly out the top and into the other meadow.
+      if (c.stay <= 0 && c.state !== 'dive' && c.state !== 'leave') { c.state = 'leave'; c.t = 0; }
+      if (c.state === 'leave') {
+        c.vx = 0; c.vy = -150;
+        c.y += c.vy * dt;
+        if (c.y < -24) {
+          this.outbox.push({ kind: 'crow', level: c.level, fromX: c.x, fromY: 0 });
+          c.hp = 0;
+        }
+        continue;
+      }
       if (c.state === 'circle') {
         const tx = C.FIELD_W / 2 + Math.cos(c.t * 1.3 + c.seed) * 80;
         const ty = 50 + Math.sin(c.t * 2.1 + c.seed) * 20;
@@ -694,4 +807,71 @@ export class Field {
     this.particles = this.particles.filter(p => p.life > 0);
     this.popups = this.popups.filter(p => p.age < 1.1);
   }
+
+  // ---- online: snapshots of this meadow for the rival's screen -----------------
+
+  /** Everything the renderer needs to draw this meadow, as plain data. */
+  snapshot(): FieldSnapshot {
+    const strip = <T extends object>(o: T, ...drop: string[]) => {
+      const c = { ...o } as Record<string, unknown>;
+      for (const k of drop) delete c[k];
+      return c;
+    };
+    return {
+      t: this.time, ri: this.roundIndex, ns: this.nextMoonseed, cw: this.crowsWoken,
+      g: this.gauge, fv: this.fever, sh: this.shake, bl: this.bloom, ba: this.bloomAt,
+      bc: this.bestChain,
+      p: this.player,
+      s: this.shots,
+      pf: this.puffs.map(j => strip(j, 'path', 'baseX')),
+      bu: this.bursts.map(b => strip(b, 'hits', 'chainId')),
+      at: this.attacks,
+      bt: this.bullets,
+      m: this.moth,
+      cr: this.crows,
+      pu: this.popups,
+    };
+  }
+
+  /** Mirror a snapshot sent by the rival. New pollen bursts get a spray of particles. */
+  applySnapshot(s: FieldSnapshot): void {
+    this.time = s.t; this.roundIndex = s.ri; this.nextMoonseed = s.ns; this.crowsWoken = s.cw;
+    this.gauge = s.g; this.fever = s.fv; this.shake = s.sh; this.bloom = s.bl; this.bloomAt = s.ba;
+    this.bestChain = s.bc;
+    this.player = s.p as Player;
+    this.shots = s.s as Shot[];
+    this.puffs = s.pf as unknown as Puff[];
+    this.bursts = (s.bu as unknown as Burst[]).map(b => ({ ...b, chainId: 0, hits: new Set<object>() }));
+    this.attacks = s.at as Attack[];
+    this.bullets = s.bt as Bullet[];
+    this.moth = s.m as Moth | null;
+    this.crows = s.cr as Crow[];
+    this.popups = s.pu as Popup[];
+    // A burst that's new since the last snapshot gets the same spray it had at home.
+    for (const b of this.bursts) if (b.age <= C.SNAP_EVERY * C.STEP + 1e-3) this.spray(b.x, b.y, 8, '#ffe9a8');
+  }
+
+  /** Between snapshots, keep the mirror moving so it doesn't stutter. */
+  drift(dt: number): void {
+    this.time += dt;
+    const tempo = this.tempo, world = dt * tempo, own = dt * (1 + (tempo - 1) * 0.5);
+    this.shake = Math.max(0, this.shake - dt * 30);
+    for (const s of this.shots) { s.y -= C.SHOT_SPEED * (s.charged ? 0.75 : 1) * own; s.x += s.vx * own; }
+    for (const a of this.attacks) { a.x += a.vx * world; a.y += a.vy * world; }
+    for (const b of this.bullets) { b.x += b.vx * world; b.y += b.vy * world; }
+    for (const c of this.crows) { c.x += c.vx * world; c.y += c.vy * world; }
+    for (const b of this.bursts) b.age += dt;
+    this.bursts = this.bursts.filter(b => b.age < C.BURST_LIFE);
+    this.updateFx(dt);
+    this.particles = this.particles.filter(p => p.life > 0);
+    this.popups = this.popups.filter(p => p.age < 1.1);
+  }
+}
+
+export interface FieldSnapshot {
+  t: number; ri: number; ns: number; cw: number;
+  g: number; fv: number; sh: number; bl: number; ba: { x: number; y: number };
+  bc: number;
+  p: unknown; s: unknown[]; pf: unknown[]; bu: unknown[]; at: unknown[]; bt: unknown[];
+  m: unknown; cr: unknown[]; pu: unknown[];
 }

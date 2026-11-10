@@ -51,14 +51,34 @@ export const HITSTOP = 0.35;
 export const COMET_RADIUS = 6;
 export const COMET_SPEED = 230;
 
-/** Sudden death: Hollow Crows wake if a round drags on. */
-export const CROW_TIMES = [100, 140, 175];
+/**
+ * Waves flow like Twinkle Star Sprites: there's no spawn clock. The next
+ * formation comes in as soon as the last one is popped or has left the
+ * meadow, so clearing fast brings the swarm faster.
+ */
+export const WAVE_GAP = 0.35;       // beat between a wave clearing and the next arriving
+export const WAVE_MAX_WAIT = 12;    // safety net only: a straggling wave can't stall the meadow longer than this
+
+/** Sudden death, part one: at this point every critter speeds up sharply. */
+export const SURGE_TIME = 100;
+export const SURGE_SPEED = 1.35;
+
+/**
+ * Sudden death, part two: the Hollow Crow (the meadow's Death). One crow per
+ * round. It wakes in one meadow, hunts for a while, then crosses into the
+ * other, back and forth. Drive it off and it returns sooner, in your
+ * rival's meadow, and faster.
+ */
+export const CROW_TIME = 120;
 export const CROW_WARNING = 3;
 export const CROW_RADIUS = 9;
-
-/** Crows can be driven off with enough hits, but come back faster. */
 export const CROW_HP = 14;
-export const CROW_RETURN = 8;
+export const CROW_SPEED = 170;      // dive speed at level 1
+export const CROW_SPEED_STEP = 25;  // added per level
+export const CROW_STAY = 10;        // seconds it hunts one meadow before crossing (level 1)
+export const CROW_STAY_MIN = 4;
+export const CROW_RETURN = 8;       // seconds before a driven-off crow reappears (level 1)
+export const CROW_RETURN_MIN = 2;
 
 /** Overcharge: hold past a full charge to spend half a gauge and send your guardian. */
 export const OVERCHARGE_TIME = 1.2;
@@ -74,5 +94,22 @@ export const TEMPO_RAMP = 0.6;        // +60% by then
 export const TEMPO_PER_ROUND = 0.1;   // each earlier round in the match adds 10%
 export const TEMPO_MAX = 2;
 
+/** Petal bloom: clears bullets and stray stars, pops small fry with no chain credit. */
+export const BLOOMS_PER_ROUND = 2;
+export const BLOOM_TIME = 0.6;
+export const BLOOM_INVULN = 2;
+
+/** Star flights: chance a star is a seeker or a slant (the rest drop straight). */
+export const SEEKER_CHANCE = 0.25;
+export const SLANT_CHANCE = 0.25;
+export const SEEK_TIME = 0.75;   // how long a seeker lines up before plunging
+export const SEEK_SLIDE = 170;   // how fast it slides across while lining up
+
 export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
+
+/** Online play. */
+export const NET_VERSION = '2';          // bump when the wire format changes; only matching versions are paired
+export const LOCAL_SERVER = 'ws://localhost:8787/ws';
+export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
+export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout

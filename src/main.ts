@@ -1,12 +1,16 @@
 import * as C from './config';
 import { Game } from './game';
 import { Input } from './input';
+import { Lobby } from './lobby';
 import { Renderer } from './render';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 const input = new Input(canvas);
 const game = new Game(input, renderer);
+const lobby = new Lobby(game);
+game.onWantOnline = () => lobby.open();
+document.querySelector<HTMLButtonElement>('[data-online]')?.addEventListener('click', e => { lobby.open(); (e.currentTarget as HTMLButtonElement).blur(); });
 
 const fit = () => renderer.resize();
 window.addEventListener('resize', fit);
@@ -16,7 +20,7 @@ document.getElementById('reset')?.addEventListener('click', () => {
   if (confirm('Reset unlocked fairies and stats?')) game.resetProgress();
 });
 document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b =>
-  b.addEventListener('click', () => { game.start(b.dataset.mode as 'cpu' | 'versus'); b.blur(); }));
+  b.addEventListener('click', () => { lobby.close(); game.start(b.dataset.mode as 'cpu' | 'versus'); b.blur(); }));
 
 // Fixed-step simulation, decoupled from display refresh rate.
 let last = performance.now();

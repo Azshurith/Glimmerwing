@@ -111,7 +111,7 @@ export class Renderer {
     for (const a of f.attacks) {
       if (a.kind === 'bramble') this.bramble(a.x, a.y, a.spin);
       else if (a.kind === 'comet') this.comet(a.x, a.y, time);
-      else this.star(a.x, a.y, a.spin, a.level, a.hp);
+      else this.star(a.x, a.y, a.spin, a.level, a.hp, a.vx, a.vy, a.flight === 'seeker' && a.seekT > 0);
     }
     for (const c of f.crows) this.crow(c.x, c.y, c.state === 'dive' ? Math.atan2(c.vy, c.vx) - Math.PI / 2 : 0, time, c.hp / C.CROW_HP);
     if (f.crowWarning) this.cue('A crow stirs', '#ff9fb8', time, 76);
@@ -143,6 +143,24 @@ export class Renderer {
       }
     }
 
+    if (f.bloom > 0) {
+      const k = 1 - f.bloom / C.BLOOM_TIME;
+      const R = 30 + 330 * k;
+      ctx.save(); ctx.translate(f.bloomAt.x, f.bloomAt.y);
+      ctx.globalAlpha = 1 - k;
+      ctx.fillStyle = 'rgba(255,209,230,0.12)';
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffd1e6';
+      for (let i = 0; i < 24; i++) {
+        const a = (Math.PI * 2 * i) / 24 + k * 2;
+        ctx.save(); ctx.translate(Math.cos(a) * R, Math.sin(a) * R); ctx.rotate(a);
+        ctx.beginPath(); ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+
     for (const pt of f.particles) {
       ctx.globalAlpha = pt.life / pt.max; ctx.fillStyle = pt.color;
       ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size * 0.7, 0, Math.PI * 2); ctx.fill();
@@ -164,6 +182,7 @@ export class Renderer {
     const ctx = this.ctx;
     const color = f.fairy.color;
     for (let i = 0; i < C.MAX_HULL; i++) this.heart(10 + i * 12, 10, i < f.player.hull ? color : 'rgba(246,240,255,0.18)');
+    for (let i = 0; i < C.BLOOMS_PER_ROUND; i++) this.blossom(74 + i * 11, 10, i < f.player.blooms ? '#ffd1e6' : 'rgba(246,240,255,0.15)');
     ctx.textAlign = 'right'; ctx.font = `600 9px ${FONT}`; ctx.fillStyle = PALETTE.dim;
     ctx.fillText(f.fairy.name, C.FIELD_W - 34, 13);
     for (let i = 0; i < C.ROUNDS_TO_WIN; i++) {
@@ -185,6 +204,16 @@ export class Renderer {
     const w = C.FIELD_W - 20;
     ctx.fillStyle = 'rgba(246,240,255,0.15)'; ctx.fillRect(10, C.FIELD_H - 5, w, 2.5);
     ctx.fillStyle = PALETTE.moth; ctx.fillRect(10, C.FIELD_H - 5, w * (f.gauge / C.GAUGE_MAX), 2.5);
+  }
+
+  /** Little five-petal flower used for the bloom stock. */
+  private blossom(x: number, y: number, color: string): void {
+    const ctx = this.ctx;
+    ctx.fillStyle = color;
+    for (let i = 0; i < 5; i++) {
+      const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+      ctx.beginPath(); ctx.arc(x + Math.cos(a) * 2.6, y + Math.sin(a) * 2.6, 2, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
   private heart(x: number, y: number, color: string): void {
@@ -378,20 +407,33 @@ export class Renderer {
    * A falling star with a straight spark trail. Its colour shows how many
    * hits it still needs, and it shrinks a little with each hit.
    */
-  private star(x: number, y: number, spin: number, level: number, hp: number): void {
+  private star(x: number, y: number, spin: number, level: number, hp: number, vx: number, vy: number, lining: boolean): void {
     const ctx = this.ctx;
     const [r, g, b] = STAR_COLORS[Math.min(STAR_COLORS.length - 1, Math.max(0, hp - 1))];
-    const len = 18 + level * 10;
     const size = C.STAR_RADIUS * (0.8 + hp * 0.12);
-    const tg = ctx.createLinearGradient(x, y - len, x, y);
-    tg.addColorStop(0, `rgba(${r},${g},${b},0)`);
-    tg.addColorStop(0.6, `rgba(${r},${g},${b},0.5)`);
-    tg.addColorStop(1, `rgba(${r},${g},${b},0.95)`);
-    ctx.fillStyle = tg;
-    ctx.beginPath();
-    ctx.moveTo(x - 0.5, y - len); ctx.lineTo(x + 0.5, y - len);
-    ctx.lineTo(x + 4.5, y); ctx.lineTo(x - 4.5, y);
-    ctx.closePath(); ctx.fill();
+    if (lining) {
+      // A seeker lining up: a pulsing halo and a faint line showing where it will fall.
+      ctx.strokeStyle = `rgba(${r},${g},${b},0.18)`; ctx.lineWidth = 1; ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, C.FIELD_H); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = `rgba(${r},${g},${b},0.7)`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(x, y, size + 4 + Math.sin(spin * 4) * 2, 0, Math.PI * 2); ctx.stroke();
+    } else {
+      // Spark trail pointing back along the direction of travel.
+      const len = 18 + level * 10;
+      const sp = Math.hypot(vx, vy) || 1;
+      const ux = vx / sp, uy = vy / sp;
+      const tx = x - ux * len, ty = y - uy * len;
+      const tg = ctx.createLinearGradient(tx, ty, x, y);
+      tg.addColorStop(0, `rgba(${r},${g},${b},0)`);
+      tg.addColorStop(0.6, `rgba(${r},${g},${b},0.5)`);
+      tg.addColorStop(1, `rgba(${r},${g},${b},0.95)`);
+      ctx.fillStyle = tg;
+      const nx = -uy, ny = ux; // perpendicular, for the trail's width
+      ctx.beginPath();
+      ctx.moveTo(tx + nx * 0.5, ty + ny * 0.5); ctx.lineTo(tx - nx * 0.5, ty - ny * 0.5);
+      ctx.lineTo(x - nx * 4.5, y - ny * 4.5); ctx.lineTo(x + nx * 4.5, y + ny * 4.5);
+      ctx.closePath(); ctx.fill();
+    }
     ctx.save(); ctx.translate(x, y); ctx.rotate(spin);
     const col = `rgb(${r},${g},${b})`;
     ctx.shadowColor = col; ctx.shadowBlur = 6 + level * 3;
@@ -495,6 +537,15 @@ export class Renderer {
     ctx.shadowBlur = 0;
   }
 
+  /** A small line of dim text, e.g. the online ping. */
+  note(text: string, x: number, y: number): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.font = `400 8px ${FONT}`; ctx.fillStyle = PALETTE.dim;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
   banner(title: string, sub: string, alpha = 0.6, extra?: string): void {
     const ctx = this.ctx;
     ctx.fillStyle = `rgba(16,11,36,${alpha})`; ctx.fillRect(0, 0, C.VIEW_W, C.VIEW_H);
@@ -515,7 +566,7 @@ export class Renderer {
     ctx.textAlign = 'center'; ctx.fillStyle = PALETTE.text;
     ctx.font = `italic 700 40px ${FONT}`; ctx.fillText('Glimmerwing', C.VIEW_W / 2, 130);
     ctx.font = `400 11px ${FONT}`; ctx.fillStyle = PALETTE.dim;
-    ctx.fillText('Press 1 to play the CPU, 2 for two players', C.VIEW_W / 2, 158);
+    ctx.fillText('Press 1 to play the CPU, 2 for two players, 3 to play online', C.VIEW_W / 2, 158);
     ctx.restore();
     this.fairy({ ...placeholder, color: '#ffd86b', accent: '#f6a04d', wing: 'round' }, C.VIEW_W / 2 - 90, 205 + Math.sin(time * 2) * 4, 2, time);
     this.fairy({ ...placeholder, color: '#c9a2ff', accent: '#5b3c8f', wing: 'moth' }, C.VIEW_W / 2 + 90, 205 + Math.cos(time * 2) * 4, 2, time + 1);
