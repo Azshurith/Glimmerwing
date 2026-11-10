@@ -75,7 +75,7 @@ export class Field {
     this.fxRng = new Rng(seed ^ 0x9e3779b9);
     this.player = {
       x: C.FIELD_W / 2, y: C.FIELD_H - 34, hull: C.MAX_HULL,
-      invuln: 0, cooldown: 0, hold: 0, charge: 0, over: 0, wasFiring: false, wasBlooming: false, blooms: C.BLOOMS_PER_ROUND,
+      invuln: 0, stun: 0, impair: 0, zakoGrace: 0, mash: 0, stunAge: 0, cooldown: 0, hold: 0, charge: 0, over: 0, wasFiring: false, wasBlooming: false, blooms: C.BLOOMS_PER_ROUND,
     };
   }
 
@@ -129,6 +129,15 @@ export class Field {
   // ---- incoming from the opponent ----------------------------------------
 
   receive(o: Outgoing): void {
+    if (o.kind === 'heal') {
+      // My rival got hit: I recover a little.
+      if (this.alive && !this.settled && this.player.hull < C.MAX_HULL) {
+        this.player.hull = Math.min(C.MAX_HULL, this.player.hull + o.level);
+        this.popup(this.player.x, this.player.y - 22, o.level >= 2 ? '+1 heart' : '+½ heart');
+        this.spray(this.player.x, this.player.y, 8, '#ff9db8');
+      }
+      return;
+    }
     if (o.kind === 'imp') {
       // The rival's Extra Attack: small critters that fly the sender's pattern.
       const sender = fairyById(o.fairy ?? 'pip');
@@ -218,6 +227,24 @@ export class Field {
 
   private updatePlayer(dt: number, input: Controls): void {
     const p = this.player;
+    p.invuln = Math.max(0, p.invuln - dt);
+    p.cooldown = Math.max(0, p.cooldown - dt);
+    p.zakoGrace = Math.max(0, p.zakoGrace - dt);
+    // Stunned after running into a critter: frozen, but mashing shakes it off sooner.
+    if (p.stun > 0) {
+      const mash = (input.left ? 1 : 0) | (input.right ? 2 : 0) | (input.up ? 4 : 0) | (input.down ? 8 : 0)
+        | (input.fire ? 16 : 0) | (input.auto ? 32 : 0) | (input.bloom ? 64 : 0);
+      p.stunAge += dt;
+      // Mashing helps, but only down to the minimum.
+      if (mash !== p.mash && mash !== 0) p.stun = Math.max(p.stun - C.MASH_STEP, C.STUN_MIN - p.stunAge);
+      p.mash = mash;
+      p.stun -= dt;
+      if (p.stun <= 0) { p.stun = 0; p.impair = C.IMPAIR_TIME; }
+      p.hold = 0; p.charge = 0; p.over = 0;
+      p.wasFiring = input.fire; p.wasBlooming = !!input.bloom;
+      return;
+    }
+    p.impair = Math.max(0, p.impair - dt);
     let dx = 0, dy = 0;
     if (input.target) {
       const tx = input.target.x - p.x, ty = input.target.y - p.y;
@@ -228,11 +255,9 @@ export class Field {
       dy = (input.down ? 1 : 0) - (input.up ? 1 : 0);
       if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
     }
-    const slow = p.charge > 0 ? 0.75 : 1;
+    const slow = (p.charge > 0 ? 0.75 : 1) * (p.impair > 0 ? C.IMPAIR_SPEED : 1);
     p.x = Math.min(C.FIELD_W - 10, Math.max(10, p.x + dx * C.PLAYER_SPEED * this.fairy.speed * slow * dt));
     p.y = Math.min(C.FIELD_H - 14, Math.max(C.PLAYER_MIN_Y, p.y + dy * C.PLAYER_SPEED * this.fairy.speed * slow * dt));
-    p.invuln = Math.max(0, p.invuln - dt);
-    p.cooldown = Math.max(0, p.cooldown - dt);
 
     // Petal bloom: once per press, if you have one left.
     if (input.bloom && !p.wasBlooming && p.blooms > 0 && this.bloom <= 0) {
@@ -255,7 +280,7 @@ export class Field {
       p.hold += dt;
       // Charge climbs a level per CHARGE_TIME, but only as high as the power gauge allows.
       const cap = this.gaugeLevel;
-      if (p.hold > C.HOLD_BEFORE_CHARGE && cap >= 1) p.charge = Math.min(cap, p.charge + dt / (C.CHARGE_TIME * this.fairy.charge));
+      if (p.hold > C.HOLD_BEFORE_CHARGE && cap >= 1) p.charge = Math.min(cap, p.charge + (dt * (p.impair > 0 ? C.IMPAIR_CHARGE : 1)) / (C.CHARGE_TIME * this.fairy.charge));
       p.over = p.charge > 1 ? (p.charge - 1) / 2 : 0;
     } else {
       if (p.wasFiring && p.charge >= 1) this.releaseCharge(Math.floor(p.charge + 1e-6));
@@ -272,7 +297,7 @@ export class Field {
   private volley(cooldown: number): void {
     const p = this.player;
     this.shots.push({ x: p.x, y: p.y - 10, vx: 0, charged: false, dead: false });
-    p.cooldown = cooldown / (this.fever > 0 ? C.FEVER_FIRE_RATE : 1);
+    p.cooldown = (cooldown / (this.fever > 0 ? C.FEVER_FIRE_RATE : 1)) * (p.impair > 0 ? C.IMPAIR_FIRE : 1);
   }
 
   /**
@@ -1088,8 +1113,8 @@ export class Field {
     if (!this.alive || p.invuln > 0 || this.settled) return;
     const pr = C.PLAYER_RADIUS * this.fairy.hitbox;
     const hit = (x: number, y: number, r: number) => dist2(p.x, p.y, x, y) < (r + pr) ** 2;
+    // Attacks from the rival (and guardians and their shots) hit hard; critters just stun.
     let struck = false;
-    for (const j of this.puffs) if (!j.dead && !j.moonseed && hit(j.x, j.y, C.PUFF_RADIUS * 0.8 * j.size)) { j.dead = true; struck = true; }
     for (const a of this.attacks) {
       const r = attackRadius(a);
       if (!a.dead && hit(a.x, a.y, r * 0.8)) { a.dead = true; struck = true; }
@@ -1106,12 +1131,30 @@ export class Field {
     const L = this.moth;
     if (L && Math.abs(p.x - L.x) < 30 && Math.abs(p.y - L.y) < 14) struck = true;
     if (struck) {
-      p.hull--;
+      p.hull = Math.max(0, p.hull - C.ATTACK_DAMAGE);
       p.invuln = C.INVULN_TIME;
       p.charge = 0;
       p.over = 0;
-      this.shake = 6;
-      this.spray(p.x, p.y, 20, '#ffffff');
+      this.shake = 7;
+      this.spray(p.x, p.y, 24, '#ffffff');
+      this.outbox.push({ kind: 'heal', level: C.HEAL_ON_ATTACK, fromX: p.x, fromY: p.y });
+      return;
+    }
+    // Running into a critter: one heart, but never below half a heart; stunned, then impaired.
+    if (p.stun > 0 || p.zakoGrace > 0) return;
+    for (const j of this.puffs) {
+      if (!j.dead && !j.moonseed && j.x > -50 && hit(j.x, j.y, C.PUFF_RADIUS * 0.8 * j.size)) {
+        j.dead = true;
+        this.spray(j.x, j.y, 8, '#fff6d8');
+        p.hull = p.hull > C.ZAKO_DAMAGE ? p.hull - C.ZAKO_DAMAGE : Math.min(p.hull, 1);
+        p.stun = C.STUN_TIME; p.stunAge = 0;
+        p.zakoGrace = C.STUN_TIME + C.ZAKO_GRACE;
+        p.charge = 0; p.over = 0; p.hold = 0;
+        this.shake = 4;
+        this.popup(p.x, p.y - 22, 'Stunned');
+        this.outbox.push({ kind: 'heal', level: C.HEAL_ON_ZAKO, fromX: p.x, fromY: p.y });
+        return;
+      }
     }
   }
 

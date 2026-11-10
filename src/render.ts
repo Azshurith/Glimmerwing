@@ -147,7 +147,21 @@ export class Renderer {
     if (f.alive) {
       const p = f.player;
       const blink = p.invuln > 0 && Math.floor(p.invuln * 14) % 2 === 0;
+      // Impaired (after a stun): dimmed and flickering.
+      if (p.impair > 0) ctx.globalAlpha = 0.55 + 0.2 * Math.sin(time * 20);
       if (!blink) this.fairy(f.fairy, p.x, p.y, 1, time, Math.min(1, p.charge));
+      ctx.globalAlpha = 1;
+      if (p.stun > 0) {
+        // Stunned: little stars circling her head.
+        ctx.fillStyle = '#fff3a8';
+        for (let i = 0; i < 3; i++) {
+          const a = time * 8 + (Math.PI * 2 * i) / 3;
+          const sx = p.x + Math.cos(a) * 10, sy = p.y - 14 + Math.sin(a) * 3;
+          ctx.beginPath();
+          for (let k = 0; k < 10; k++) { const rr = k % 2 ? 1.2 : 3, aa = (Math.PI * k) / 5; ctx.lineTo(sx + Math.cos(aa) * rr, sy + Math.sin(aa) * rr); }
+          ctx.closePath(); ctx.fill();
+        }
+      }
       if (!blink && p.over > 0) {
         ctx.strokeStyle = f.fairy.guardian.color; ctx.lineWidth = 2; ctx.globalAlpha = 0.9;
         ctx.beginPath(); ctx.arc(p.x, p.y, 21, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p.over); ctx.stroke();
@@ -178,7 +192,17 @@ export class Renderer {
   private hud(f: Field, wins: number, time: number): void {
     const ctx = this.ctx;
     const color = f.fairy.color;
-    for (let i = 0; i < C.MAX_HULL; i++) this.heart(10 + i * 12, 10, i < f.player.hull ? color : 'rgba(246,240,255,0.18)');
+    // Five hearts; life is kept in half-hearts.
+    for (let i = 0; i < C.MAX_HULL / 2; i++) {
+      const x = 10 + i * 12, have = f.player.hull - i * 2;
+      this.heart(x, 10, 'rgba(246,240,255,0.18)');
+      if (have >= 2) this.heart(x, 10, color);
+      else if (have === 1) {
+        const ctx = this.ctx;
+        ctx.save(); ctx.beginPath(); ctx.rect(x - 7, 0, 7, 20); ctx.clip();
+        this.heart(x, 10, color); ctx.restore();
+      }
+    }
     for (let i = 0; i < C.BLOOMS_PER_ROUND; i++) this.blossom(74 + i * 11, 10, i < f.player.blooms ? f.fairy.bomb.color : 'rgba(246,240,255,0.15)');
     ctx.textAlign = 'right'; ctx.font = `600 9px ${FONT}`; ctx.fillStyle = PALETTE.dim;
     ctx.fillText(f.fairy.name, C.FIELD_W - 34, 13);

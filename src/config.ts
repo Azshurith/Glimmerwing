@@ -9,8 +9,30 @@ export const VIEW_H = FIELD_H;
 
 export const STEP = 1 / 60;
 
-export const MAX_HULL = 5;
-export const INVULN_TIME = 1.4;
+/**
+ * Life, in half-hearts (10 = five hearts), and damage, as in Twinkle Star Sprites:
+ * - running into a critter (zako) costs one heart but can't take you below half
+ *   a heart; you're stunned (mash to shake it off sooner), then slowed and
+ *   weakened for a few seconds, and your rival recovers half a heart;
+ * - being hit by an attack (stars, brambles, Extra Attacks, a guardian or its
+ *   shots) costs three hearts, you blink invincible for about a second, and
+ *   your rival recovers a heart;
+ * - Death (the hollow crow) knocks you out outright.
+ */
+export const MAX_HULL = 10;
+export const ZAKO_DAMAGE = 2;
+export const ATTACK_DAMAGE = 6;
+export const HEAL_ON_ZAKO = 1;
+export const HEAL_ON_ATTACK = 2;
+export const INVULN_TIME = 1.0;
+export const STUN_TIME = 1.1;
+export const MASH_STEP = 0.04;      // each new button/direction press while stunned shaves this off
+export const STUN_MIN = 0.6;        // however hard you mash, a stun lasts at least this long
+export const ZAKO_GRACE = 0.6;      // after a stun, critters pass through you this long
+export const IMPAIR_TIME = 5;
+export const IMPAIR_SPEED = 0.6;    // movement multiplier while impaired
+export const IMPAIR_FIRE = 1.7;     // time between shots multiplier while impaired
+export const IMPAIR_CHARGE = 0.6;   // charge speed multiplier while impaired
 export const PLAYER_SPEED = 225;
 export const PLAYER_RADIUS = 6;
 /** As in Twinkle Star Sprites, the fairy can fly anywhere in her meadow: this is just the top margin. */
@@ -180,7 +202,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '14';          // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '15';          // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout
