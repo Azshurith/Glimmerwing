@@ -198,7 +198,7 @@ export class Field {
     }
     const slow = p.charge > 0 ? 0.75 : 1;
     p.x = Math.min(C.FIELD_W - 10, Math.max(10, p.x + dx * C.PLAYER_SPEED * this.fairy.speed * slow * dt));
-    p.y = Math.min(C.FIELD_H - 14, Math.max(C.FIELD_H * 0.45, p.y + dy * C.PLAYER_SPEED * this.fairy.speed * slow * dt));
+    p.y = Math.min(C.FIELD_H - 14, Math.max(C.PLAYER_MIN_Y, p.y + dy * C.PLAYER_SPEED * this.fairy.speed * slow * dt));
     p.invuln = Math.max(0, p.invuln - dt);
     p.cooldown = Math.max(0, p.cooldown - dt);
 

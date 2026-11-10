@@ -13,6 +13,8 @@ export const MAX_HULL = 5;
 export const INVULN_TIME = 1.4;
 export const PLAYER_SPEED = 225;
 export const PLAYER_RADIUS = 6;
+/** As in Twinkle Star Sprites, the fairy can fly anywhere in her meadow: this is just the top margin. */
+export const PLAYER_MIN_Y = 14;
 
 export const SHOT_SPEED = 430;
 export const FIRE_COOLDOWN = 0.11;
