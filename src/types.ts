@@ -156,8 +156,24 @@ export interface Moth {
   guardian: Guardian;
   wing: string;
   angle: number;
-  stage: 'wander' | 'attack' | 'exit';
+  /** enter: rushes in. wander: circles. attack: locks in place and fires. exit: drifts off a side. */
+  stage: 'enter' | 'wander' | 'attack' | 'exit';
   stageT: number;
+  /** Which way it circles while wandering (+1 or -1), picked at random. */
+  dir: number;
+  /** Damage taken this wander; at GUARDIAN_STUN_DMG it reels. */
+  hurt: number;
+  /** Seconds of reeling left: untouchable, and the wander clock waits. */
+  stun: number;
+  /** Sideways drift while exiting; shots nudge it. */
+  vx: number;
+  /** Summoned by a reverse chain: skips the wander and attacks straight away. */
+  rush: boolean;
+  /** Attack-phase swoop: seconds into the current swoop (-1 when not swooping), and the wait until the next. */
+  swoop: number;
+  swoopIn: number;
+  /** Where it returns to after a swoop, and where it swoops to. */
+  postX: number; postY: number; toX: number; toY: number;
 }
 
 export interface Crow {
@@ -188,8 +204,10 @@ export interface Outgoing {
   kind: AttackKind | 'moth' | 'crow';
   /** For a crow: seconds before it appears after arriving. */
   delay?: number;
-  /** For a guardian: which fairy sent it. */
+  /** For a guardian or Extra Attack: which fairy sent it. */
   fairy?: string;
+  /** For a guardian: a direct rush that skips the wander phase. */
+  rush?: boolean;
   level: number;
   fromX: number;
   fromY: number;

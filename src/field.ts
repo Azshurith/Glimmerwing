@@ -160,7 +160,12 @@ export class Field {
     if (o.kind === 'moth') {
       if (!this.moth) {
         const sender = fairyById(o.fairy ?? 'pip');
-        this.moth = { x: C.FIELD_W / 2, y: -40, hp: C.MOTH_HP, t: 0, fireT: 0, dead: false, guardian: sender.guardian, wing: sender.wing, angle: 0, stage: 'wander', stageT: 0 };
+        this.moth = {
+          x: C.FIELD_W / 2, y: -40, hp: C.MOTH_HP, t: 0, fireT: 0, dead: false, guardian: sender.guardian, wing: sender.wing,
+          angle: this.fxRng.range(0, Math.PI * 2), stage: 'enter', stageT: 0,
+          dir: this.fxRng.next() < 0.5 ? 1 : -1, hurt: 0, stun: 0, vx: 0, rush: !!o.rush,
+          swoop: -1, swoopIn: 1.8, postX: 0, postY: 0, toX: 0, toY: 0,
+        };
         this.popup(C.FIELD_W / 2, 90, `${sender.guardian.name} incoming`);
       }
       return;
@@ -529,7 +534,7 @@ export class Field {
         const c = this.chains.get(id);
         if (c && ++c.reverses >= C.BOSS_CHAIN_REVERSES && !c.bossSent) {
           c.bossSent = true;
-          this.sendGuardian('Reverse chain');
+          this.sendGuardian('Reverse chain', true);
         }
       }
     }
@@ -720,19 +725,71 @@ export class Field {
     const L = this.moth;
     if (!L) return;
     L.t += dt;
+    // Reeling: frozen in place and untouchable; the wander clock waits.
+    if (L.stun > 0) { L.stun = Math.max(0, L.stun - dt); return; }
     L.stageT += dt;
-    if (L.stage === 'wander') {
-      L.y += (62 - L.y) * Math.min(1, dt * 1.8);
-      L.x += (this.player.x - L.x) * Math.min(1, dt * 1.4);
+    const cx = C.FIELD_W / 2, cy = 80;
+    if (L.stage === 'enter') {
+      // Rocket in to the top of the circle (a rush goes straight to its attack spot).
+      const tx = L.rush ? this.player.x : cx + Math.cos(L.angle) * C.GUARDIAN_CIRCLE;
+      const ty = L.rush ? 62 : cy + Math.sin(L.angle) * C.GUARDIAN_CIRCLE * 0.45;
+      const k = Math.min(1, dt * 9);
+      L.x += (tx - L.x) * k; L.y += (ty - L.y) * k;
+      if (L.stageT >= C.GUARDIAN_ENTER) {
+        L.stageT = 0;
+        if (L.rush) { L.stage = 'attack'; L.fireT = 0.3; } else L.stage = 'wander';
+      }
+    } else if (L.stage === 'wander') {
+      // Float in a loop, clockwise or anticlockwise at random.
+      L.angle += L.dir * C.GUARDIAN_SPIN * dt;
+      const tx = cx + Math.cos(L.angle) * C.GUARDIAN_CIRCLE, ty = cy + Math.sin(L.angle) * C.GUARDIAN_CIRCLE * 0.45;
+      const k = Math.min(1, dt * 5);
+      L.x += (tx - L.x) * k; L.y += (ty - L.y) * k;
       if (L.stageT >= C.GUARDIAN_WANDER) { L.stage = 'attack'; L.stageT = 0; L.fireT = 0.5; }
     } else if (L.stage === 'attack') {
+      if (L.swoop >= 0) {
+        // Slide down near the fairy, hang there, then glide back up to the post.
+        L.swoop += dt;
+        const down = C.GUARDIAN_SWOOP_DOWN, hold = down + C.GUARDIAN_SWOOP_HOLD, back = hold + C.GUARDIAN_SWOOP_BACK;
+        const ease = (k: number) => k * k * (3 - 2 * k);
+        if (L.swoop < down) {
+          const k = ease(L.swoop / down);
+          L.x = L.postX + (L.toX - L.postX) * k; L.y = L.postY + (L.toY - L.postY) * k;
+        } else if (L.swoop < hold) {
+          L.x = L.toX; L.y = L.toY;
+        } else if (L.swoop < back) {
+          const k = ease((L.swoop - hold) / C.GUARDIAN_SWOOP_BACK);
+          L.x = L.toX + (L.postX - L.toX) * k; L.y = L.toY + (L.postY - L.toY) * k;
+        } else {
+          L.x = L.postX; L.y = L.postY;
+          L.swoop = -1;
+          L.swoopIn = C.GUARDIAN_SWOOP_EVERY + this.fxRng.range(-0.5, 0.5);
+          L.fireT = 0.4;
+        }
+        return; // no firing mid-swoop, and it finishes the swoop before leaving
+      }
       L.fireT -= dt;
       if (L.fireT <= 0 && this.alive) this.guardianFire(L);
-      if (L.stageT >= C.GUARDIAN_ATTACK) { L.stage = 'exit'; L.stageT = 0; }
+      L.swoopIn -= dt;
+      if (L.swoopIn <= 0 && this.alive && L.stageT < C.GUARDIAN_ATTACK - 1.5) {
+        L.swoop = 0;
+        L.postX = L.x; L.postY = L.y;
+        L.toX = Math.min(C.FIELD_W - 30, Math.max(30, this.player.x));
+        L.toY = Math.max(L.y, Math.min(C.FIELD_H - 50, this.player.y - C.GUARDIAN_SWOOP_GAP));
+        return;
+      }
+      if (L.stageT >= C.GUARDIAN_ATTACK) {
+        L.stage = 'exit'; L.stageT = 0;
+        // Head for whichever side it's nearer, unless shots push it the other way.
+        L.vx = (L.x < cx ? -1 : 1) * (15 + this.fxRng.range(0, 15));
+      }
     } else {
-      L.y += (30 + L.stageT * 25) * dt;
-      L.x = Math.min(C.FIELD_W - 20, Math.max(20, L.x + Math.sin(L.stageT * 2) * 40 * dt));
-      if (L.y > C.FIELD_H + 40) this.moth = null;
+      // Drift down and off a side. Shots nudge it (see damageMoth).
+      L.vx *= Math.pow(0.97, dt * 60);
+      L.vx += Math.sign(L.vx || 1) * 20 * dt;
+      L.x += L.vx * dt;
+      L.y += (25 + L.stageT * 22) * dt;
+      if (L.y > C.FIELD_H + 40 || L.x < -50 || L.x > C.FIELD_W + 50) this.moth = null;
     }
   }
 
@@ -825,8 +882,8 @@ export class Field {
   }
 
   /** Breaking several incoming stars in quick succession rallies your guardian. */
-  private sendGuardian(how: string): void {
-    this.outbox.push({ kind: 'moth', level: 1, fromX: C.FIELD_W / 2, fromY: C.FIELD_H / 2, fairy: this.fairy.id });
+  private sendGuardian(how: string, rush = false): void {
+    this.outbox.push({ kind: 'moth', level: 1, fromX: C.FIELD_W / 2, fromY: C.FIELD_H / 2, fairy: this.fairy.id, rush });
     this.popup(C.FIELD_W / 2, C.FIELD_H / 2, how ? `${how}: ${this.fairy.guardian.name} sent` : `${this.fairy.guardian.name} sent`);
   }
 
@@ -869,8 +926,22 @@ export class Field {
   private damageMoth(dmg: number, x: number, y: number): void {
     const L = this.moth;
     if (!L) return;
+    // Reeling guardians are untouchable.
+    if (L.stun > 0) { this.spray(x, y, 1, '#ffffff'); return; }
     L.hp -= dmg;
     this.spray(x, y, 3, '#ffcf8a');
+    if (L.stage === 'wander' || L.stage === 'enter') {
+      // Hit it hard enough while it wanders and it reels.
+      L.hurt += dmg;
+      if (L.hurt >= C.GUARDIAN_STUN_DMG && L.hp > 0) {
+        L.hurt = 0;
+        L.stun = C.GUARDIAN_STUN;
+        this.popup(L.x, L.y - 18, 'Reeling');
+      }
+    } else if (L.stage === 'exit') {
+      // Exiting guardians don't reel, but shots push them away from where they hit.
+      L.vx += (L.x >= x ? 1 : -1) * C.GUARDIAN_NUDGE;
+    }
     if (L.hp <= 0) {
       const id = this.newChain(L.x, L.y, true);
       this.addBurst(L.x, L.y, id, 70);
@@ -967,7 +1038,14 @@ export class Field {
       if (!a.dead && hit(a.x, a.y, r * 0.8)) { a.dead = true; struck = true; }
     }
     for (const b of this.bullets) if (!b.dead && hit(b.x, b.y, 3)) { b.dead = true; struck = true; }
-    for (const c of this.crows) if (hit(c.x, c.y, C.CROW_RADIUS * 0.8)) struck = true;
+    // The hollow crow is the meadow's Death: its touch knocks you out on the spot.
+    if (this.crows.some(c => c.hp > 0 && hit(c.x, c.y, C.CROW_RADIUS * 0.8))) {
+      p.hull = 0;
+      this.shake = 10;
+      this.spray(p.x, p.y, 40, '#ff9fb8');
+      this.popup(p.x, p.y - 20, 'Death’s touch');
+      return;
+    }
     const L = this.moth;
     if (L && Math.abs(p.x - L.x) < 30 && Math.abs(p.y - L.y) < 14) struck = true;
     if (struck) {

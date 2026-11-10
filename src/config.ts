@@ -36,9 +36,30 @@ export const MAX_STAR_LEVEL = 3;
 export const starHp = (level: number) => 1 + level;
 
 export const GAUGE_MAX = 200;
-export const MOTH_HP = 32;
+export const MOTH_HP = 70;   // bosses are tough: a few seconds of focused fire won't banish one
+/**
+ * Guardians (Boss Attacks) run through phases, as in Twinkle Star Sprites:
+ * rush in, wander (circling, random direction), attack, then exit off a side.
+ * Taking GUARDIAN_STUN_DMG while wandering makes it reel, briefly untouchable.
+ * Shots nudge an exiting guardian sideways, so you can steer where it leaves.
+ */
+export const GUARDIAN_ENTER = 0.45;
 export const GUARDIAN_WANDER = 2.5;
-export const GUARDIAN_ATTACK = 6;
+export const GUARDIAN_ATTACK = 10;
+/**
+ * While attacking, the guardian now and then slides down near the fairy,
+ * hangs there a moment, then glides back to its post (touching it hurts).
+ */
+export const GUARDIAN_SWOOP_EVERY = 3;
+export const GUARDIAN_SWOOP_DOWN = 0.6;
+export const GUARDIAN_SWOOP_HOLD = 0.35;
+export const GUARDIAN_SWOOP_BACK = 0.8;
+export const GUARDIAN_SWOOP_GAP = 46;   // how far above the fairy it stops
+export const GUARDIAN_CIRCLE = 55;      // wander circle radius
+export const GUARDIAN_SPIN = 1.7;       // radians a second
+export const GUARDIAN_STUN_DMG = 5;
+export const GUARDIAN_STUN = 0.6;
+export const GUARDIAN_NUDGE = 18;       // sideways speed each shot adds while it exits
 
 export const FEVER_TIME = 6;
 /** During Fever you fire this many times faster (autofire and tapping alike). The shot pattern doesn't change. */
@@ -73,9 +94,9 @@ export const SURGE_SPEED = 1.35;
  * Sudden death, part two: the Hollow Crow (the meadow's Death). One crow per
  * round. It wakes in one meadow, hunts for a while, then crosses into the
  * other, back and forth. Drive it off and it returns sooner, in your
- * rival's meadow, and faster.
+ * rival's meadow, and faster. Its touch is an instant knockout, like Death's.
  */
-export const CROW_TIME = 120;
+export const CROW_TIME = 102;            // about when Death appears in Twinkle Star Sprites
 export const CROW_WARNING = 3;
 export const CROW_RADIUS = 9;
 export const CROW_HP = 14;
@@ -144,7 +165,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '8';          // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '11';          // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout
