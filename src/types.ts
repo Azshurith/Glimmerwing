@@ -116,9 +116,11 @@ export interface Attack {
   /** Extra Attack critters wear the sender's colour and look. */
   color?: string;
   look?: string;
+  /** Flight timer for critters that need a second clock. */
+  t?: number;
 }
 
-export type StarFlight = 'drop' | 'seeker' | 'slant' | 'zig' | 'homing' | 'flutter';
+export type StarFlight = 'drop' | 'seeker' | 'slant' | 'zig' | 'homing' | 'lateral' | 'bounce' | 'bat';
 
 /** A fairy's Extra Attack: a few small critters sent with a level 2 charge. */
 export interface Extra {
@@ -127,7 +129,10 @@ export interface Extra {
   /**
    * drop: straight down. seeker: line up over the fairy, then plunge.
    * slant: diagonals off the walls. zig: right-angle turns.
-   * homing: steers after the fairy for a while. flutter: weaves side to side like a bat.
+   * homing: steers after the fairy for a while.
+   * lateral: enters from a side, streaks across and bursts into a ring of sparks (Load Ran's Rabi Bomb).
+   * bounce: hops slowly down the meadow, off the walls (Nanja Monja's furballs).
+   * bat: weaves down, then locks on to where the fairy is and dives (Mevious's bats).
    */
   flight: StarFlight;
   /** How the critter looks. */

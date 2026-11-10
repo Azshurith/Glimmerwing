@@ -105,6 +105,17 @@ export const IMP_SPEED = 95;
 /** Homing critters steer after the fairy for this long, turning at most this fast (radians a second). */
 export const HOMING_TIME = 2.6;
 export const HOMING_TURN = 2.4;
+/** Hearthsparks: how fast they streak across, and the ring of sparks they burst into. */
+export const LATERAL_SPEED = 125;
+export const SPARK_BULLETS = 8;
+export const SPARK_SPEED = 75;
+/** Burrs: gravity, the hop, and how often they hop. They drift down slowly overall. */
+export const BURR_GRAVITY = 150;
+export const BURR_HOP = 40;
+export const BURR_HOP_EVERY = 0.9;
+/** Dusk moths: weave this long, then dive at this speed toward where the fairy was. */
+export const BAT_WEAVE = 1.2;
+export const BAT_DIVE = 200;
 /** Break this many reverse stars within one chain to send your guardian (the TSS reverse-chain Boss Attack). */
 export const BOSS_CHAIN_REVERSES = 3;
 
@@ -133,7 +144,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '7';          // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '8';          // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout
