@@ -81,12 +81,12 @@ export const GUARDIAN_CYCLES_MAX = 4;
  */
 export const GUARDIAN_LEAVES = false;
 export const GUARDIAN_CYCLE: Record<string, number> = {
-  aimed: 1.8,
-  ring: 2.1,
-  rapid: 1.6,
-  rain: 2.4,
-  spiral: 2.6,
-  sweep: 2.1,
+    aimed: 1.8,
+    ring: 2.1,
+    rapid: 1.6,
+    rain: 2.4,
+    spiral: 2.6,
+    sweep: 2.1,
 };
 /** Two bosses sent within this many seconds of each other clash and cancel out. */
 export const BOSS_CLASH_WINDOW = 1.5;

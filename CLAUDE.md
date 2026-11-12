@@ -56,6 +56,8 @@ Do each feature on its own branch (`feature/<name>` or `fix/<name>`) and open a 
 ## Conventions
 
 - `src/types/` holds interfaces and type aliases only, and ESLint enforces it: no runtime exports, and no imports from outside `types/`. Import with `import type { … } from '../types'`. A type used by only one module stays private to that module.
+- Indent with 4 spaces (Prettier and `.editorconfig`); lines are up to 120 characters.
+- Every function, class, method, interface, type alias and module-level arrow helper needs a `/** … */` docblock that says what it's for (enforced by `eslint-plugin-jsdoc`). Small lambdas inside a function body and constructors are exempt. Write prose only, with no `{type}` annotations, since TypeScript already has the types.
 - Use type-only imports (`consistent-type-imports`), `===`, and an `_` prefix for intentionally unused variables. `console.log` gives a warning; `warn`/`error` are fine.
 - The TypeScript config is strict and also turns on `noUnusedLocals/Parameters`, `noImplicitReturns` and `noImplicitOverride`.
 - The sprite atlas `assets/witch.png` and `witch.json` are generated from `assets/source/` by [tools/extract-witch.py](tools/extract-witch.py) (Python, using PIL, numpy and scipy). Don't hand-edit them.
