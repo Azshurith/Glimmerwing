@@ -1,6 +1,6 @@
-import * as C from './config';
-import { Field } from './field';
-import { Controls } from './types';
+import * as C from '../core/config';
+import type { Controls } from '../types';
+import type { Field } from './field';
 
 /**
  * The CPU pilot. It lines up under its target and dodges sideways, like a
@@ -35,8 +35,15 @@ export class CpuPilot {
     const forward = C.FIELD_H * 0.56;
 
     const threats: { x: number; y: number; r: number; rising: boolean }[] = [
-      ...f.puffs.filter(j => !j.moonseed && j.x > -50).map(j => ({ x: j.x, y: j.y, r: C.PUFF_RADIUS * j.size, rising: j.path?.type === 'rise' })),
-      ...f.attacks.map(a => ({ x: a.x, y: a.y, r: a.kind === 'bramble' ? C.BRAMBLE_RADIUS : C.STAR_RADIUS + (a.kind === 'comet' ? 6 : 0), rising: false })),
+      ...f.puffs
+        .filter(j => !j.moonseed && j.x > -50)
+        .map(j => ({ x: j.x, y: j.y, r: C.PUFF_RADIUS * j.size, rising: j.path?.type === 'rise' })),
+      ...f.attacks.map(a => ({
+        x: a.x,
+        y: a.y,
+        r: a.kind === 'bramble' ? C.BRAMBLE_RADIUS : C.STAR_RADIUS + (a.kind === 'comet' ? 6 : 0),
+        rising: false,
+      })),
       ...f.crows.map(c => ({ x: c.x, y: c.y, r: C.CROW_RADIUS + 8, rising: c.vy < 0 })),
       ...(f.moth ? [{ x: f.moth.x, y: f.moth.y, r: 34, rising: false }] : []),
       ...f.bullets.map(b => ({ x: b.x, y: b.y, r: 4, rising: b.vy < 0 })),
@@ -44,17 +51,24 @@ export class CpuPilot {
 
     // Sideways dodge: anything in our lane just above (or level with) us.
     // Also note things coming up from below, which we dodge by moving forward.
-    let dodge = 0, fromBelow = false, overhead = 0, urgent = false;
+    let dodge = 0,
+      fromBelow = false,
+      overhead = 0,
+      urgent = false;
     // A seeker about to plunge from right above us: get moving before it drops.
     for (const a of f.attacks) {
       if (a.flight === 'seeker' && a.seekT > 0 && a.seekT < 0.25 && Math.abs(a.x - p.x) < C.STAR_RADIUS + 16) {
-        dodge += a.x < p.x ? 1 : -1; urgent = true;
+        dodge += a.x < p.x ? 1 : -1;
+        urgent = true;
       }
     }
     for (const th of threats) {
       const dy = p.y - th.y; // positive when the threat is above us
       const inLane = Math.abs(th.x - p.x) < th.r + 14;
-      if (inLane && dy > -40 && dy < 60) { dodge += th.x < p.x ? 1 : -1; if (dy < 35) urgent = true; }
+      if (inLane && dy > -40 && dy < 60) {
+        dodge += th.x < p.x ? 1 : -1;
+        if (dy < 35) urgent = true;
+      }
       if (inLane && dy > 0 && dy < 70) overhead++;
       if (th.rising && Math.abs(th.x - p.x) < th.r + 22 && dy < 0 && dy > -70) fromBelow = true;
     }
@@ -86,14 +100,16 @@ export class CpuPilot {
         this.homeY = forward + (bottom - forward) * lean;
       }
       // Edge closer to a critter that's sinking low, so bursts land sooner.
-      if (target && target !== star && target.y > C.FIELD_H * 0.35) this.homeY = Math.max(forward, Math.min(bottom, target.y + 90));
+      if (target && target !== star && target.y > C.FIELD_H * 0.35)
+        this.homeY = Math.max(forward, Math.min(bottom, target.y + 90));
       // Working on a falling star: hang back to get more time to break it.
       if (target === star && star) this.homeY = bottom;
 
       // Occasionally charge into a dense cluster.
       if (this.chargeMode <= 0 && puff) {
         const near = f.puffs.filter(j => Math.hypot(j.x - puff.x, j.y - puff.y) < 50).length;
-        if (near >= 5 && Math.random() < 0.5) this.charge(f, f.gaugeLevel >= 3 ? 3 : f.gaugeLevel === 2 && Math.random() < 0.5 ? 2 : 1);
+        if (near >= 5 && Math.random() < 0.5)
+          this.charge(f, f.gaugeLevel >= 3 ? 3 : f.gaugeLevel === 2 && Math.random() < 0.5 ? 2 : 1);
       }
       // Sitting on a full gauge: go for the guardian before long.
       if (this.chargeMode <= 0 && f.gaugeLevel >= 3 && Math.random() < dt * 0.4) this.charge(f, 3);
@@ -110,21 +126,24 @@ export class CpuPilot {
     // Sideways.
     if (dodge !== 0) {
       let dir = dodge > 0 ? 1 : -1;
-      if (p.x < 20) dir = 1; else if (p.x > C.FIELD_W - 20) dir = -1;
-      out.right = dir > 0; out.left = dir < 0;
+      if (p.x < 20) dir = 1;
+      else if (p.x > C.FIELD_W - 20) dir = -1;
+      out.right = dir > 0;
+      out.left = dir < 0;
     } else if (Math.abs(weaveX - p.x) > 4) {
-      out.right = weaveX > p.x; out.left = weaveX < p.x;
+      out.right = weaveX > p.x;
+      out.left = weaveX < p.x;
     }
 
     // Forward and back.
     if (fromBelow) {
-      out.up = true;                                   // hop forward out of a rising wave
+      out.up = true; // hop forward out of a rising wave
     } else if (dodge === 0 && overhead > 0) {
-      if (p.y < bottom - 4) out.down = true;           // something above but not on us yet: back off
+      if (p.y < bottom - 4) out.down = true; // something above but not on us yet: back off
     } else if (dodge !== 0 && !urgent) {
-      if (p.y < bottom - 4) out.down = true;           // time to spare: dodge with a diagonal retreat
+      if (p.y < bottom - 4) out.down = true; // time to spare: dodge with a diagonal retreat
     } else if (p.y > Math.min(bottom, weaveY) + 4) {
-      out.up = true;                                   // advance to the chosen height
+      out.up = true; // advance to the chosen height
     } else if (p.y < Math.min(bottom, weaveY) - 4) {
       out.down = true;
     }

@@ -1,0 +1,44 @@
+{
+ "cell": [
+  112,
+  124
+ ],
+ "anchor": [
+  56,
+  26
+ ],
+ "anims": {
+  "fly": {
+   "row": 0,
+   "count": 4
+  },
+  "idle": {
+   "row": 1,
+   "count": 4
+  },
+  "tiltL": {
+   "row": 2,
+   "count": 4
+  },
+  "tiltR": {
+   "row": 3,
+   "count": 4
+  },
+  "hit": {
+   "row": 4,
+   "count": 6
+  },
+  "death": {
+   "row": 5,
+   "count": 8
+  },
+  "remains": {
+   "row": 6,
+   "count": 4
+  },
+  "revive": {
+   "row": 7,
+   "count": 4
+  }
+ }
+}

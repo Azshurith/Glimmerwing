@@ -1,25 +1,5 @@
-import * as C from './config';
-
-/** Messages exchanged between the two players' games (relayed by the server). */
-export type PeerMsg =
-  | { k: 'sel'; i: number; done: boolean; id: string }
-  | { k: 'round'; seed: number; wins: [number, number] }
-  | { k: 'snap'; r: number; s: unknown }
-  | { k: 'atk'; r: number; o: import('./types').Outgoing }
-  | { k: 'dead'; r: number }
-  | { k: 'end'; hostDead: boolean; guestDead: boolean }
-  | { k: 'ping'; t: number }
-  | { k: 'pong'; t: number };
-
-export type NetEvent =
-  | { t: 'open' }
-  | { t: 'queued' }
-  | { t: 'hosted'; code: string }
-  | { t: 'matched'; host: boolean; code: string }
-  | { t: 'error'; msg: string }
-  | { t: 'peerLeft' }
-  | { t: 'closed' }
-  | { t: 'msg'; d: PeerMsg };
+import * as C from '../core/config';
+import type { NetEvent, PeerMsg } from '../types';
 
 declare const __GW_SERVER__: string;
 
@@ -52,23 +32,42 @@ export class Net {
     this.close();
     return new Promise((resolve, reject) => {
       let ws: WebSocket;
-      try { ws = new WebSocket(url); } catch (e) { reject(e); return; }
+      try {
+        ws = new WebSocket(url);
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error(String(e)));
+        return;
+      }
       this.ws = ws;
-      ws.onopen = () => { this.connected = true; this.queue.push({ t: 'open' }); resolve(); };
-      ws.onerror = () => { if (!this.connected) reject(new Error(`Couldn't reach the server at ${url}`)); };
+      ws.onopen = () => {
+        this.connected = true;
+        this.queue.push({ t: 'open' });
+        resolve();
+      };
+      ws.onerror = () => {
+        if (!this.connected) reject(new Error(`Couldn't reach the server at ${url}`));
+      };
       ws.onclose = () => {
         if (this.ws !== ws) return;
         const was = this.connected;
-        this.connected = false; this.ws = null;
+        this.connected = false;
+        this.ws = null;
         if (was) this.queue.push({ t: 'closed' });
       };
       ws.onmessage = e => {
         let m: NetEvent;
-        try { m = JSON.parse(String(e.data)); } catch { return; }
+        try {
+          m = JSON.parse(String(e.data)) as NetEvent;
+        } catch {
+          return;
+        }
         if (m.t === 'matched') this.isHost = m.host;
         if (m.t === 'msg') {
           // Answer pings straight away so the reading isn't held up by the frame loop.
-          if (m.d.k === 'ping') { this.peer({ k: 'pong', t: m.d.t }); return; }
+          if (m.d.k === 'ping') {
+            this.peer({ k: 'pong', t: m.d.t });
+            return;
+          }
           if (m.d.k === 'pong') {
             const sample = (performance.now() - m.d.t) / 1000;
             this.rtt = this.rtt * 0.7 + sample * 0.3;
@@ -84,19 +83,34 @@ export class Net {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(obj));
   }
 
-  quick(): void { this.raw({ t: 'quick', v: C.NET_VERSION }); }
-  host(): void { this.raw({ t: 'host', v: C.NET_VERSION }); }
-  join(code: string): void { this.raw({ t: 'join', v: C.NET_VERSION, code }); }
-  leave(): void { this.raw({ t: 'leave' }); }
-  peer(d: PeerMsg): void { this.raw({ t: 'msg', d }); }
+  quick(): void {
+    this.raw({ t: 'quick', v: C.NET_VERSION });
+  }
+  host(): void {
+    this.raw({ t: 'host', v: C.NET_VERSION });
+  }
+  join(code: string): void {
+    this.raw({ t: 'join', v: C.NET_VERSION, code });
+  }
+  leave(): void {
+    this.raw({ t: 'leave' });
+  }
+  peer(d: PeerMsg): void {
+    this.raw({ t: 'msg', d });
+  }
 
   /** Put events back at the front of the queue (the lobby hands leftovers to the game). */
-  requeue(events: NetEvent[]): void { this.queue = events.concat(this.queue); }
+  requeue(events: NetEvent[]): void {
+    this.queue = events.concat(this.queue);
+  }
 
   /** Call once a frame: keeps the ping going and hands back what arrived. */
   poll(dt: number): NetEvent[] {
     this.pingT -= dt;
-    if (this.pingT <= 0) { this.pingT = 1.5; this.peer({ k: 'ping', t: performance.now() }); }
+    if (this.pingT <= 0) {
+      this.pingT = 1.5;
+      this.peer({ k: 'ping', t: performance.now() });
+    }
     const q = this.queue;
     this.queue = [];
     return q;
@@ -107,6 +121,9 @@ export class Net {
     this.ws = null;
     this.connected = false;
     this.queue = [];
-    if (ws) { ws.onclose = null; ws.close(); }
+    if (ws) {
+      ws.onclose = null;
+      ws.close();
+    }
   }
 }
