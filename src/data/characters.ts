@@ -1,6 +1,6 @@
-import witchPortrait from '../../assets/witch-portrait.jpg';
-import { loadImage } from '../core/images';
-import type { Fairy } from '../types';
+import witchPortrait from '@/../assets/witch-portrait.jpg';
+import { loadImage } from '@/core/images';
+import type { Fairy } from '@/types';
 import { WITCH } from './sprite-sets';
 
 export const FAIRIES: Fairy[] = [

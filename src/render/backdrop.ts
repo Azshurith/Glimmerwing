@@ -1,4 +1,4 @@
-import * as C from '../core/config';
+import * as C from '@/core/config';
 import { sparkle } from './draw';
 
 /** The shared arcade night sky: turning light rays, a drifting sparkle lattice, twinkling stars, vignette. */

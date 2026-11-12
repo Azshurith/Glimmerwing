@@ -1,4 +1,4 @@
-import type { Sfx } from '../types';
+import type { Sfx } from '@/types';
 
 /**
  * Sound effects, synthesised on the fly with Web Audio: no audio files, so the

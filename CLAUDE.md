@@ -41,7 +41,11 @@ Do each feature on its own branch (`feature/<name>` or `fix/<name>`) and open a 
 - The server has no game logic: it only matches players and relays messages, and it also serves `dist/`.
 - **Bump `NET_VERSION` in [src/core/config.ts](src/core/config.ts) whenever the wire format or snapshot shape changes**, so builds that don't match never get paired.
 
-**Rendering.** [src/render/renderer.ts](src/render/renderer.ts) draws everything from read-only state on `Game`/`Field`; the simulation never draws. HUD, the title and select screens, the backdrop and sprite animation each live in their own module under `src/render/`. Colours and fonts are in `theme.ts`.
+**Rendering.** Rendering reads `Game`/`Field` state and never changes it; the simulation never draws.
+- [src/render/renderer.ts](src/render/renderer.ts) (`Renderer`) sets up each frame and composes a meadow layer by layer.
+- The drawing itself is plain functions that take the canvas context first, e.g. `drawStar(ctx, …)`. They're grouped by what they draw in `src/render/entities/`: `fairy`, `critters`, `attacks`, `bosses` and `bombs`. HUD icons are in `icons.ts`.
+- To draw something new, add a function to the matching entities module and call it from `Renderer.field()`.
+- The HUD, the title and select screens (`screens/`), the backdrop and sprite animation each have their own module. Colours and fonts are in `theme.ts`.
 
 **Data and tuning.**
 - Every tuning number is in [src/core/config.ts](src/core/config.ts), imported as `* as C`.
@@ -55,11 +59,11 @@ Do each feature on its own branch (`feature/<name>` or `fix/<name>`) and open a 
 
 ## Conventions
 
-- `src/types/` holds interfaces and type aliases only, and ESLint enforces it: no runtime exports, and no imports from outside `types/`. Import with `import type { … } from '../types'`. A type used by only one module stays private to that module.
+- **Imports:** use `./x` within a folder and `@/folder/x` everywhere else, never `../` (ESLint enforces this). The `@/` alias is set in `tsconfig.json` `paths`, and esbuild reads it from there.
+- **Types:** `src/types/` holds interfaces and type aliases only, and ESLint enforces it: no runtime exports, and no imports from outside `types/`. Import with `import type { … } from '@/types'`. A type stays private to its module until a second module needs to name it (for example through a public method's signature); then it moves into `types/`.
 - Indent with 4 spaces (Prettier and `.editorconfig`); lines are up to 120 characters.
 - Every function, class, method, interface, type alias and module-level arrow helper needs a `/** … */` docblock that says what it's for (enforced by `eslint-plugin-jsdoc`). Small lambdas inside a function body and constructors are exempt. Write prose only, with no `{type}` annotations, since TypeScript already has the types.
 - Use type-only imports (`consistent-type-imports`), `===`, and an `_` prefix for intentionally unused variables. `console.log` gives a warning; `warn`/`error` are fine.
 - The TypeScript config is strict and also turns on `noUnusedLocals/Parameters`, `noImplicitReturns` and `noImplicitOverride`.
 - The sprite atlas `assets/witch.png` and `witch.json` are generated from `assets/source/` by [tools/extract-witch.py](tools/extract-witch.py) (Python, using PIL, numpy and scipy). Don't hand-edit them.
 - ESLint ignores `Claude outputs/`, which holds scratch output, not source.
-- The "Layout" section at the bottom of README.md still lists the old flat `src/*.ts` paths. The "Project structure" section in the README is the current one.

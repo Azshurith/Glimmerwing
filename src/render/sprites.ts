@@ -1,4 +1,4 @@
-import type { Anim, Layer, SpriteSet } from '../types';
+import type { Anim, Layer, SpriteSet } from '@/types';
 
 /**
  * Animation and drawing for sprite-sheet characters (sheets are defined in data/sprite-sets.ts).

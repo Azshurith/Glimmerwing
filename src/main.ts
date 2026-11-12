@@ -4,6 +4,7 @@ import { Input } from './input/input';
 import { Lobby } from './net/lobby';
 import { Sound } from './audio/sound';
 import { Renderer } from './render/renderer';
+import type { Mode } from './types';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
@@ -202,7 +203,7 @@ document.getElementById('reset')?.addEventListener('click', () => {
 document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b =>
     b.addEventListener('click', () => {
         lobby.close();
-        game.start(b.dataset.mode as 'cpu' | 'versus');
+        game.start(b.dataset.mode as Mode);
         b.blur();
     }),
 );

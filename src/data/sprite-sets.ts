@@ -1,6 +1,6 @@
-import witchSheet from '../../assets/witch.png';
-import { loadImage } from '../core/images';
-import type { SpriteSet } from '../types';
+import witchSheet from '@/../assets/witch.png';
+import { loadImage } from '@/core/images';
+import type { SpriteSet } from '@/types';
 
 /**
  * Sprite-sheet characters. A sheet is an atlas of equal cells, one animation per row;

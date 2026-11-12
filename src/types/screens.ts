@@ -33,9 +33,6 @@ export interface SelectView {
     hints: string[];
 }
 
-/** A game mode chosen from the title menu. */
-export type MenuMode = 'cpu' | 'versus' | 'online';
-
 /** Everything the title screen needs to draw a frame. */
 export interface TitleView {
     /** Highlighted menu item. */

@@ -1,32 +1,29 @@
-import type { Sound } from '../audio/sound';
-import * as C from '../core/config';
-import { FAIRIES, fairyById } from '../data/characters';
-import type { Input } from '../input/input';
-import type { Net } from '../net/net';
-import type { Renderer } from '../render/renderer';
-import { medallionAt, SELECT_COLS } from '../render/screens/select-screen';
-import { TITLE_BUTTONS } from '../render/screens/title-screen';
-import { PALETTE, PLAYER_COLORS } from '../render/theme';
+import type { Sound } from '@/audio/sound';
+import * as C from '@/core/config';
+import { FAIRIES, fairyById } from '@/data/characters';
+import type { Input } from '@/input/input';
+import type { Net } from '@/net/net';
+import type { Renderer } from '@/render/renderer';
+import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
+import { TITLE_BUTTONS } from '@/render/screens/title-screen';
+import { PALETTE, PLAYER_COLORS } from '@/render/theme';
 import type {
     Controls,
     Fairy,
     FieldSnapshot,
     HudTag,
+    Mode,
     Outgoing,
     PeerMsg,
+    Phase,
     Progress,
     SelectCard,
     SelectSide,
     Sfx,
-} from '../types';
+} from '@/types';
 import { CpuPilot } from './ai';
 import { Field } from './field';
 import { loadProgress, resetProgress, saveProgress } from './progress';
-
-/** How the match is played: against the CPU, two players on one device, or online. */
-type Mode = 'cpu' | 'versus' | 'online';
-/** Where the game is in its flow, from the title screen to the end of a match. */
-type Phase = 'title' | 'select' | 'countdown' | 'playing' | 'roundOver' | 'matchOver';
 
 /** `ghost` transits are only drawn: online, the real attack is delivered on the rival's screen. */
 interface Transit {

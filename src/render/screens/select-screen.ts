@@ -1,9 +1,10 @@
-import * as C from '../../core/config';
-import { FAIRIES } from '../../data/characters';
-import type { Fairy, SelectSide, SelectView } from '../../types';
-import { Backdrop } from '../backdrop';
-import { arcadeText, shade, slanted, sparkle } from '../draw';
-import { ARCADE, FONT } from '../theme';
+import * as C from '@/core/config';
+import { FAIRIES } from '@/data/characters';
+import type { SelectSide, SelectView } from '@/types';
+import { Backdrop } from '@/render/backdrop';
+import { drawFairy } from '@/render/entities/fairy';
+import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
+import { ARCADE, FONT } from '@/render/theme';
 
 // Layout, in view units (504 x 320).
 const PANEL_W = 160;
@@ -27,25 +28,11 @@ export function medallionAt(i: number): { x: number; y: number; r: number } {
 }
 export const SELECT_COLS = MED_COLS;
 
-/** Draws a fairy at a position and scale; supplied by the renderer. */
-type DrawFairy = (
-    fy: Fairy,
-    x: number,
-    y: number,
-    scale: number,
-    t: number,
-    charge?: number,
-    silhouette?: boolean,
-) => void;
-
 /** The character select screen: both players' panels and the roster between them. */
 export class SelectScreen {
     private backdrop: Backdrop;
 
-    constructor(
-        private ctx: CanvasRenderingContext2D,
-        private drawFairy: DrawFairy,
-    ) {
+    constructor(private ctx: CanvasRenderingContext2D) {
         this.backdrop = new Backdrop(ctx);
     }
 
@@ -114,7 +101,7 @@ export class SelectScreen {
                 dh = sh * k;
             ctx.drawImage(p.img, sx, sy, sw, sh, x + PANEL_W / 2 - dw / 2, ART_Y, dw, dh);
         } else {
-            this.drawFairy(fy, x + PANEL_W / 2, ART_Y + ART_H * 0.48 + Math.sin(t * 2.2) * 3, 4.2, t, 0, false);
+            drawFairy(this.ctx, fy, x + PANEL_W / 2, ART_Y + ART_H * 0.48 + Math.sin(t * 2.2) * 3, 4.2, t, 0, false);
         }
         ctx.filter = 'none';
         if (hidden) {
@@ -289,12 +276,12 @@ export class SelectScreen {
             ctx.clip();
             const p = c.fairy.portrait;
             if (c.locked) {
-                this.drawFairy(c.fairy, m.x, m.y + lift + 2, 1.15, t, 0, true);
+                drawFairy(this.ctx, c.fairy, m.x, m.y + lift + 2, 1.15, t, 0, true);
             } else if (p && p.img.complete && p.img.naturalWidth) {
                 const [fx, fy, fr] = p.face;
                 ctx.drawImage(p.img, fx - fr, fy - fr, fr * 2, fr * 2, m.x - m.r, m.y + lift - m.r, m.r * 2, m.r * 2);
             } else {
-                this.drawFairy(c.fairy, m.x, m.y + lift + 2, 1.15, t + i);
+                drawFairy(this.ctx, c.fairy, m.x, m.y + lift + 2, 1.15, t + i);
             }
             if (!hovered) {
                 ctx.fillStyle = 'rgba(10,6,28,0.35)';

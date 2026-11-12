@@ -1,14 +1,14 @@
-import * as C from '../../core/config';
-import { FAIRIES } from '../../data/characters';
-import type { MenuMode, TitleView } from '../../types';
-import { Backdrop } from '../backdrop';
-import { arcadeText, slanted, sparkle } from '../draw';
-import { drawSprite } from '../sprites';
-import { ARCADE, FONT } from '../theme';
+import * as C from '@/core/config';
+import { FAIRIES } from '@/data/characters';
+import type { Mode, TitleView } from '@/types';
+import { Backdrop } from '@/render/backdrop';
+import { arcadeText, slanted, sparkle } from '@/render/draw';
+import { drawSprite } from '@/render/sprites';
+import { ARCADE, FONT } from '@/render/theme';
 
 /** The title menu, top to bottom; also the tap targets (view units). */
 export const TITLE_BUTTONS: {
-    mode: MenuMode;
+    mode: Mode;
     label: string;
     sub: string;
     x: number;
@@ -19,7 +19,7 @@ export const TITLE_BUTTONS: {
     { mode: 'cpu', label: 'VS CPU', sub: 'Battle the computer' },
     { mode: 'versus', label: '2 PLAYERS', sub: 'Share a keyboard, pads or a tablet' },
     { mode: 'online', label: 'ONLINE', sub: 'Find a rival or invite a friend' },
-].map((b, i) => ({ ...b, mode: b.mode as MenuMode, x: 290, y: 106 + i * 44, w: 192, h: 36 }));
+].map((b, i) => ({ ...b, mode: b.mode as Mode, x: 290, y: 106 + i * 44, w: 192, h: 36 }));
 
 const LOGO_X = 386;
 

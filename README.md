@@ -25,13 +25,15 @@ type-aware `typescript-eslint` rules, Prettier for formatting, and an
     src/
       main.ts            entry point: wires the page, input, game loop and renderer
       types/             shared interfaces and type aliases only (no runtime code;
-                         lint-enforced). Import with `import type { … } from '../types'`.
+                         lint-enforced). Import with `import type { … } from '@/types'`.
       core/              config constants, seeded RNG, image loading
       data/              the fairy roster and sprite-sheet definitions
       game/              simulation: game flow (game.ts), a meadow (field.ts),
                          CPU pilot, wave formations, saved progress
-      render/            canvas renderer, theme (colours, fonts), drawing helpers,
-                         the shared backdrop and sprite animation
+      render/            the renderer (frame and meadow composition), HUD, HUD icons,
+                         theme (colours, fonts), drawing helpers, backdrop, sprites
+        entities/        drawing for each kind of thing in a meadow: the fairy,
+                         critters, attacks, bosses, bombs
         screens/         title screen and character select
       input/             keyboard, gamepad and touch
       audio/             synthesized sound effects
@@ -40,8 +42,13 @@ type-aware `typescript-eslint` rules, Prettier for formatting, and an
     assets/              sprite atlas, portrait, app icons (source art in assets/source)
     tools/               asset scripts (frame extraction for the sprite sheet)
 
-Types used by just one module stay private to it; anything shared lives in
-`src/types`.
+Imports use `./x` within a folder and `@/folder/x` across folders (never
+`../`; lint-enforced). Types used by just one module stay private to it; once a
+second module needs one, it moves to `src/types`.
+
+Fields never reference each other: a field writes to its `outbox`, and `Game`
+delivers each item to the other side after a short flight. Both fields share a
+wave seed each round, so the swarms are identical on both sides.
 
 ## Phones, tablets and desktop
 
@@ -100,22 +107,3 @@ background stops simulating, so your meadow freezes for your rival while
 you're away. The server has no game logic; it only pairs players and
 forwards messages.
 
-## Layout
-
-- `src/config.ts`  – every tuning number in one place
-- `src/characters.ts` – the fairy roster, their stats, and unlock conditions
-- `src/progress.ts`   – saved stats and unlocks (localStorage)
-- `src/waves.ts`   – wave definitions: path, speed, side, size, count, toughness, bubbles
-- `src/field.ts`   – one side's simulation: fairy, puffs, chain bursts, counters, Fever, moth
-- `src/game.ts`    – rounds, match flow, and delivering attacks between fields
-- `src/ai.ts`      – CPU pilot
-- `src/input.ts`   – keyboard and touch
-- `src/render.ts`  – canvas drawing
-- `src/main.ts`    – fixed 60 Hz step loop
-- `src/net.ts`     – WebSocket client and the messages players exchange
-- `src/lobby.ts`   – the Play online panel (Find match, friend rooms)
-- `server/server.mjs` – zero-dependency matchmaking relay and static server
-
-Fields never reference each other: a field writes to its `outbox`, and `Game`
-delivers each item to the other side after a short flight. Both fields share a
-wave seed each round, so the swarms are identical on both sides.

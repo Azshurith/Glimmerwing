@@ -26,6 +26,11 @@ export default tseslint.config(
             '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
             eqeqeq: ['error', 'always', { null: 'ignore' }],
             'no-console': ['warn', { allow: ['warn', 'error'] }],
+            // Same folder: './x'. Anywhere else in src: '@/folder/x' (never '../').
+            'no-restricted-imports': [
+                'error',
+                { patterns: [{ group: ['../*'], message: "Import across folders with '@/…' instead of '../'." }] },
+            ],
         },
     },
 
@@ -72,7 +77,7 @@ export default tseslint.config(
         rules: {
             'no-restricted-imports': [
                 'error',
-                { patterns: [{ group: ['../*'], message: 'types/ must not depend on runtime modules.' }] },
+                { patterns: [{ group: ['../*', '@/*'], message: 'types/ must not depend on runtime modules.' }] },
             ],
             'no-restricted-syntax': [
                 'error',

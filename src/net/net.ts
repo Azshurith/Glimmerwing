@@ -1,5 +1,5 @@
-import * as C from '../core/config';
-import type { NetEvent, PeerMsg } from '../types';
+import * as C from '@/core/config';
+import type { NetEvent, PeerMsg } from '@/types';
 
 declare const __GW_SERVER__: string;
 

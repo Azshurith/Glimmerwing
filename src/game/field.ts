@@ -1,6 +1,6 @@
-import * as C from '../core/config';
-import { Rng } from '../core/rng';
-import { fairyById } from '../data/characters';
+import * as C from '@/core/config';
+import { Rng } from '@/core/rng';
+import { fairyById } from '@/data/characters';
 import type {
     Attack,
     Bullet,
@@ -18,7 +18,7 @@ import type {
     Sfx,
     Shot,
     StarFlight,
-} from '../types';
+} from '@/types';
 import { rollWave } from './waves';
 
 /** Which bomb sound each bomb style plays (see Sound.play 'bomb'). */

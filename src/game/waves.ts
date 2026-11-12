@@ -1,6 +1,6 @@
-import * as C from '../core/config';
-import type { Rng } from '../core/rng';
-import type { CritterKind, WavePath, WaveSpec } from '../types';
+import * as C from '@/core/config';
+import type { Rng } from '@/core/rng';
+import type { CritterKind, WavePath, WaveSpec } from '@/types';
 
 const PATH_WEIGHTS: [WavePath, number, number][] = [
     // path, weight at the start of a round, weight once the round heats up

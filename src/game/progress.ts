@@ -1,4 +1,4 @@
-import type { Progress } from '../types';
+import type { Progress } from '@/types';
 
 const KEY = 'glimmerwing-progress-v1';
 /** Progress for a player who has never played. */

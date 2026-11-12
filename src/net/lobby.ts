@@ -1,5 +1,5 @@
-import type { Game } from '../game/game';
-import type { NetEvent } from '../types';
+import type { Game } from '@/game/game';
+import type { NetEvent } from '@/types';
 import { Net, serverUrl } from './net';
 
 /**

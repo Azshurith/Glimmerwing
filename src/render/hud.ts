@@ -1,7 +1,8 @@
-import * as C from '../core/config';
-import type { Field } from '../game/field';
-import type { BannerView, ConsoleView, HudTag } from '../types';
+import * as C from '@/core/config';
+import type { Field } from '@/game/field';
+import type { BannerView, ConsoleView, HudTag } from '@/types';
 import { arcadeText, slanted, sparkle } from './draw';
+import { drawBlossom, drawHeart } from './icons';
 import { ARCADE } from './theme';
 
 /** Gauge segment colours by level: green, gold, then hot orange for MAX. */
@@ -20,14 +21,7 @@ export class Hud {
     // ---- per-meadow HUD (drawn inside the meadow's translated, clipped space) ----------
 
     /** Draw one meadow's HUD strip (hearts, bombs, gauge and wins) in that meadow's coordinates. */
-    meadow(
-        f: Field,
-        wins: number,
-        time: number,
-        tag: HudTag,
-        drawHeart: (x: number, y: number, c: string) => void,
-        drawBlossom: (x: number, y: number, c: string) => void,
-    ): void {
+    meadow(f: Field, wins: number, time: number, tag: HudTag): void {
         const ctx = this.ctx;
         const W = C.FIELD_W;
         const color = f.fairy.color;
@@ -48,19 +42,19 @@ export class Hud {
         for (let i = 0; i < C.MAX_HULL / 2; i++) {
             const x = 10 + i * 12;
             const have = f.player.hull - i * 2;
-            drawHeart(x, 10, 'rgba(246,240,255,0.16)');
-            if (have >= 2) drawHeart(x, 10, color);
+            drawHeart(ctx, x, 10, 'rgba(246,240,255,0.16)');
+            if (have >= 2) drawHeart(ctx, x, 10, color);
             else if (have === 1) {
                 ctx.save();
                 ctx.beginPath();
                 ctx.rect(x - 7, 0, 7, 20);
                 ctx.clip();
-                drawHeart(x, 10, color);
+                drawHeart(ctx, x, 10, color);
                 ctx.restore();
             }
         }
         for (let i = 0; i < C.BLOOMS_PER_ROUND; i++)
-            drawBlossom(74 + i * 11, 10, i < f.player.blooms ? f.fairy.bomb.color : 'rgba(246,240,255,0.15)');
+            drawBlossom(ctx, 74 + i * 11, 10, i < f.player.blooms ? f.fairy.bomb.color : 'rgba(246,240,255,0.15)');
 
         // Right side, right to left: round stars, player badge, name.
         for (let i = 0; i < C.ROUNDS_TO_WIN; i++) {

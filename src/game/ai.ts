@@ -1,5 +1,5 @@
-import * as C from '../core/config';
-import type { Controls } from '../types';
+import * as C from '@/core/config';
+import type { Controls } from '@/types';
 import type { Field } from './field';
 
 /**

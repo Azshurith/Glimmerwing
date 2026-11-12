@@ -1,5 +1,5 @@
-import * as C from '../core/config';
-import type { Controls, Pos } from '../types';
+import * as C from '@/core/config';
+import type { Controls, Pos } from '@/types';
 
 // Buttons follow the arcade: A shoots (hold to charge), B blooms (the bomb), C autofires.
 const KEYMAP_SOLO: Record<string, keyof Controls> = {
