@@ -1,30 +1,6 @@
-import * as C from './config';
-import { CritterKind, Rng } from './types';
-
-/**
- * Every wave is described by one of these, so new formations can be added as
- * data. `rollWave` picks one from the shared seed, so both meadows match.
- */
-export type WavePath = 'arc' | 'string' | 'ring' | 'leader' | 'swoop' | 'sweep' | 'column' | 'rise';
-
-export interface WaveSpec {
-  path: WavePath;
-  kind: CritterKind;
-  /** Downward speed for drifting waves; travel speed scale for path waves. */
-  speed: number;
-  /** -1 enters from the left, 1 from the right (for paths that care). */
-  side: -1 | 1;
-  /** Big critters are larger, tougher, and leave wider bursts. */
-  big: boolean;
-  count: number;
-  /** Shots needed for each member, front to back. */
-  hp: number[];
-  /** Wrapped in dew bubbles that must pop first. */
-  bubble: boolean;
-  cx: number;
-  /** Height of a sweeping line. */
-  lane: number;
-}
+import * as C from '../core/config';
+import type { Rng } from '../core/rng';
+import type { CritterKind, WavePath, WaveSpec } from '../types';
 
 const PATH_WEIGHTS: [WavePath, number, number][] = [
   // path, weight at the start of a round, weight once the round heats up
@@ -50,15 +26,26 @@ const pickWeighted = (r: Rng, pressure: number): WavePath => {
 
 /** Shots needed for a puff, 1 to 5, getting tougher as the round goes on. */
 const rollHp = (r: Rng, pressure: number): number => {
-  const a = r.next(), b = r.next(), c = r.next(), d = r.next();
-  return 1 + (a < 0.2 + pressure * 0.4 ? 1 : 0) + (b < pressure * 0.3 ? 1 : 0)
-    + (c < pressure * 0.15 ? 1 : 0) + (d < pressure * 0.08 ? 1 : 0);
+  const a = r.next(),
+    b = r.next(),
+    c = r.next(),
+    d = r.next();
+  return (
+    1 +
+    (a < 0.2 + pressure * 0.4 ? 1 : 0) +
+    (b < pressure * 0.3 ? 1 : 0) +
+    (c < pressure * 0.15 ? 1 : 0) +
+    (d < pressure * 0.08 ? 1 : 0)
+  );
 };
 
 export function rollWave(r: Rng, pressure: number): WaveSpec {
   // Draw every roll in the same order every time so both meadows stay in step.
   const path = pickWeighted(r, pressure);
-  const kindRoll = r.next(), bigRoll = r.next(), bubbleRoll = r.next(), sideRoll = r.next();
+  const kindRoll = r.next(),
+    bigRoll = r.next(),
+    bubbleRoll = r.next(),
+    sideRoll = r.next();
   const cx = r.range(50, C.FIELD_W - 50);
   const lane = r.range(36, 110);
   const speed = r.range(26, 38) + pressure * 14;
@@ -66,9 +53,13 @@ export function rollWave(r: Rng, pressure: number): WaveSpec {
   const hps = Array.from({ length: 12 }, () => rollHp(r, pressure));
 
   const drifting = path === 'arc' || path === 'string' || path === 'ring';
-  const kind: CritterKind = !drifting ? 'puff'
-    : kindRoll < 0.18 + pressure * 0.17 ? 'beetle'
-    : kindRoll < 0.36 + pressure * 0.24 ? 'spinner' : 'puff';
+  const kind: CritterKind = !drifting
+    ? 'puff'
+    : kindRoll < 0.18 + pressure * 0.17
+      ? 'beetle'
+      : kindRoll < 0.36 + pressure * 0.24
+        ? 'spinner'
+        : 'puff';
   const big = kind === 'puff' && path !== 'rise' && bigRoll < 0.08 + pressure * 0.12;
   const bubble = kind === 'puff' && path !== 'leader' && bubbleRoll < 0.1 + pressure * 0.2;
   if (kind === 'beetle') count = Math.max(3, count - 2);

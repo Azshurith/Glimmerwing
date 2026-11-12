@@ -1,0 +1,6 @@
+dist/
+node_modules/
+assets/
+Claude outputs/
+package-lock.json
+*.md

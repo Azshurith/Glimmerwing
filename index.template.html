@@ -1,108 +1,569 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Glimmerwing</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,600;1,9..144,700&display=swap" rel="stylesheet">
-<style>
-:root {
-  --bg: #f1ecfa; --ink: #2a1d52; --muted: #5d5280; --btn: #2a1d52; --btn-ink: #f6f0ff; --edge: #c9bde6;
-  color-scheme: light;
-  box-sizing: border-box;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #100b24; --ink: #f6f0ff; --muted: #a99fc8; --btn: #ffd86b; --btn-ink: #100b24; --edge: #2f2557;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #100b24; --ink: #f6f0ff; --muted: #a99fc8; --btn: #ffd86b; --btn-ink: #100b24; --edge: #2f2557;
-  color-scheme: dark;
-}
-*, *::before, *::after { box-sizing: inherit; }
-html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
-body {
-  margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
-  font-family: "Fraunces", Georgia, "Times New Roman", serif;
-  display: flex; flex-direction: column; align-items: center; gap: 1rem;
-  padding: 1rem;
-}
-header { width: 100%; max-width: 1000px; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .75rem; }
-h1 { margin: 0; font-size: clamp(1.6rem, 4.5vw, 2.6rem); font-weight: 700; font-style: italic; letter-spacing: -0.01em; }
-.modes { display: flex; gap: .5rem; }
-button {
-  font: inherit; font-size: .9rem; font-weight: 600; border: 0; border-radius: 999px;
-  padding: .6rem 1.1rem; background: var(--btn); color: var(--btn-ink); cursor: pointer;
-}
-button.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--btn); }
-button:focus-visible, canvas:focus-visible { outline: 3px solid #ffd36e; outline-offset: 3px; }
-.stage { width: 100%; max-width: 1000px; position: relative; }
-#lobby { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(16,11,36,.72); border-radius: 14px; padding: 1rem; }
-#lobby[hidden] { display: none; }
-.lobby-card { width: min(100%, 26rem); background: var(--bg); color: var(--ink); border-radius: 14px; padding: 1.2rem 1.4rem; display: grid; gap: .8rem; box-shadow: 0 0 0 1px var(--edge), 0 12px 40px rgba(0,0,0,.35); text-align: center; }
-.lobby-card h2 { margin: 0; font-style: italic; font-size: 1.4rem; }
-.lobby-friend { display: grid; gap: .5rem; padding-top: .8rem; border-top: 1px solid var(--edge); }
-#lobby-join { display: flex; gap: .5rem; }
-#lobby-join-code { flex: 1; min-width: 0; font: inherit; font-size: 1rem; letter-spacing: .3em; text-align: center; text-transform: uppercase; padding: .5rem .8rem; border-radius: 999px; border: 2px solid var(--edge); background: transparent; color: var(--ink); }
-#lobby-code { font-size: 2.4rem; font-weight: 700; letter-spacing: .25em; color: var(--ink); }
-#lobby-status { margin: 0; min-height: 1.4em; font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
-canvas {
-  display: block; width: 100%; aspect-ratio: 504 / 320; border-radius: 14px;
-  touch-action: none; background: #100b24; box-shadow: 0 0 0 1px var(--edge);
-}
-button.link { background: none; color: var(--muted); padding: .2rem 0; text-decoration: underline; font-weight: 400; font-size: .8rem; border-radius: 0; }
-.help { width: 100%; max-width: 1000px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .5rem 2rem; font-size: .88rem; line-height: 1.6; color: var(--muted); }
-.help p { margin: 0; }
-.help strong { color: var(--ink); font-weight: 600; }
-kbd { font: inherit; padding: 0 .35em; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--edge); color: var(--ink); }
-</style>
-</head>
-<body>
-<header>
-  <h1>Glimmerwing</h1>
-  <div class="modes">
-    <button data-mode="cpu">Play the CPU</button>
-    <button data-mode="versus" class="ghost">Two players</button>
-    <button data-online class="ghost">Play online</button>
-    <button id="mute" class="ghost" aria-pressed="true">Sound on</button>
-  </div>
-</header>
-<div class="stage">
-  <canvas id="game" tabindex="0" aria-label="Glimmerwing playfield"></canvas>
-  <div id="lobby" role="dialog" aria-modal="true" aria-labelledby="lobby-title" hidden>
-    <div class="lobby-card">
-      <h2 id="lobby-title">Play online</h2>
-      <button id="lobby-quick">Find match</button>
-      <div class="lobby-friend">
-        <button id="lobby-host" class="ghost">Create friend room</button>
-        <form id="lobby-join">
-          <input id="lobby-join-code" maxlength="4" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
-          <button class="ghost">Join</button>
-        </form>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Glimmerwing</title>
+    <meta
+      name="description"
+      content="A split-screen versus shooter: chain dandelion bursts in your meadow to send stars into your rival's."
+    />
+    <meta name="theme-color" content="#100b24" />
+    <!-- Installable: home screen on phones and tablets, an app window on desktop. -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="icon-192.png" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Glimmerwing" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bungee&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,600;1,9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f1ecfa;
+        --ink: #2a1d52;
+        --muted: #5d5280;
+        --btn: #2a1d52;
+        --btn-ink: #f6f0ff;
+        --edge: #c9bde6;
+        color-scheme: light;
+        box-sizing: border-box;
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --bg: #100b24;
+          --ink: #f6f0ff;
+          --muted: #a99fc8;
+          --btn: #ffd86b;
+          --btn-ink: #100b24;
+          --edge: #2f2557;
+          color-scheme: dark;
+        }
+      }
+      :root[data-theme='dark'] {
+        --bg: #100b24;
+        --ink: #f6f0ff;
+        --muted: #a99fc8;
+        --btn: #ffd86b;
+        --btn-ink: #100b24;
+        --edge: #2f2557;
+        color-scheme: dark;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: inherit;
+      }
+      html {
+        height: 100%;
+        scroll-padding-top: env(safe-area-inset-top, 0px);
+      }
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+      }
+      header {
+        width: 100%;
+        max-width: 1000px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.75rem;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(1.6rem, 4.5vw, 2.6rem);
+        font-weight: 700;
+        font-style: italic;
+        letter-spacing: -0.01em;
+      }
+      .modes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      button {
+        touch-action: manipulation;
+      }
+      button {
+        font: inherit;
+        font-size: 0.9rem;
+        font-weight: 600;
+        border: 0;
+        border-radius: 999px;
+        padding: 0.6rem 1.1rem;
+        background: var(--btn);
+        color: var(--btn-ink);
+        cursor: pointer;
+      }
+      button.ghost {
+        background: transparent;
+        color: var(--ink);
+        box-shadow: inset 0 0 0 2px var(--btn);
+      }
+      button:focus-visible,
+      canvas:focus-visible {
+        outline: 3px solid #ffd36e;
+        outline-offset: 3px;
+      }
+      .stage {
+        width: 100%;
+        max-width: 1000px;
+        position: relative;
+      }
+      /* The game screen: canvas plus everything layered on it. main.ts sizes it to fit the window. */
+      .screen {
+        position: relative;
+        width: 100%;
+        margin: 0 auto;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      /* Fullscreen (or, where the browser can't, a fixed full-window layer, as on iPhone). */
+      .stage.immersive {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        max-width: none;
+        background: #05030d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+          env(safe-area-inset-left, 0px);
+      }
+      .stage.immersive canvas {
+        border-radius: 0;
+        box-shadow: none;
+      }
+      body:has(.stage.immersive) {
+        overflow: hidden;
+      }
+
+      /* On-screen buttons, shown once the player uses a touchscreen. */
+      .touch-ui {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        display: none;
+      }
+      html.touch .touch-ui {
+        display: block;
+      }
+      .tb {
+        pointer-events: auto;
+        touch-action: none;
+        position: absolute;
+        --btn: clamp(44px, calc(var(--sw, 600px) * 0.1), 76px);
+        width: var(--btn);
+        aspect-ratio: 1;
+        padding: 0;
+        border-radius: 50%;
+        font:
+          400 calc(var(--btn) * 0.19) 'Bungee',
+          'Arial Black',
+          sans-serif;
+        letter-spacing: 0.02em;
+        background: rgba(16, 11, 36, 0.5);
+        color: #fff3c9;
+        box-shadow: inset 0 0 0 2px rgba(255, 216, 107, 0.75);
+        -webkit-backdrop-filter: blur(2px);
+        backdrop-filter: blur(2px);
+      }
+      .tb.active {
+        background: rgba(255, 216, 107, 0.9);
+        color: #140a26;
+      }
+      .tb.small {
+        --btn: clamp(34px, calc(var(--sw, 600px) * 0.065), 52px);
+        font-size: calc(var(--btn) * 0.34);
+      }
+      .tb-menu {
+        top: 2.5%;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      /* Exit sits in the gap between the meadows, under the pause button, clear of both HUDs. */
+      .tb-exit {
+        top: 17%;
+        left: 50%;
+        transform: translateX(-50%);
+        display: none;
+      }
+      .stage.immersive .tb-exit {
+        display: block;
+      }
+      .screen[data-phase='title'] .tb-menu {
+        display: none;
+      }
+      /* On the select screen the header and timer own the top centre; Back goes in the corner. */
+      .screen[data-phase='select'] .tb-menu {
+        top: 1%;
+        left: 1%;
+        transform: none;
+      }
+      .screen:is([data-phase='select'], [data-phase='title']) .tb-exit {
+        top: 1%;
+        left: auto;
+        right: 1%;
+        transform: none;
+      }
+      .pad {
+        position: absolute;
+        bottom: 10%;
+        display: none;
+        gap: 0.4rem;
+        align-items: flex-end;
+      }
+      .pad .tb {
+        position: static;
+        opacity: 0.85;
+      }
+      .screen:is([data-phase='playing'], [data-phase='countdown'], [data-phase='roundOver']) .pad-a {
+        display: flex;
+      }
+      .pad-a {
+        right: 2.5%;
+      }
+      .screen[data-mode='versus'] .pad-a {
+        right: auto;
+        left: 2.5%;
+        flex-direction: row-reverse;
+      }
+      .screen[data-mode='versus']:is([data-phase='playing'], [data-phase='countdown'], [data-phase='roundOver'])
+        .pad-b {
+        display: flex;
+        right: 2.5%;
+      }
+
+      .rotate-hint {
+        display: none;
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--muted);
+        text-align: center;
+      }
+      @media (orientation: portrait) and (pointer: coarse) {
+        .rotate-hint {
+          display: block;
+        }
+      }
+      /* Short screens (phones held sideways): a slim header so the meadows get the height. */
+      @media (max-height: 540px) {
+        body {
+          padding: 0.4rem 0.75rem;
+          gap: 0.4rem;
+        }
+        header {
+          align-items: center;
+        }
+        h1 {
+          font-size: 1.15rem;
+        }
+        button {
+          padding: 0.35rem 0.75rem;
+          font-size: 0.78rem;
+        }
+      }
+      details.help-wrap {
+        width: 100%;
+        max-width: 1000px;
+      }
+      details.help-wrap > summary {
+        cursor: pointer;
+        font-weight: 600;
+        font-style: italic;
+        padding: 0.3rem 0;
+        color: var(--ink);
+      }
+      details.help-wrap > .help {
+        margin-top: 0.5rem;
+      }
+      #lobby {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(16, 11, 36, 0.72);
+        border-radius: 14px;
+        padding: 1rem;
+      }
+      #lobby[hidden] {
+        display: none;
+      }
+      .lobby-card {
+        width: min(100%, 26rem);
+        background: var(--bg);
+        color: var(--ink);
+        border-radius: 14px;
+        padding: 1.2rem 1.4rem;
+        display: grid;
+        gap: 0.8rem;
+        box-shadow:
+          0 0 0 1px var(--edge),
+          0 12px 40px rgba(0, 0, 0, 0.35);
+        text-align: center;
+      }
+      .lobby-card h2 {
+        margin: 0;
+        font-style: italic;
+        font-size: 1.4rem;
+      }
+      .lobby-friend {
+        display: grid;
+        gap: 0.5rem;
+        padding-top: 0.8rem;
+        border-top: 1px solid var(--edge);
+      }
+      #lobby-join {
+        display: flex;
+        gap: 0.5rem;
+      }
+      #lobby-join-code {
+        flex: 1;
+        min-width: 0;
+        font: inherit;
+        font-size: 1rem;
+        letter-spacing: 0.3em;
+        text-align: center;
+        text-transform: uppercase;
+        padding: 0.5rem 0.8rem;
+        border-radius: 999px;
+        border: 2px solid var(--edge);
+        background: transparent;
+        color: var(--ink);
+      }
+      #lobby-code {
+        font-size: 2.4rem;
+        font-weight: 700;
+        letter-spacing: 0.25em;
+        color: var(--ink);
+      }
+      #lobby-status {
+        margin: 0;
+        min-height: 1.4em;
+        font-size: 0.85rem;
+        color: var(--muted);
+        overflow-wrap: anywhere;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 504 / 320;
+        border-radius: 14px;
+        touch-action: none;
+        background: #100b24;
+        box-shadow: 0 0 0 1px var(--edge);
+      }
+      button.link {
+        background: none;
+        color: var(--muted);
+        padding: 0.2rem 0;
+        text-decoration: underline;
+        font-weight: 400;
+        font-size: 0.8rem;
+        border-radius: 0;
+      }
+      .help {
+        width: 100%;
+        max-width: 1000px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.5rem 2rem;
+        font-size: 0.88rem;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      .help p {
+        margin: 0;
+      }
+      .help strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      kbd {
+        font: inherit;
+        padding: 0 0.35em;
+        border-radius: 4px;
+        box-shadow: inset 0 0 0 1px var(--edge);
+        color: var(--ink);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Glimmerwing</h1>
+      <div class="modes">
+        <button data-mode="cpu">Play the CPU</button>
+        <button data-mode="versus" class="ghost">Two players</button>
+        <button data-online class="ghost">Play online</button>
+        <button id="fullscreen" class="ghost">Fullscreen</button>
+        <button id="mute" class="ghost" aria-pressed="true">Sound on</button>
       </div>
-      <output id="lobby-code" hidden></output>
-      <p id="lobby-status" role="status" aria-live="polite"></p>
-      <button class="link" id="lobby-close">Cancel</button>
+    </header>
+    <p class="rotate-hint">Turn your device sideways, or tap Fullscreen, for bigger meadows.</p>
+    <div class="stage" id="stage">
+      <div class="screen" id="screen">
+        <canvas id="game" tabindex="0" aria-label="Glimmerwing playfield"></canvas>
+        <div class="touch-ui" aria-hidden="false">
+          <button class="tb small tb-menu" id="menu-btn" data-key="Escape" aria-label="Pause">❚❚</button>
+          <button class="tb small tb-exit" id="exit-full" aria-label="Exit fullscreen">✕</button>
+          <!-- One player (or 1P in versus): B blooms, C autofires while held. -->
+          <div class="pad pad-a">
+            <button class="tb" data-key="KeyF" aria-label="Autofire">Auto</button>
+            <button class="tb" data-key="KeyH" aria-label="Bomb">Bomb</button>
+          </div>
+          <div class="pad pad-b">
+            <button class="tb" data-key="Quote" aria-label="Player two autofire">Auto</button>
+            <button class="tb" data-key="ShiftRight" aria-label="Player two bomb">Bomb</button>
+          </div>
+        </div>
+        <div id="lobby" role="dialog" aria-modal="true" aria-labelledby="lobby-title" hidden>
+          <div class="lobby-card">
+            <h2 id="lobby-title">Play online</h2>
+            <button id="lobby-quick">Find match</button>
+            <div class="lobby-friend">
+              <button id="lobby-host" class="ghost">Create friend room</button>
+              <form id="lobby-join">
+                <input
+                  id="lobby-join-code"
+                  maxlength="4"
+                  placeholder="CODE"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                  aria-label="Room code"
+                />
+                <button class="ghost">Join</button>
+              </form>
+            </div>
+            <output id="lobby-code" hidden></output>
+            <p id="lobby-status" role="status" aria-live="polite"></p>
+            <button class="link" id="lobby-close">Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
-<section class="help">
-  <p><strong>How to win.</strong> Pop a dandelion puff and its pollen burst pops its neighbours. Chains of three or more send falling stars into your rival’s meadow; seven or more add a thorny bramble. Popping critters fills your power gauge (bottom of the meadow) through three levels. Hold fire to charge, one level at a time as far as the gauge allows, and let go: level 1 fires a piercing torpedo that clears a lane; level 2 also sends your fairy’s Extra Attack, a few small critters that hunt your rival and can’t be shot down, only dodged or bombed (costs half a level); MAX summons your guardian into their meadow (costs two levels). With the gauge below level 1 you can’t charge at all. Breaking three or more reverse stars in one chain also sends your guardian. Guardians rush in, circle for a moment (clockwise or not, you can’t tell which), lock in place to attack (every few seconds sliding down close to you before gliding back up, so don’t get touched), then drift down and off a side. Hit one hard while it circles and it reels, briefly untouchable. Once it’s leaving, your shots push it sideways, so you can steer it out of your way. A guardian summoned by a reverse chain skips the circling and attacks at once. Each guardian has three attacks and keeps cycling through them at random. It doesn’t leave on its own: shoot it down or bomb it while it attacks to get rid of it. A bomb set off while it’s attacking dispels it on the spot. If both players send a guardian at almost the same moment, they clash and cancel each other out.</p>
-  <p><strong>Bat stars back.</strong> A star’s colour shows the hits it needs: rose takes four, orange three, gold two, pale one. Break a plain star and it flies back to your rival as a flashing reverse star, tougher. Break a reverse star and it turns into one of your Extra Attack critters instead. Most stars drop straight, but watch for seekers, which slide over you and then plunge (a faint line shows where), and slanted stars that cut diagonals and glance off the walls. The longer a round runs, the faster everything comes at you (watch the tempo in the corner), and each new round of a match starts faster. You have five hearts. Running into a critter costs one heart but can never finish you (it stops at half a heart); it does stun you, so mash buttons to shake it off, and leaves you slow and weak for about five seconds, while your rival recovers half a heart. Getting hit by an attack (a star, bramble, Extra Attack, guardian or its shots) costs three hearts and gives your rival a heart back. Lose all your hearts and you lose the round; best of three takes the match.</p>
-  <p><strong>Fever.</strong> About half a minute in, “Moonseed rising” flashes and a pale crescent orb drifts in with the next puffs. Shots bounce off it; catch it in a pollen burst to break it. That starts Fever: you fire twice as fast (same shots, just quicker), a rush of puffs, a gauge that fills twice as fast, and every chain sends one star per pop after the first, so a 5-chain sends four.</p>
-  <p><strong>Tough puffs and late rounds.</strong> A puff’s seed tips show the shots it takes, dropping a step with each hit: purple five, blue four, green three, yellow two, red one. Any pollen burst pops it outright. Some waves come wrapped in dew bubbles that pop first, big puffs leave extra-wide bursts, and watch for waves that sneak up from below. Beetles cut diagonals inside a glassy shell that has to break first; spinners corkscrew down. Waves also swoop in from a corner, sweep across in a line, or drop in squeezing columns, and some ring a tough leader with small fry: pop the leader to clear the lot. Tougher critters leave bigger bursts. Waves don’t run on a clock: the next one comes in as soon as the last is popped or gone, so clearing fast brings the swarm faster. At about a hundred seconds every critter speeds up sharply, and a moment later a hollow crow, the meadow’s Death, wakes in one meadow. Its touch is an instant knockout, however many hearts you have. It circles and dives at the fairy, then crosses into the other meadow, back and forth. Shoot it enough to drive it off and it reappears in your rival’s meadow, sooner and faster each time.</p>
-  <p><strong>Each fairy fights her own way.</strong> Pip’s charge is a steady Sunorb, Bramblewick’s a slow, heavy Thornburst, Wisp fans out three Frost needles, Clove fires Twin darts, Sorrel’s Ember fan is a short-range cone, and Umbra’s Dusk crescent sweeps a wide arc. Each sends her own Extra Attack critters: Pip’s Hearthsparks streak in from the side and burst into a ring of sparks, Bramblewick’s Burrs hop slowly down the meadow, Wisp’s Glimmers ricochet off the walls, Clove’s Petal darts home in on you, Sorrel’s Cinders zig-zag, and Umbra’s Dusk moths weave down, then lock on and dive at where you were. None of them can be shot down. Reverse stars flash purple and green.</p>
-  <p><strong>Bombs.</strong> Two per round, shown as flowers by your hearts. Every fairy’s bomb makes her untouchable for a couple of seconds, clears bullets and incoming stars, pops small fry and stings a guardian, but each sweeps the meadow her own way. Pip’s Sunflare streaks across her row and ends in a full-field flash. Bramblewick’s Thornquake is a huge blast that also slows her meadow for a moment. Wisp’s Frost gale spirals out from the centre. Clove’s Petal storm only covers a cone ahead of her, but keeps her safe longest. Sorrel’s Ember lance sweeps a beam over everything above her. Umbra’s Duskfall opens a black hole that drags hazards in, then bursts in lightning. Bombs never start a chain or send anything, so they’re for getting out of trouble, not scoring.</p>
-  <p><strong>Fairies.</strong> Three fairies are ready from the start. Win matches, chain big, and beat the CPU cleanly to unlock three more. Progress is saved in this browser. <button class="link" id="reset">Reset progress</button></p>
-  <p><strong>Controls.</strong> Three buttons, like the arcade: <strong>A</strong> shoots (tap) or charges (hold and let go), <strong>B</strong> sets off a petal bloom, <strong>C</strong> autofires while held. Vs CPU and online: arrows or <kbd>WASD</kbd> to move, A is <kbd>Z</kbd> or <kbd>Space</kbd>, B is <kbd>X</kbd>, C is <kbd>C</kbd>. Two players: <kbd>WASD</kbd> with <kbd>G</kbd> to shoot and charge, <kbd>F</kbd> to autofire, <kbd>H</kbd> to bloom (these work vs CPU too); arrows with <kbd>Enter</kbd>, right <kbd>Shift</kbd>, <kbd>'</kbd>. Gamepads work too: stick or d-pad to move, A/B as marked, X or Y to autofire, Start to confirm; the first pad is player one, the second player two. On touch, drag to steer and hold to charge; tap a second finger to bloom. <kbd>P</kbd> pauses, <kbd>M</kbd> mutes.</p>
-  <p><strong>Online.</strong> Press <em>Play online</em> (or <kbd>3</kbd>). <em>Find match</em> pairs you with the next player looking for a game; <em>Create friend room</em> gives you a four-letter code for a friend to join. Online you use the single-player controls, and your meadow is always on the left. <kbd>Esc</kbd> between rounds leaves.</p>
-</section>
-<script>/*__BUNDLE__*/</script>
-</body>
+    <details class="help-wrap" id="help">
+      <summary>How to play</summary>
+      <section class="help">
+        <p>
+          <strong>How to win.</strong> Pop a dandelion puff and its pollen burst pops its neighbours. Chains of three or
+          more send falling stars into your rival’s meadow; seven or more add a thorny bramble. Popping critters fills
+          your power gauge (bottom of the meadow) through three levels. Hold fire to charge, one level at a time as far
+          as the gauge allows, and let go: level 1 fires a piercing torpedo that clears a lane; level 2 also sends your
+          fairy’s Extra Attack, a few small critters that hunt your rival and can’t be shot down, only dodged or bombed
+          (costs half a level); MAX summons your guardian into their meadow (costs two levels). With the gauge below
+          level 1 you can’t charge at all. Breaking three or more reverse stars in one chain also sends your guardian.
+          Guardians rush in, circle for a moment (clockwise or not, you can’t tell which), lock in place to attack
+          (every few seconds sliding down close to you before gliding back up, so don’t get touched), then drift down
+          and off a side. Hit one hard while it circles and it reels, briefly untouchable. Once it’s leaving, your shots
+          push it sideways, so you can steer it out of your way. A guardian summoned by a reverse chain skips the
+          circling and attacks at once. Each guardian has three attacks and keeps cycling through them at random. It
+          doesn’t leave on its own: shoot it down or bomb it while it attacks to get rid of it. A bomb set off while
+          it’s attacking dispels it on the spot. If both players send a guardian at almost the same moment, they clash
+          and cancel each other out.
+        </p>
+        <p>
+          <strong>Bat stars back.</strong> A star’s colour shows the hits it needs: rose takes four, orange three, gold
+          two, pale one. Break a plain star and it flies back to your rival as a flashing reverse star, tougher. Break a
+          reverse star and it turns into one of your Extra Attack critters instead. Most stars drop straight, but watch
+          for seekers, which slide over you and then plunge (a faint line shows where), and slanted stars that cut
+          diagonals and glance off the walls. The longer a round runs, the faster everything comes at you (watch the
+          tempo in the corner), and each new round of a match starts faster. You have five hearts. Running into a
+          critter costs one heart but can never finish you (it stops at half a heart); it does stun you, so mash buttons
+          to shake it off, and leaves you slow and weak for about five seconds, while your rival recovers half a heart.
+          Getting hit by an attack (a star, bramble, Extra Attack, guardian or its shots) costs three hearts and gives
+          your rival a heart back. Lose all your hearts and you lose the round; best of three takes the match.
+        </p>
+        <p>
+          <strong>Fever.</strong> About half a minute in, “Moonseed rising” flashes and a pale crescent orb drifts in
+          with the next puffs. Shots bounce off it; catch it in a pollen burst to break it. That starts Fever: you fire
+          twice as fast (same shots, just quicker), a rush of puffs, a gauge that fills twice as fast, and every chain
+          sends one star per pop after the first, so a 5-chain sends four.
+        </p>
+        <p>
+          <strong>Tough puffs and late rounds.</strong> A puff’s seed tips show the shots it takes, dropping a step with
+          each hit: purple five, blue four, green three, yellow two, red one. Any pollen burst pops it outright. Some
+          waves come wrapped in dew bubbles that pop first, big puffs leave extra-wide bursts, and watch for waves that
+          sneak up from below. Beetles cut diagonals inside a glassy shell that has to break first; spinners corkscrew
+          down. Waves also swoop in from a corner, sweep across in a line, or drop in squeezing columns, and some ring a
+          tough leader with small fry: pop the leader to clear the lot. Tougher critters leave bigger bursts. Waves
+          don’t run on a clock: the next one comes in as soon as the last is popped or gone, so clearing fast brings the
+          swarm faster. At about a hundred seconds every critter speeds up sharply, and a moment later a hollow crow,
+          the meadow’s Death, wakes in one meadow. Its touch is an instant knockout, however many hearts you have. It
+          circles and dives at the fairy, then crosses into the other meadow, back and forth. Shoot it enough to drive
+          it off and it reappears in your rival’s meadow, sooner and faster each time.
+        </p>
+        <p>
+          <strong>Each fairy fights her own way.</strong> Pip’s charge is a steady Sunorb, Bramblewick’s a slow, heavy
+          Thornburst, Wisp fans out three Frost needles, Clove fires Twin darts, Sorrel’s Ember fan is a short-range
+          cone, and Umbra’s Dusk crescent sweeps a wide arc. Each sends her own Extra Attack critters: Pip’s
+          Hearthsparks streak in from the side and burst into a ring of sparks, Bramblewick’s Burrs hop slowly down the
+          meadow, Wisp’s Glimmers ricochet off the walls, Clove’s Petal darts home in on you, Sorrel’s Cinders zig-zag,
+          and Umbra’s Dusk moths weave down, then lock on and dive at where you were. None of them can be shot down.
+          Reverse stars flash purple and green.
+        </p>
+        <p>
+          <strong>Bombs.</strong> Two per round, shown as flowers by your hearts. Every fairy’s bomb makes her
+          untouchable for a couple of seconds, clears bullets and incoming stars, pops small fry and stings a guardian,
+          but each sweeps the meadow her own way. Pip’s Sunflare streaks across her row and ends in a full-field flash.
+          Bramblewick’s Thornquake is a huge blast that also slows her meadow for a moment. Wisp’s Frost gale spirals
+          out from the centre. Clove’s Petal storm only covers a cone ahead of her, but keeps her safe longest. Sorrel’s
+          Ember lance sweeps a beam over everything above her. Umbra’s Duskfall opens a black hole that drags hazards
+          in, then bursts in lightning. Bombs never start a chain or send anything, so they’re for getting out of
+          trouble, not scoring.
+        </p>
+        <p>
+          <strong>Fairies.</strong> Three fairies are ready from the start. Win matches, chain big, and beat the CPU
+          cleanly to unlock three more. Progress is saved in this browser.
+          <button class="link" id="reset">Reset progress</button>
+        </p>
+        <p>
+          <strong>Controls.</strong> Three buttons, like the arcade: <strong>A</strong> shoots (tap) or charges (hold
+          and let go), <strong>B</strong> sets off a petal bloom, <strong>C</strong> autofires while held. Vs CPU and
+          online: arrows or <kbd>WASD</kbd> to move, A is <kbd>Z</kbd> or <kbd>Space</kbd>, B is <kbd>X</kbd>, C is
+          <kbd>C</kbd>. Two players: <kbd>WASD</kbd> with <kbd>G</kbd> to shoot and charge, <kbd>F</kbd> to autofire,
+          <kbd>H</kbd> to bloom (these work vs CPU too); arrows with <kbd>Enter</kbd>, right <kbd>Shift</kbd>,
+          <kbd>'</kbd>. Gamepads work too: stick or d-pad to move, A/B as marked, X or Y to autofire, Start to confirm;
+          the first pad is player one, the second player two. <kbd>P</kbd> pauses, <kbd>M</kbd> mutes.
+        </p>
+        <p>
+          <strong>Phones and tablets.</strong> Drag anywhere to fly: your fairy moves with your finger from wherever she
+          is, so your finger never hides her. Holding charges; lift to fire. Tap <em>Bomb</em> to bloom (or tap with a
+          second finger), hold <em>Auto</em> to autofire, and the button at the top pauses. Two players can share a
+          tablet: each drags on their own meadow and has their own buttons. Turn the device sideways and tap
+          <em>Fullscreen</em> for the biggest meadows. To keep it like an app, use your browser's
+          <em>Add to Home Screen</em> (or <em>Install</em> on desktop).
+        </p>
+        <p>
+          <strong>Online.</strong> Press <em>Play online</em> (or <kbd>3</kbd>). <em>Find match</em> pairs you with the
+          next player looking for a game; <em>Create friend room</em> gives you a four-letter code for a friend to join.
+          Online you use the single-player controls, and your meadow is always on the left. <kbd>Esc</kbd> between
+          rounds leaves.
+        </p>
+      </section>
+    </details>
+    <script>
+      /*__BUNDLE__*/
+    </script>
+  </body>
 </html>

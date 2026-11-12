@@ -26,13 +26,13 @@ export const HEAL_ON_ZAKO = 1;
 export const HEAL_ON_ATTACK = 2;
 export const INVULN_TIME = 1.0;
 export const STUN_TIME = 1.1;
-export const MASH_STEP = 0.04;      // each new button/direction press while stunned shaves this off
-export const STUN_MIN = 0.6;        // however hard you mash, a stun lasts at least this long
-export const ZAKO_GRACE = 0.6;      // after a stun, critters pass through you this long
+export const MASH_STEP = 0.04; // each new button/direction press while stunned shaves this off
+export const STUN_MIN = 0.6; // however hard you mash, a stun lasts at least this long
+export const ZAKO_GRACE = 0.6; // after a stun, critters pass through you this long
 export const IMPAIR_TIME = 5;
-export const IMPAIR_SPEED = 0.6;    // movement multiplier while impaired
-export const IMPAIR_FIRE = 1.7;     // time between shots multiplier while impaired
-export const IMPAIR_CHARGE = 0.6;   // charge speed multiplier while impaired
+export const IMPAIR_SPEED = 0.6; // movement multiplier while impaired
+export const IMPAIR_FIRE = 1.7; // time between shots multiplier while impaired
+export const IMPAIR_CHARGE = 0.6; // charge speed multiplier while impaired
 export const PLAYER_SPEED = 225;
 export const PLAYER_RADIUS = 6;
 /** As in Twinkle Star Sprites, the fairy can fly anywhere in her meadow: this is just the top margin. */
@@ -58,7 +58,7 @@ export const MAX_STAR_LEVEL = 3;
 export const starHp = (level: number) => 1 + level;
 
 export const GAUGE_MAX = 200;
-export const MOTH_HP = 70;   // bosses are tough: a few seconds of focused fire won't banish one
+export const MOTH_HP = 70; // bosses are tough: a few seconds of focused fire won't banish one
 /**
  * Guardians (Boss Attacks) run through phases, as in Twinkle Star Sprites:
  * rush in, wander (circling, random direction), attack, then exit off a side.
@@ -80,7 +80,14 @@ export const GUARDIAN_CYCLES_MAX = 4;
  * Set true to have it leave after GUARDIAN_CYCLES_MIN-_MAX cycles.
  */
 export const GUARDIAN_LEAVES = false;
-export const GUARDIAN_CYCLE: Record<string, number> = { aimed: 1.8, ring: 2.1, rapid: 1.6, rain: 2.4, spiral: 2.6, sweep: 2.1 };
+export const GUARDIAN_CYCLE: Record<string, number> = {
+  aimed: 1.8,
+  ring: 2.1,
+  rapid: 1.6,
+  rain: 2.4,
+  spiral: 2.6,
+  sweep: 2.1,
+};
 /** Two bosses sent within this many seconds of each other clash and cancel out. */
 export const BOSS_CLASH_WINDOW = 1.5;
 /**
@@ -91,12 +98,12 @@ export const GUARDIAN_SWOOP_EVERY = 3;
 export const GUARDIAN_SWOOP_DOWN = 0.6;
 export const GUARDIAN_SWOOP_HOLD = 0.35;
 export const GUARDIAN_SWOOP_BACK = 0.8;
-export const GUARDIAN_SWOOP_GAP = 46;   // how far above the fairy it stops
-export const GUARDIAN_CIRCLE = 55;      // wander circle radius
-export const GUARDIAN_SPIN = 1.7;       // radians a second
+export const GUARDIAN_SWOOP_GAP = 46; // how far above the fairy it stops
+export const GUARDIAN_CIRCLE = 55; // wander circle radius
+export const GUARDIAN_SPIN = 1.7; // radians a second
 export const GUARDIAN_STUN_DMG = 5;
 export const GUARDIAN_STUN = 0.6;
-export const GUARDIAN_NUDGE = 18;       // sideways speed each shot adds while it exits
+export const GUARDIAN_NUDGE = 18; // sideways speed each shot adds while it exits
 
 export const FEVER_TIME = 6;
 /** During Fever you fire this many times faster (autofire and tapping alike). The shot pattern doesn't change. */
@@ -120,8 +127,8 @@ export const COMET_SPEED = 230;
  * formation comes in as soon as the last one is popped or has left the
  * meadow, so clearing fast brings the swarm faster.
  */
-export const WAVE_GAP = 0.35;       // beat between a wave clearing and the next arriving
-export const WAVE_MAX_WAIT = 12;    // safety net only: a straggling wave can't stall the meadow longer than this
+export const WAVE_GAP = 0.35; // beat between a wave clearing and the next arriving
+export const WAVE_MAX_WAIT = 12; // safety net only: a straggling wave can't stall the meadow longer than this
 
 /** Sudden death, part one: at this point every critter speeds up sharply. */
 export const SURGE_TIME = 100;
@@ -133,15 +140,15 @@ export const SURGE_SPEED = 1.35;
  * other, back and forth. Drive it off and it returns sooner, in your
  * rival's meadow, and faster. Its touch is an instant knockout, like Death's.
  */
-export const CROW_TIME = 102;            // about when Death appears in Twinkle Star Sprites
+export const CROW_TIME = 102; // about when Death appears in Twinkle Star Sprites
 export const CROW_WARNING = 3;
 export const CROW_RADIUS = 9;
 export const CROW_HP = 14;
-export const CROW_SPEED = 170;      // dive speed at level 1
-export const CROW_SPEED_STEP = 25;  // added per level
-export const CROW_STAY = 10;        // seconds it hunts one meadow before crossing (level 1)
+export const CROW_SPEED = 170; // dive speed at level 1
+export const CROW_SPEED_STEP = 25; // added per level
+export const CROW_STAY = 10; // seconds it hunts one meadow before crossing (level 1)
 export const CROW_STAY_MIN = 4;
-export const CROW_RETURN = 8;       // seconds before a driven-off crow reappears (level 1)
+export const CROW_RETURN = 8; // seconds before a driven-off crow reappears (level 1)
 export const CROW_RETURN_MIN = 2;
 
 /**
@@ -154,8 +161,8 @@ export const CROW_RETURN_MIN = 2;
  * Below level 1 you can't charge at all.
  */
 export const GAUGE_LEVEL = GAUGE_MAX / 3;
-export const GAUGE_START = GAUGE_LEVEL;  // each round starts at level 1
-export const EXTRA_COST = 0.5;           // in gauge levels
+export const GAUGE_START = GAUGE_LEVEL; // each round starts at level 1
+export const EXTRA_COST = 0.5; // in gauge levels
 export const BOSS_COST = 2;
 /** Extra Attack critters: they can't be shot or burst, only dodged (or cleared by a bomb). */
 export const IMP_RADIUS = 7;
@@ -178,9 +185,9 @@ export const BAT_DIVE = 200;
 export const BOSS_CHAIN_REVERSES = 3;
 
 /** Tempo: the meadow speeds up the longer a round (and a match) goes on. */
-export const TEMPO_RAMP_TIME = 120;   // seconds to reach the full in-round ramp
-export const TEMPO_RAMP = 0.6;        // +60% by then
-export const TEMPO_PER_ROUND = 0.1;   // each earlier round in the match adds 10%
+export const TEMPO_RAMP_TIME = 120; // seconds to reach the full in-round ramp
+export const TEMPO_RAMP = 0.6; // +60% by then
+export const TEMPO_PER_ROUND = 0.1; // each earlier round in the match adds 10%
 export const TEMPO_MAX = 2;
 
 /** Petal bloom: clears bullets and stray stars, pops small fry with no chain credit. */
@@ -195,14 +202,14 @@ export const HOLE_PULL = 160;
 /** Star flights: chance a star is a seeker or a slant (the rest drop straight). */
 export const SEEKER_CHANCE = 0.25;
 export const SLANT_CHANCE = 0.25;
-export const SEEK_TIME = 0.75;   // how long a seeker lines up before plunging
-export const SEEK_SLIDE = 170;   // how fast it slides across while lining up
+export const SEEK_TIME = 0.75; // how long a seeker lines up before plunging
+export const SEEK_SLIDE = 170; // how fast it slides across while lining up
 
 export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '15';          // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '15'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
-export const SNAP_EVERY = 3;             // send a meadow snapshot every 3 steps (20 a second)
-export const END_GRACE = 0.25;           // host waits this long for a near-simultaneous knockout
+export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
+export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

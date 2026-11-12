@@ -38,11 +38,19 @@ export interface Player {
 }
 
 export interface Shot {
-  x: number; y: number; vx: number; charged: boolean; dead: boolean;
+  x: number;
+  y: number;
+  vx: number;
+  charged: boolean;
+  dead: boolean;
   /** A charged shot that has made its first hit ploughs on through the rest. */
   popped?: boolean;
   /** Charged shots differ by fairy: hit radius, speed (x SHOT_SPEED), damage, range in seconds, look. */
-  r?: number; sp?: number; dmg?: number; life?: number; style?: ChargeStyle;
+  r?: number;
+  sp?: number;
+  dmg?: number;
+  life?: number;
+  style?: ChargeStyle;
 }
 
 /** Each fairy's charge shot. */
@@ -61,7 +69,8 @@ export type ChargeStyle = 'orb' | 'thorn' | 'needles' | 'twin' | 'flare' | 'cres
  */
 export type BombStyle = 'dash' | 'blast' | 'vortex' | 'fan' | 'beam' | 'hole';
 export interface Bomb {
-  name: string; color: string;
+  name: string;
+  color: string;
   shape: 'petal' | 'leaf' | 'shard' | 'heart' | 'ember' | 'moon';
   style: BombStyle;
   /** Seconds the sweep takes. */
@@ -84,8 +93,10 @@ export interface Puff {
   /** 1 for normal critters, larger for big ones. */
   size: number;
   path?: { type: 'swoop' | 'sweep' | 'column' | 'rise'; t: number; delay: number; dir: number; ox: number; oy: number };
-  x: number; y: number;
-  vx: number; vy: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
   phase: number;
   dead: boolean;
   /** Shots needed to pop it (1 to 3). Any pollen burst pops it outright. */
@@ -95,7 +106,8 @@ export interface Puff {
 }
 
 export interface Burst {
-  x: number; y: number;
+  x: number;
+  y: number;
   maxR: number;
   age: number;
   chainId: number;
@@ -106,8 +118,10 @@ export interface Burst {
 export type AttackKind = 'star' | 'bramble' | 'comet' | 'imp';
 
 export interface Attack {
-  x: number; y: number;
-  vx: number; vy: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
   kind: AttackKind;
   level: number;
   hp: number;
@@ -161,7 +175,8 @@ export interface Guardian {
 }
 
 export interface Moth {
-  x: number; y: number;
+  x: number;
+  y: number;
   hp: number;
   t: number;
   fireT: number;
@@ -190,12 +205,17 @@ export interface Moth {
   swoop: number;
   swoopIn: number;
   /** Where it returns to after a swoop, and where it swoops to. */
-  postX: number; postY: number; toX: number; toY: number;
+  postX: number;
+  postY: number;
+  toX: number;
+  toY: number;
 }
 
 export interface Crow {
-  x: number; y: number;
-  vx: number; vy: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
   state: 'circle' | 'dive' | 'climb' | 'leave';
   /** Starts at 1 and rises each time it's driven off: faster, quicker to return. */
   level: number;
@@ -207,14 +227,31 @@ export interface Crow {
   speed: number;
 }
 
-export interface Bullet { x: number; y: number; vx: number; vy: number; dead: boolean }
-
-export interface Particle {
-  x: number; y: number; vx: number; vy: number;
-  life: number; max: number; size: number; color: string;
+export interface Bullet {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  dead: boolean;
 }
 
-export interface Popup { x: number; y: number; text: string; age: number }
+export interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  max: number;
+  size: number;
+  color: string;
+}
+
+export interface Popup {
+  x: number;
+  y: number;
+  text: string;
+  age: number;
+}
 
 /** Something one field sends to the other. */
 export interface Outgoing {
@@ -232,16 +269,8 @@ export interface Outgoing {
   fromY: number;
 }
 
-export class Rng {
-  private s: number;
-  constructor(seed: number) { this.s = seed >>> 0; }
-  next(): number {
-    this.s = (this.s + 0x6d2b79f5) >>> 0;
-    let t = this.s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  }
-  range(a: number, b: number): number { return a + (b - a) * this.next(); }
-  int(a: number, b: number): number { return Math.floor(this.range(a, b + 1)); }
+/** Where a player's fairy is now, so a drag can move her relative to it. */
+export interface Pos {
+  x: number;
+  y: number;
 }

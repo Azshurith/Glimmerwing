@@ -1,18 +1,34 @@
 {
   "name": "glimmerwing",
   "version": "1.0.0",
-  "description": "",
+  "description": "Glimmerwing: a split-screen versus shooter for the browser (desktop, mobile, installable).",
   "scripts": {
+    "dev": "npm run build && npm run server",
+    "build": "npm run typecheck && node build.mjs",
+    "server": "node server/server.mjs",
     "typecheck": "tsc -p .",
-    "build": "tsc -p . && node build.mjs",
-    "server": "node server/server.mjs"
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm run lint && npm run format:check"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "esbuild": "^0.21.5",
-    "typescript": "^5.4.5"
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^9.1.2",
+    "globals": "^15.15.0",
+    "prettier": "^3.10.0",
+    "typescript": "^5.4.5",
+    "typescript-eslint": "^8.72.2"
   },
-  "type": "module"
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  }
 }

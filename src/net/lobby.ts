@@ -1,5 +1,6 @@
-import { Game } from './game';
-import { Net, NetEvent, serverUrl } from './net';
+import type { Game } from '../game/game';
+import type { NetEvent } from '../types';
+import { Net, serverUrl } from './net';
 
 /**
  * The "Play online" panel over the canvas: Find match (random rival) or
@@ -7,28 +8,57 @@ import { Net, NetEvent, serverUrl } from './net';
  * us, it hands the connection to the Game and gets out of the way.
  */
 export class Lobby {
-  private el = document.getElementById('lobby') as HTMLElement;
-  private status = document.getElementById('lobby-status') as HTMLElement;
-  private codeOut = document.getElementById('lobby-code') as HTMLElement;
+  private el = document.getElementById('lobby')!;
+  private status = document.getElementById('lobby-status')!;
+  private codeOut = document.getElementById('lobby-code')!;
   private codeIn = document.getElementById('lobby-join-code') as HTMLInputElement;
   private net: Net | null = null;
   private timer = 0;
 
   constructor(private game: Game) {
-    document.getElementById('lobby-quick')!.addEventListener('click', () => this.go(n => { n.quick(); this.say('Looking for a rival…'); }));
-    document.getElementById('lobby-host')!.addEventListener('click', () => this.go(n => { n.host(); this.say('Making a room…'); }));
+    document.getElementById('lobby-quick')!.addEventListener(
+      'click',
+      () =>
+        void this.go(n => {
+          n.quick();
+          this.say('Looking for a rival…');
+        }),
+    );
+    document.getElementById('lobby-host')!.addEventListener(
+      'click',
+      () =>
+        void this.go(n => {
+          n.host();
+          this.say('Making a room…');
+        }),
+    );
     document.getElementById('lobby-join')!.addEventListener('submit', e => {
       e.preventDefault();
       const code = this.codeIn.value.trim().toUpperCase();
-      if (code.length !== 4) { this.say('Room codes are four letters.'); this.codeIn.focus(); return; }
-      this.go(n => { n.join(code); this.say(`Joining ${code}…`); });
+      if (code.length !== 4) {
+        this.say('Room codes are four letters.');
+        this.codeIn.focus();
+        return;
+      }
+      void this.go(n => {
+        n.join(code);
+        this.say(`Joining ${code}…`);
+      });
     });
-    this.codeIn.addEventListener('input', () => { this.codeIn.value = this.codeIn.value.toUpperCase().replace(/[^A-Z]/g, ''); });
+    this.codeIn.addEventListener('input', () => {
+      this.codeIn.value = this.codeIn.value.toUpperCase().replace(/[^A-Z]/g, '');
+    });
     document.getElementById('lobby-close')!.addEventListener('click', () => this.close());
-    this.el.addEventListener('keydown', e => { if (e.key === 'Escape') this.close(); });
+    this.el.addEventListener('keydown', e => {
+      if (e.key === 'Escape') this.close();
+    });
     // Arriving through a shared link (?room=ABCD) drops you straight into that room.
     const room = new URLSearchParams(location.search).get('room');
-    if (room) { this.open(); this.codeIn.value = room.toUpperCase(); this.el.querySelector('form')!.requestSubmit(); }
+    if (room) {
+      this.open();
+      this.codeIn.value = room.toUpperCase();
+      this.el.querySelector('form')!.requestSubmit();
+    }
   }
 
   open(): void {
@@ -40,12 +70,18 @@ export class Lobby {
 
   close(): void {
     this.stop();
-    if (this.net) { this.net.leave(); this.net.close(); this.net = null; }
+    if (this.net) {
+      this.net.leave();
+      this.net.close();
+      this.net = null;
+    }
     this.el.hidden = true;
     (document.getElementById('game') as HTMLCanvasElement).focus();
   }
 
-  private say(text: string): void { this.status.textContent = text; }
+  private say(text: string): void {
+    this.status.textContent = text;
+  }
 
   /** Connect if needed, then ask the server for something. */
   private async go(ask: (n: Net) => void): Promise<void> {
@@ -54,8 +90,9 @@ export class Lobby {
       this.net?.close();
       this.net = new Net();
       this.say('Connecting…');
-      try { await this.net.connect(); }
-      catch {
+      try {
+        await this.net.connect();
+      } catch {
         this.say(`Couldn't reach the game server (${serverUrl()}). Is it running?`);
         this.net = null;
         return;
@@ -66,7 +103,12 @@ export class Lobby {
     this.timer = window.setInterval(() => this.pump(), 50);
   }
 
-  private stop(): void { if (this.timer) { clearInterval(this.timer); this.timer = 0; } }
+  private stop(): void {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = 0;
+    }
+  }
 
   private pump(): void {
     const net = this.net;
@@ -90,7 +132,9 @@ export class Lobby {
   /** Returns true once we're matched. */
   private handle(ev: NetEvent): boolean {
     switch (ev.t) {
-      case 'queued': this.say('Looking for a rival… (anyone else who presses Find match gets paired with you)'); break;
+      case 'queued':
+        this.say('Looking for a rival… (anyone else who presses Find match gets paired with you)');
+        break;
       case 'hosted': {
         this.codeOut.hidden = false;
         this.codeOut.textContent = ev.code;
@@ -101,9 +145,16 @@ export class Lobby {
         } else this.say('Send your friend this code. They pick Play online, type it in and press Join.');
         break;
       }
-      case 'error': this.say(ev.msg); break;
-      case 'closed': this.say('Lost the connection to the server.'); this.stop(); this.net = null; break;
-      case 'matched': return true;
+      case 'error':
+        this.say(ev.msg);
+        break;
+      case 'closed':
+        this.say('Lost the connection to the server.');
+        this.stop();
+        this.net = null;
+        break;
+      case 'matched':
+        return true;
     }
     return false;
   }
