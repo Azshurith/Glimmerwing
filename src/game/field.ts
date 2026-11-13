@@ -21,11 +21,6 @@ import type {
 } from '@/types';
 import { rollWave } from './waves';
 
-/** How fast a slide row crosses the meadow, in units a second. */
-const SLIDE_SPEED = 46;
-/** How fast a file drops: brisk, as in TSS, where the column reaches the fairy in under two seconds. */
-const fileSpeed = (speed: number) => 70 + (speed - 26) * 2.5;
-
 /** Which bomb sound each bomb style plays (see Sound.play 'bomb'). */
 const BOMB_SOUND: Record<string, number> = { dash: 0, blast: 1, vortex: 2, fan: 3, beam: 4, hole: 5 };
 
@@ -333,39 +328,48 @@ export class Field {
         }
         // Attacks drop in at the same spot they were sent from, mirrored into this meadow.
         const x = Math.min(C.FIELD_W - 12, Math.max(12, o.fromX));
-        const speed = o.kind === 'bramble' ? 42 : o.kind === 'comet' ? C.COMET_SPEED : 70 + o.level * 32;
-        let vx = o.kind === 'bramble' ? (this.player.x - x) * 0.2 : 0,
-            vy = speed;
-        // Stars come in three flights; tougher (batted-back) stars lean toward the trickier ones.
-        let flight: StarFlight = 'drop';
         if (o.kind === 'star') {
-            const roll = this.fxRng.next(),
-                bias = (o.level - 1) * 0.1;
-            if (roll < C.SEEKER_CHANCE + bias) flight = 'seeker';
-            else if (roll < C.SEEKER_CHANCE + C.SLANT_CHANCE + bias * 2) flight = 'slant';
+            // TSS Normal Attack: appears just inside the top, hangs for a moment, then falls faster and
+            // faster. Most fall straight; some cut across at an angle and glance off the walls.
+            let vx = 0,
+                vy = C.STAR_ENTER_SPEED;
+            let flight: StarFlight = 'drop';
+            if (this.fxRng.next() < C.STAR_ANGLED_CHANCE + (o.level - 1) * 0.1) {
+                flight = 'slant';
+                const ang = this.fxRng.range(0.5, 1.15); // from straight down: 30 to 65 degrees
+                const dir = x < C.FIELD_W / 2 ? 1 : -1;
+                vx = dir * Math.sin(ang) * C.STAR_ENTER_SPEED;
+                vy = Math.cos(ang) * C.STAR_ENTER_SPEED;
+            }
+            this.attacks.push({
+                x,
+                y: 10,
+                vx,
+                vy,
+                flight,
+                seekT: C.STAR_HOLD,
+                plunge: C.STAR_TOP_SPEED + C.STAR_TOP_PER_LEVEL * o.level,
+                kind: 'star',
+                level: o.level,
+                hp: C.starHp(o.level),
+                spin: this.fxRng.range(0, Math.PI * 2),
+                dead: false,
+                t: C.STAR_ENTER_SPEED,
+            });
+            return;
         }
-        if (flight === 'slant') {
-            // Angle across the meadow, toward the far side from where it enters.
-            const dir = x < C.FIELD_W / 2 ? 1 : -1;
-            const ang = this.fxRng.range(0.35, 0.6);
-            vx = dir * Math.sin(ang) * speed * 1.1;
-            vy = Math.cos(ang) * speed;
-        }
-        if (flight === 'seeker') {
-            vx = 0;
-            vy = 0;
-        }
+        const speed = o.kind === 'bramble' ? 42 : C.COMET_SPEED;
         this.attacks.push({
             x,
             y: -12,
-            vx,
-            vy,
-            flight,
-            seekT: flight === 'seeker' ? C.SEEK_TIME : 0,
+            vx: o.kind === 'bramble' ? (this.player.x - x) * 0.2 : 0,
+            vy: speed,
+            flight: 'drop',
+            seekT: 0,
             plunge: speed * 1.2,
             kind: o.kind,
             level: o.level,
-            hp: o.kind === 'bramble' ? C.BRAMBLE_HP : o.kind === 'comet' ? Infinity : C.starHp(o.level),
+            hp: o.kind === 'bramble' ? C.BRAMBLE_HP : Infinity,
             spin: this.fxRng.range(0, Math.PI * 2),
             dead: false,
         });
@@ -613,8 +617,8 @@ export class Field {
                 vy = w.speed,
                 shell = w.bubble ? 1 : 0;
             if (w.kind === 'beetle') {
-                vx = w.side * 34;
-                vy = w.speed * 1.35;
+                vx = w.side * 55;
+                vy = w.speed * 1.05;
                 shell = 2;
             }
             if (w.kind === 'spinner') {
@@ -624,7 +628,7 @@ export class Field {
             let path: Puff['path'];
             switch (w.path) {
                 case 'swoop':
-                    path = { type: 'swoop', t: 0, delay: i * 0.32 * size, dir: w.side, ox: 0, oy: 0 };
+                    path = { type: 'swoop', t: 0, delay: i * 0.5 * size, dir: w.side, ox: 0, oy: 0 };
                     break;
                 case 'sweep':
                     path = { type: 'sweep', t: 0, delay: i * 0.42 * size, dir: w.side, ox: 0, oy: w.lane };
@@ -643,23 +647,19 @@ export class Field {
                     path = { type: 'rise', t: 0, delay: 0.9 + i * 0.4, dir: w.side, ox: 0, oy: 0 };
                     break;
                 case 'file': {
-                    // Single file down one lane, evenly spaced: each member a fixed beat behind the last.
+                    // Single file down one lane, evenly spaced: each member a fixed beat behind the last
+                    // (in TSS about 0.6 s, a sixth of the meadow's height).
                     const lane = Math.min(C.FIELD_W - 30, Math.max(30, w.cx));
-                    const v = fileSpeed(w.speed);
+                    const v = w.speed;
                     path = { type: 'file', t: 0, delay: (i * C.FILE_SPACING * size) / v, dir: v, ox: lane, oy: 0 };
                     break;
                 }
-                case 'slide': {
-                    // A row centred away from the side it slides toward, so it crosses the meadow.
-                    const half = ((n - 1) * C.SLIDE_SPACING * size) / 2;
-                    const lo = half + 16,
-                        hi = C.FIELD_W - half - 16;
-                    const centre = Math.min(
-                        hi,
-                        Math.max(lo, w.side > 0 ? lo + (w.cx - 50) * 0.3 : hi - (w.cx - 50) * 0.3),
-                    );
-                    const ox = centre - half + i * C.SLIDE_SPACING * size;
-                    path = { type: 'slide', t: 0, delay: 0, dir: w.side, ox, oy: 50 + (w.lane - 36) * 0.6 };
+                case 'row': {
+                    // An even row falling together, its ends drawing in toward its middle as it comes.
+                    const half = ((n - 1) * C.ROW_SPACING * size) / 2;
+                    const centre = Math.min(C.FIELD_W - half - 16, Math.max(half + 16, w.cx));
+                    const ox = centre - half + i * C.ROW_SPACING * size;
+                    path = { type: 'row', t: 0, delay: 0, dir: w.speed, ox, oy: centre };
                     break;
                 }
             }
@@ -708,45 +708,39 @@ export class Field {
         const W = C.FIELD_W;
         if (P.type === 'swoop') {
             // Enter from a top corner, dive to mid-meadow and curl back up and out.
-            const T = 7,
+            const T = 3.6,
                 k = tt / T;
             j.x = (P.dir > 0 ? -10 : W + 10) + P.dir * (W + 20) * k;
             j.y = -14 + 4 * 175 * k * (1 - k);
             if (k > 1) j.dead = true;
         } else if (P.type === 'sweep') {
             // A line crossing the meadow, sinking slowly.
-            j.x = (P.dir > 0 ? -12 : W + 12) + P.dir * 48 * tt;
-            j.y = P.oy + 6 * tt;
+            j.x = (P.dir > 0 ? -12 : W + 12) + P.dir * 85 * tt;
+            j.y = P.oy + 14 * tt;
             if (j.x < -20 || j.x > W + 20) j.dead = true;
         } else if (P.type === 'file') {
             // Straight down at an even speed (P.dir holds the speed), out the bottom.
             j.x = P.ox;
             j.y = -14 + P.dir * tt;
             if (j.y > C.FIELD_H + 20) j.dead = true;
-        } else if (P.type === 'slide') {
-            // The row drops in together to its lane, then slides across in lockstep, sinking a little.
-            const IN = 0.8;
-            if (tt < IN) {
-                const k = tt / IN;
-                j.x = P.ox;
-                j.y = -14 + (P.oy + 14) * (1 - (1 - k) * (1 - k));
-            } else {
-                const s = tt - IN;
-                j.x = P.ox + P.dir * SLIDE_SPEED * s;
-                j.y = P.oy + 5 * s;
-                if (j.x < -20 || j.x > C.FIELD_W + 20) j.dead = true;
-            }
+        } else if (P.type === 'row') {
+            // Straight down at the wave's speed (P.dir); each member closes a third of its gap to the
+            // row's middle (P.oy) over the first two seconds, as the TSS rows do.
+            const k = Math.min(1, tt / 2);
+            j.x = P.ox + (P.oy - P.ox) * 0.33 * k * (2 - k);
+            j.y = -14 + P.dir * tt;
+            if (j.y > C.FIELD_H + 20) j.dead = true;
         } else if (P.type === 'rise') {
             // The sneaky one: climbs up from a bottom corner, across the fairy's level, and out the top.
-            const T = 6,
+            const T = 3.5,
                 k = tt / T;
             j.x = (P.dir < 0 ? 14 : W - 14) - P.dir * (W * 0.55) * k + Math.sin(k * Math.PI * 2) * 12;
             j.y = C.FIELD_H + 14 - (C.FIELD_H + 40) * k;
             if (k > 1) j.dead = true;
         } else {
             // Two columns dropping in pairs, squeezing together as they fall.
-            j.x = P.ox + P.dir * (8 + 24 * Math.max(0, 1 - tt / 3.5));
-            j.y = -14 + 42 * tt;
+            j.x = P.ox + P.dir * (8 + 24 * Math.max(0, 1 - tt / 1.8));
+            j.y = -14 + 95 * tt;
             if (j.y > C.FIELD_H + 20) j.dead = true;
         }
     }
@@ -768,8 +762,8 @@ export class Field {
                 j.y += j.vy * dt;
                 j.x = j.baseX + Math.sin(j.phase * 0.9) * 34;
             } else {
-                j.x += (j.vx + Math.sin(j.phase) * 14) * dt;
-                j.y += j.vy * (0.75 + 0.25 * Math.sin(j.phase * 0.5)) * dt;
+                j.x += (j.vx + Math.sin(j.phase) * 5) * dt;
+                j.y += j.vy * (0.94 + 0.06 * Math.sin(j.phase * 0.5)) * dt;
             }
             if (j.kind !== 'spinner' && (j.x < 10 || j.x > C.FIELD_W - 10)) {
                 // Beetles ricochet alone; a drifting formation turns as one, so it keeps its spacing.
@@ -839,6 +833,7 @@ export class Field {
             if (s.dead) continue;
 
             for (const a of this.attacks) {
+                if (a.flight === 'back') continue; // on its way back: shots pass by
                 const r = attackRadius(a);
                 if (!a.dead && dist2(s.x, s.y, a.x, a.y) < (r + hitR) ** 2) {
                     s.dead = true;
@@ -931,9 +926,15 @@ export class Field {
             this.addBurst(a.x, a.y, id, C.BURST_RADIUS);
             this.spray(a.x, a.y, 6, '#ffe27a');
             if (a.level < 2) {
-                // A plain star goes back as a flashing reverse star, tougher.
+                // A plain star turns into a flashing reverse star and flies back up the meadow (TSS);
+                // it reaches the rival once it's out the top (see updateAttacks).
                 const lvl = Math.min(C.MAX_STAR_LEVEL, 2 + this.fairy.counterBoost);
-                this.outbox.push({ kind: 'star', level: lvl, fromX: a.x, fromY: a.y });
+                a.dead = false;
+                a.flight = 'back';
+                a.level = lvl;
+                a.hp = Infinity;
+                a.vx = 0;
+                a.vy = -C.STAR_BACK_SPEED;
                 this.popup(a.x, a.y - 10, 'Reverse');
                 this.snd('reverse');
             } else {
@@ -971,7 +972,13 @@ export class Field {
                 }
             }
             for (const a of this.attacks) {
-                if (!a.dead && a.kind === 'star' && !b.hits.has(a) && dist2(b.x, b.y, a.x, a.y) < r * r) {
+                if (
+                    !a.dead &&
+                    a.kind === 'star' &&
+                    a.flight !== 'back' &&
+                    !b.hits.has(a) &&
+                    dist2(b.x, b.y, a.x, a.y) < r * r
+                ) {
                     b.hits.add(a);
                     this.hitAttack(a, 1, b.chainId);
                 }
@@ -1149,6 +1156,24 @@ export class Field {
                         a.vy = ((this.player.y - a.y) / d) * C.BAT_DIVE;
                     }
                 }
+            }
+            if (a.flight === 'back') {
+                // Shot down: it flies back up and out, then reaches the rival as a reverse star.
+                a.y += a.vy * dt;
+                if (a.y < -14) {
+                    a.dead = true;
+                    this.outbox.push({ kind: 'star', level: a.level, fromX: a.x, fromY: 0 });
+                }
+                continue;
+            }
+            if (a.kind === 'star' && (a.flight === 'drop' || a.flight === 'slant')) {
+                // Hang at the top for a moment, then fall faster and faster up to top speed.
+                if (a.seekT > 0) a.seekT -= dt;
+                else a.t = Math.min(a.plunge, (a.t ?? C.STAR_ENTER_SPEED) + C.STAR_ACCEL * dt);
+                const sp = Math.hypot(a.vx, a.vy) || 1;
+                const v = a.t ?? C.STAR_ENTER_SPEED;
+                a.vx = (a.vx / sp) * v;
+                a.vy = (a.vy / sp) * v;
             }
             if (a.flight === 'seeker' && a.seekT > 0) {
                 // Line up: ease into the top of the meadow while sliding over the fairy.
@@ -1370,7 +1395,7 @@ export class Field {
                 this.spray(b.x, b.y, 2, col);
             }
         for (const a of this.attacks)
-            if (!a.dead && inside(a.x, a.y)) {
+            if (!a.dead && a.flight !== 'back' && inside(a.x, a.y)) {
                 a.dead = true;
                 this.spray(a.x, a.y, 4, col);
             }
@@ -1629,6 +1654,7 @@ export class Field {
         // Attacks from the rival (and guardians and their shots) hit hard; critters just stun.
         let struck = false;
         for (const a of this.attacks) {
+            if (a.flight === 'back') continue; // a reverse star on its way out can't hurt you
             const r = attackRadius(a);
             if (!a.dead && hit(a.x, a.y, r * 0.8)) {
                 a.dead = true;

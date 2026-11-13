@@ -157,10 +157,17 @@ export const COMET_SPEED = 230;
 export const WAVE_GAP = 0.5; // beat between a wave clearing and the next arriving (TSS: about half a second)
 /** Some waves let the next one in early, so two groups share the meadow for a moment, as in TSS. */
 export const WAVE_OVERLAP_AFTER = 2.5;
-/** A file: critters in single file dropping straight down, spaced this far apart (meadow units). */
-export const FILE_SPACING = 46;
-/** A slide: a row that drops in to its lane, then slides across in lockstep, this far apart. */
-export const SLIDE_SPACING = 34;
+/**
+ * Critter speed, measured from TSS footage: formations fall at about 0.28-0.37 of the meadow's
+ * height a second at the start of a round, a little faster as it goes on.
+ */
+export const ZAKO_SPEED_MIN = 86;
+export const ZAKO_SPEED_MAX = 104;
+export const ZAKO_SPEED_PRESSURE = 24;
+/** A file: critters in single file dropping straight down, about a sixth of the meadow's height apart. */
+export const FILE_SPACING = 54;
+/** A row: evenly spaced across, about a sixth of the meadow's width apart. */
+export const ROW_SPACING = 38;
 export const WAVE_MAX_WAIT = 12; // safety net only: a straggling wave can't stall the meadow longer than this
 
 /** Sudden death, part one: at this point every critter speeds up sharply. */
@@ -232,17 +239,28 @@ export const BOMB_SLOW_TIME = 1.6;
 export const HOLE_Y = 110;
 export const HOLE_PULL = 160;
 
-/** Star flights: chance a star is a seeker or a slant (the rest drop straight). */
-export const SEEKER_CHANCE = 0.25;
-export const SLANT_CHANCE = 0.25;
+/** Extra Attack seekers: how long one lines up before plunging. */
 export const SEEK_TIME = 0.75; // how long a seeker lines up before plunging
+/**
+ * Rival stars (TSS Normal Attacks), measured from footage: each one hangs at the top of the meadow
+ * for a moment, then falls faster and faster, to about 0.75 of the meadow's height a second.
+ * Most fall straight down; some cut across at an angle and glance off the walls.
+ */
+export const STAR_HOLD = 0.4;
+export const STAR_ENTER_SPEED = 24;
+export const STAR_ACCEL = 300;
+export const STAR_TOP_SPEED = 225; // plus STAR_TOP_PER_LEVEL a level
+export const STAR_TOP_PER_LEVEL = 15;
+export const STAR_ANGLED_CHANCE = 0.25;
+/** A star you shoot down flies back up and out at this speed before it reaches your rival as a reverse star. */
+export const STAR_BACK_SPEED = 88;
 export const SEEK_SLIDE = 170; // how fast it slides across while lining up
 
 export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '16'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '17'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

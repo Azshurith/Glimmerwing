@@ -99,7 +99,7 @@ export interface Puff {
     /** 1 for normal critters, larger for big ones. */
     size: number;
     path?: {
-        type: 'swoop' | 'sweep' | 'column' | 'rise' | 'file' | 'slide';
+        type: 'swoop' | 'sweep' | 'column' | 'rise' | 'file' | 'row';
         t: number;
         delay: number;
         dir: number;
@@ -144,24 +144,34 @@ export interface Attack {
     spin: number;
     dead: boolean;
     /**
-     * How a star flies: 'drop' falls straight down, 'seeker' slides across the
-     * top to line up with the fairy and then plunges, 'slant' cuts a diagonal
-     * and glances off the walls.
+     * How it flies. A rival star is a 'drop' (hangs at the top, then falls faster and faster) or a
+     * 'slant' (the same, at an angle, glancing off the walls), and becomes 'back' once shot down.
+     * Extra Attack critters use their sender's flight ('seeker', 'zig' and the rest).
      */
     flight: StarFlight;
-    /** Seconds a seeker still spends lining up before it plunges. */
+    /** Seconds a seeker still spends lining up, or a star still hangs at the top, before it moves off. */
     seekT: number;
-    /** Plunge speed a seeker switches to once it's lined up. */
+    /** Plunge speed a seeker switches to once it's lined up; a star's top speed. */
     plunge: number;
     /** Extra Attack critters wear the sender's colour and look. */
     color?: string;
     look?: string;
-    /** Flight timer for critters that need a second clock. */
+    /** Flight timer for critters that need a second clock; a falling star keeps its current speed here. */
     t?: number;
 }
 
 /** How an attack star or critter moves after it arrives. */
-export type StarFlight = 'drop' | 'seeker' | 'slant' | 'zig' | 'homing' | 'lateral' | 'bounce' | 'bat';
+export type StarFlight =
+    | 'drop'
+    | 'seeker'
+    | 'slant'
+    | 'zig'
+    | 'homing'
+    | 'lateral'
+    | 'bounce'
+    | 'bat'
+    /** A star you shot down, flying back up and out to your rival as a reverse star (harmless here). */
+    | 'back';
 
 /** A fairy's Extra Attack: a few small critters sent with a level 2 charge. */
 export interface Extra {

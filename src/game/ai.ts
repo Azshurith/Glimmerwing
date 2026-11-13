@@ -39,12 +39,14 @@ export class CpuPilot {
             ...f.puffs
                 .filter(j => !j.moonseed && j.x > -50)
                 .map(j => ({ x: j.x, y: j.y, r: C.PUFF_RADIUS * j.size, rising: j.path?.type === 'rise' })),
-            ...f.attacks.map(a => ({
-                x: a.x,
-                y: a.y,
-                r: a.kind === 'bramble' ? C.BRAMBLE_RADIUS : C.STAR_RADIUS + (a.kind === 'comet' ? 6 : 0),
-                rising: false,
-            })),
+            ...f.attacks
+                .filter(a => a.flight !== 'back')
+                .map(a => ({
+                    x: a.x,
+                    y: a.y,
+                    r: a.kind === 'bramble' ? C.BRAMBLE_RADIUS : C.STAR_RADIUS + (a.kind === 'comet' ? 6 : 0),
+                    rising: false,
+                })),
             ...f.crows.map(c => ({ x: c.x, y: c.y, r: C.CROW_RADIUS + 8, rising: c.vy < 0 })),
             ...(f.moth ? [{ x: f.moth.x, y: f.moth.y, r: 34, rising: false }] : []),
             ...f.bullets.map(b => ({ x: b.x, y: b.y, r: 4, rising: b.vy < 0 })),
@@ -78,7 +80,7 @@ export class CpuPilot {
         this.decideT -= dt;
         if (this.decideT <= 0) {
             this.decideT = this.reaction + Math.random() * 0.1;
-            const star = f.attacks.filter(a => a.kind === 'star').sort((a, b) => b.y - a.y)[0];
+            const star = f.attacks.filter(a => a.kind === 'star' && a.flight !== 'back').sort((a, b) => b.y - a.y)[0];
             const seed = f.puffs.find(q => q.moonseed && q.y > 20);
             const pool = f.puffs.filter(q => !q.moonseed && q.x > -50);
             // With a moonseed on screen, pop the puff nearest it so the burst catches it.

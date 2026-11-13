@@ -12,9 +12,9 @@ const PATH_WEIGHTS: [WavePath, number, number][] = [
     ['sweep', 1.5, 2],
     ['column', 1, 1.5],
     ['rise', 0, 1],
-    // The two TSS staples: a single file dropping straight down, and a row sliding across.
+    // The two TSS staples: a single file dropping straight down, and an even row closing in as it falls.
     ['file', 2.5, 2],
-    ['slide', 2.5, 2],
+    ['row', 2.5, 2],
 ];
 
 /** Pick a formation path, weighted by pressure: more elaborate paths turn up more as a round goes on. */
@@ -54,7 +54,8 @@ export function rollWave(r: Rng, pressure: number): WaveSpec {
         overlapRoll = r.next();
     const cx = r.range(50, C.FIELD_W - 50);
     const lane = r.range(36, 110);
-    const speed = r.range(26, 38) + pressure * 14;
+    // TSS critters fall at about 0.28-0.37 of the meadow's height a second (measured from footage).
+    const speed = r.range(C.ZAKO_SPEED_MIN, C.ZAKO_SPEED_MAX) + pressure * C.ZAKO_SPEED_PRESSURE;
     let count = r.int(4, 6) + Math.floor(pressure * 4);
     const hps = Array.from({ length: 12 }, () => rollHp(r, pressure));
 
@@ -72,7 +73,7 @@ export function rollWave(r: Rng, pressure: number): WaveSpec {
     if (big) count = Math.max(3, Math.ceil(count / 2));
     if (path === 'rise') count = Math.min(count, 5);
     if (path === 'file') count = 6 + Math.floor(pressure * 3) + (count > 5 ? 1 : 0);
-    if (path === 'slide') count = Math.min(6, 4 + Math.floor(pressure * 2) + (count > 5 ? 1 : 0));
+    if (path === 'row') count = Math.min(6, 4 + Math.floor(pressure * 2) + (count > 5 ? 1 : 0));
 
     let hp = hps.slice(0, count);
     if (path === 'leader') hp = hp.map((_, i) => (i === 0 ? Math.max(3, hps[0] + 1) : 1));
