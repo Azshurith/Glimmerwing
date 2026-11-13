@@ -133,8 +133,8 @@ export class Input {
 
     constructor(canvas: HTMLCanvasElement) {
         window.addEventListener('keydown', e => {
-            // Typing a room code in the online lobby shouldn't steer a fairy.
-            if ((e.target as HTMLElement | null)?.closest?.('#lobby')) return;
+            // Typing a room code in the online lobby, or using the Settings panel, shouldn't steer a fairy.
+            if ((e.target as HTMLElement | null)?.closest?.('#lobby, #settings')) return;
             if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
             if (!this.held.has(e.code)) this.pressed.add(e.code);
             this.held.add(e.code);

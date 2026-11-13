@@ -9,11 +9,22 @@
 export let FIELD_W = 240;
 export const FIELD_W_BASE = 240,
     FIELD_W_MAX = 380;
-export const FIELD_H = 320;
+/**
+ * A meadow's height. It's FIELD_H_BASE, except that a vs-CPU round on an upright phone with the rival's meadow
+ * hidden (Settings) plays in taller meadows that reach the top of the screen: Game sets it with setFieldHeight at
+ * the start of each round, up to FIELD_H_MAX. Read it through C., never copy it into a module-level constant.
+ */
+export let FIELD_H = 320;
+export const FIELD_H_BASE = 320,
+    FIELD_H_MAX = 640;
+/** Set the meadows' height for the coming round. */
+export function setFieldHeight(h: number): void {
+    FIELD_H = Math.round(Math.max(FIELD_H_BASE, Math.min(FIELD_H_MAX, h)));
+}
 export const GAP = 24;
 /** The side-by-side view: both meadows and the console between them. */
 export let VIEW_W = FIELD_W * 2 + GAP;
-export const VIEW_H = FIELD_H;
+export const VIEW_H = FIELD_H_BASE;
 /** The widest the title and select screens' view gets on a wide landscape screen (their sky fills the rest). */
 export const WIDE_W_MAX = 900;
 
@@ -35,7 +46,7 @@ export const TALL_TOP = 172;
 /** Room the title and select screens are designed for below TALL_TOP + FIELD_H. */
 export const TALL_STRIP = 56;
 /** The tall view's shortest height; on longer screens it stretches to their shape, up to TALL_H_MAX. */
-export const TALL_H = TALL_TOP + FIELD_H + TALL_STRIP;
+export const TALL_H = TALL_TOP + FIELD_H_BASE + TALL_STRIP;
 export const TALL_H_MAX = 680;
 /** Your meadow's scale in the tall view: it spans the whole width. */
 export const TALL_OWN_S = TALL_W / FIELD_W_BASE;
@@ -45,10 +56,12 @@ export const TALL_OWN_S = TALL_W / FIELD_W_BASE;
  * whole (see menu-fit.ts). Below TALL_H_MIN the view stops shrinking and the page shows bars.
  */
 export const TALL_TOP_MIN = 104;
-export const TALL_H_MIN = Math.ceil(FIELD_H * TALL_OWN_S) + TALL_TOP_MIN;
+export const TALL_H_MIN = Math.ceil(FIELD_H_BASE * TALL_OWN_S) + TALL_TOP_MIN;
 /** Where the rival's meadow sits in the tall view, at half size (moved down to centre it in the band above yours). */
 export const TALL_RIVAL = { x: 8, y: 6, s: 0.5 } as const;
-export const TALL_CONSOLE = { x: 136, y: 6, w: 120, h: FIELD_H / 2 } as const;
+export const TALL_CONSOLE = { x: 136, y: 6, w: 120, h: FIELD_H_BASE / 2 } as const;
+/** With the rival's meadow hidden in the tall layout, the slim bar across the top (round, rival's hearts, speed). */
+export const TALL_SOLO_BAR = 22;
 
 export const STEP = 1 / 60;
 

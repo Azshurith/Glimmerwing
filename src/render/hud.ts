@@ -293,6 +293,56 @@ export class Hud {
     }
 
     /**
+     * The slim bar across the top of the tall view when the rival's meadow is hidden (Settings): the round on the
+     * left, the shared speed in the middle, and the rival's badge and hearts on the right.
+     */
+    soloBar(v: ConsoleView, rival: Field, tag: HudTag, time: number, w: number, h: number): void {
+        const ctx = this.ctx;
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, '#1c1240');
+        g.addColorStop(1, '#0b0720');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(201,162,74,0.8)';
+        ctx.fillRect(0, h - 1, w, 1);
+        const cy = h / 2;
+        ctx.textAlign = 'left';
+        ctx.font = `6px ${ARCADE}`;
+        ctx.fillStyle = '#cbbcf5';
+        ctx.fillText('ROUND', 8, cy + 2);
+        arcadeText(ctx, String(v.round), 40, cy + 5, 12, ['#ffffff', '#ffe08a', '#ff9a2e'], 'left');
+        // Speed: the shared tempo as a short bar that runs hot.
+        const k = Math.max(0, Math.min(1, (v.tempo - 1) / (C.TEMPO_MAX - 1)));
+        const bx = 62,
+            bw = 46;
+        ctx.fillStyle = 'rgba(246,240,255,0.12)';
+        ctx.fillRect(bx, cy - 2, bw, 4);
+        ctx.fillStyle = k > 0.7 ? `rgba(255,${120 + Math.round(60 * Math.sin(time * 10))},90,1)` : '#8ff0a0';
+        ctx.fillRect(bx, cy - 2, bw * k, 4);
+        // The rival: badge, then hearts (life is kept in half-hearts).
+        const hearts = C.MAX_HULL / 2;
+        const hx = w - 8 - (hearts - 1) * 11;
+        for (let i = 0; i < hearts; i++) {
+            const x = hx + i * 11;
+            const have = rival.player.hull - i * 2;
+            drawHeart(ctx, x, cy, 'rgba(246,240,255,0.16)');
+            if (have >= 2) drawHeart(ctx, x, cy, tag.color);
+            else if (have === 1) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(x - 7, 0, 7, h);
+                ctx.clip();
+                drawHeart(ctx, x, cy, tag.color);
+                ctx.restore();
+            }
+        }
+        ctx.textAlign = 'right';
+        ctx.font = `7px ${ARCADE}`;
+        ctx.fillStyle = tag.color;
+        ctx.fillText(tag.label, hx - 10, cy + 3);
+    }
+
+    /**
      * The tall layout's console, in the box beside the rival's half-size meadow:
      * round number, a VS mark, the shared speed as a bar, and the ping online.
      */
