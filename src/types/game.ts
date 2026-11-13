@@ -1,3 +1,5 @@
+import type { Formation } from './waves';
+
 /** One player's controls for a frame. */
 export interface Controls {
     left: boolean;
@@ -95,17 +97,10 @@ export interface Puff {
     shell: number;
     maxHp: number;
     baseX: number;
-    /** Formation flight path, for waves that sweep, swoop or drop in columns. */
     /** 1 for normal critters, larger for big ones. */
     size: number;
-    path?: {
-        type: 'swoop' | 'sweep' | 'column' | 'rise' | 'file' | 'row';
-        t: number;
-        delay: number;
-        dir: number;
-        ox: number;
-        oy: number;
-    };
+    /** The formation it flies with and its place in it (Fever rushes have none and just drift). */
+    form?: { g: Formation; i: number };
     x: number;
     y: number;
     vx: number;

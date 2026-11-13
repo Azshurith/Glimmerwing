@@ -9,6 +9,8 @@ import type {
     Crow,
     Fairy,
     FieldSnapshot,
+    Formation,
+    FormationShape,
     Moth,
     Outgoing,
     Particle,
@@ -19,7 +21,7 @@ import type {
     Shot,
     StarFlight,
 } from '@/types';
-import { rollWave } from './waves';
+import { leaving, memberAt, rollFormation, startFormation } from './waves';
 
 /** Which bomb sound each bomb style plays (see Sound.play 'bomb'). */
 const BOMB_SOUND: Record<string, number> = { dash: 0, blast: 1, vortex: 2, fan: 3, beam: 4, hole: 5 };
@@ -101,8 +103,9 @@ export class Field {
     private spawnT = 1.2;
     private waveId = 0;
     private waveT = 0;
-    /** Whether the current wave lets the next one in before it's cleared (see WAVE_OVERLAP_AFTER). */
-    private waveOverlap = false;
+    /** Formations in play, and the shape of the last one (so the same shape doesn't come twice running). */
+    private forms: Formation[] = [];
+    private lastShape: FormationShape | null = null;
     private surged = false;
     private chains = new Map<number, ChainInfo>();
     private nextChain = 1;
@@ -553,204 +556,79 @@ export class Field {
         return this.nextMoonseed > 0 && this.nextMoonseed - this.time < C.MOONSEED_WARNING;
     }
 
-    /** Spawn the next wave of critters once the current one is cleared or has waited long enough. */
+    /**
+     * Bring in the next formation once the current one is cleared or has flown off, or, for some, as soon
+     * as it starts to leave, so the meadow never sits empty for long (see waves.ts for the choreography).
+     */
     private spawnWaves(dt: number): void {
-        // Formation flow: the next wave waits until every member of the current one
-        // has been popped or has left the meadow, then follows after a short beat.
         this.waveT += dt;
-        const wait = this.waveOverlap ? C.WAVE_OVERLAP_AFTER : C.WAVE_MAX_WAIT;
-        const holding = this.waveId > 0 && this.waveT < wait && this.puffs.some(j => j.wave === this.waveId && !j.dead);
+        this.forms = this.forms.filter(g => this.puffs.some(j => j.form?.g === g && !j.dead));
+        const cur = this.forms.find(g => g.id === this.waveId);
+        const holding = this.waveId > 0 && this.waveT < C.WAVE_MAX_WAIT && cur && !(cur.spec.overlap && leaving(cur));
         if (holding) {
             this.spawnT = C.WAVE_GAP;
             return;
         }
         this.spawnT -= dt;
         if (this.spawnT > 0) return;
-        // Both meadows draw the same sequence of waves from the shared seed; a faster
-        // clearer just meets them sooner. The moonseed rides the first wave after its time.
+        // Both meadows draw the same sequence of formations from the shared seed; a faster
+        // clearer just meets them sooner. The moonseed rides the first formation after its time.
         const withMoonseed = this.time >= this.nextMoonseed;
         if (withMoonseed) this.nextMoonseed += C.MOONSEED_EVERY;
-        const r = this.waveRng;
         const pressure = Math.min(1, this.time / 90);
         this.waveId++;
         this.waveT = 0;
-        const w = rollWave(r, pressure);
-        this.waveOverlap = w.overlap;
-        const firstNew = this.puffs.length;
-        const n = w.count;
-        const size = w.big ? 1.5 : 1;
-        if (w.path === 'rise') this.popup(w.side < 0 ? 50 : C.FIELD_W - 50, C.FIELD_H - 70, 'From below');
-
-        for (let i = 0; i < n; i++) {
-            let x = w.cx,
-                y = -14;
-            const spread = size;
-            switch (w.path) {
-                case 'arc': {
-                    const a = Math.PI * (i / Math.max(1, n - 1));
-                    x = w.cx + Math.cos(a) * 40 * spread;
-                    y = -14 - Math.sin(a) * 26 * spread;
-                    break;
-                }
-                case 'string':
-                    x = w.cx - 50 + i * (100 / n);
-                    y = -14 - i * 12 * spread;
-                    break;
-                case 'ring': {
-                    const a = (Math.PI * 2 * i) / n;
-                    x = w.cx + Math.cos(a) * 26 * spread;
-                    y = -40 + Math.sin(a) * 22 * spread;
-                    break;
-                }
-                case 'leader':
-                    if (i > 0) {
-                        const a = (Math.PI * 2 * (i - 1)) / (n - 1);
-                        x = w.cx + Math.cos(a) * 17;
-                        y = -40 + Math.sin(a) * 17;
-                    } else y = -40;
-                    break;
-            }
-            // A formation moves in lockstep (TSS): every member shares the wobble and the drift,
-            // so the group keeps its even spacing and one burst can carry through it.
-            const phase = w.cx % 6.28;
-            let vx = ((w.cx * 37) % 16) - 8,
-                vy = w.speed,
-                shell = w.bubble ? 1 : 0;
-            if (w.kind === 'beetle') {
-                vx = w.side * 55;
-                vy = w.speed * 1.05;
-                shell = 2;
-            }
-            if (w.kind === 'spinner') {
-                vx = 0;
-                vy = w.speed * 0.9;
-            }
-            let path: Puff['path'];
-            switch (w.path) {
-                case 'swoop':
-                    path = { type: 'swoop', t: 0, delay: i * 0.5 * size, dir: w.side, ox: 0, oy: 0 };
-                    break;
-                case 'sweep':
-                    path = { type: 'sweep', t: 0, delay: i * 0.42 * size, dir: w.side, ox: 0, oy: w.lane };
-                    break;
-                case 'column':
-                    path = {
-                        type: 'column',
-                        t: 0,
-                        delay: Math.floor(i / 2) * 0.55,
-                        dir: i % 2 ? 1 : -1,
-                        ox: w.cx,
-                        oy: 0,
-                    };
-                    break;
-                case 'rise':
-                    path = { type: 'rise', t: 0, delay: 0.9 + i * 0.4, dir: w.side, ox: 0, oy: 0 };
-                    break;
-                case 'file': {
-                    // Single file down one lane, evenly spaced: each member a fixed beat behind the last
-                    // (in TSS about 0.6 s, a sixth of the meadow's height).
-                    const lane = Math.min(C.FIELD_W - 30, Math.max(30, w.cx));
-                    const v = w.speed;
-                    path = { type: 'file', t: 0, delay: (i * C.FILE_SPACING * size) / v, dir: v, ox: lane, oy: 0 };
-                    break;
-                }
-                case 'row': {
-                    // An even row falling together, its ends drawing in toward its middle as it comes.
-                    const half = ((n - 1) * C.ROW_SPACING * size) / 2;
-                    const centre = Math.min(C.FIELD_W - half - 16, Math.max(half + 16, w.cx));
-                    const ox = centre - half + i * C.ROW_SPACING * size;
-                    path = { type: 'row', t: 0, delay: 0, dir: w.speed, ox, oy: centre };
-                    break;
-                }
-            }
-            if (path) {
-                x = -100;
-                y = -100;
-                vx = 0;
-            }
-            const hp = w.hp[i];
+        const spec = rollFormation(this.waveRng, pressure, this.lastShape);
+        this.lastShape = spec.shape;
+        const g = startFormation(this.waveId, spec);
+        this.forms.push(g);
+        const size = spec.big ? 1.5 : 1;
+        const mid = Math.floor(spec.count / 2);
+        for (let i = 0; i < spec.count; i++) {
+            const hp = spec.hp[i];
             this.puffs.push({
-                kind: w.kind,
-                x,
-                y,
-                baseX: x,
-                vx,
-                vy,
-                phase,
+                kind: spec.kind,
+                // Waiting off-screen until its turn to fly in.
+                x: -100,
+                y: -100,
+                baseX: -100,
+                vx: 0,
+                vy: 0,
+                phase: i * 0.9,
                 dead: false,
                 hp,
                 maxHp: hp,
-                shell,
-                path,
+                shell: spec.kind === 'beetle' ? 2 : spec.bubble ? 1 : 0,
                 size,
                 wave: this.waveId,
+                form: { g, i },
+                moonseed: withMoonseed && i === mid ? true : undefined,
             });
-        }
-        if (withMoonseed) {
-            const m = this.puffs[firstNew + Math.floor((this.puffs.length - firstNew) / 2)];
-            if (m) {
-                m.moonseed = true;
-                m.shell = 0;
-            }
+            if (withMoonseed && i === mid) this.puffs[this.puffs.length - 1].shell = 0;
         }
     }
 
-    /** Formation paths: each member follows the same route, a beat behind the one ahead. */
-    private followPath(j: Puff, dt: number): void {
-        const P = j.path!;
-        P.t += dt;
-        const tt = P.t - P.delay;
-        if (tt < 0) {
-            j.x = -100;
-            j.y = -100;
-            return;
-        } // still waiting off-screen
-        const W = C.FIELD_W;
-        if (P.type === 'swoop') {
-            // Enter from a top corner, dive to mid-meadow and curl back up and out.
-            const T = 3.6,
-                k = tt / T;
-            j.x = (P.dir > 0 ? -10 : W + 10) + P.dir * (W + 20) * k;
-            j.y = -14 + 4 * 175 * k * (1 - k);
-            if (k > 1) j.dead = true;
-        } else if (P.type === 'sweep') {
-            // A line crossing the meadow, sinking slowly.
-            j.x = (P.dir > 0 ? -12 : W + 12) + P.dir * 85 * tt;
-            j.y = P.oy + 14 * tt;
-            if (j.x < -20 || j.x > W + 20) j.dead = true;
-        } else if (P.type === 'file') {
-            // Straight down at an even speed (P.dir holds the speed), out the bottom.
-            j.x = P.ox;
-            j.y = -14 + P.dir * tt;
-            if (j.y > C.FIELD_H + 20) j.dead = true;
-        } else if (P.type === 'row') {
-            // Straight down at the wave's speed (P.dir); each member closes a third of its gap to the
-            // row's middle (P.oy) over the first two seconds, as the TSS rows do.
-            const k = Math.min(1, tt / 2);
-            j.x = P.ox + (P.oy - P.ox) * 0.33 * k * (2 - k);
-            j.y = -14 + P.dir * tt;
-            if (j.y > C.FIELD_H + 20) j.dead = true;
-        } else if (P.type === 'rise') {
-            // The sneaky one: climbs up from a bottom corner, across the fairy's level, and out the top.
-            const T = 3.5,
-                k = tt / T;
-            j.x = (P.dir < 0 ? 14 : W - 14) - P.dir * (W * 0.55) * k + Math.sin(k * Math.PI * 2) * 12;
-            j.y = C.FIELD_H + 14 - (C.FIELD_H + 40) * k;
-            if (k > 1) j.dead = true;
-        } else {
-            // Two columns dropping in pairs, squeezing together as they fall.
-            j.x = P.ox + P.dir * (8 + 24 * Math.max(0, 1 - tt / 1.8));
-            j.y = -14 + 95 * tt;
-            if (j.y > C.FIELD_H + 20) j.dead = true;
-        }
-    }
-
-    /** Move every critter along its formation path or drift. */
+    /** Move every critter: formation members along their choreography, Fever rushes as a loose drift. */
     private updatePuffs(dt: number): void {
+        for (const g of this.forms) g.t += dt;
         for (const j of this.puffs) {
             j.phase += dt * 3;
-            if (j.path) {
-                this.followPath(j, dt);
+            if (j.form) {
+                const p = memberAt(j.form.g, j.form.i, j.kind);
+                if (p === 'gone') {
+                    j.dead = true; // flew out of the meadow; not popped, so no chain or score
+                } else if (p === 'wait') {
+                    j.x = j.y = j.baseX = -100;
+                    j.vx = j.vy = 0;
+                } else {
+                    if (j.x > -50 && dt > 0) {
+                        // Velocity for facing (beetles) and for the online mirror's extrapolation.
+                        j.vx = (p.x - j.x) / dt;
+                        j.vy = (p.y - j.y) / dt;
+                    }
+                    j.x = j.baseX = p.x;
+                    j.y = p.y;
+                }
                 continue;
             }
             if (j.kind === 'beetle') {
@@ -762,17 +640,11 @@ export class Field {
                 j.y += j.vy * dt;
                 j.x = j.baseX + Math.sin(j.phase * 0.9) * 34;
             } else {
-                j.x += (j.vx + Math.sin(j.phase) * 5) * dt;
-                j.y += j.vy * (0.94 + 0.06 * Math.sin(j.phase * 0.5)) * dt;
+                j.x += (j.vx + Math.sin(j.phase) * 14) * dt;
+                j.y += j.vy * (0.75 + 0.25 * Math.sin(j.phase * 0.5)) * dt;
             }
             if (j.kind !== 'spinner' && (j.x < 10 || j.x > C.FIELD_W - 10)) {
-                // Beetles ricochet alone; a drifting formation turns as one, so it keeps its spacing.
-                const dir = j.x < 10 ? 1 : -1;
-                if (j.kind === 'puff' && j.wave)
-                    for (const o of this.puffs) {
-                        if (o.wave === j.wave && !o.path && o.kind === 'puff') o.vx = dir * Math.abs(o.vx);
-                    }
-                else j.vx *= -1;
+                j.vx *= -1;
                 j.x = Math.min(C.FIELD_W - 10, Math.max(10, j.x));
             }
             if (j.y > C.FIELD_H + 20) j.dead = true;
@@ -1783,7 +1655,7 @@ export class Field {
             bc: this.bestChain,
             p: this.player,
             s: this.shots,
-            pf: this.puffs.map(j => strip(j, 'path', 'baseX')),
+            pf: this.puffs.map(j => strip(j, 'form', 'baseX')),
             bu: this.bursts.map(b => strip(b, 'hits', 'chainId')),
             at: this.attacks,
             bt: this.bullets,

@@ -150,25 +150,12 @@ export const COMET_RADIUS = 6;
 export const COMET_SPEED = 230;
 
 /**
- * Waves flow like Twinkle Star Sprites: there's no spawn clock. The next
- * formation comes in as soon as the last one is popped or has left the
- * meadow, so clearing fast brings the swarm faster.
+ * Waves flow like Twinkle Star Sprites: there's no spawn clock. Each formation flies in, holds its
+ * shape for a while and flies off (see waves.ts); the next comes in once it's cleared or gone, or as
+ * it starts to leave, so clearing fast brings the swarm faster.
  */
-export const WAVE_GAP = 0.5; // beat between a wave clearing and the next arriving (TSS: about half a second)
-/** Some waves let the next one in early, so two groups share the meadow for a moment, as in TSS. */
-export const WAVE_OVERLAP_AFTER = 2.5;
-/**
- * Critter speed, measured from TSS footage: formations fall at about 0.28-0.37 of the meadow's
- * height a second at the start of a round, a little faster as it goes on.
- */
-export const ZAKO_SPEED_MIN = 86;
-export const ZAKO_SPEED_MAX = 104;
-export const ZAKO_SPEED_PRESSURE = 24;
-/** A file: critters in single file dropping straight down, about a sixth of the meadow's height apart. */
-export const FILE_SPACING = 54;
-/** A row: evenly spaced across, about a sixth of the meadow's width apart. */
-export const ROW_SPACING = 38;
-export const WAVE_MAX_WAIT = 12; // safety net only: a straggling wave can't stall the meadow longer than this
+export const WAVE_GAP = 0.5; // beat before the next formation sets off
+export const WAVE_MAX_WAIT = 20; // safety net only: a formation can't hold up the next one longer than this
 
 /** Sudden death, part one: at this point every critter speeds up sharply. */
 export const SURGE_TIME = 100;
@@ -260,7 +247,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '17'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '18'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

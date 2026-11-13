@@ -38,7 +38,7 @@ export class CpuPilot {
         const threats: { x: number; y: number; r: number; rising: boolean }[] = [
             ...f.puffs
                 .filter(j => !j.moonseed && j.x > -50)
-                .map(j => ({ x: j.x, y: j.y, r: C.PUFF_RADIUS * j.size, rising: j.path?.type === 'rise' })),
+                .map(j => ({ x: j.x, y: j.y, r: C.PUFF_RADIUS * j.size, rising: j.vy < -20 })),
             ...f.attacks
                 .filter(a => a.flight !== 'back')
                 .map(a => ({
