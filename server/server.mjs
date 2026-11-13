@@ -54,6 +54,7 @@ const server = createServer((req, res) => {
     }
     // The installable-app files next to the page.
     const APP_FILES = {
+        '/guide.html': ['text/html; charset=utf-8', 'no-cache'],
         '/manifest.webmanifest': ['application/manifest+json', 'no-cache'],
         '/sw.js': ['text/javascript; charset=utf-8', 'no-cache'],
         '/icon-192.png': ['image/png', 'public, max-age=86400'],

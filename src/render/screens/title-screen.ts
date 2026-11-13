@@ -4,6 +4,7 @@ import type { Layout, Mode, TitleView } from '@/types';
 import { Backdrop } from '@/render/backdrop';
 import { arcadeText, slanted, sparkle } from '@/render/draw';
 import { drawSprite } from '@/render/sprites';
+import { tallMenuFit } from './menu-fit';
 import { ARCADE, FONT } from '@/render/theme';
 
 /** A title menu entry and its tap target, in view units. */
@@ -33,7 +34,15 @@ const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
 
 /** The title menu, top to bottom, for a layout and view height; also the tap targets (view units). */
 export function titleButtons(layout: Layout, h: number = C.TALL_H): TitleButton[] {
-    return layout === 'tall' ? tallButtons(tallShift(h)) : WIDE_BUTTONS;
+    if (layout !== 'tall') return WIDE_BUTTONS;
+    const f = tallMenuFit(h);
+    return tallButtons(tallShift(f.h)).map(b => ({
+        ...b,
+        x: f.x + b.x * f.s,
+        y: b.y * f.s,
+        w: b.w * f.s,
+        h: b.h * f.s,
+    }));
 }
 
 const LOGO_X = 386;
@@ -46,6 +55,8 @@ export class TitleScreen {
     /** The hero portrait, pre-faded into the scene on its right and bottom edges. */
     private hero: HTMLCanvasElement | null = null;
     private motes: { x: number; y: number; s: number; p: number }[] = [];
+    /** How far past each side edge full-width art reaches this frame (see menu-fit.ts). */
+    private bleed = 0;
 
     constructor(private ctx: CanvasRenderingContext2D) {
         this.backdrop = new Backdrop(ctx);
@@ -62,15 +73,23 @@ export class TitleScreen {
     draw(v: TitleView, t: number, layout: Layout = 'wide', h: number = C.TALL_H): void {
         if (layout === 'tall') {
             const W = C.TALL_W,
-                dy = tallShift(h);
-            this.backdrop.draw(t, W / 2, 170 + dy, W, h);
-            this.ctx.save();
-            this.ctx.translate(0, dy);
+                f = tallMenuFit(h),
+                dy = tallShift(f.h);
+            this.backdrop.draw(t, W / 2, (170 + dy) * f.s, W, h);
+            const ctx = this.ctx;
+            this.bleed = f.bleed;
+            ctx.save();
+            ctx.translate(f.x, 0);
+            ctx.scale(f.s, f.s);
+            ctx.save();
+            ctx.translate(0, dy);
             this.heroArtTall(t);
             this.logo(t, W / 2, TALL.logoY, 24);
-            this.ctx.restore();
+            ctx.restore();
             this.menu(v, t, tallButtons(dy));
-            this.footer(v, t, W / 2, TALL.ctaY + dy, W, h);
+            this.footer(v, t, W / 2, TALL.ctaY + dy, W, f.h);
+            ctx.restore();
+            this.bleed = 0;
             return;
         }
         this.backdrop.draw(t, 150, 170);
@@ -88,7 +107,7 @@ export class TitleScreen {
         if (hero) {
             const w = (hero.width / hero.height) * H;
             // Her left edge isn't faded, so keep it off-screen; the right edge fades into the scene.
-            ctx.drawImage(hero, -14 + Math.sin(t * 0.5) * 3, Math.sin(t * 0.7) * 2, w, H);
+            ctx.drawImage(hero, -14 - this.bleed + Math.sin(t * 0.5) * 3, Math.sin(t * 0.7) * 2, w, H);
         } else {
             const pip = FAIRIES[0];
             if (pip.sprite)
@@ -313,9 +332,9 @@ export class TitleScreen {
         g.addColorStop(0, 'rgba(10,6,28,0.6)');
         g.addColorStop(1, 'rgba(10,6,28,0.95)');
         ctx.fillStyle = g;
-        ctx.fillRect(0, H - 20, W, 20);
+        ctx.fillRect(-this.bleed, H - 20, W + 2 * this.bleed, 20);
         ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(0, H - 20, W, 1);
+        ctx.fillRect(-this.bleed, H - 20, W + 2 * this.bleed, 1);
         ctx.font = `${tall ? 6.5 : 8}px ${ARCADE}`;
         ctx.fillStyle = '#cbbcf5';
         ctx.textAlign = 'center';
