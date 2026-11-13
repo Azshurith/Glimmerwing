@@ -254,6 +254,24 @@
                 right: 2.5%;
             }
 
+            /* Tall layout (portrait, one player): buttons go in the strip under your meadow,
+               pause and exit in its corners, clear of the meadows and the console. */
+            .screen[data-layout='tall'] .pad-a {
+                bottom: 1.5%;
+                right: 4%;
+            }
+            .screen[data-layout='tall'] .tb-menu {
+                top: auto;
+                bottom: 2%;
+                left: 4%;
+                transform: none;
+            }
+            .screen[data-layout='tall'] .tb-exit {
+                top: auto;
+                bottom: 2%;
+                left: 18%;
+                transform: none;
+            }
             .rotate-hint {
                 display: none;
                 margin: 0;
@@ -367,7 +385,8 @@
             canvas {
                 display: block;
                 width: 100%;
-                aspect-ratio: 504 / 320;
+                /* main.ts sets --view-ratio to the current layout's shape (wide or tall). */
+                aspect-ratio: var(--view-ratio, 504 / 320);
                 border-radius: 14px;
                 touch-action: none;
                 background: #100b24;
@@ -419,7 +438,10 @@
                 <button id="mute" class="ghost" aria-pressed="true">Sound on</button>
             </div>
         </header>
-        <p class="rotate-hint">Turn your device sideways, or tap Fullscreen, for bigger meadows.</p>
+        <p class="rotate-hint">
+            Play either way up: upright shows your meadow big with your rival's above it. Tap Fullscreen to fill the
+            screen.
+        </p>
         <div class="stage" id="stage">
             <div class="screen" id="screen">
                 <canvas id="game" tabindex="0" aria-label="Glimmerwing playfield"></canvas>

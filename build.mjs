@@ -32,7 +32,7 @@ writeFileSync(
             scope: './',
             display: 'fullscreen',
             display_override: ['fullscreen', 'standalone'],
-            orientation: 'landscape',
+            orientation: 'any',
             background_color: '#100b24',
             theme_color: '#100b24',
             categories: ['games'],

@@ -16,7 +16,17 @@ const INK = '#2a0f2e';
  * it reads game state and never changes it.
  */
 export class Hud {
+    /** Size of the current view, in view units (wide or tall layout). */
+    private viewW = C.VIEW_W;
+    private viewH = C.VIEW_H;
+
     constructor(private ctx: CanvasRenderingContext2D) {}
+
+    /** Set the size of the view the banners span. */
+    setView(w: number, h: number): void {
+        this.viewW = w;
+        this.viewH = h;
+    }
 
     // ---- per-meadow HUD (drawn inside the meadow's translated, clipped space) ----------
 
@@ -282,6 +292,68 @@ export class Hud {
         }
     }
 
+    /**
+     * The tall layout's console, in the box beside the rival's half-size meadow:
+     * round number, a VS mark, the shared speed as a bar, and the ping online.
+     */
+    consoleCompact(v: ConsoleView, time: number, x: number, y: number, w: number, h: number): void {
+        const ctx = this.ctx;
+        const cx = x + w / 2;
+        const g = ctx.createLinearGradient(x, y, x, y + h);
+        g.addColorStop(0, '#1c1240');
+        g.addColorStop(1, '#0b0720');
+        ctx.fillStyle = g;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = 'rgba(201,162,74,0.7)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+        ctx.textAlign = 'center';
+        ctx.font = `6px ${ARCADE}`;
+        ctx.fillStyle = '#cbbcf5';
+        ctx.fillText('ROUND', cx, y + 16);
+        arcadeText(ctx, String(v.round), cx, y + 40, 18, ['#ffffff', '#ffe08a', '#ff9a2e'], 'center');
+
+        ctx.save();
+        ctx.shadowColor = '#ff6b8a';
+        ctx.shadowBlur = 8 + 3 * Math.sin(time * 3);
+        arcadeText(ctx, 'VS', cx, y + 72, 14, ['#ffffff', '#ffd1dc', '#ff3d6e'], 'center');
+        ctx.restore();
+        ctx.fillStyle = '#ffe7a0';
+        sparkle(ctx, cx - 26, y + 66, 2 + Math.max(0, Math.sin(time * 2.5)) * 2);
+        sparkle(ctx, cx + 26, y + 66, 2 + Math.max(0, Math.sin(time * 2.5 + 2)) * 2);
+
+        // Speed: the shared tempo as a horizontal bar that runs hot.
+        const k = Math.max(0, Math.min(1, (v.tempo - 1) / (C.TEMPO_MAX - 1)));
+        const bx = x + 12,
+            bw = w - 24,
+            by = y + 100,
+            bh = 8,
+            steps = 10;
+        ctx.fillStyle = 'rgba(10,6,28,0.9)';
+        ctx.fillRect(bx, by, bw, bh);
+        for (let i = 0; i < steps; i++) {
+            const on = i < Math.round(k * steps);
+            const hot = i / steps;
+            ctx.fillStyle = on
+                ? hot > 0.66
+                    ? '#ff6b3d'
+                    : hot > 0.33
+                      ? '#ffd45c'
+                      : '#8ff0a0'
+                : 'rgba(246,240,255,0.08)';
+            ctx.fillRect(bx + 1 + (i * (bw - 2)) / steps, by + 1.5, (bw - 2) / steps - 1.5, bh - 3);
+        }
+        ctx.font = `6px ${ARCADE}`;
+        ctx.fillStyle = k > 0.66 ? '#ff8a5b' : '#cbbcf5';
+        ctx.fillText(`SPEED ${v.tempo.toFixed(1)}`, cx, by + 20);
+        if (v.ping !== undefined) {
+            ctx.font = `5.5px ${ARCADE}`;
+            ctx.fillStyle = v.ping > 150 ? '#ff8a5b' : 'rgba(203,188,245,0.8)';
+            ctx.fillText(`${v.ping} MS`, cx, y + h - 12);
+        }
+    }
+
     // ---- full-width banners ------------------------------------------------------------
 
     /**
@@ -290,8 +362,8 @@ export class Hud {
      */
     banner(v: BannerView): void {
         const ctx = this.ctx;
-        const W = C.VIEW_W,
-            H = C.VIEW_H,
+        const W = this.viewW,
+            H = this.viewH,
             cy = H / 2;
         const age = v.age ?? 1;
         ctx.fillStyle = `rgba(10,6,28,${v.dim ?? 0.45})`;

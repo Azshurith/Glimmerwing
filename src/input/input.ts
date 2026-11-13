@@ -113,6 +113,8 @@ export class Input {
     touchActive = matchMedia?.('(pointer: coarse)').matches ?? false;
     /** Where the most recent tap landed this frame, in view coordinates. */
     tap: { x: number; y: number } | null = null;
+    /** The current view size in view units; the page points this at the renderer's layout. */
+    viewSize: () => { w: number; h: number } = () => ({ w: C.VIEW_W, h: C.VIEW_H });
 
     constructor(canvas: HTMLCanvasElement) {
         window.addEventListener('keydown', e => {
@@ -128,14 +130,15 @@ export class Input {
 
         const toView = (e: PointerEvent) => {
             const r = canvas.getBoundingClientRect();
-            return { x: ((e.clientX - r.left) / r.width) * C.VIEW_W, y: ((e.clientY - r.top) / r.height) * C.VIEW_H };
+            const v = this.viewSize();
+            return { x: ((e.clientX - r.left) / r.width) * v.w, y: ((e.clientY - r.top) / r.height) * v.h };
         };
         canvas.addEventListener('pointerdown', e => {
             e.preventDefault();
             canvas.setPointerCapture(e.pointerId);
             this.touchActive = e.pointerType !== 'mouse';
             const p = toView(e);
-            const side: 0 | 1 = p.x < C.VIEW_W / 2 ? 0 : 1;
+            const side: 0 | 1 = p.x < this.viewSize().w / 2 ? 0 : 1;
             // A finger landing while another is already steering is a bloom, not a new drag.
             if (this.fingers.length) this.extraAny = true;
             if (this.fingers.some(f => f.side === side)) this.extraSide[side] = true;

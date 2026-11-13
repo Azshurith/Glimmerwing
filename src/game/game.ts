@@ -16,6 +16,7 @@ import type {
     Outgoing,
     PeerMsg,
     Phase,
+    Placement,
     Progress,
     SelectCard,
     SelectSide,
@@ -38,7 +39,13 @@ interface Picker {
     done: boolean;
 }
 
-const FIELD_X = [0, C.FIELD_W + C.GAP] as const;
+/** Where the two meadows sit side by side in the wide layout. */
+const WIDE: readonly [Placement, Placement] = [
+    { x: 0, y: 0, s: 1 },
+    { x: C.FIELD_W + C.GAP, y: 0, s: 1 },
+];
+/** Where they sit in the tall layout: yours full size at the bottom, the rival's small at the top. */
+const TALL: readonly [Placement, Placement] = [C.TALL_OWN, C.TALL_RIVAL];
 const IDLE: Controls = { left: false, right: false, up: false, down: false, fire: false };
 
 // Select screen: roster medallions in rows of SELECT_COLS; arrows move, up/down jump a row.
@@ -584,6 +591,11 @@ export class Game {
         const r = this.r;
         // Prompts follow whatever the player last used: a touchscreen or keys/pad.
         const touch = this.input.touchActive;
+        // A portrait screen gets the tall layout while one player is in a round; menus and
+        // two players sharing the device keep the meadows side by side.
+        const inRound = this.phase !== 'title' && this.phase !== 'select';
+        r.layout = r.portrait && inRound && this.mode !== 'versus' ? 'tall' : 'wide';
+        const at = r.layout === 'tall' ? TALL : WIDE;
         r.begin();
         const solo = this.mode !== 'versus';
         const tags: [HudTag, HudTag] = [
@@ -592,8 +604,8 @@ export class Game {
                 ? { label: 'CPU', color: PLAYER_COLORS.cpu }
                 : { label: this.mode === 'online' ? 'RIVAL' : '2P', color: PLAYER_COLORS.p2 },
         ];
-        r.field(this.fields[0], FIELD_X[0], this.wins[0], this.time, tags[0]);
-        r.field(this.fields[1], FIELD_X[1], this.wins[1], this.time, tags[1]);
+        r.field(this.fields[0], at[0].x, this.wins[0], this.time, tags[0], at[0].y, at[0].s);
+        r.field(this.fields[1], at[1].x, this.wins[1], this.time, tags[1], at[1].y, at[1].s);
         // Between rounds the console still shows the round just played.
         const played = this.wins[0] + this.wins[1];
         const between = this.phase === 'roundOver' || this.phase === 'matchOver';
@@ -609,10 +621,12 @@ export class Game {
         for (const tr of this.transits) {
             if (tr.o.kind === 'clash' || tr.o.kind === 'heal') continue;
             const k = tr.t / C.TRANSIT_TIME;
-            const sx = FIELD_X[tr.from] + tr.o.fromX,
-                sy = tr.o.fromY;
-            const ex = FIELD_X[1 - tr.from] + Math.min(C.FIELD_W - 12, Math.max(12, tr.o.fromX)),
-                ey = -10;
+            const from = at[tr.from],
+                to = at[1 - tr.from];
+            const sx = from.x + tr.o.fromX * from.s,
+                sy = from.y + tr.o.fromY * from.s;
+            const ex = to.x + Math.min(C.FIELD_W - 12, Math.max(12, tr.o.fromX)) * to.s,
+                ey = to.y - 10 * to.s;
             const x = sx + (ex - sx) * k,
                 y = sy + (ey - sy) * k - Math.sin(k * Math.PI) * 40;
             r.transit(

@@ -11,6 +11,7 @@ const renderer = new Renderer(canvas);
 const input = new Input(canvas);
 const sound = new Sound();
 const game = new Game(input, renderer, sound);
+input.viewSize = () => ({ w: renderer.viewW, h: renderer.viewH });
 // Browsers only start audio after a gesture.
 for (const ev of ['keydown', 'pointerdown', 'touchstart'] as const)
     window.addEventListener(ev, () => sound.unlock(), { passive: true });
@@ -40,16 +41,18 @@ document.querySelector<HTMLButtonElement>('[data-online]')?.addEventListener('cl
 });
 
 // ---- fitting the screen ---------------------------------------------------------
-// The view is a fixed 504x320; scale it to fit both the width and the height available,
-// so a phone held sideways or a short laptop screen still shows all of both meadows.
+// The view is 504x320 side by side, or the tall view on a portrait screen during a round
+// (see Game.draw). Scale it to fit both the width and the height available, so a phone
+// either way up, or a short laptop screen, still shows everything.
 const stage = document.getElementById('stage')!;
 const screenEl = document.getElementById('screen')!;
-const RATIO = C.VIEW_W / C.VIEW_H;
-/** Size the game to fit the window's width and height, keeping its aspect ratio. */
+/** Size the game to fit the window's width and height, keeping the current layout's aspect ratio. */
 function fit(): void {
     const vv = window.visualViewport;
     const vw = vv?.width ?? window.innerWidth,
         vh = vv?.height ?? window.innerHeight;
+    renderer.portrait = vh > vw;
+    const RATIO = renderer.viewW / renderer.viewH;
     let w: number;
     if (stage.classList.contains('immersive')) {
         const cs = getComputedStyle(stage);
@@ -61,6 +64,7 @@ function fit(): void {
         w = Math.min(stage.clientWidth, Math.max(200, vh - top - 10) * RATIO);
     }
     screenEl.style.width = `${Math.floor(w)}px`;
+    screenEl.style.setProperty('--view-ratio', `${renderer.viewW} / ${renderer.viewH}`);
     // On-screen buttons scale with the game, not the window.
     screenEl.style.setProperty('--sw', `${Math.floor(w)}px`);
     renderer.resize();
@@ -90,12 +94,7 @@ async function enterFull(): Promise<void> {
     } catch {
         /* the full-window layer still works */
     }
-    // Phones: try to hold landscape while playing (Android Chrome allows it in fullscreen).
-    try {
-        await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape');
-    } catch {
-        /* not supported */
-    }
+    // Either way up works (portrait gets the tall layout), so the orientation isn't locked.
     fit();
 }
 /** Leave fullscreen or the full-window layer. */
@@ -144,9 +143,15 @@ document.querySelectorAll<HTMLButtonElement>('.touch-ui [data-key]').forEach(b =
 const menuBtn = document.getElementById('menu-btn') as HTMLButtonElement;
 let shownMode = '',
     shownPhase = '',
+    shownLayout = '',
     shownTouch: boolean | null = null;
 /** Keeps the page's touch layer in step with the game: which buttons show, and what the top one does. */
 function syncPage(): void {
+    // The layout changes with the phase and the orientation: refit to its shape.
+    if (renderer.layout !== shownLayout) {
+        shownLayout = screenEl.dataset.layout = renderer.layout;
+        fit();
+    }
     if (input.touchActive !== shownTouch) {
         shownTouch = input.touchActive;
         document.documentElement.classList.toggle('touch', shownTouch);

@@ -7,6 +7,21 @@ export const GAP = 24;
 export const VIEW_W = FIELD_W * 2 + GAP;
 export const VIEW_H = FIELD_H;
 
+/**
+ * The tall view, used while playing on a portrait screen (one player on the device):
+ * your meadow full size at the bottom, the rival's at half size at the top beside a
+ * compact console, and a strip under your meadow for the touch buttons.
+ */
+export const TALL_W = FIELD_W + 24;
+export const TALL_TOP = 172;
+export const TALL_STRIP = 56;
+export const TALL_H = TALL_TOP + FIELD_H + TALL_STRIP;
+/** Where each meadow sits in the tall view: yours (field 0) and the rival's, at half size. */
+export const TALL_OWN = { x: 12, y: TALL_TOP, s: 1 } as const;
+export const TALL_RIVAL = { x: 8, y: 6, s: 0.5 } as const;
+/** The compact console beside the rival's meadow in the tall view. */
+export const TALL_CONSOLE = { x: 136, y: 6, w: 120, h: FIELD_H / 2 } as const;
+
 export const STEP = 1 / 60;
 
 /**

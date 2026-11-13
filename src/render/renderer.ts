@@ -1,6 +1,6 @@
 import * as C from '@/core/config';
 import type { Field } from '@/game/field';
-import type { BannerView, ConsoleView, HudTag, Layer, SelectView, TitleView, WingShape } from '@/types';
+import type { BannerView, ConsoleView, HudTag, Layer, Layout, SelectView, TitleView, WingShape } from '@/types';
 
 import { drawImp, drawBramble, drawComet, drawStar } from './entities/attacks';
 import { drawBomb } from './entities/bombs';
@@ -24,6 +24,19 @@ export class Renderer {
     private titleScreen: TitleScreen;
     /** HUD, console, popups and banners for a match. */
     private hudLayer: Hud;
+    /** The layout this frame uses; Game picks it each frame. */
+    layout: Layout = 'wide';
+    /** Whether the screen is taller than wide; the page keeps this up to date. */
+    portrait = false;
+
+    /** Width of the view in view units, for the current layout. */
+    get viewW(): number {
+        return this.layout === 'tall' ? C.TALL_W : C.VIEW_W;
+    }
+    /** Height of the view in view units, for the current layout. */
+    get viewH(): number {
+        return this.layout === 'tall' ? C.TALL_H : C.VIEW_H;
+    }
 
     constructor(private canvas: HTMLCanvasElement) {
         this.ctx = canvas.getContext('2d')!;
@@ -53,9 +66,12 @@ export class Renderer {
     /** Start a frame: scale to the fixed view and clear it. */
     begin(): void {
         const { ctx, canvas } = this;
-        ctx.setTransform(canvas.width / C.VIEW_W, 0, 0, canvas.height / C.VIEW_H, 0, 0);
+        const w = this.viewW,
+            h = this.viewH;
+        ctx.setTransform(canvas.width / w, 0, 0, canvas.height / h, 0, 0);
         ctx.fillStyle = '#100b24';
-        ctx.fillRect(0, 0, C.VIEW_W, C.VIEW_H);
+        ctx.fillRect(0, 0, w, h);
+        this.hudLayer.setView(w, h);
     }
 
     /** Paint a meadow's sky and drifting motes. */
@@ -90,14 +106,18 @@ export class Renderer {
         ctx.fill();
     }
 
-    /** Draw one meadow at x offset `ox`: sky, critters, shots, bursts, attacks, bosses, the fairy and its HUD. */
-    field(f: Field, ox: number, wins: number, time: number, tag: HudTag): void {
+    /**
+     * Draw one meadow at (`ox`, `oy`) and `scale` (the tall layout shows the rival's at half size):
+     * sky, critters, shots, bursts, attacks, bosses, the fairy and its HUD.
+     */
+    field(f: Field, ox: number, wins: number, time: number, tag: HudTag, oy = 0, scale = 1): void {
         const ctx = this.ctx;
         const color = f.fairy.color;
         ctx.save();
         const sx = f.shake ? (Math.random() - 0.5) * f.shake : 0;
         const sy = f.shake ? (Math.random() - 0.5) * f.shake : 0;
-        ctx.translate(ox + sx, sy);
+        ctx.translate(ox + sx * scale, oy + sy * scale);
+        ctx.scale(scale, scale);
         ctx.beginPath();
         ctx.rect(0, 0, C.FIELD_W, C.FIELD_H);
         ctx.clip();
@@ -306,6 +326,11 @@ export class Renderer {
 
     /** The console between the two meadows: round, VS, the shared speed meter. */
     console(v: ConsoleView, time: number): void {
+        if (this.layout === 'tall') {
+            const b = C.TALL_CONSOLE;
+            this.hudLayer.consoleCompact(v, time, b.x, b.y, b.w, b.h);
+            return;
+        }
         this.hudLayer.console(v, time);
     }
 
