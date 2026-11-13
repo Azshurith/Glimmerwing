@@ -352,6 +352,21 @@ function groupAt(g: Formation, t: number): { x: number; y: number; turn: number 
     return { x: s.cx + x, y: s.cy + y, turn };
 }
 
+/** The highest point any member of formation `g` reaches at time `t` (its own idle bob included), in a group at `grp`. */
+function groupTop(g: Formation, t: number, grp: { y: number; turn?: number }): number {
+    const k = g.slotsTo ? smooth(Math.min(1, Math.max(0, (t - allInTime(g.spec) - g.spec.hold * 0.4) / 1.2))) : 0;
+    const c = Math.cos(grp.turn ?? 0),
+        sn = Math.sin(grp.turn ?? 0);
+    let top = Infinity;
+    g.slots.forEach((p, i) => {
+        const q = g.slotsTo ? g.slotsTo[i] : p;
+        const x = p.x + (q.x - p.x) * k,
+            y = p.y + (q.y - p.y) * k;
+        top = Math.min(top, grp.y + x * sn + y * c);
+    });
+    return top - 3.5;
+}
+
 /** Member `i`'s place in the formation at formation time `t` (slot, re-forming, group movement, idle). */
 function slotAt(g: Formation, i: number, t: number, kind: CritterKind): Vec {
     const s = g.spec;
@@ -380,8 +395,9 @@ function slotAt(g: Formation, i: number, t: number, kind: CritterKind): Vec {
         ix = Math.sin(ph * 0.7) * 1.5;
         iy = Math.sin(ph) * 2.5;
     }
-    // However it moves, never up behind the HUD strip.
-    return { x: grp.x + p.x + ix, y: Math.max(LANE, grp.y + p.y + iy) };
+    // However it moves, never up behind the HUD strip: if the group's top reaches it, the whole group sits lower,
+    // keeping its shape (squashing members onto the line would stack them on top of each other).
+    return { x: grp.x + p.x + ix, y: grp.y + p.y + iy + Math.max(0, LANE - groupTop(g, t, grp)) };
 }
 
 /** Where member `i` starts, off-screen, and the control point of its curve in. */
@@ -467,8 +483,10 @@ function exitCurve(g: Formation, i: number, from: Vec): { to: Vec; via: Vec } {
             const d = Math.hypot(g.slots[i].x, g.slots[i].y) || 1;
             const ux = d > 1 ? g.slots[i].x / d : i % 2 ? -1 : 1,
                 uy = d > 1 ? g.slots[i].y / d : -1;
+            // Always well past a side wall, so nobody vanishes on screen when the flight ends.
+            const side = Math.abs(ux) > 0.2 ? Math.sign(ux) : from.x < W / 2 ? -1 : 1;
             return {
-                to: { x: from.x + (ux || 1) * (W + 80), y: Math.max(LANE, from.y + uy * (H * 0.6) - 60) },
+                to: { x: side < 0 ? -OFF - 10 : W + OFF + 10, y: Math.max(LANE, from.y + uy * (H * 0.6) - 60) },
                 via: { x: from.x - ux * 14, y: Math.max(LANE, from.y - uy * 14) },
             };
         }
