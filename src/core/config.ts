@@ -247,16 +247,14 @@ export const fireballHp = (size: number) => size + 1;
 /** A fireball's radius by size. */
 export const fireballRadius = (size: number) => 5.5 + size * 1.6;
 /**
- * A top-drop fireball comes in at the top where it was sent from (it never follows the fairy) and falls,
- * faster and faster, to FIREBALL_FALL_SPEED (about 0.45 of the meadow's height a second; slowed from the
- * 0.75 measured in TSS footage, which played too fast here). Some lean a little, up to FIREBALL_LEAN radians
- * from straight down.
+ * A Normal fireball comes in at the top right above the receiving fairy (a volley's others FIREBALL_AIM_SPREAD
+ * apart on either side) and falls straight down, faster and faster, to FIREBALL_FALL_SPEED (about 0.45 of the
+ * meadow's height a second). It doesn't follow the fairy once it's in.
  */
 export const FIREBALL_ENTER_SPEED = 24;
 export const FIREBALL_ACCEL = 150;
 export const FIREBALL_FALL_SPEED = 140;
-export const FIREBALL_LEAN_CHANCE = 0.35;
-export const FIREBALL_LEAN = 0.14;
+export const FIREBALL_AIM_SPREAD = 22;
 /**
  * Speed. Size never changes it. Each reflection multiplies it by SPEED_REVERSE (initial tuning target, not
  * measured), each Perfect the sender has this round adds PERFECT_SPEED_STEP (up to PERFECT_SPEED_MAX), and
@@ -293,7 +291,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '25'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '26'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout
