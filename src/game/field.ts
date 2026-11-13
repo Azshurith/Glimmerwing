@@ -172,6 +172,11 @@ export class Field {
         return Math.min(C.TEMPO_MAX, ramp * (1 + C.TEMPO_PER_ROUND * this.roundIndex));
     }
 
+    /** How fast attacks fly here: the tempo, and sudden death on top once it's begun. */
+    get attackPace(): number {
+        return this.tempo * (this.surged ? C.SURGE_SPEED : 1);
+    }
+
     /** Advance this meadow by one fixed step: the fairy, swarms, shots, chains, attacks, bosses and effects. */
     update(dt: number, input: Controls): void {
         this.time += dt;
@@ -366,8 +371,8 @@ export class Field {
      * fireballs a little to either side, by `aim`) and falls straight down in a vertical line and out the
      * bottom; it doesn't follow her once it's in. A Reverse arrives mid-flight on its curve across the screen
      * and carries on along it onto where the fairy was when it was broken, still arcing on past there. Size
-     * sets hits, never speed; speed comes from reflections and the sender's Perfects (fireballSpeedMul) and is
-     * capped.
+     * sets hits, never speed: every Normal flies at the same speed (slower in Fever), and a Reverse faster with
+     * each reflection and the Perfects of whoever shot it back (fireballSpeedMul), capped.
      */
     private receiveFireball(o: Outgoing, x: number): void {
         const size = Math.min(4, Math.max(1, o.size ?? 1));
@@ -404,7 +409,7 @@ export class Field {
         const at = o.aim === undefined ? x : Math.min(C.FIELD_W - 12, Math.max(12, this.player.x + o.aim));
         const e = o.enter ?? { x: at, y: 10, ux: 0, uy: 1 };
         // Already moving, at no more than the speed it flew in at, so it doesn't stall where it comes in.
-        const v = Math.min(fall, C.fireballTransitSpeed(o.reflects ?? 0, o.boost ?? 1));
+        const v = Math.min(fall, C.fireballTransitSpeed(o.reflects ?? 0, o.boost ?? 1) * (o.fever ? (o.pace ?? 1) : 1));
         this.attacks.push({
             ...base,
             x: e.x,
@@ -1008,7 +1013,9 @@ export class Field {
                     fever: inFever,
                     pace: inFever ? C.feverSpeedAt(this.time) : undefined,
                     reflects: 0,
-                    boost: this.perfectBoost,
+                    // Every Normal flies at the same speed (Fever's slower pace aside), so a volley never
+                    // looks randomly slow or fast; Perfects speed up what's shot back (see hitAttack).
+                    boost: 1,
                     fromX: c.x + off,
                     fromY: c.y,
                     aim,

@@ -29,17 +29,22 @@ export function reverseCurve(x: number, y: number, tx: number, ty: number, side:
  * `side` (+1 right, -1 left). `points` is the part flown on this side, in the sender's meadow units, up to the
  * rival's near wall; `enter` is where it comes into the rival's meadow and which way it's heading there, in the
  * rival's units, with `turnX` where it turns straight down if it came in sliding.
- * - Close to the top (within FIREBALL_NEAR_TOP): straight across at its height, then down once over the fairy.
+ * - Close to the top (within FIREBALL_NEAR_TOP): straight across at its height (dipping first to FIREBALL_TOP_Y if it's
+ *   above that), then down once over the fairy.
  * - Lower down: diagonally up to FIREBALL_TOP_Y, a bounce, and diagonally down at the fairy. The bounce is where
  *   a true reflection off the top border would send it at the fairy, kept inside the sender's meadow.
  */
 export function normalRoute(x: number, y: number, side: number, tx: number, ty: number): NormalRoute {
+    const y0 = y;
     const wall = side > 0 ? MEADOW_STEP : C.FIELD_W - MEADOW_STEP;
     const enterX = side > 0 ? 0 : C.FIELD_W;
     const aimX = Math.min(C.FIELD_W - 12, Math.max(12, tx));
     if (y <= C.FIREBALL_NEAR_TOP) {
+        // Kept below the HUD bar along the top, so it's never hidden behind it.
+        y = Math.max(y, C.FIREBALL_TOP_Y);
         return {
             points: [
+                { x, y: y0 },
                 { x, y },
                 { x: wall, y },
             ],
