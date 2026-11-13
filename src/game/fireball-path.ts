@@ -38,10 +38,13 @@ export function curveDir(c: Curve, k: number): { x: number; y: number } {
     };
 }
 
-/** Advance `k` along the curve by `dist` meadow units. */
-export function curveStep(c: Curve, k: number, dist: number): number {
+/**
+ * Advance `k` along the curve by `dist` meadow units, up to `limit` (1 is the curve's end; past it the curve
+ * carries on bending the same way, which is how a Reverse keeps arcing after its target).
+ */
+export function curveStep(c: Curve, k: number, dist: number, limit = 1): number {
     const d = curveDir(c, k);
-    return Math.min(1, k + dist / Math.max(1, Math.hypot(d.x, d.y)));
+    return Math.min(limit, k + dist / Math.max(1, Math.hypot(d.x, d.y)));
 }
 
 /** The same curve as seen from the meadow `side` meadows over (shifted into that meadow's own units). */
