@@ -139,8 +139,8 @@ export interface Attack {
     spin: number;
     dead: boolean;
     /**
-     * How it flies. A Normal fireball (kind 'star') is a 'drop': it comes in at the top, tracks the fairy,
-     * locks on and falls across the meadow. Shot down it becomes 'back', starting its curve across the
+     * How it flies. A Normal fireball (kind 'star') is a 'drop': it comes in along the top border from the
+     * sender's side and comes down diagonally at where the fairy was, on a line it keeps to. Shot down it becomes 'back', starting its curve across the
      * screen, and arrives in the sender's meadow as a 'cross' Reverse finishing that curve.
      * Extra Attack critters use their sender's flight ('seeker', 'zig' and the rest).
      */
@@ -169,6 +169,9 @@ export interface Attack {
     tail?: number[];
     /** Times this fireball has been shot back (0 for a Normal, 1 for a Reverse...): each one speeds it up. */
     reflects?: number;
+    /** A Normal fireball's heading as it comes down at the fairy (a unit vector; straight down if unset). */
+    ux?: number;
+    uy?: number;
     /** Seconds a fireball still stalls after a shot that didn't break it, and its hit flash. */
     stall?: number;
     hitT?: number;
@@ -341,7 +344,8 @@ export interface Outgoing {
     fromY: number;
     /**
      * A Reverse crossing the screen: its curve in the sender's meadow units, how far along it was when it
-     * left the sender's meadow, which way the receiver's meadow lies from the sender's, and its speed.
+     * left the sender's meadow, which way the receiver's meadow lies from the sender's (also set on a Normal
+     * fireball, for its route), and its speed.
      */
     curve?: Curve;
     k?: number;

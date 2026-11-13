@@ -300,21 +300,24 @@ export const SEEK_SLIDE = 170; // how fast it slides across while lining up
 
 export const TRANSIT_TIME = 0.7;
 /**
- * A fireball leaves the sender's meadow straight up, out over its top edge, at FIREBALL_TRANSIT_SPEED (meadow
- * units a second, the same as it falls; faster with reflections and Perfects, capped at FIREBALL_MAX_SPEED). It
- * is out of sight for FIREBALL_HIDDEN_TIME, then drops in over the top of the rival's meadow at that same speed.
+ * A Normal fireball's route between the meadows (see normalRoute): diagonally up through the sender's meadow
+ * toward the rival's side, FIREBALL_RISE_SLOPE units across for each unit up, to FIREBALL_TOP_Y just under the
+ * top border (one already that high skips the climb), along the top border into the rival's meadow, coming in
+ * FIREBALL_ENTRY_X inside its near wall, then diagonally down at the rival's fairy. It flies all of that at
+ * FIREBALL_TRANSIT_SPEED (meadow units a second, the same as it falls; faster with reflections and Perfects,
+ * capped at FIREBALL_MAX_SPEED).
  */
 export const FIREBALL_TRANSIT_SPEED = 140;
-export const FIREBALL_HIDDEN_TIME = 0.35;
-/** How far above a meadow's top edge a fireball is when it's out of sight, and where it drops in from. */
-export const FIREBALL_OUT_Y = -14;
+export const FIREBALL_TOP_Y = 30;
+export const FIREBALL_RISE_SLOPE = 0.6;
+export const FIREBALL_ENTRY_X = 14;
 /** A fireball's speed between the meadows, given its reflections and its sender's Perfects boost. */
 export const fireballTransitSpeed = (reflects: number, boost: number) =>
     Math.min(FIREBALL_MAX_SPEED, FIREBALL_TRANSIT_SPEED * fireballSpeedMul(reflects, boost));
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '33'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '34'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

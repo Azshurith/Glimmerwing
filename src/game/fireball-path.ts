@@ -24,6 +24,40 @@ export function reverseCurve(x: number, y: number, tx: number, ty: number, side:
     return { x0: x, y0: y, cx, cy, x1, y1 };
 }
 
+/**
+ * The route a Normal fireball sent from (x, y) flies to the rival's meadow on `side`, in the sender's meadow
+ * units: diagonally up toward that side to just under the top border (`top`), never closer to the wall than
+ * FIREBALL_ENTRY_X, then along the top border to where it comes into the rival's meadow (`entry`), and the
+ * route's length. The rival flies the rest, diagonally down at its fairy, from (`entryX`, `top`) in its units.
+ */
+export function normalRoute(x: number, y: number, side: number) {
+    const ty = Math.min(y, C.FIREBALL_TOP_Y);
+    const far = side > 0 ? C.FIELD_W - C.FIREBALL_ENTRY_X : C.FIREBALL_ENTRY_X;
+    const climb = x + side * (y - ty) * C.FIREBALL_RISE_SLOPE;
+    const tx = side > 0 ? Math.max(x, Math.min(climb, far)) : Math.min(x, Math.max(climb, far));
+    const entryX = side > 0 ? C.FIREBALL_ENTRY_X : C.FIELD_W - C.FIREBALL_ENTRY_X;
+    const top = { x: tx, y: ty },
+        entry = { x: side * MEADOW_STEP + entryX, y: ty };
+    const length = Math.hypot(tx - x, ty - y) + Math.abs(entry.x - tx);
+    return { from: { x, y }, top, entry, entryX, length };
+}
+
+/** The point `d` units along a Normal fireball's route (see normalRoute), and which way it's heading. */
+export function routeAt(r: ReturnType<typeof normalRoute>, d: number) {
+    const climb = Math.hypot(r.top.x - r.from.x, r.top.y - r.from.y);
+    if (d < climb) {
+        const k = d / climb;
+        return {
+            x: r.from.x + (r.top.x - r.from.x) * k,
+            y: r.from.y + (r.top.y - r.from.y) * k,
+            dx: (r.top.x - r.from.x) / climb,
+            dy: (r.top.y - r.from.y) / climb,
+        };
+    }
+    const side = Math.sign(r.entry.x - r.top.x) || 1;
+    return { x: r.top.x + side * Math.min(d - climb, Math.abs(r.entry.x - r.top.x)), y: r.top.y, dx: side, dy: 0 };
+}
+
 /** The point at `k` (0 to 1) along a curve. */
 export function curveAt(c: Curve, k: number): { x: number; y: number } {
     const u = 1 - k;
