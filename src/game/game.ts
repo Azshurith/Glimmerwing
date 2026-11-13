@@ -34,10 +34,6 @@ const transitTime = (o: Outgoing) =>
     (C.TRANSIT_TIME * (o.kind === 'star' && o.fever ? C.FEVER_TRANSIT : 1)) /
     (o.kind === 'imp' ? C.SPEED_EXTRA : o.kind === 'star' && o.level >= 2 ? C.SPEED_REVERSE : C.SPEED_NORMAL);
 
-/** A fireball's colour in flight between the meadows (Reverse ones flash through colours). */
-const fireballColor = (o: Outgoing, t: number) =>
-    o.level >= 2 ? `hsl(${(t * 900) % 360}, 100%, 70%)` : o.fever ? '#fff26a' : o.tint === 'p2' ? '#c27bff' : '#ff9a3c';
-
 /** `ghost` transits are only drawn: online, the real attack is delivered on the rival's screen. */
 interface Transit {
     o: Outgoing;
@@ -266,6 +262,8 @@ export class Game {
             new Field(seed, this.picks[0], roundIndex, crowHere),
             new Field(seed, this.picks[1], roundIndex, !crowHere),
         ];
+        // The second meadow's rival is to its left, so its countered fireballs arc off that way.
+        this.fields[1].rivalSide = -1;
         this.transits = [];
         this.cpu = new CpuPilot();
         this.phase = 'countdown';
@@ -663,10 +661,17 @@ export class Game {
                 to = at[1 - tr.from];
             const sx = from.x + tr.o.fromX * from.s,
                 sy = from.y + tr.o.fromY * from.s;
-            const ex = to.x + Math.min(C.FIELD_W - 12, Math.max(12, tr.o.fromX)) * to.s,
+            const ex = to.x + Math.min(C.FIELD_W - 12, Math.max(12, tr.o.toX ?? tr.o.fromX)) * to.s,
                 ey = to.y - 10 * to.s;
+            // A low arc between the meadows, kept on screen so it can be followed.
             const x = sx + (ex - sx) * k,
-                y = sy + (ey - sy) * k - Math.sin(k * Math.PI) * 40;
+                y = Math.max(10 * to.s, sy + (ey - sy) * k - Math.sin(k * Math.PI) * 40);
+            if (tr.o.kind === 'star') {
+                const s = from.s + (to.s - from.s) * k;
+                const dur = transitTime(tr.o);
+                r.transitFireball(x, y, s, this.time, (ex - sx) / dur, (ey - sy) / dur, tr.o);
+                continue;
+            }
             r.transit(
                 x,
                 y,
@@ -680,7 +685,7 @@ export class Game {
                           ? (FAIRIES.find(f => f.id === tr.o.fairy)?.color ?? PALETTE.star)
                           : tr.o.kind === 'comet'
                             ? '#ff6f9c'
-                            : fireballColor(tr.o, this.time),
+                            : PALETTE.star,
             );
         }
 

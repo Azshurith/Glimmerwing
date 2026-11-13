@@ -48,12 +48,29 @@ const attackRadius = (a: Attack) =>
             ? C.IMP_RADIUS
             : C.fireballRadius(a.size ?? 1);
 
-/** Add a fireball's position to its path once it has moved far enough, so a Reverse can retrace it. */
-const recordTrail = (a: Attack) => {
-    const tr = a.trail;
-    if (!tr || a.flight === 'back') return;
-    const n = tr.length;
-    if (n < 2 || Math.hypot(a.x - tr[n - 2], a.y - tr[n - 1]) >= C.FIREBALL_TRAIL_STEP) tr.push(a.x, a.y);
+/**
+ * The arc a Reverse takes out of the meadow: from where it broke, rising and bending over to the top corner
+ * on the rival's side (`side` +1 for right, -1 for left). `t`/`T` are distance along it and its length.
+ */
+const backArc = (x: number, y: number, side: number) => {
+    const x1 = side > 0 ? C.FIELD_W + 14 : -14,
+        y1 = -18;
+    const cx = x + (x1 - x) * 0.3,
+        cy = Math.min(y, 70) - 80;
+    // Measure the curve's length so it can be flown at a set speed.
+    let T = 0,
+        px = x,
+        py = y;
+    for (let i = 1; i <= 16; i++) {
+        const k = i / 16,
+            u = 1 - k;
+        const qx = u * u * x + 2 * u * k * cx + k * k * x1,
+            qy = u * u * y + 2 * u * k * cy + k * k * y1;
+        T += Math.hypot(qx - px, qy - py);
+        px = qx;
+        py = qy;
+    }
+    return { x0: x, y0: y, cx, cy, x1, y1, t: 0, T };
 };
 
 /** Squared distance between two points (avoids a square root in hit tests). */
@@ -110,6 +127,8 @@ export class Field {
     private spawnT = 1.2;
     private waveId = 0;
     private waveT = 0;
+    /** Which way the rival's meadow lies on screen (+1 right, -1 left): countered fireballs arc off that way. */
+    rivalSide: 1 | -1 = 1;
     /** Formations in play, and the shape of the last one (so the same shape doesn't come twice running). */
     private forms: Formation[] = [];
     private lastShape: FormationShape | null = null;
@@ -336,8 +355,8 @@ export class Field {
             }
             return;
         }
-        // Attacks drop in at the same spot they were sent from, mirrored into this meadow.
-        const x = Math.min(C.FIELD_W - 12, Math.max(12, o.fromX));
+        // Attacks drop in at the same spot they were sent from (or where they're aimed), mirrored into this meadow.
+        const x = Math.min(C.FIELD_W - 12, Math.max(12, o.toX ?? o.fromX));
         if (o.kind === 'star') {
             this.receiveFireball(o, x);
             return;
@@ -400,7 +419,6 @@ export class Field {
                 flight: 'arc',
                 arc: { x0, y0, cx, cy, x1, y1, t: 0, T: len / speed },
                 speed,
-                trail: [x0, y0],
             });
             return;
         }
@@ -415,8 +433,6 @@ export class Field {
             plunge: (C.FIREBALL_FALL_SPEED + C.FIREBALL_FALL_PER_SIZE * size) * fast,
             t: C.FIREBALL_ENTER_SPEED,
             speed: (C.FIREBALL_FALL_SPEED + C.FIREBALL_FALL_PER_SIZE * size) * fast,
-            // It came in from above the meadow, so its path starts there.
-            trail: [x, -20, x, 10],
         });
     }
 
@@ -848,25 +864,18 @@ export class Field {
             this.addBurst(a.x, a.y, id, C.BURST_RADIUS * (0.85 + (a.size ?? 1) * 0.15));
             this.spray(a.x, a.y, 6, '#ffe27a');
             if (a.level < 2) {
-                // A Normal fireball flashes and turns into a Reverse right where it broke, then flies back out
-                // along the path it came in on and on to the rival who sent it (see updateAttacks).
+                // A Normal fireball flashes and turns into a Reverse right where it broke, then arcs up and out
+                // of the meadow toward the rival's side, on its way back to them (see flyBack).
                 const lvl = Math.min(C.MAX_STAR_LEVEL, 2 + this.fairy.counterBoost);
                 a.dead = false;
                 a.flight = 'back';
                 a.level = lvl;
                 a.hp = Infinity;
                 a.fever = false;
-                a.arc = undefined;
                 a.flash = C.FIREBALL_FLASH;
-                const tr = (a.trail ??= [a.x, -20]);
-                tr.push(a.x, a.y);
-                a.ri = tr.length / 2 - 2; // the point before the one it's at
-                // Reverse the current movement and ease up to full Reverse speed from a fraction of it.
-                const full = (a.speed ?? C.FIREBALL_FALL_SPEED) * C.SPEED_REVERSE;
-                a.t = full * C.FIREBALL_BACK_START;
-                const sp = Math.hypot(a.vx, a.vy) || 1;
-                a.vx = (-a.vx / sp) * a.t;
-                a.vy = (-a.vy / sp) * a.t;
+                a.arc = backArc(a.x, a.y, this.rivalSide);
+                // Ease up to full Reverse speed from a fraction of it.
+                a.t = (a.speed ?? C.FIREBALL_FALL_SPEED) * C.SPEED_REVERSE * C.FIREBALL_BACK_START;
                 a.tail = [a.x, a.y];
                 this.popup(a.x, a.y - 10, 'Reverse');
                 this.snd('reverse');
@@ -1113,7 +1122,6 @@ export class Field {
                     a.vx = Math.sign(gap) * Math.min(Math.abs(gap) / dt, C.FIREBALL_TRACK_SPEED);
                     a.x += a.vx * dt;
                     a.vy = C.FIREBALL_ENTER_SPEED;
-                    recordTrail(a);
                     continue;
                 }
                 // Locked on: straight down, faster and faster.
@@ -1133,7 +1141,6 @@ export class Field {
                 a.vy = (ny - a.y) / dt;
                 a.x = nx;
                 a.y = ny;
-                recordTrail(a);
                 continue;
             }
             if (a.flight === 'seeker' && a.seekT > 0) {
@@ -1156,51 +1163,45 @@ export class Field {
             } else if (a.x < 8 || a.x > C.FIELD_W - 8) {
                 a.vx = Math.abs(a.vx) * (a.x < 8 ? 1 : -1);
             }
-            if (a.kind === 'star') recordTrail(a);
             if (a.y > C.FIELD_H + 20) a.dead = true;
         }
     }
 
     /**
-     * A Reverse on its way back: it retraces the path it came in on, point by point, easing up to full
-     * Reverse speed, and once it's back out of the meadow it carries on to the rival who sent it.
+     * A Reverse on its way back: one smooth arc from where it broke, up and out of the top corner on the
+     * rival's side, easing up to full Reverse speed; from there it flies on into the rival's meadow.
      */
     private flyBack(a: Attack, dt: number): void {
         if (a.flash) a.flash = Math.max(0, a.flash - dt);
         const full = (a.speed ?? C.FIREBALL_FALL_SPEED) * C.SPEED_REVERSE;
         const ramp = (full * (1 - C.FIREBALL_BACK_START)) / C.FIREBALL_BACK_RAMP;
         a.t = Math.min(full, (a.t ?? full) + ramp * dt);
-        const tr = a.trail ?? [a.x, -20];
-        let left = a.t * dt;
-        const x0 = a.x,
-            y0 = a.y;
-        let i = a.ri ?? -1;
-        while (left > 0 && i >= 0) {
-            const px = tr[i * 2],
-                py = tr[i * 2 + 1];
-            const d = Math.hypot(px - a.x, py - a.y);
-            if (d <= left) {
-                a.x = px;
-                a.y = py;
-                left -= d;
-                i--;
-            } else {
-                a.x += ((px - a.x) / d) * left;
-                a.y += ((py - a.y) / d) * left;
-                left = 0;
-            }
-        }
-        // Past the start of its path (above the meadow): straight on up and out.
-        if (i < 0 && left > 0) a.y -= left;
-        a.ri = i;
-        a.vx = (a.x - x0) / dt;
-        a.vy = (a.y - y0) / dt;
+        const P = (a.arc ??= backArc(a.x, a.y, this.rivalSide));
+        // Along the curve by distance (P.T is its length, P.t how far along it is).
+        P.t = Math.min(P.T, P.t + a.t * dt);
+        const k = P.t / P.T,
+            u = 1 - k;
+        const nx = u * u * P.x0 + 2 * u * k * P.cx + k * k * P.x1,
+            ny = u * u * P.y0 + 2 * u * k * P.cy + k * k * P.y1;
+        a.vx = (nx - a.x) / dt;
+        a.vy = (ny - a.y) / dt;
+        a.x = nx;
+        a.y = ny;
         const tail = (a.tail ??= []);
         tail.push(a.x, a.y);
         if (tail.length > C.FIREBALL_TAIL * 2) tail.splice(0, tail.length - C.FIREBALL_TAIL * 2);
-        if (a.y < -14 || a.x < -30 || a.x > C.FIELD_W + 30) {
+        if (k >= 1 || a.y < -16) {
             a.dead = true;
-            this.outbox.push({ kind: 'star', level: a.level, size: a.size, fromX: a.x, fromY: 0 });
+            // It enters the rival's meadow on the side nearest the one it left.
+            const toX = this.rivalSide > 0 ? 28 : C.FIELD_W - 28;
+            this.outbox.push({
+                kind: 'star',
+                level: a.level,
+                size: a.size,
+                fromX: Math.min(C.FIELD_W, Math.max(0, a.x)),
+                fromY: 0,
+                toX,
+            });
         }
     }
 
@@ -1790,7 +1791,7 @@ export class Field {
             s: this.shots,
             pf: this.puffs.map(j => strip(j, 'form', 'baseX')),
             bu: this.bursts.map(b => strip(b, 'hits', 'chainId')),
-            at: this.attacks.map(a => strip(a, 'trail', 'tail')),
+            at: this.attacks.map(a => strip(a, 'tail')),
             bt: this.bullets,
             m: this.moth,
             cr: this.crows,

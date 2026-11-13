@@ -6,6 +6,7 @@ import type {
     HudTag,
     Layer,
     Layout,
+    Outgoing,
     Placement,
     SelectView,
     TitleView,
@@ -322,6 +323,21 @@ export class Renderer {
     }
 
     /** Draw an attack in flight between the meadows as a glowing dot. */
+    /**
+     * A fireball between the meadows, drawn as itself (at the scale `s` of the meadows it's between) so a
+     * Reverse visibly carries on from the meadow it left into the one it's heading for.
+     */
+    transitFireball(x: number, y: number, s: number, time: number, vx: number, vy: number, o: Outgoing): void {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(s, s);
+        const look = o.level >= 2 ? 'reverse' : o.fever ? 'fever' : (o.tint ?? 'p1');
+        drawFireball(ctx, 0, 0, time, o.fromX, vx, vy, o.size ?? 1, look, 0);
+        ctx.restore();
+    }
+
+    /** Something else between the meadows: a glowing dot in its colour. */
     transit(x: number, y: number, color: string): void {
         const ctx = this.ctx;
         ctx.fillStyle = color;

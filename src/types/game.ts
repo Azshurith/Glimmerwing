@@ -161,16 +161,16 @@ export interface Attack {
     /** Sent during Fever: flashes yellow. */
     fever?: boolean;
     /**
-     * A fireball's path so far, as x, y pairs (starting off-screen where it came in); a Reverse retraces it.
-     * `ri` is the point a retracing Reverse is heading for, `speed` its Normal speed, `flash` the seconds
-     * left of its breaking flash, and `tail` its recent positions (x, y pairs), drawn as a glowing trail.
+     * `speed` is a fireball's Normal speed, `flash` the seconds left of its breaking flash, and `tail` a
+     * Reverse's recent positions (x, y pairs), drawn as a glowing trail.
      */
-    trail?: number[];
-    ri?: number;
     speed?: number;
     flash?: number;
     tail?: number[];
-    /** An 'arc' fireball's curve: from (x0, y0) bending toward (cx, cy) to its locked target (x1, y1) over T s. */
+    /**
+     * An 'arc' fireball's curve: from (x0, y0) bending toward (cx, cy) to its locked target (x1, y1), t of T
+     * seconds along. For a Reverse on its way 'back', its arc out of the meadow, with t and T as distances.
+     */
     arc?: { x0: number; y0: number; cx: number; cy: number; x1: number; y1: number; t: number; T: number };
 }
 
@@ -189,7 +189,7 @@ export type StarFlight =
     | 'bat'
     /** A fireball curving in through the meadow at where the fairy was, then on in a straight line. */
     | 'arc'
-    /** A fireball you shot down, flying back up and out to your rival as a Reverse fireball (harmless here). */
+    /** A fireball you shot down, arcing up and out toward your rival as a Reverse fireball (harmless here). */
     | 'back';
 
 /** A fairy's Extra Attack: a few small critters sent with a level 2 charge. */
@@ -323,6 +323,8 @@ export interface Outgoing {
     level: number;
     fromX: number;
     fromY: number;
+    /** Where it comes into the receiving meadow, if not at fromX (a Reverse comes in on the near side). */
+    toX?: number;
     /** For a fireball: its size (1 to 4), whose it is, and whether it was sent during Fever. */
     size?: number;
     tint?: Tint;
