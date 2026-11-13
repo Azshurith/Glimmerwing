@@ -59,6 +59,8 @@ export interface RosterView {
     index: number;
     locked: boolean[];
     touch: boolean;
+    /** What the live demo of the fairy in view is showing right now (see game/preview.ts). */
+    caption: string;
 }
 
 /** What the Profile screen shows: this browser's record. */
