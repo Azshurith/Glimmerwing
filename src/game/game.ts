@@ -32,9 +32,9 @@ const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
 
 /**
  * Seconds an attack is in flight between the meadows, once any `stagger` is over: a Reverse crossing the screen
- * takes as long as the stretch of its curve between the meadows needs at its speed; any other fireball
- * flies at FIREBALL_TRANSIT_SPEED, faster with reflections and Perfects (fireballSpeedMul) and slower in Fever
- * (its pace); everything else takes TRANSIT_TIME, an Extra Attack less (SPEED_EXTRA).
+ * takes as long as the stretch of its curve between the meadows needs at its speed; any other fireball flies at
+ * FIREBALL_TRANSIT_SPEED, faster with reflections and Perfects (fireballSpeedMul); everything else takes
+ * TRANSIT_TIME, an Extra Attack less (SPEED_EXTRA).
  */
 const flightTime = (o: Outgoing) => {
     if (o.kind === 'star' && o.curve) {
@@ -43,12 +43,11 @@ const flightTime = (o: Outgoing) => {
         return Math.max(0.05, curveLength(o.curve, k0, kIn) / Math.max(40, o.speed ?? C.FIREBALL_FALL_SPEED));
     }
     if (o.kind === 'star') {
-        // Roughly from where it was sent, across into the other meadow and up to its top edge, at about the
-        // speed it then falls (and never faster than FIREBALL_MAX_SPEED).
+        // Roughly from where it was sent, across into the other meadow and up to its top edge, a little slower
+        // than it then falls (and never faster than FIREBALL_MAX_SPEED).
         const dist = Math.hypot(MEADOW_STEP, o.fromY + 10);
         const mul = C.fireballSpeedMul(o.reflects ?? (o.level >= 2 ? 1 : 0), o.boost ?? 1);
-        const pace = o.fever && o.level < 2 ? (o.pace ?? 1) : 1;
-        return dist / Math.min(C.FIREBALL_MAX_SPEED, C.FIREBALL_TRANSIT_SPEED * mul * pace);
+        return dist / Math.min(C.FIREBALL_MAX_SPEED, C.FIREBALL_TRANSIT_SPEED * mul);
     }
     return C.TRANSIT_TIME / (o.kind === 'imp' ? C.SPEED_EXTRA : C.SPEED_NORMAL);
 };

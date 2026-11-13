@@ -299,15 +299,16 @@ export const SEEK_SLIDE = 170; // how fast it slides across while lining up
 
 export const TRANSIT_TIME = 0.7;
 /**
- * How fast a fireball crosses between the meadows, in meadow units a second: about as fast as it then falls, so
- * it can be followed across. Faster with reflections and Perfects (fireballSpeedMul, capped at
- * FIREBALL_MAX_SPEED); a Fever fireball also by its `pace`.
+ * How fast a fireball crosses between the meadows, in meadow units a second (measured straight; the arc it's
+ * drawn on is about 15% longer): a little slower than it then falls, so it can be followed across. Faster with
+ * reflections and Perfects (fireballSpeedMul, capped at FIREBALL_MAX_SPEED). Fever fireballs cross at the same
+ * speed; their pace only slows their fall.
  */
-export const FIREBALL_TRANSIT_SPEED = 180;
+export const FIREBALL_TRANSIT_SPEED = 110;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '31'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '32'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout
