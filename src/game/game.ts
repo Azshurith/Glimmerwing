@@ -588,10 +588,8 @@ export class Game {
                         pts.push(view(i, p.x, p.y));
                     }
                 } else {
-                    // A falling fireball: down its lean to the bottom of the meadow.
-                    const lean = a.seekT > 0 ? 0 : (a.lean ?? 0);
-                    const len = (C.FIELD_H + 10 - a.y) / Math.max(0.2, Math.cos(lean));
-                    pts.push(view(i, a.x, a.y), view(i, a.x + Math.sin(lean) * len, a.y + Math.cos(lean) * len));
+                    // A falling fireball: straight down to the bottom of the meadow.
+                    pts.push(view(i, a.x, a.y), view(i, a.x, C.FIELD_H + 10));
                 }
                 this.r.debugPath(pts, a.level >= 2 ? '#ffffff' : '#ffb347');
             }
@@ -731,7 +729,9 @@ export class Game {
             }
             const sx = from.x + tr.o.fromX * from.s,
                 sy = from.y + tr.o.fromY * from.s;
-            const ex = to.x + Math.min(C.FIELD_W - 12, Math.max(12, tr.o.fromX)) * to.s,
+            // A fireball aimed at the fairy lands above her; anything else where it was sent from.
+            const toX = tr.o.aim === undefined ? tr.o.fromX : this.fields[1 - tr.from].player.x + tr.o.aim;
+            const ex = to.x + Math.min(C.FIELD_W - 12, Math.max(12, toX)) * to.s,
                 ey = to.y - 10 * to.s;
             // A low arc between the meadows, kept on screen so it can be followed.
             const x = sx + (ex - sx) * k,

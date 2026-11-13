@@ -169,8 +169,6 @@ export interface Attack {
     tail?: number[];
     /** Times this fireball has been shot back (0 for a Normal, 1 for a Reverse...): each one speeds it up. */
     reflects?: number;
-    /** A top-drop fireball's lean from straight down, in radians. */
-    lean?: number;
     /** Seconds a fireball still stalls after a shot that didn't break it, and its hit flash. */
     stall?: number;
     hitT?: number;
@@ -349,6 +347,8 @@ export interface Outgoing {
     k?: number;
     side?: number;
     speed?: number;
+    /** A Normal fireball comes in this far from the receiving fairy's x (0 for the first of a volley). */
+    aim?: number;
     /** For a fireball: times it has been shot back, and the speed boost from its sender's Perfects. */
     reflects?: number;
     boost?: number;

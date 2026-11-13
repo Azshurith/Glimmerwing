@@ -20,7 +20,7 @@ import type {
     Sfx,
     Shot,
 } from '@/types';
-import { curveAt, curveDir, curveStep, enterAt, reverseCurve, shiftCurve } from './fireball-path';
+import { curveAt, curveStep, enterAt, reverseCurve, shiftCurve } from './fireball-path';
 import { leaving, memberAt, rollFormation, startFormation } from './waves';
 
 /** Which bomb sound each bomb style plays (see Sound.play 'bomb'). */
@@ -360,11 +360,12 @@ export class Field {
     }
 
     /**
-     * A fireball arrives. A Normal comes in at the top of the meadow where it was sent from and falls across
-     * the meadow (straight, or leaning a little) and out the bottom; it doesn't follow the fairy. A Reverse
-     * arrives mid-flight on its curve across the screen and carries on along it onto where the fairy was when
-     * it was broken, then straight on out. Size sets hits, never speed; speed comes from reflections and the
-     * sender's Perfects (fireballSpeedMul) and is capped.
+     * A fireball arrives. A Normal comes in at the top of the meadow right above the fairy (a volley's later
+     * fireballs a little to either side, by `aim`) and falls straight down in a vertical line and out the
+     * bottom; it doesn't follow her once it's in. A Reverse arrives mid-flight on its curve across the screen
+     * and carries on along it onto where the fairy was when it was broken, then straight down and out. Size
+     * sets hits, never speed; speed comes from reflections and the sender's Perfects (fireballSpeedMul) and is
+     * capped.
      */
     private receiveFireball(o: Outgoing, x: number): void {
         const size = Math.min(4, Math.max(1, o.size ?? 1));
@@ -393,11 +394,11 @@ export class Field {
             return;
         }
         const fall = Math.min(C.FIREBALL_MAX_SPEED, C.FIREBALL_FALL_SPEED * mul);
-        // Most fall straight; some lean a little.
-        const lean = this.fxRng.next() < C.FIREBALL_LEAN_CHANCE ? this.fxRng.range(-1, 1) * C.FIREBALL_LEAN : 0;
+        // In right above where the fairy is now (the rest of a volley close on either side).
+        const at = o.aim === undefined ? x : Math.min(C.FIELD_W - 12, Math.max(12, this.player.x + o.aim));
         this.attacks.push({
             ...base,
-            x,
+            x: at,
             y: 10,
             vx: 0,
             vy: C.FIREBALL_ENTER_SPEED,
@@ -406,7 +407,6 @@ export class Field {
             plunge: fall,
             t: C.FIREBALL_ENTER_SPEED,
             speed: fall,
-            lean,
         });
     }
 
@@ -876,7 +876,6 @@ export class Field {
                 a.fever = false;
                 a.flash = C.FIREBALL_FLASH;
                 a.stall = 0;
-                a.lean = 0;
                 // Lock on to where the rival's fairy is right now: the Reverse crosses the screen to there.
                 a.curve = reverseCurve(a.x, a.y, this.rivalFairy.x, this.rivalFairy.y, this.rivalSide);
                 a.k = 0;
@@ -980,6 +979,9 @@ export class Field {
                 const hit = inFever ? i + 2 : 2 * i + 4;
                 // Fan the volley out around the chain's last pop so they don't stack.
                 const off = (i - (balls - 1) / 2) * 16;
+                // Where it comes in, from the rival's fairy: the first right above her, then alternately
+                // to her right and left, FIREBALL_AIM_SPREAD apart.
+                const aim = (i % 2 ? 1 : -1) * Math.ceil(i / 2) * C.FIREBALL_AIM_SPREAD;
                 this.outbox.push({
                     kind: 'star',
                     level: 1,
@@ -989,6 +991,7 @@ export class Field {
                     boost: this.perfectBoost,
                     fromX: c.x + off,
                     fromY: c.y,
+                    aim,
                 });
             }
             if (n >= 7) this.outbox.push({ kind: 'bramble', level: 1, fromX: c.x, fromY: c.y });
@@ -1134,12 +1137,10 @@ export class Field {
                 continue;
             }
             if (a.kind === 'star' && a.flight === 'drop') {
-                // Down from where it came in (straight, or leaning a little), faster and faster. It never
-                // follows the fairy: where it enters is where it falls.
+                // Straight down from where it came in, faster and faster: a vertical line, never sideways.
                 a.t = Math.min(a.plunge, (a.t ?? C.FIREBALL_ENTER_SPEED) + C.FIREBALL_ACCEL * dt);
-                const lean = a.lean ?? 0;
-                a.vx = Math.sin(lean) * a.t;
-                a.vy = Math.cos(lean) * a.t;
+                a.vx = 0;
+                a.vy = a.t;
             }
             if (a.kind === 'star' && a.flight === 'cross' && a.curve) {
                 // A Reverse finishing its curve across the screen, onto where the fairy was when it broke.
@@ -1151,12 +1152,10 @@ export class Field {
                 a.y = p.y;
                 a.k = k;
                 if (k >= 1) {
-                    // Past its target: straight on the way it was heading, and out of the meadow.
-                    const d = curveDir(a.curve, 1);
+                    // At its target: from there straight down and out of the meadow.
                     a.flight = 'drop';
                     a.seekT = 0;
                     a.plunge = a.t ?? C.FIREBALL_FALL_SPEED;
-                    a.lean = Math.atan2(d.x, Math.max(1, d.y));
                     a.curve = undefined;
                 }
                 continue;
