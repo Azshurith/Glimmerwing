@@ -178,7 +178,6 @@
                 left: 50%;
                 transform: translateX(-50%);
             }
-            /* Exit sits in the gap between the meadows, under the pause button, clear of both HUDs. */
             .screen[data-phase='title'] .tb-menu {
                 display: none;
             }
@@ -216,44 +215,12 @@
             #tb-full[hidden] {
                 display: none;
             }
-            .pad {
-                position: absolute;
-                bottom: 10%;
-                display: none;
-                gap: 0.4rem;
-                align-items: flex-end;
-            }
-            .pad .tb {
-                position: static;
-                opacity: 0.85;
-            }
-            .screen:is([data-phase='playing'], [data-phase='countdown'], [data-phase='roundOver']) .pad-a {
-                display: flex;
-            }
-            .pad-a {
-                right: 2.5%;
-            }
-            .screen[data-mode='versus'] .pad-a {
-                right: auto;
-                left: 2.5%;
-                flex-direction: row-reverse;
-            }
-            .screen[data-mode='versus']:is([data-phase='playing'], [data-phase='countdown'], [data-phase='roundOver'])
-                .pad-b {
-                display: flex;
-                right: 2.5%;
-            }
-
-            /* Tall layout (portrait, one player): buttons go in the strip under your meadow,
-               pause and exit in its corners, clear of the meadows and the console. */
-            .screen[data-layout='tall'] .pad-a {
-                bottom: 1.5%;
-                right: 4%;
-            }
+            /* Tall layout (portrait, one player): pause in the top-right corner. Touch play is all
+               gestures (see Input), so there are no other buttons over the meadow. */
             .screen[data-layout='tall'] .tb-menu {
-                top: auto;
-                bottom: 2%;
-                left: 4%;
+                top: 1%;
+                left: auto;
+                right: 1.5%;
                 transform: none;
             }
             /* Tall menus: back (select) and exit sit in the top corners, beside the heading. */
@@ -358,15 +325,6 @@
                 <canvas id="game" tabindex="0" aria-label="Glimmerwing playfield"></canvas>
                 <div class="touch-ui" aria-hidden="false">
                     <button class="tb small tb-menu" id="menu-btn" data-key="Escape" aria-label="Pause">❚❚</button>
-                    <!-- One player (or 1P in versus): B blooms, C autofires while held. -->
-                    <div class="pad pad-a">
-                        <button class="tb" data-key="KeyF" aria-label="Autofire">Auto</button>
-                        <button class="tb" data-key="KeyH" aria-label="Bomb">Bomb</button>
-                    </div>
-                    <div class="pad pad-b">
-                        <button class="tb" data-key="Quote" aria-label="Player two autofire">Auto</button>
-                        <button class="tb" data-key="ShiftRight" aria-label="Player two bomb">Bomb</button>
-                    </div>
                 </div>
                 <!-- Title-screen corners, on every device: sound, fullscreen, and the guide page. -->
                 <div class="corner-ui">

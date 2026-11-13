@@ -18,6 +18,8 @@ const lobby = new Lobby(game);
 game.onWantOnline = () => lobby.open();
 // Links from the guide page open the game straight into a mode: index.html?mode=cpu|versus|online.
 const startMode = new URLSearchParams(location.search).get('mode');
+// ?debug=paths draws every fireball's path across the screen.
+game.debugPaths = new URLSearchParams(location.search).get('debug') === 'paths';
 if (startMode === 'cpu' || startMode === 'versus') game.start(startMode);
 else if (startMode === 'online') lobby.open();
 
@@ -45,7 +47,7 @@ function fit(): void {
             availH = immersive
                 ? vh - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
                 : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
-        renderer.tallH = Math.max(C.TALL_H, Math.min(C.TALL_H_MAX, (C.TALL_W * availH) / Math.max(1, availW)));
+        renderer.tallH = Math.max(C.TALL_H_MIN, Math.min(C.TALL_H_MAX, (C.TALL_W * availH) / Math.max(1, availW)));
     }
     const RATIO = renderer.viewW / renderer.viewH;
     let w: number;
