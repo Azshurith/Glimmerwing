@@ -5,6 +5,7 @@ import { Backdrop } from '@/render/backdrop';
 import { drawFairy } from '@/render/entities/fairy';
 import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
 import { ARCADE, FONT } from '@/render/theme';
+import { tallMenuFit } from './menu-fit';
 
 // Layout, in view units (504 x 320).
 const PANEL_W = 160;
@@ -58,15 +59,33 @@ const CENTRE = {
 /** The tall layout's roster: under the panels, a little bigger for fingers. */
 const TALL_MED = { y0: 372, dx: 64, dy: 58, r: 24 } as const;
 
-/** Where each roster medallion sits (centre), in roster order, for a layout. */
-export function medallionAt(i: number, layout: Layout = 'wide'): { x: number; y: number; r: number } {
+/** How far the tall select's content moves down to sit centred in a view `h` tall. */
+const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
+
+/** Where each roster medallion sits (centre), in roster order, for a layout and view height: the tap targets. */
+export function medallionAt(
+    i: number,
+    layout: Layout = 'wide',
+    h: number = C.TALL_H,
+): { x: number; y: number; r: number } {
+    if (layout !== 'tall') return designMedallion(i, layout, h);
+    const f = tallMenuFit(h);
+    const m = designMedallion(i, layout, f.h);
+    return { x: f.x + m.x * f.s, y: m.y * f.s, r: m.r * f.s };
+}
+/** Where a medallion sits in the screen's own design units, for a design height `h` (see menu-fit.ts). */
+function designMedallion(
+    i: number,
+    layout: Layout = 'wide',
+    h: number = C.TALL_H,
+): { x: number; y: number; r: number } {
     const row = Math.floor(i / MED_COLS);
     const inRow = Math.min(MED_COLS, FAIRIES.length - row * MED_COLS);
     const col = i % MED_COLS;
     if (layout === 'tall')
         return {
             x: C.TALL_W / 2 + (col - (inRow - 1) / 2) * TALL_MED.dx,
-            y: TALL_MED.y0 + row * TALL_MED.dy,
+            y: TALL_MED.y0 + tallShift(h) + row * TALL_MED.dy,
             r: TALL_MED.r,
         };
     return { x: MID_X + (col - (inRow - 1) / 2) * MED_DX, y: MED_Y0 + row * MED_DY, r: MED_R };
@@ -76,25 +95,43 @@ export const SELECT_COLS = MED_COLS;
 /** The character select screen: both players' panels and the roster between them. */
 export class SelectScreen {
     private backdrop: Backdrop;
-    /** The layout of the frame being drawn. */
+    /** The layout of the frame being drawn, its height, and how far tall content is shifted down. */
     private layout: Layout = 'wide';
+    private h: number = C.TALL_H;
+    private dy = 0;
+    /** How far past each side edge full-width bars reach this frame (see menu-fit.ts). */
+    private bleed = 0;
 
     constructor(private ctx: CanvasRenderingContext2D) {
         this.backdrop = new Backdrop(ctx);
     }
 
     /** Draw the whole screen, wide or (for a portrait screen) tall. */
-    draw(v: SelectView, t: number, layout: Layout = 'wide'): void {
+    draw(v: SelectView, t: number, layout: Layout = 'wide', h: number = C.TALL_H): void {
         this.layout = layout;
+        const ctx = this.ctx;
+        ctx.save();
         if (layout === 'tall') {
-            this.backdrop.draw(t, C.TALL_W / 2, 150, C.TALL_W, C.TALL_H);
-            v.sides.forEach((s, i) => this.panel(s, TALL_PANEL_X[i], i === 1, t, TALL_PANEL));
+            // Designed TALL_H tall; a shorter view shrinks it to fit (see menu-fit.ts).
+            const f = tallMenuFit(h);
+            this.h = f.h;
+            this.dy = tallShift(f.h);
+            this.bleed = f.bleed;
+            this.backdrop.draw(t, C.TALL_W / 2, (150 + this.dy) * f.s, C.TALL_W, h);
+            ctx.translate(f.x, 0);
+            ctx.scale(f.s, f.s);
+            const g = { ...TALL_PANEL, artY: TALL_PANEL.artY + this.dy };
+            v.sides.forEach((s, i) => this.panel(s, TALL_PANEL_X[i], i === 1, t, g));
         } else {
+            this.h = h;
+            this.dy = 0;
+            this.bleed = 0;
             this.backdrop.draw(t);
             v.sides.forEach((s, i) => this.panel(s, PANEL_X[i], i === 1, t));
         }
         this.header(v.heading);
         this.centre(v, t);
+        ctx.restore();
     }
 
     // ---- header ----------------------------------------------------------------
@@ -107,11 +144,12 @@ export class SelectScreen {
         g.addColorStop(0, 'rgba(10,6,28,0.95)');
         g.addColorStop(1, 'rgba(10,6,28,0.6)');
         ctx.fillStyle = g;
-        ctx.fillRect(0, 0, cg.W, 27);
+        const b = this.bleed;
+        ctx.fillRect(-b, 0, cg.W + 2 * b, 27);
         ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(0, 27, cg.W, 1);
+        ctx.fillRect(-b, 27, cg.W + 2 * b, 1);
         ctx.fillStyle = 'rgba(255,230,160,0.25)';
-        ctx.fillRect(0, 28, cg.W, 1);
+        ctx.fillRect(-b, 28, cg.W + 2 * b, 1);
         // On the tall screen the corners hold the back and exit buttons, so the heading keeps to the middle.
         arcadeText(ctx, text, cg.mid, 21, cg.headSize, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'center', cg.W - 76);
     }
@@ -276,7 +314,9 @@ export class SelectScreen {
     /** Draw the centre column: timer, roster medallions and cursors. */
     private centre(v: SelectView, t: number): void {
         const ctx = this.ctx;
-        const cg = CENTRE[this.layout];
+        const base = CENTRE[this.layout],
+            dy = this.dy;
+        const cg = { ...base, timeY: base.timeY + dy, vsY: base.vsY + dy, hintY: base.hintY + dy };
         // Timer.
         if (v.timer !== null) {
             ctx.textAlign = 'center';
@@ -302,7 +342,7 @@ export class SelectScreen {
 
         // Roster medallions.
         v.cards.forEach((c, i) => {
-            const m = medallionAt(i, this.layout);
+            const m = designMedallion(i, this.layout, this.h);
             const hovered = v.cursors.some(cu => cu.index === i);
             const lift = hovered ? -2 : 0;
             ctx.save();
@@ -343,7 +383,7 @@ export class SelectScreen {
 
         // Cursors: a spinning dashed ring per player (solid once chosen), with a tag.
         v.cursors.forEach((cu, k) => {
-            const m = medallionAt(cu.index, this.layout);
+            const m = designMedallion(cu.index, this.layout, this.h);
             const shared = v.cursors.length > 1 && v.cursors[0].index === v.cursors[1].index;
             const r = m.r + 4 + (shared && k === 1 ? 4 : 0);
             ctx.save();

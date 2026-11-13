@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <title>How to play · Glimmerwing</title>
+        <meta name="theme-color" content="#100b24" />
+        <link rel="manifest" href="manifest.webmanifest" />
+        <link rel="icon" type="image/png" href="icon-192.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Bungee&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,600;1,9..144,700&display=swap"
+            rel="stylesheet"
+        />
+        <!-- The game page (index.html) is only the game; this page holds how to play, controls and settings. -->
+        <style>
+            :root {
+                --bg: #100b24;
+                --ink: #f6f0ff;
+                --muted: #a99fc8;
+                --btn: #ffd86b;
+                --btn-ink: #100b24;
+                --edge: #2f2557;
+                color-scheme: dark;
+            }
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+            }
+            body {
+                margin: 0;
+                background: var(--bg);
+                color: var(--ink);
+                font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+                padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+                    max(1.5rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+            }
+            main {
+                max-width: 1000px;
+                margin: 0 auto;
+                display: grid;
+                gap: 1.25rem;
+            }
+            header {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: baseline;
+                justify-content: space-between;
+                gap: 0.75rem;
+            }
+            h1 {
+                margin: 0;
+                font-family: 'Bungee', 'Arial Black', sans-serif;
+                font-weight: 400;
+                font-size: clamp(1.6rem, 5vw, 2.6rem);
+                color: #ffd45c;
+            }
+            .play {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            .btn,
+            button {
+                font: inherit;
+                font-size: 0.9rem;
+                font-weight: 600;
+                border: 0;
+                border-radius: 999px;
+                padding: 0.6rem 1.1rem;
+                background: var(--btn);
+                color: var(--btn-ink);
+                cursor: pointer;
+                text-decoration: none;
+            }
+            .btn.ghost {
+                background: transparent;
+                color: var(--ink);
+                box-shadow: inset 0 0 0 2px var(--btn);
+            }
+            button.link {
+                background: none;
+                color: var(--muted);
+                padding: 0.2rem 0;
+                text-decoration: underline;
+                font-weight: 400;
+                font-size: 0.8rem;
+                border-radius: 0;
+            }
+            .help {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                gap: 0.75rem 2rem;
+                font-size: 0.92rem;
+                line-height: 1.6;
+                color: var(--muted);
+            }
+            .help p {
+                margin: 0;
+            }
+            .help strong {
+                color: var(--ink);
+                font-weight: 600;
+            }
+            kbd {
+                font: inherit;
+                padding: 0 0.35em;
+                border-radius: 4px;
+                box-shadow: inset 0 0 0 1px var(--edge);
+                color: var(--ink);
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <header>
+                <h1>Glimmerwing</h1>
+                <nav class="play">
+                    <a class="btn" href="index.html">▶ Play</a>
+                    <a class="btn ghost" href="index.html?mode=cpu">VS CPU</a>
+                    <a class="btn ghost" href="index.html?mode=versus">2 players</a>
+                    <a class="btn ghost" href="index.html?mode=online">Online</a>
+                </nav>
+            </header>
+            <section class="help">
+                <p>
+                    <strong>How to win.</strong> Pop a dandelion puff and its pollen burst pops its neighbours. Chains
+                    of four or more send fireballs into your rival’s meadow: one for 4–5 hits, two for 6–7, three for
+                    8–9, one more for every two hits after that; seven or more also add a thorny bramble. Popping
+                    critters fills your power gauge (bottom of the meadow) through three levels. Hold fire to charge,
+                    one level at a time as far as the gauge allows, and let go: level 1 fires a piercing torpedo that
+                    clears a lane; level 2 also sends your fairy’s Extra Attack, a few small critters that hunt your
+                    rival and can’t be shot down, only dodged or bombed (costs half a level); MAX summons your guardian
+                    into their meadow (costs two levels). With the gauge below level 1 you can’t charge at all. Breaking
+                    three or more Reverse fireballs in one chain also sends your guardian. Guardians rush in, circle for
+                    a moment (clockwise or not, you can’t tell which), lock in place to attack (every few seconds
+                    sliding down close to you before gliding back up, so don’t get touched), then drift down and off a
+                    side. Hit one hard while it circles and it reels, briefly untouchable. Once it’s leaving, your shots
+                    push it sideways, so you can steer it out of your way. A guardian summoned by a reverse chain skips
+                    the circling and attacks at once. Each guardian has three attacks and keeps cycling through them at
+                    random. It doesn’t leave on its own: shoot it down or bomb it while it attacks to get rid of it. A
+                    bomb set off while it’s attacking dispels it on the spot. If both players send a guardian at almost
+                    the same moment, they clash and cancel each other out.
+                </p>
+                <p>
+                    <strong>Bat fireballs back.</strong> Your fireballs are orange as player 1 and purple as player 2.
+                    The longer the chain, the bigger the later fireballs: small ones (from hits 2–5) take two shots,
+                    medium (6–10) three, large (11–15) four, extra large (16 and up) five. Each one comes in at the top
+                    of your meadow, slides along after you, then locks on and falls across the meadow where it locked
+                    (straight down, or leaning a little) and out the bottom. A shot that doesn’t break a fireball makes
+                    it stall and flash. Break one and it turns into a flashing, colour-changing Reverse that crosses the
+                    screen in one curve, up and over to the rival who sent it and down onto where their fairy was when
+                    you broke it. Size never changes speed, but every time a fireball is shot back it flies faster, and
+                    each Perfect you score (a whole formation cleared by one chain) speeds up every fireball you send
+                    for the rest of the round. Break a Reverse and it becomes one of your Extra Attack critters, sent
+                    straight back at them. A pollen burst that catches a fireball counts it as a hit in your chain. The
+                    longer a round runs, the faster everything comes at you (watch the tempo in the corner), and each
+                    new round of a match starts faster. You have five hearts. Running into a critter costs one heart but
+                    can never finish you (it stops at half a heart); it does stun you, so mash buttons to shake it off,
+                    and leaves you slow and weak for about five seconds, while your rival recovers half a heart. Getting
+                    hit by an attack (a fireball, bramble, Extra Attack, guardian or its shots) costs three hearts and
+                    gives your rival a heart back. Lose all your hearts and you lose the round; best of three takes the
+                    match.
+                </p>
+                <p>
+                    <strong>Fever.</strong> About half a minute in, “Moonseed rising” flashes and a pale crescent orb
+                    drifts in with the next puffs. Shots bounce off it; catch it in a pollen burst to break it. That
+                    starts Fever: you fire twice as fast (same shots, just quicker), a rush of puffs, a gauge that fills
+                    twice as fast, and every chain sends one fireball per hit after the first (a 5-chain sends four),
+                    flashing yellow and reaching your rival sooner.
+                </p>
+                <p>
+                    <strong>Tough puffs and late rounds.</strong> A puff’s seed tips show the shots it takes, dropping a
+                    step with each hit: purple five, blue four, green three, yellow two, red one. Any pollen burst pops
+                    it outright. Some waves come wrapped in dew bubbles that pop first, big puffs leave extra-wide
+                    bursts, and watch for waves that sneak up from below. Beetles cut diagonals inside a glassy shell
+                    that has to break first; spinners corkscrew down. Waves also swoop in from a corner, sweep across in
+                    a line, or drop in squeezing columns, and some ring a tough leader with small fry: pop the leader to
+                    clear the lot. Tougher critters leave bigger bursts. Waves don’t run on a clock: the next one comes
+                    in as soon as the last is popped or gone, so clearing fast brings the swarm faster. At about a
+                    hundred seconds every critter speeds up sharply, and a moment later a hollow crow, the meadow’s
+                    Death, wakes in one meadow. Its touch is an instant knockout, however many hearts you have. It
+                    circles and dives at the fairy, then crosses into the other meadow, back and forth. Shoot it enough
+                    to drive it off and it reappears in your rival’s meadow, sooner and faster each time.
+                </p>
+                <p>
+                    <strong>Each fairy fights her own way.</strong> Pip’s charge is a steady Sunorb, Bramblewick’s a
+                    slow, heavy Thornburst, Wisp fans out three Frost needles, Clove fires Twin darts, Sorrel’s Ember
+                    fan is a short-range cone, and Umbra’s Dusk crescent sweeps a wide arc. Each sends her own Extra
+                    Attack critters: Pip’s Hearthsparks streak in from the side and burst into a ring of sparks,
+                    Bramblewick’s Burrs hop slowly down the meadow, Wisp’s Glimmers ricochet off the walls, Clove’s
+                    Petal darts home in on you, Sorrel’s Cinders zig-zag, and Umbra’s Dusk moths weave down, then lock
+                    on and dive at where you were. None of them can be shot down. Reverse fireballs flash through
+                    colours.
+                </p>
+                <p>
+                    <strong>Bombs.</strong> Two per round, shown as flowers by your hearts. Every fairy’s bomb makes her
+                    untouchable for a couple of seconds, clears bullets and incoming fireballs, pops small fry and
+                    stings a guardian, but each sweeps the meadow her own way. Pip’s Sunflare streaks across her row and
+                    ends in a full-field flash. Bramblewick’s Thornquake is a huge blast that also slows her meadow for
+                    a moment. Wisp’s Frost gale spirals out from the centre. Clove’s Petal storm only covers a cone
+                    ahead of her, but keeps her safe longest. Sorrel’s Ember lance sweeps a beam over everything above
+                    her. Umbra’s Duskfall opens a black hole that drags hazards in, then bursts in lightning. Bombs
+                    never start a chain or send anything, so they’re for getting out of trouble, not scoring.
+                </p>
+                <p>
+                    <strong>Fairies.</strong> Three fairies are ready from the start. Win matches, chain big, and beat
+                    the CPU cleanly to unlock three more. Progress is saved in this browser.
+                    <button class="link" id="reset">Reset progress</button>
+                </p>
+                <p>
+                    <strong>Controls.</strong> Three buttons, like the arcade: <strong>A</strong> shoots (tap) or
+                    charges (hold and let go), <strong>B</strong> sets off a petal bloom, <strong>C</strong> autofires
+                    while held. Vs CPU and online: arrows or <kbd>WASD</kbd> to move, A is <kbd>Z</kbd> or
+                    <kbd>Space</kbd>, B is <kbd>X</kbd>, C is <kbd>C</kbd>. Two players: <kbd>WASD</kbd> with
+                    <kbd>G</kbd> to shoot and charge, <kbd>F</kbd> to autofire, <kbd>H</kbd> to bloom (these work vs CPU
+                    too); arrows with <kbd>Enter</kbd>, right <kbd>Shift</kbd>, <kbd>'</kbd>. Gamepads work too: stick
+                    or d-pad to move, A/B as marked, X or Y to autofire, Start to confirm; the first pad is player one,
+                    the second player two. <kbd>P</kbd> pauses, <kbd>M</kbd> mutes.
+                </p>
+                <p>
+                    <strong>Phones and tablets.</strong> Play with gestures, either way up. Hold a finger anywhere and
+                    drag to fly while autofiring: your fairy moves with your finger from wherever she is, so your finger
+                    never hides her. Put a second finger down to charge, and lift it to fire the charge shot. Double-tap
+                    to set off a bomb. The button in the top corner pauses. Two players can share a tablet held
+                    sideways: each uses the same gestures on their own meadow. To keep it like an app, use your
+                    browser's <em>Add to Home Screen</em> (or <em>Install</em> on desktop).
+                </p>
+                <p>
+                    <strong>Online.</strong> Choose <em>Online</em> on the title screen (or press <kbd>3</kbd>).
+                    <em>Find match</em> pairs you with the next player looking for a game;
+                    <em>Create friend room</em> gives you a four-letter code for a friend to join. Online you use the
+                    single-player controls, and your meadow is always on the left. <kbd>Esc</kbd> between rounds leaves.
+                </p>
+            </section>
+        </main>
+        <script>
+            // Same storage key as src/game/progress.ts.
+            document.getElementById('reset')?.addEventListener('click', () => {
+                if (!confirm('Reset unlocked fairies and stats?')) return;
+                try {
+                    localStorage.removeItem('glimmerwing-progress-v1');
+                } catch {
+                    /* storage unavailable */
+                }
+                alert('Progress reset.');
+            });
+        </script>
+    </body>
+</html>
