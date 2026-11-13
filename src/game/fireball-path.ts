@@ -7,7 +7,7 @@ import * as C from '@/core/config';
 import type { Curve, NormalRoute, Point } from '@/types';
 
 /** How far the rival's meadow is from this one, in meadow units, as they sit side by side. */
-export const MEADOW_STEP = C.FIELD_W + C.GAP;
+export const meadowStep = () => C.FIELD_W + C.GAP;
 /** Where a Reverse bounces: the top line, just under the HUD bar. */
 const TURN_TOP = C.FIREBALL_TOP_Y;
 
@@ -36,7 +36,7 @@ function bounceX(x: number, y: number, fx: number, fy: number, side: number): nu
  * One broken at or above the top line starts along it at once.
  */
 export function reverseCurve(x: number, y: number, tx: number, ty: number, side: number, straight = false): Curve {
-    const x1 = tx + side * MEADOW_STEP,
+    const x1 = tx + side * meadowStep(),
         y1 = ty;
     const top = Math.min(y, TURN_TOP);
     if (straight) return { x0: x, y0: y, cx: x, cy: top, tx: x1, ty: top, x1, y1 };
@@ -56,7 +56,7 @@ export function reverseCurve(x: number, y: number, tx: number, ty: number, side:
  */
 export function normalRoute(x: number, y: number, side: number, tx: number, ty: number, straight = false): NormalRoute {
     const y0 = y;
-    const wall = side > 0 ? MEADOW_STEP : C.FIELD_W - MEADOW_STEP;
+    const wall = side > 0 ? meadowStep() : C.FIELD_W - meadowStep();
     const enterX = side > 0 ? 0 : C.FIELD_W;
     const aimX = Math.min(C.FIELD_W - 12, Math.max(12, tx));
     if (straight) {
@@ -74,7 +74,7 @@ export function normalRoute(x: number, y: number, side: number, tx: number, ty: 
     }
     const top = C.FIREBALL_TOP_Y;
     // The fairy in this meadow's units, and where it bounces near the middle of the screen.
-    const fx = side * MEADOW_STEP + aimX;
+    const fx = side * meadowStep() + aimX;
     const bx = bounceX(x, y, fx, ty, side);
     const dx = fx - bx,
         dy = ty - top;
@@ -170,7 +170,7 @@ export function curveStep(c: Curve, k: number, dist: number, limit = 1): number 
 
 /** The same path as seen from the meadow `side` meadows over (shifted into that meadow's own units). */
 export function shiftCurve(c: Curve, side: number): Curve {
-    const dx = side * MEADOW_STEP;
+    const dx = side * meadowStep();
     return {
         ...c,
         x0: c.x0 - dx,

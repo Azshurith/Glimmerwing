@@ -65,8 +65,8 @@ interface Picker {
     done: boolean;
 }
 
-/** Where the two meadows sit side by side in the wide layout. */
-const WIDE: readonly [Placement, Placement] = [
+/** Where the two meadows sit side by side in the wide layout (the meadows' width can change by round). */
+const wide = (): readonly [Placement, Placement] => [
     { x: 0, y: 0, s: 1 },
     { x: C.FIELD_W + C.GAP, y: 0, s: 1 },
 ];
@@ -276,6 +276,9 @@ export class Game {
         }
         // The seed also decides which meadow the Hollow Crow wakes in. Online, field 0 is
         // ours on both screens, so "side A" means the host's meadow.
+        // On a wide landscape screen a local match plays in wider meadows, so the view fills the screen; online
+        // both players must share one width, so it stays the usual one there.
+        C.setFieldWidth(this.online ? C.FIELD_W_BASE : this.r.fieldWidthToFill);
         const sideA = (seed & 1) === 0;
         const crowHere = this.online ? (this.net!.isHost ? sideA : !sideA) : sideA;
         this.fields = [
@@ -693,9 +696,12 @@ export class Game {
         // A portrait screen gets the tall layout: the menus are redrawn for it, and so is a
         // round with one player on the device. Two players sharing it keep the meadows side by side.
         const inRound = this.phase !== 'title' && this.phase !== 'select';
-        r.layout = r.portrait && !(inRound && this.mode === 'versus') ? 'tall' : 'wide';
+        // The menus are laid out for the usual meadow width; only a round plays in wider ones.
+        if (!inRound && C.FIELD_W !== C.FIELD_W_BASE) C.setFieldWidth(C.FIELD_W_BASE);
+        // A round in wider meadows stays side by side even if the screen turns upright mid-round.
+        r.layout = r.portrait && !(inRound && this.mode === 'versus') && C.FIELD_W === C.FIELD_W_BASE ? 'tall' : 'wide';
         const tall = r.layout === 'tall' ? tallPlacement(r.viewH) : null;
-        const at = tall ? tall.at : WIDE;
+        const at = tall ? tall.at : wide();
         if (tall) r.tallBand = tall.band;
         r.begin();
         const solo = this.mode !== 'versus';
