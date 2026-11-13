@@ -613,8 +613,6 @@ export class Game {
         // round with one player on the device. Two players sharing it keep the meadows side by side.
         const inRound = this.phase !== 'title' && this.phase !== 'select';
         r.layout = r.portrait && !(inRound && this.mode === 'versus') ? 'tall' : 'wide';
-        // A round may squeeze the tall view shorter than the menus can (main.ts refits when this changes).
-        r.tallMin = inRound ? C.TALL_H_PLAY : C.TALL_H;
         const tall = r.layout === 'tall' ? tallPlacement(r.viewH) : null;
         const at = tall ? tall.at : WIDE;
         if (tall) r.tallBand = tall.band;

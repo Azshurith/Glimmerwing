@@ -38,10 +38,8 @@ export class Renderer {
     layout: Layout = 'wide';
     /** Whether the screen is taller than wide; the page keeps this up to date. */
     portrait = false;
-    /** The tall view's height, stretched by the page to the screen's shape (at least TALL_H). */
+    /** The tall view's height, fitted by the page to the screen's shape (TALL_H_MIN to TALL_H_MAX). */
     tallH: number = C.TALL_H;
-    /** The shortest the tall view may be right now; Game sets it (rounds allow a squatter view than menus). */
-    tallMin: number = C.TALL_H;
     /** Where the tall view's top band (rival's meadow and console) sits and how much it shrinks; Game sets it. */
     tallBand: Placement = { x: 0, y: 0, s: 1 };
 

@@ -24,12 +24,12 @@ export const TALL_H_MAX = 680;
 /** Your meadow's scale in the tall view: it spans the whole width. */
 export const TALL_OWN_S = TALL_W / FIELD_W;
 /**
- * During a round the tall view can be shorter than TALL_H, so a squatter phone screen is still filled: the band
- * above your meadow (rival's meadow and console) shrinks, down to this height, before the view stops shrinking.
+ * The tall view can be shorter than TALL_H, so a squatter phone screen is still filled. In a round the band above
+ * your meadow (rival's meadow and console) shrinks, down to TALL_TOP_MIN; the title and select screens shrink as a
+ * whole (see menu-fit.ts). Below TALL_H_MIN the view stops shrinking and the page shows bars.
  */
 export const TALL_TOP_MIN = 104;
-/** The tall view's shortest height during a round (the title and select screens keep TALL_H). */
-export const TALL_H_PLAY = Math.ceil(FIELD_H * TALL_OWN_S) + TALL_TOP_MIN;
+export const TALL_H_MIN = Math.ceil(FIELD_H * TALL_OWN_S) + TALL_TOP_MIN;
 /** Where the rival's meadow sits in the tall view, at half size (moved down to centre it in the band above yours). */
 export const TALL_RIVAL = { x: 8, y: 6, s: 0.5 } as const;
 export const TALL_CONSOLE = { x: 136, y: 6, w: 120, h: FIELD_H / 2 } as const;
