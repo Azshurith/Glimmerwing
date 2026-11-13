@@ -320,8 +320,9 @@ export const FIREBALL_TOP_Y = 40;
 export const CRITTER_TOP = 38;
 export const FIREBALL_NEAR_TOP = 70;
 /**
- * The chance a Normal sent from lower down takes the straight route instead of the bounce: straight up to
- * FIREBALL_TOP_Y, straight across into the rival's meadow, then straight down over their fairy.
+ * The chance a fireball (a Normal as it's sent, or a Reverse as it's shot back) takes the straight route instead of
+ * the bounce: straight up to FIREBALL_TOP_Y, straight across into the rival's meadow, then straight down over their
+ * fairy.
  */
 export const FIREBALL_STRAIGHT_CHANCE = 0.5;
 export const FIREBALL_BOUNCE_SPREAD = 0.25;
@@ -331,7 +332,7 @@ export const fireballTransitSpeed = (reflects: number, boost: number) =>
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '40'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '41'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

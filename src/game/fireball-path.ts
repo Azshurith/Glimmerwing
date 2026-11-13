@@ -28,12 +28,18 @@ function bounceX(x: number, y: number, fx: number, fy: number, side: number): nu
 
 /**
  * The path for a Reverse broken at (x, y) in this meadow, aimed at (tx, ty) in the rival's meadow on `side`
- * (+1 right, -1 left): diagonally up to TURN_TOP, bouncing off it at (cx, cy) near the middle of the screen
- * (bounceX), then diagonally down to (x1, y1) and on. One broken at or above the top line bounces at once.
+ * (+1 right, -1 left), ending at (x1, y1) and carrying on past it:
+ * - normally diagonally up to TURN_TOP, bouncing off it at (cx, cy) near the middle of the screen (bounceX), then
+ *   diagonally down;
+ * - `straight`, straight up to TURN_TOP at (cx, cy), straight across it to over the target at (tx, ty), then
+ *   straight down.
+ * One broken at or above the top line starts along it at once.
  */
-export function reverseCurve(x: number, y: number, tx: number, ty: number, side: number): Curve {
+export function reverseCurve(x: number, y: number, tx: number, ty: number, side: number, straight = false): Curve {
     const x1 = tx + side * MEADOW_STEP,
         y1 = ty;
+    const top = Math.min(y, TURN_TOP);
+    if (straight) return { x0: x, y0: y, cx: x, cy: top, tx: x1, ty: top, x1, y1 };
     if (y <= TURN_TOP) return { x0: x, y0: y, cx: x, cy: y, x1, y1 };
     return { x0: x, y0: y, cx: bounceX(x, y, x1, y1, side), cy: TURN_TOP, x1, y1 };
 }
@@ -43,18 +49,17 @@ export function reverseCurve(x: number, y: number, tx: number, ty: number, side:
  * `side` (+1 right, -1 left). `points` is the part flown on this side, in the sender's meadow units, up to the
  * rival's near wall; `enter` is where it comes into the rival's meadow and which way it's heading there, in the
  * rival's units, with `turnX` where it turns straight down if it came in sliding.
- * - Close to the top (within FIREBALL_NEAR_TOP): straight across at its height (dipping first to FIREBALL_TOP_Y if
- *   it's above that), then straight down once over the fairy.
- * - Lower down and `straight`: straight up to FIREBALL_TOP_Y, straight across, then straight down over the fairy.
- * - Lower down otherwise: diagonally up to FIREBALL_TOP_Y, a bounce near the middle of the screen (bounceX), and
- *   diagonally down at the fairy.
+ * - `straight`: straight up to FIREBALL_TOP_Y (or, within FIREBALL_NEAR_TOP of the top, at its own height, never
+ *   above FIREBALL_TOP_Y), straight across, then straight down once over the fairy.
+ * - Otherwise: diagonally up to FIREBALL_TOP_Y, a bounce near the middle of the screen (bounceX), and diagonally
+ *   down at the fairy.
  */
 export function normalRoute(x: number, y: number, side: number, tx: number, ty: number, straight = false): NormalRoute {
     const y0 = y;
     const wall = side > 0 ? MEADOW_STEP : C.FIELD_W - MEADOW_STEP;
     const enterX = side > 0 ? 0 : C.FIELD_W;
     const aimX = Math.min(C.FIELD_W - 12, Math.max(12, tx));
-    if (straight || y <= C.FIREBALL_NEAR_TOP) {
+    if (straight) {
         // Along the top line, or at its own height if it's already that close to the top; kept below the HUD
         // bar either way, so it's never hidden behind it.
         y = y <= C.FIREBALL_NEAR_TOP ? Math.max(y, C.FIREBALL_TOP_Y) : C.FIREBALL_TOP_Y;
@@ -114,34 +119,65 @@ export function pathAt(points: Point[], d: number): { x: number; y: number; dx: 
     return { x: points[0].x, y: points[0].y, dx: 0, dy: -1 };
 }
 
+/** A Reverse's path as its corners: from where it broke, the bounce (and the second corner, if any), the target. */
+function corners(c: Curve): Point[] {
+    return c.tx === undefined || c.ty === undefined
+        ? [
+              { x: c.x0, y: c.y0 },
+              { x: c.cx, y: c.cy },
+              { x: c.x1, y: c.y1 },
+          ]
+        : [
+              { x: c.x0, y: c.y0 },
+              { x: c.cx, y: c.cy },
+              { x: c.tx, y: c.ty },
+              { x: c.x1, y: c.y1 },
+          ];
+}
+
 /**
- * The point at `k` along a Reverse's path: the way up for `k` 0 to 0.5, the bounce at 0.5, the way down to the
- * target at 1, and on down the same line past 1.
+ * The point at `k` along a Reverse's path: its straight legs share 0 to 1 equally (the target is at 1), and past 1
+ * it carries on along the last leg.
  */
 export function curveAt(c: Curve, k: number): { x: number; y: number } {
-    if (k < 0.5) return { x: c.x0 + (c.cx - c.x0) * 2 * k, y: c.y0 + (c.cy - c.y0) * 2 * k };
-    return { x: c.cx + (c.x1 - c.cx) * (2 * k - 1), y: c.cy + (c.y1 - c.cy) * (2 * k - 1) };
+    const p = corners(c),
+        n = p.length - 1;
+    const i = Math.max(0, Math.min(n - 1, Math.floor(k * n))),
+        u = k * n - i;
+    return { x: p[i].x + (p[i + 1].x - p[i].x) * u, y: p[i].y + (p[i + 1].y - p[i].y) * u };
 }
 
 /** The path's direction at `k` (unnormalised: how far it moves per unit of `k`). */
 export function curveDir(c: Curve, k: number): { x: number; y: number } {
-    return k < 0.5 ? { x: 2 * (c.cx - c.x0), y: 2 * (c.cy - c.y0) } : { x: 2 * (c.x1 - c.cx), y: 2 * (c.y1 - c.cy) };
+    const p = corners(c),
+        n = p.length - 1;
+    const i = Math.max(0, Math.min(n - 1, Math.floor(k * n)));
+    return { x: (p[i + 1].x - p[i].x) * n, y: (p[i + 1].y - p[i].y) * n };
 }
 
 /**
- * Advance `k` along the curve by `dist` meadow units, up to `limit` (1 is the target; past it the path carries
- * on down the same line). A step that would cross the bounce stops there, so it never cuts the corner.
+ * Advance `k` along the path by `dist` meadow units, up to `limit` (1 is the target; past it the path carries
+ * on along its last leg). A step that would cross a corner stops there, so it never cuts the corner.
  */
 export function curveStep(c: Curve, k: number, dist: number, limit = 1): number {
+    const n = corners(c).length - 1;
     const d = curveDir(c, k);
     const next = k + dist / Math.max(1, Math.hypot(d.x, d.y));
-    return Math.min(limit, k < 0.5 && next > 0.5 ? 0.5 + 1e-6 : next);
+    const i = Math.floor(k * n);
+    const corner = (i + 1) / n;
+    return Math.min(limit, i < n - 1 && next > corner ? corner + 1e-6 : next);
 }
 
-/** The same curve as seen from the meadow `side` meadows over (shifted into that meadow's own units). */
+/** The same path as seen from the meadow `side` meadows over (shifted into that meadow's own units). */
 export function shiftCurve(c: Curve, side: number): Curve {
     const dx = side * MEADOW_STEP;
-    return { x0: c.x0 - dx, y0: c.y0, cx: c.cx - dx, cy: c.cy, x1: c.x1 - dx, y1: c.y1 };
+    return {
+        ...c,
+        x0: c.x0 - dx,
+        cx: c.cx - dx,
+        x1: c.x1 - dx,
+        ...(c.tx === undefined ? {} : { tx: c.tx - dx }),
+    };
 }
 
 /** The first `k` from `from` on where the curve is inside the meadow (between its walls), in its own units. */
