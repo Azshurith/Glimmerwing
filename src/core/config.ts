@@ -259,13 +259,6 @@ export const FIREBALL_FALL_SPEED = 230;
 export const FIREBALL_LEAN_CHANCE = 0.35;
 export const FIREBALL_LEAN = 0.14;
 /**
- * A corner-arc fireball comes in from an upper corner and sweeps down across the meadow to the opposite
- * bottom corner. Reverses come in that way more often.
- */
-export const FIREBALL_ANGLED_CHANCE = 0.3;
-export const FIREBALL_ARC_SPEED = 250;
-export const REVERSE_ANGLED_CHANCE = 0.5;
-/**
  * Speed. Size never changes it. Each reflection multiplies it by SPEED_REVERSE (initial tuning target, not
  * measured), each Perfect the sender has this round adds PERFECT_SPEED_STEP (up to PERFECT_SPEED_MAX), and
  * the tempo and sudden death speed everything in flight. FIREBALL_MAX_SPEED caps it so nothing can skip
@@ -286,9 +279,9 @@ export const REVERSE_TRACK_TIME = 0.25;
 export const FIREBALL_STALL = 0.06;
 export const FIREBALL_HIT_FLASH = 0.1;
 /**
- * A fireball you shoot down flashes, turns into a Reverse where it broke and arcs up and out of the meadow
- * toward the rival's side, starting at FIREBALL_BACK_START of its reflected speed and reaching it over
- * FIREBALL_BACK_RAMP seconds.
+ * A fireball you shoot down flashes, turns into a Reverse where it broke and crosses the screen on one curve
+ * (fireball-path.ts) to where the rival's fairy was, starting at FIREBALL_BACK_START of its reflected speed
+ * and reaching it over FIREBALL_BACK_RAMP seconds.
  */
 export const FIREBALL_BACK_START = 0.3;
 export const FIREBALL_BACK_RAMP = 0.3;
@@ -303,7 +296,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '22'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '23'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

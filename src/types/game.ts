@@ -139,9 +139,9 @@ export interface Attack {
     spin: number;
     dead: boolean;
     /**
-     * How it flies. A fireball (kind 'star', TSS Normal or Reverse Attack) is a 'drop' (tracks the fairy
-     * along the top, then falls straight down where it locked on) or an 'arc' (curves in through the
-     * inner side of the meadow at where the fairy was), and becomes 'back' once shot down.
+     * How it flies. A Normal fireball (kind 'star') is a 'drop': it comes in at the top, tracks the fairy,
+     * locks on and falls across the meadow. Shot down it becomes 'back', starting its curve across the
+     * screen, and arrives in the sender's meadow as a 'cross' Reverse finishing that curve.
      * Extra Attack critters use their sender's flight ('seeker', 'zig' and the rest).
      */
     flight: StarFlight;
@@ -174,11 +174,22 @@ export interface Attack {
     /** Seconds a fireball still stalls after a shot that didn't break it, and its hit flash. */
     stall?: number;
     hitT?: number;
-    /**
-     * An 'arc' fireball's curve: from (x0, y0) bending toward (cx, cy) to its locked target (x1, y1), t of T
-     * seconds along. For a Reverse on its way 'back', its arc out of the meadow, with t and T as distances.
-     */
-    arc?: { x0: number; y0: number; cx: number; cy: number; x1: number; y1: number; t: number; T: number };
+    /** A Reverse's path across the screen (see fireball-path.ts), and how far along it is (0 to 1). */
+    curve?: Curve;
+    k?: number;
+}
+
+/**
+ * A quadratic curve in meadow units: from (x0, y0), bending toward (cx, cy), to (x1, y1). Points past the
+ * meadow's walls lie in the space between the meadows or in the rival's meadow beside it.
+ */
+export interface Curve {
+    x0: number;
+    y0: number;
+    cx: number;
+    cy: number;
+    x1: number;
+    y1: number;
 }
 
 /** Which player a fireball belongs to: 'p1' (orange) or 'p2' (purple). */
@@ -194,8 +205,8 @@ export type StarFlight =
     | 'lateral'
     | 'bounce'
     | 'bat'
-    /** A fireball curving in through the meadow at where the fairy was, then on in a straight line. */
-    | 'arc'
+    /** A Reverse coming across from the rival's meadow along its curve, onto where the fairy was. */
+    | 'cross'
     /** A fireball you shot down, arcing up and out toward your rival as a Reverse fireball (harmless here). */
     | 'back';
 
@@ -330,8 +341,14 @@ export interface Outgoing {
     level: number;
     fromX: number;
     fromY: number;
-    /** Where it comes into the receiving meadow, if not at fromX (a Reverse comes in on the near side). */
-    toX?: number;
+    /**
+     * A Reverse crossing the screen: its curve in the sender's meadow units, how far along it was when it
+     * left the sender's meadow, which way the receiver's meadow lies from the sender's, and its speed.
+     */
+    curve?: Curve;
+    k?: number;
+    side?: number;
+    speed?: number;
     /** For a fireball: times it has been shot back, and the speed boost from its sender's Perfects. */
     reflects?: number;
     boost?: number;

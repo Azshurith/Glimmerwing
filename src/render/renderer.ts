@@ -346,6 +346,27 @@ export class Renderer {
         ctx.restore();
     }
 
+    /** Debug overlay: a dashed path through view points, with a dot where it ends. */
+    debugPath(pts: { x: number; y: number }[], color: string): void {
+        if (pts.length < 2) return;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const end = pts[pts.length - 1];
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(end.x, end.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
     /** Something else between the meadows: a glowing dot in its colour. */
     transit(x: number, y: number, color: string): void {
         const ctx = this.ctx;
