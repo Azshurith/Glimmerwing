@@ -218,17 +218,19 @@ export class TitleScreen {
         ctx.restore();
         // A shine sweeping across the letters every few seconds.
         const k = ((t * 0.45) % 1.8) - 0.4;
-        if (k > -0.2 && k < 1.2) {
+        if (k >= 0 && k <= 1) {
             ctx.save();
             ctx.font = `${size}px ${ARCADE}`;
             ctx.textAlign = 'center';
-            const x0 = lx - 107 * k30,
-                x1 = lx + 107 * k30;
-            const g = ctx.createLinearGradient(x0, 0, x1, 0);
-            const c = Math.min(0.98, Math.max(0.02, k));
-            g.addColorStop(Math.max(0, c - 0.08), 'rgba(255,255,255,0)');
-            g.addColorStop(c, 'rgba(255,255,255,0.85)');
-            g.addColorStop(Math.min(1, c + 0.08), 'rgba(255,255,255,0)');
+            // Sweep across the letters as they're actually drawn: the text can come out narrower than its
+            // 214-unit cap, and a band clamped to the cap's ends would stall over the last letters and vanish.
+            const w = Math.min(214 * k30, ctx.measureText('GLIMMERWING').width),
+                band = w * 0.09;
+            const px = lx - w / 2 - band + k * (w + 2 * band);
+            const g = ctx.createLinearGradient(px - band, 0, px + band, 0);
+            g.addColorStop(0, 'rgba(255,255,255,0)');
+            g.addColorStop(0.5, 'rgba(255,255,255,0.85)');
+            g.addColorStop(1, 'rgba(255,255,255,0)');
             ctx.globalCompositeOperation = 'lighter';
             ctx.fillStyle = g;
             ctx.fillText('GLIMMERWING', lx, y, 214 * k30);
