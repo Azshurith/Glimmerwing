@@ -209,6 +209,43 @@
             #tb-guide {
                 right: 1.5%;
             }
+            #tb-settings {
+                left: calc(1.5% + var(--btn) + 8px);
+            }
+            #settings {
+                position: absolute;
+                inset: 0;
+                display: grid;
+                place-items: center;
+                background: rgba(16, 11, 36, 0.72);
+                border-radius: 14px;
+                padding: 1rem;
+                z-index: 5;
+            }
+            #settings[hidden] {
+                display: none;
+            }
+            .setting {
+                display: flex;
+                gap: 0.7rem;
+                align-items: flex-start;
+                text-align: left;
+                cursor: pointer;
+            }
+            .setting input {
+                width: 1.3rem;
+                height: 1.3rem;
+                margin-top: 0.15rem;
+                flex: none;
+                accent-color: #ffd86b;
+            }
+            .setting small {
+                display: block;
+                margin-top: 0.2rem;
+                color: var(--muted);
+                font-size: 0.8rem;
+                line-height: 1.35;
+            }
             #tb-full {
                 right: calc(1.5% + var(--btn) + 8px);
             }
@@ -329,8 +366,25 @@
                 <!-- Title-screen corners, on every device: sound, fullscreen, and the guide page. -->
                 <div class="corner-ui">
                     <button class="tb small" id="tb-sound" aria-label="Sound" aria-pressed="true">♪</button>
+                    <button class="tb small" id="tb-settings" aria-label="Settings">⚙</button>
                     <button class="tb small" id="tb-full" aria-label="Fullscreen">⛶</button>
                     <a class="tb small" id="tb-guide" href="guide.html" aria-label="How to play and settings">?</a>
+                </div>
+                <div id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+                    <div class="lobby-card">
+                        <h2 id="settings-title">Settings</h2>
+                        <label class="setting">
+                            <input type="checkbox" id="set-hide-rival" />
+                            <span>
+                                <strong>Hide the rival's meadow</strong>
+                                <small
+                                    >On a phone held upright, against the CPU: your meadow fills the whole screen, with
+                                    a slim bar for the round and the rival's hearts.</small
+                                >
+                            </span>
+                        </label>
+                        <button id="settings-close">Done</button>
+                    </div>
                 </div>
                 <div id="lobby" role="dialog" aria-modal="true" aria-labelledby="lobby-title" hidden>
                     <div class="lobby-card">

@@ -125,7 +125,7 @@ export class Renderer {
         ctx.fillRect(0, 0, C.FIELD_W, C.FIELD_H);
         // Drifting fireflies in the background.
         for (const m of this.motes) {
-            const y = (m.y - time * 6 * m.s + C.FIELD_H * 10) % C.FIELD_H;
+            const y = ((((m.y * C.FIELD_H) / C.FIELD_H_BASE - time * 6 * m.s) % C.FIELD_H) + C.FIELD_H) % C.FIELD_H;
             // Spread across however wide the meadow is this round.
             const x = (m.x * C.FIELD_W) / C.FIELD_W_BASE + Math.sin(time * 0.8 + m.p) * 6;
             ctx.globalAlpha = 0.25 + 0.25 * Math.sin(time * 2 + m.p);
@@ -426,6 +426,11 @@ export class Renderer {
             return;
         }
         this.hudLayer.console(v, time);
+    }
+
+    /** The slim top bar standing in for the rival's meadow and console when it's hidden (tall layout only). */
+    soloBar(v: ConsoleView, rival: Field, tag: HudTag, time: number): void {
+        this.hudLayer.soloBar(v, rival, tag, time, C.TALL_W, C.TALL_SOLO_BAR);
     }
 
     /** A full-width arcade banner (round start, round over, match over, pause). */

@@ -18,6 +18,7 @@ import type {
     Phase,
     Placement,
     Progress,
+    Settings,
     SelectCard,
     SelectSide,
     Sfx,
@@ -26,6 +27,7 @@ import { CpuPilot } from './ai';
 import { Field } from './field';
 import { curveAt, pathAt, pathLength, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
 import { loadProgress, resetProgress, saveProgress } from './progress';
+import { loadSettings, saveSettings } from './settings';
 
 /** Seconds from an attack leaving one meadow to arriving in the other: its `stagger`, then its flight. */
 const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
@@ -125,6 +127,8 @@ export class Game {
     private roundWinner: 0 | 1 | -1 = -1;
     private paused = false;
     private progress: Progress = loadProgress();
+    /** The player's settings (the page's Settings panel changes them through setSettings). */
+    settings: Settings = loadSettings();
     private matchBestChain = 0;
     private newlyUnlocked: Fairy[] = [];
     time = 0;
@@ -262,6 +266,20 @@ export class Game {
         this.newRound(seed);
     }
 
+    /** Change the player's settings and save them; they apply from the next round. */
+    setSettings(next: Partial<Settings>): void {
+        this.settings = { ...this.settings, ...next };
+        saveSettings(this.settings);
+    }
+
+    /**
+     * Whether a round played now would hide the rival's meadow: an upright phone, against the CPU, with the
+     * setting on. Such a round plays in taller meadows that reach the top of the screen.
+     */
+    private get soloView(): boolean {
+        return this.settings.hideRival && this.mode === 'cpu' && !this.online && this.r.portrait;
+    }
+
     /** Set up both meadows for a new round from one shared seed, so their waves match. */
     private newRound(seed = (Math.random() * 2 ** 31) | 0): void {
         const roundIndex = this.wins[0] + this.wins[1];
@@ -279,6 +297,9 @@ export class Game {
         // On a wide landscape screen a local match plays in wider meadows, so the view fills the screen; online
         // both players must share one width, so it stays the usual one there.
         C.setFieldWidth(this.online ? C.FIELD_W_BASE : this.r.fieldWidthToFill);
+        // With the rival's meadow hidden on an upright phone, the meadows grow to reach the top of the screen
+        // (both, so the round stays fair), leaving a slim bar for the round and the rival's hearts.
+        C.setFieldHeight(this.soloView ? (this.r.tallH - C.TALL_SOLO_BAR) / C.TALL_OWN_S : C.FIELD_H_BASE);
         const sideA = (seed & 1) === 0;
         const crowHere = this.online ? (this.net!.isHost ? sideA : !sideA) : sideA;
         this.fields = [
@@ -698,11 +719,22 @@ export class Game {
         const inRound = this.phase !== 'title' && this.phase !== 'select';
         // The menus are laid out for the usual meadow width; only a round plays in wider ones.
         if (!inRound && C.FIELD_W !== C.FIELD_W_BASE) C.setFieldWidth(C.FIELD_W_BASE);
+        if (!inRound && C.FIELD_H !== C.FIELD_H_BASE) C.setFieldHeight(C.FIELD_H_BASE);
         r.inMenu = !inRound;
         // A round in wider meadows stays side by side even if the screen turns upright mid-round.
-        r.layout = r.portrait && !(inRound && this.mode === 'versus') && C.FIELD_W === C.FIELD_W_BASE ? 'tall' : 'wide';
+        // A round in taller meadows (rival hidden) stays tall even if the screen turns sideways.
+        const soloTall = inRound && C.FIELD_H !== C.FIELD_H_BASE;
+        r.layout =
+            soloTall || (r.portrait && !(inRound && this.mode === 'versus') && C.FIELD_W === C.FIELD_W_BASE)
+                ? 'tall'
+                : 'wide';
         const tall = r.layout === 'tall' ? tallPlacement(r.viewH) : null;
-        const at = tall ? tall.at : wide();
+        // With the rival's meadow hidden it's placed far off screen, so nothing of it (or flying to it) shows.
+        const at: readonly [Placement, Placement] = !tall
+            ? wide()
+            : soloTall
+              ? [tall.at[0], { x: 0, y: -10000, s: tall.at[0].s }]
+              : tall.at;
         if (tall) r.tallBand = tall.band;
         r.begin();
         const solo = this.mode !== 'versus';
@@ -713,18 +745,17 @@ export class Game {
                 : { label: this.mode === 'online' ? 'RIVAL' : '2P', color: PLAYER_COLORS.p2 },
         ];
         r.field(this.fields[0], at[0].x, this.wins[0], this.time, tags[0], at[0].y, at[0].s);
-        r.field(this.fields[1], at[1].x, this.wins[1], this.time, tags[1], at[1].y, at[1].s);
+        if (!soloTall) r.field(this.fields[1], at[1].x, this.wins[1], this.time, tags[1], at[1].y, at[1].s);
         // Between rounds the console still shows the round just played.
         const played = this.wins[0] + this.wins[1];
         const between = this.phase === 'roundOver' || this.phase === 'matchOver';
-        r.console(
-            {
-                round: Math.max(1, between ? played : played + 1),
-                tempo: this.fields[0].tempo,
-                ping: this.online ? Math.round(this.net!.rtt * 1000) : undefined,
-            },
-            this.time,
-        );
+        const consoleView = {
+            round: Math.max(1, between ? played : played + 1),
+            tempo: this.fields[0].tempo,
+            ping: this.online ? Math.round(this.net!.rtt * 1000) : undefined,
+        };
+        if (soloTall) r.soloBar(consoleView, this.fields[1], tags[1], this.time);
+        else r.console(consoleView, this.time);
 
         for (const tr of this.transits) {
             if (tr.o.kind === 'clash' || tr.o.kind === 'heal') continue;

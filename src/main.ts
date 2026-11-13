@@ -167,6 +167,26 @@ document.querySelectorAll<HTMLButtonElement>('.touch-ui [data-key]').forEach(b =
 });
 const menuBtn = document.getElementById('menu-btn') as HTMLButtonElement;
 // Sound on/off from the title screen's corner (M works from the keyboard too).
+// ---- settings ------------------------------------------------------------------
+const settingsEl = document.getElementById('settings');
+const hideRivalBox = document.getElementById('set-hide-rival') as HTMLInputElement | null;
+/** Open the Settings panel, showing the current settings. */
+function openSettings(): void {
+    if (!settingsEl || !hideRivalBox) return;
+    hideRivalBox.checked = game.settings.hideRival;
+    settingsEl.hidden = false;
+    hideRivalBox.focus();
+}
+document.getElementById('tb-settings')?.addEventListener('click', e => {
+    e.stopPropagation();
+    openSettings();
+});
+hideRivalBox?.addEventListener('change', () => game.setSettings({ hideRival: hideRivalBox.checked }));
+document.getElementById('settings-close')?.addEventListener('click', () => {
+    if (settingsEl) settingsEl.hidden = true;
+    canvas.focus();
+});
+
 const soundBtn = document.getElementById('tb-sound') as HTMLButtonElement | null;
 soundBtn?.addEventListener('click', () => {
     sound.unlock();
