@@ -12,4 +12,13 @@ export interface Placement {
 }
 
 /** Where the game is in its flow, from the title screen to the end of a match. */
-export type Phase = 'title' | 'select' | 'countdown' | 'playing' | 'roundOver' | 'matchOver';
+export type Phase =
+    | 'title'
+    | 'modes'
+    | 'roster'
+    | 'profile'
+    | 'select'
+    | 'countdown'
+    | 'playing'
+    | 'roundOver'
+    | 'matchOver';

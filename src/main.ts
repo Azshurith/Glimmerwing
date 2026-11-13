@@ -177,10 +177,8 @@ function openSettings(): void {
     settingsEl.hidden = false;
     hideRivalBox.focus();
 }
-document.getElementById('tb-settings')?.addEventListener('click', e => {
-    e.stopPropagation();
-    openSettings();
-});
+game.onWantSettings = openSettings;
+game.onWantGuide = () => (location.href = 'guide.html');
 hideRivalBox?.addEventListener('change', () => game.setSettings({ hideRival: hideRivalBox.checked }));
 document.getElementById('settings-close')?.addEventListener('click', () => {
     if (settingsEl) settingsEl.hidden = true;
@@ -220,7 +218,7 @@ function syncPage(): void {
     if (game.modeName !== shownMode || game.phaseName !== shownPhase) {
         shownMode = screenEl.dataset.mode = game.modeName;
         shownPhase = screenEl.dataset.phase = game.phaseName;
-        const back = shownPhase === 'select';
+        const back = ['select', 'modes', 'roster', 'profile'].includes(shownPhase);
         menuBtn.textContent = back ? '◀' : '❚❚';
         menuBtn.setAttribute('aria-label', back ? 'Back' : 'Pause');
         void keepAwake(shownPhase === 'playing' || shownPhase === 'countdown');
