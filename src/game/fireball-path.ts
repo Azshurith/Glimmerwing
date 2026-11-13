@@ -8,8 +8,8 @@ import type { Curve, NormalRoute, Point } from '@/types';
 
 /** How far the rival's meadow is from this one, in meadow units, as they sit side by side. */
 export const MEADOW_STEP = C.FIELD_W + C.GAP;
-/** Lowest a Reverse's turn may sit (just inside the top of the play area), and how high above its ends. */
-const TURN_TOP = 18,
+/** Highest a Reverse's turn may reach (just under the HUD bar), and how high above its ends it sits. */
+const TURN_TOP = C.FIREBALL_TOP_Y,
     TURN_RISE = 110;
 
 /**

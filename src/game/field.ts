@@ -371,7 +371,7 @@ export class Field {
      * fireballs a little to either side, by `aim`) and falls straight down in a vertical line and out the
      * bottom; it doesn't follow her once it's in. A Reverse arrives mid-flight on its curve across the screen
      * and carries on along it onto where the fairy was when it was broken, still arcing on past there. Size
-     * sets hits, never speed: every Normal flies at the same speed (slower in Fever), and a Reverse faster with
+     * sets hits, never speed: each Normal flies at the speed it was sent with (slower in Fever), and a Reverse faster with
      * each reflection and the Perfects of whoever shot it back (fireballSpeedMul), capped.
      */
     private receiveFireball(o: Outgoing, x: number): void {
@@ -407,7 +407,7 @@ export class Field {
         // In from the sender's side along its route (see normalRoute), on a line it keeps to: it doesn't follow
         // the fairy once it's in. Without one, straight down from right above her.
         const at = o.aim === undefined ? x : Math.min(C.FIELD_W - 12, Math.max(12, this.player.x + o.aim));
-        const e = o.enter ?? { x: at, y: 10, ux: 0, uy: 1 };
+        const e = o.enter ?? { x: at, y: C.FIREBALL_TOP_Y, ux: 0, uy: 1 };
         // Already moving, at no more than the speed it flew in at, so it doesn't stall where it comes in.
         const v = Math.min(fall, C.fireballTransitSpeed(o.reflects ?? 0, o.boost ?? 1) * (o.fever ? (o.pace ?? 1) : 1));
         this.attacks.push({
@@ -1006,6 +1006,10 @@ export class Field {
                 // Where it comes in, from the rival's fairy: the first right above her, then alternately
                 // to her right and left, FIREBALL_AIM_SPREAD apart.
                 const aim = (i % 2 ? 1 : -1) * Math.ceil(i / 2) * C.FIREBALL_AIM_SPREAD;
+                // From where the chain ended, but never up behind the HUD bar (a chain can end on critters still
+                // flying in over the top) or outside the walls.
+                const fx = Math.min(C.FIELD_W - 12, Math.max(12, c.x + off)),
+                    fy = Math.max(C.FIREBALL_TOP_Y, c.y);
                 this.outbox.push({
                     kind: 'star',
                     level: 1,
@@ -1013,14 +1017,14 @@ export class Field {
                     fever: inFever,
                     pace: inFever ? C.feverSpeedAt(this.time) : undefined,
                     reflects: 0,
-                    // Every Normal flies at the same speed (Fever's slower pace aside), so a volley never
-                    // looks randomly slow or fast; Perfects speed up what's shot back (see hitAttack).
-                    boost: 1,
-                    fromX: c.x + off,
-                    fromY: c.y,
+                    // Each Normal gets its own speed, picked between FIREBALL_NORMAL_SPEED_MIN and _MAX, and
+                    // keeps it all the way (Fever's slower pace on top); Perfects speed up what's shot back.
+                    boost: this.fxRng.range(C.FIREBALL_NORMAL_SPEED_MIN, C.FIREBALL_NORMAL_SPEED_MAX),
+                    fromX: fx,
+                    fromY: fy,
                     aim,
                     side: this.rivalSide,
-                    ...this.routeFor(c.x + off, c.y, aim),
+                    ...this.routeFor(fx, fy, aim),
                     // One after another, not all at once: each a beat behind the last, so they come
                     // down as a staggered stream rather than a row at the same height.
                     stagger: i * C.FIREBALL_STAGGER,
