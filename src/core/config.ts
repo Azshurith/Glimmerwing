@@ -247,33 +247,41 @@ export const fireballHp = (size: number) => size + 1;
 /** A fireball's radius by size. */
 export const fireballRadius = (size: number) => 5.5 + size * 1.6;
 /**
- * A straight fireball appears just inside the top and slides along it after the fairy for FIREBALL_TRACK_TIME,
- * then locks on and drops straight down, faster and faster (measured from TSS footage: up to about 0.75
- * of the meadow's height a second).
+ * A top-drop fireball appears just inside the top and slides along it after the fairy for FIREBALL_TRACK_TIME,
+ * then locks on and falls, faster and faster, to FIREBALL_FALL_SPEED (measured from TSS footage: about 0.75
+ * of the meadow's height a second). Some lean a little, up to FIREBALL_LEAN radians from straight down.
  */
 export const FIREBALL_TRACK_TIME = 0.5;
 export const FIREBALL_TRACK_SPEED = 150;
 export const FIREBALL_ENTER_SPEED = 24;
 export const FIREBALL_ACCEL = 300;
-export const FIREBALL_FALL_SPEED = 220; // plus FIREBALL_FALL_PER_SIZE a size
-export const FIREBALL_FALL_PER_SIZE = 8;
-/** An angled fireball curves in from a top corner through the inner meadow at where the fairy was, faster. */
-export const FIREBALL_ANGLED_CHANCE = 0.3;
-export const FIREBALL_ARC_SPEED = 265;
+export const FIREBALL_FALL_SPEED = 230;
+export const FIREBALL_LEAN_CHANCE = 0.35;
+export const FIREBALL_LEAN = 0.14;
 /**
- * Projectile speeds as multiples of a Normal fireball's (initial tuning targets, not measured from the
- * arcade): a Reverse fireball, on its way back and when it arrives, and an Extra Attack between meadows.
+ * Speed. Size never changes it. Each reflection multiplies it by SPEED_REVERSE (initial tuning target, not
+ * measured), each Perfect the sender has this round adds PERFECT_SPEED_STEP (up to PERFECT_SPEED_MAX), and
+ * the tempo and sudden death speed everything in flight. FIREBALL_MAX_SPEED caps it so nothing can skip
+ * past a hitbox in one step. SPEED_EXTRA is how much faster an Extra Attack crosses between the meadows.
  */
 export const SPEED_NORMAL = 1;
 export const SPEED_REVERSE = 1.5;
 export const SPEED_EXTRA = 1.8;
-/** Reverse fireballs also lock on sooner and come in angled more often. */
+export const PERFECT_SPEED_STEP = 0.08;
+export const PERFECT_SPEED_MAX = 1.5;
+export const FIREBALL_MAX_SPEED = 420;
+/** A fireball's speed multiplier after `reflects` reflections, with the sender's Perfect `boost`. */
+export const fireballSpeedMul = (reflects: number, boost: number) =>
+    Math.min(3, SPEED_NORMAL * SPEED_REVERSE ** reflects * boost);
+/** Reverse fireballs also lock on sooner. */
 export const REVERSE_TRACK_TIME = 0.25;
-export const REVERSE_ANGLED_CHANCE = 0.5;
+/** A shot that doesn't break a fireball stalls it this long and flashes it this long. */
+export const FIREBALL_STALL = 0.06;
+export const FIREBALL_HIT_FLASH = 0.1;
 /**
- * A fireball you shoot down flashes, turns into a Reverse where it broke and arcs up and out of the meadow
- * toward the rival's side, starting at FIREBALL_BACK_START of its full speed (SPEED_REVERSE times its
- * Normal speed) and reaching full speed over FIREBALL_BACK_RAMP seconds.
+ * A fireball you shoot down flashes, turns into a Reverse where it broke and crosses the screen on one curve
+ * (fireball-path.ts) to where the rival's fairy was, starting at FIREBALL_BACK_START of its reflected speed
+ * and reaching it over FIREBALL_BACK_RAMP seconds.
  */
 export const FIREBALL_BACK_START = 0.3;
 export const FIREBALL_BACK_RAMP = 0.3;
@@ -288,7 +296,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '21'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '23'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

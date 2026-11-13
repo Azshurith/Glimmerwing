@@ -24,15 +24,29 @@ import type {
 } from '@/types';
 import { CpuPilot } from './ai';
 import { Field } from './field';
+import { curveAt, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 
 /**
- * Seconds an attack spends between the meadows: Reverse fireballs and Extra Attacks fly faster (SPEED_*),
- * and Fever fireballs get there sooner.
+ * Seconds an attack spends between the meadows: a Reverse crossing the screen takes as long as the stretch
+ * of its curve between the meadows needs at its speed; other fireballs and Extra Attacks fly faster with
+ * reflections and Perfects (SPEED_*, fireballSpeedMul), and Fever fireballs get there sooner.
  */
-const transitTime = (o: Outgoing) =>
-    (C.TRANSIT_TIME * (o.kind === 'star' && o.fever ? C.FEVER_TRANSIT : 1)) /
-    (o.kind === 'imp' ? C.SPEED_EXTRA : o.kind === 'star' && o.level >= 2 ? C.SPEED_REVERSE : C.SPEED_NORMAL);
+const transitTime = (o: Outgoing) => {
+    if (o.kind === 'star' && o.curve) {
+        const k0 = o.k ?? 0;
+        const kIn = enterAt(shiftCurve(o.curve, o.side ?? 1), k0);
+        return Math.max(0.05, curveLength(o.curve, k0, kIn) / Math.max(40, o.speed ?? C.FIREBALL_FALL_SPEED));
+    }
+    return (
+        (C.TRANSIT_TIME * (o.kind === 'star' && o.fever ? C.FEVER_TRANSIT : 1)) /
+        (o.kind === 'imp'
+            ? C.SPEED_EXTRA
+            : o.kind === 'star'
+              ? C.fireballSpeedMul(o.reflects ?? (o.level >= 2 ? 1 : 0), o.boost ?? 1)
+              : C.SPEED_NORMAL)
+    );
+};
 
 /** `ghost` transits are only drawn: online, the real attack is delivered on the rival's screen. */
 interface Transit {
@@ -98,6 +112,8 @@ export class Game {
     /** Highlighted title-menu item. */
     private titleIndex = 0;
     private readyAt = -1;
+    /** Draw every fireball's path across the screen (`?debug=paths`). */
+    debugPaths = false;
     private fields: [Field, Field] = [new Field(1, FAIRIES[0]), new Field(1, FAIRIES[1])];
     private wins: [number, number] = [0, 0];
     private transits: Transit[] = [];
@@ -530,6 +546,7 @@ export class Game {
             return;
         }
 
+        this.shareFairies();
         const c0 = this.mode === 'cpu' ? this.input.solo(this.fields[0].player) : this.input.p1(this.fields[0].player);
         const c1 = this.mode === 'cpu' ? this.cpu.think(this.fields[1], dt) : this.input.p2(this.fields[1].player);
         this.fields[0].update(dt, c0);
@@ -555,6 +572,49 @@ export class Game {
     }
 
     /** One playing step online: only our meadow is simulated here. */
+    /**
+     * Debug overlay (`?debug=paths`): every fireball's path from where it is to where it leaves, drawn across
+     * the screen, so its route can be checked against the play area.
+     */
+    private drawFireballPaths(at: readonly [Placement, Placement]): void {
+        const view = (i: number, x: number, y: number) => ({ x: at[i].x + x * at[i].s, y: at[i].y + y * at[i].s });
+        this.fields.forEach((f, i) => {
+            for (const a of f.attacks) {
+                if (a.kind !== 'star' || a.dead) continue;
+                const pts: { x: number; y: number }[] = [];
+                if (a.curve) {
+                    for (let k = a.k ?? 0; k <= 1.0001; k += 0.04) {
+                        const p = curveAt(a.curve, Math.min(1, k));
+                        pts.push(view(i, p.x, p.y));
+                    }
+                } else {
+                    // A falling fireball: down its lean to the bottom of the meadow.
+                    const lean = a.seekT > 0 ? 0 : (a.lean ?? 0);
+                    const len = (C.FIELD_H + 10 - a.y) / Math.max(0.2, Math.cos(lean));
+                    pts.push(view(i, a.x, a.y), view(i, a.x + Math.sin(lean) * len, a.y + Math.cos(lean) * len));
+                }
+                this.r.debugPath(pts, a.level >= 2 ? '#ffffff' : '#ffb347');
+            }
+        });
+        for (const tr of this.transits) {
+            const c = tr.o.curve;
+            if (tr.o.kind !== 'star' || !c) continue;
+            const pts: { x: number; y: number }[] = [];
+            for (let k = tr.o.k ?? 0; k <= 1.0001; k += 0.04) {
+                const p = curveAt(c, Math.min(1, k));
+                pts.push(view(tr.from, p.x, p.y));
+            }
+            this.r.debugPath(pts, '#ffffff');
+        }
+    }
+
+    /** Tell each meadow where the rival's fairy is, so a Reverse can lock on to her when it's broken. */
+    private shareFairies(): void {
+        const [a, b] = this.fields;
+        a.rivalFairy = { x: b.player.x, y: b.player.y };
+        b.rivalFairy = { x: a.player.x, y: a.player.y };
+    }
+
     private stepOnline(dt: number): void {
         const me = this.fields[0];
         // A moonseed break freezes only the meadow it broke in; the rival's keeps going on their screen.
@@ -562,6 +622,7 @@ export class Game {
             me.hitstop = Math.max(0, me.hitstop - dt);
             return;
         }
+        this.shareFairies();
         me.update(dt, this.input.solo(me.player));
         for (const o of me.outbox) {
             // Player 1 is the host, on both screens.
@@ -659,9 +720,18 @@ export class Game {
             const k = tr.t / transitTime(tr.o);
             const from = at[tr.from],
                 to = at[1 - tr.from];
+            if (tr.o.kind === 'star' && tr.o.curve && r.layout === 'wide') {
+                // A Reverse crossing between the meadows stays on its curve (in the sender's units).
+                const c = tr.o.curve;
+                const kIn = enterAt(shiftCurve(c, tr.o.side ?? 1), tr.o.k ?? 0);
+                const p = curveAt(c, (tr.o.k ?? 0) + (kIn - (tr.o.k ?? 0)) * k);
+                const d = curveDir(c, (tr.o.k ?? 0) + (kIn - (tr.o.k ?? 0)) * k);
+                r.transitFireball(from.x + p.x * from.s, from.y + p.y * from.s, from.s, this.time, d.x, d.y, tr.o);
+                continue;
+            }
             const sx = from.x + tr.o.fromX * from.s,
                 sy = from.y + tr.o.fromY * from.s;
-            const ex = to.x + Math.min(C.FIELD_W - 12, Math.max(12, tr.o.toX ?? tr.o.fromX)) * to.s,
+            const ex = to.x + Math.min(C.FIELD_W - 12, Math.max(12, tr.o.fromX)) * to.s,
                 ey = to.y - 10 * to.s;
             // A low arc between the meadows, kept on screen so it can be followed.
             const x = sx + (ex - sx) * k,
@@ -688,6 +758,8 @@ export class Game {
                             : PALETTE.star,
             );
         }
+
+        if (this.debugPaths && r.layout === 'wide') this.drawFireballPaths(at);
 
         const names =
             this.mode === 'cpu'

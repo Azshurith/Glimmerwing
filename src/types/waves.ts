@@ -71,4 +71,8 @@ export interface Formation {
     slotsTo: Vec[] | null;
     /** Formation time at which the hold ends and the members start leaving. */
     exitAt: number;
+    /** For Perfects: members popped, the chain that popped them (-1 once more than one has), any flown out. */
+    popped?: number;
+    chain?: number;
+    escaped?: boolean;
 }

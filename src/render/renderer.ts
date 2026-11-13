@@ -13,7 +13,15 @@ import type {
     WingShape,
 } from '@/types';
 
-import { drawImp, drawBramble, drawComet, drawFireball, drawFireFlash, drawReverseTrail } from './entities/attacks';
+import {
+    drawImp,
+    drawBramble,
+    drawComet,
+    drawFireball,
+    drawFireFlash,
+    drawFireHit,
+    drawReverseTrail,
+} from './entities/attacks';
 import { drawBomb } from './entities/bombs';
 import { drawCrow, drawGuardian } from './entities/bosses';
 import { drawBeetle, drawMoonseed, drawPuff, drawSpinner } from './entities/critters';
@@ -197,6 +205,7 @@ export class Renderer {
                 if (a.tail && a.level >= 2) drawReverseTrail(ctx, a.tail, time, size);
                 drawFireball(ctx, a.x, a.y, time, a.spin, a.vx, a.vy, size, look, hurt);
                 if (a.flash) drawFireFlash(ctx, a.x, a.y, a.flash / C.FIREBALL_FLASH, size);
+                if (a.hitT) drawFireHit(ctx, a.x, a.y, a.hitT / C.FIREBALL_HIT_FLASH, size);
             }
         }
         for (const c of f.crows)
@@ -334,6 +343,27 @@ export class Renderer {
         ctx.scale(s, s);
         const look = o.level >= 2 ? 'reverse' : o.fever ? 'fever' : (o.tint ?? 'p1');
         drawFireball(ctx, 0, 0, time, o.fromX, vx, vy, o.size ?? 1, look, 0);
+        ctx.restore();
+    }
+
+    /** Debug overlay: a dashed path through view points, with a dot where it ends. */
+    debugPath(pts: { x: number; y: number }[], color: string): void {
+        if (pts.length < 2) return;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const end = pts[pts.length - 1];
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(end.x, end.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
     }
 

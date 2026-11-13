@@ -18,6 +18,8 @@ const lobby = new Lobby(game);
 game.onWantOnline = () => lobby.open();
 // Links from the guide page open the game straight into a mode: index.html?mode=cpu|versus|online.
 const startMode = new URLSearchParams(location.search).get('mode');
+// ?debug=paths draws every fireball's path across the screen.
+game.debugPaths = new URLSearchParams(location.search).get('debug') === 'paths';
 if (startMode === 'cpu' || startMode === 'versus') game.start(startMode);
 else if (startMode === 'online') lobby.open();
 
