@@ -247,12 +247,10 @@ export const fireballHp = (size: number) => size + 1;
 /** A fireball's radius by size. */
 export const fireballRadius = (size: number) => 5.5 + size * 1.6;
 /**
- * A top-drop fireball appears just inside the top and slides along it after the fairy for FIREBALL_TRACK_TIME,
- * then locks on and falls, faster and faster, to FIREBALL_FALL_SPEED (measured from TSS footage: about 0.75
- * of the meadow's height a second). Some lean a little, up to FIREBALL_LEAN radians from straight down.
+ * A top-drop fireball comes in at the top where it was sent from (it never follows the fairy) and falls,
+ * faster and faster, to FIREBALL_FALL_SPEED (measured from TSS footage: about 0.75 of the meadow's height a
+ * second). Some lean a little, up to FIREBALL_LEAN radians from straight down.
  */
-export const FIREBALL_TRACK_TIME = 0.5;
-export const FIREBALL_TRACK_SPEED = 150;
 export const FIREBALL_ENTER_SPEED = 24;
 export const FIREBALL_ACCEL = 300;
 export const FIREBALL_FALL_SPEED = 230;
@@ -273,8 +271,6 @@ export const FIREBALL_MAX_SPEED = 420;
 /** A fireball's speed multiplier after `reflects` reflections, with the sender's Perfect `boost`. */
 export const fireballSpeedMul = (reflects: number, boost: number) =>
     Math.min(3, SPEED_NORMAL * SPEED_REVERSE ** reflects * boost);
-/** Reverse fireballs also lock on sooner. */
-export const REVERSE_TRACK_TIME = 0.25;
 /** A shot that doesn't break a fireball stalls it this long and flashes it this long. */
 export const FIREBALL_STALL = 0.06;
 export const FIREBALL_HIT_FLASH = 0.1;
@@ -296,7 +292,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '23'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '24'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout
