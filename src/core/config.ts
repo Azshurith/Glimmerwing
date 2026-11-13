@@ -285,8 +285,16 @@ export const FIREBALL_BACK_RAMP = 0.3;
 export const FIREBALL_FLASH = 0.3;
 /** Positions kept for a Reverse's glowing trail. */
 export const FIREBALL_TAIL = 10;
-/** Fever fireballs come many at a time, so each falls at this share of the normal speed. */
+/**
+ * Fever fireballs come many at a time, so each falls at FEVER_FIREBALL_SPEED of the normal speed early in a
+ * round, easing up to full speed by FEVER_SPEED_RAMP_TIME seconds in (on top of the tempo, which speeds up
+ * everything in flight as the match goes on).
+ */
 export const FEVER_FIREBALL_SPEED = 0.7;
+export const FEVER_SPEED_RAMP_TIME = 120;
+/** How fast a Fever fireball falls, as a share of normal, `t` seconds into the round. */
+export const feverSpeedAt = (t: number) =>
+    FEVER_FIREBALL_SPEED + (1 - FEVER_FIREBALL_SPEED) * Math.min(1, t / FEVER_SPEED_RAMP_TIME);
 export const SEEK_SLIDE = 170; // how fast it slides across while lining up
 
 export const TRANSIT_TIME = 0.7;
