@@ -9,19 +9,22 @@ export const VIEW_H = FIELD_H;
 
 /**
  * The tall view, used while playing on a portrait screen (one player on the device):
- * your meadow full size at the bottom, the rival's at half size at the top beside a
- * compact console, and a strip under your meadow for the touch buttons.
+ * your meadow at the bottom, as wide as the view and touching its bottom edge (touch play is
+ * all gestures on the meadow, so nothing sits under it), and the rival's at half size at the
+ * top beside a compact console.
  */
 export const TALL_W = FIELD_W + 24;
+/** Height of the band above your meadow that holds the rival's meadow and the console. */
 export const TALL_TOP = 172;
+/** Room the title and select screens are designed for below TALL_TOP + FIELD_H. */
 export const TALL_STRIP = 56;
 /** The tall view's shortest height; on longer screens it stretches to their shape, up to TALL_H_MAX. */
 export const TALL_H = TALL_TOP + FIELD_H + TALL_STRIP;
 export const TALL_H_MAX = 680;
-/** Where each meadow sits in the tall view: yours (field 0) and the rival's, at half size. */
-export const TALL_OWN = { x: 12, y: TALL_TOP, s: 1 } as const;
+/** Your meadow's scale in the tall view: it spans the whole width. */
+export const TALL_OWN_S = TALL_W / FIELD_W;
+/** Where the rival's meadow sits in the tall view, at half size (moved down to centre it in the band above yours). */
 export const TALL_RIVAL = { x: 8, y: 6, s: 0.5 } as const;
-/** The compact console beside the rival's meadow in the tall view. */
 export const TALL_CONSOLE = { x: 136, y: 6, w: 120, h: FIELD_H / 2 } as const;
 
 export const STEP = 1 / 60;

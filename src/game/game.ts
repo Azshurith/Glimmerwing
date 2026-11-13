@@ -45,12 +45,21 @@ const WIDE: readonly [Placement, Placement] = [
     { x: C.FIELD_W + C.GAP, y: 0, s: 1 },
 ];
 /**
- * Where they sit in the tall layout: yours full size at the bottom, the rival's small at the top.
- * On a longer screen the extra height is shared between the gap above your meadow and the button strip.
+ * Where they sit in the tall layout: yours full width against the bottom edge, the rival's small at the top.
+ * Whatever height is left above your meadow is shared evenly above and below the rival's meadow and the
+ * console, so `top` is how far that band moves down.
  */
-function tallPlacement(h: number): readonly [Placement, Placement] {
-    const extra = Math.max(0, h - C.TALL_H);
-    return [{ ...C.TALL_OWN, y: C.TALL_OWN.y + extra / 2 }, C.TALL_RIVAL];
+function tallPlacement(h: number): { at: readonly [Placement, Placement]; top: number } {
+    const s = C.TALL_OWN_S;
+    const ownY = h - C.FIELD_H * s;
+    const top = Math.max(0, (ownY - C.TALL_TOP) / 2);
+    return {
+        at: [
+            { x: 0, y: ownY, s },
+            { ...C.TALL_RIVAL, y: C.TALL_RIVAL.y + top },
+        ],
+        top,
+    };
 }
 const IDLE: Controls = { left: false, right: false, up: false, down: false, fire: false };
 
@@ -602,7 +611,9 @@ export class Game {
         // round with one player on the device. Two players sharing it keep the meadows side by side.
         const inRound = this.phase !== 'title' && this.phase !== 'select';
         r.layout = r.portrait && !(inRound && this.mode === 'versus') ? 'tall' : 'wide';
-        const at = r.layout === 'tall' ? tallPlacement(r.viewH) : WIDE;
+        const tall = r.layout === 'tall' ? tallPlacement(r.viewH) : null;
+        const at = tall ? tall.at : WIDE;
+        r.tallTop = tall ? tall.top : 0;
         r.begin();
         const solo = this.mode !== 'versus';
         const tags: [HudTag, HudTag] = [

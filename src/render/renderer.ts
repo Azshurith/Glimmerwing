@@ -30,6 +30,8 @@ export class Renderer {
     portrait = false;
     /** The tall view's height, stretched by the page to the screen's shape (at least TALL_H). */
     tallH: number = C.TALL_H;
+    /** How far the tall view's top band (rival's meadow and console) moves down to stay centred; Game sets it. */
+    tallTop = 0;
 
     /** Width of the view in view units, for the current layout. */
     get viewW(): number {
@@ -330,7 +332,7 @@ export class Renderer {
     console(v: ConsoleView, time: number): void {
         if (this.layout === 'tall') {
             const b = C.TALL_CONSOLE;
-            this.hudLayer.consoleCompact(v, time, b.x, b.y, b.w, b.h);
+            this.hudLayer.consoleCompact(v, time, b.x, b.y + this.tallTop, b.w, b.h);
             return;
         }
         this.hudLayer.console(v, time);
