@@ -7,6 +7,7 @@
  */
 export type * from './audio';
 export type * from './characters';
+export type * from './flow';
 export type * from './game';
 export type * from './hud';
 export type * from './net';

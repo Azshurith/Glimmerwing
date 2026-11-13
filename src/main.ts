@@ -10,208 +10,232 @@ const renderer = new Renderer(canvas);
 const input = new Input(canvas);
 const sound = new Sound();
 const game = new Game(input, renderer, sound);
+input.viewSize = () => ({ w: renderer.viewW, h: renderer.viewH });
 // Browsers only start audio after a gesture.
 for (const ev of ['keydown', 'pointerdown', 'touchstart'] as const)
-  window.addEventListener(ev, () => sound.unlock(), { passive: true });
-const muteBtn = document.getElementById('mute') as HTMLButtonElement | null;
-const showMute = () => {
-  if (muteBtn) {
-    muteBtn.textContent = sound.muted ? 'Sound off' : 'Sound on';
-    muteBtn.setAttribute('aria-pressed', String(!sound.muted));
-  }
-};
-muteBtn?.addEventListener('click', () => {
-  sound.unlock();
-  sound.toggleMute();
-  showMute();
-  muteBtn.blur();
-});
-window.addEventListener('keydown', e => {
-  if (e.code === 'KeyM') setTimeout(showMute);
-});
-showMute();
+    window.addEventListener(ev, () => sound.unlock(), { passive: true });
 const lobby = new Lobby(game);
 game.onWantOnline = () => lobby.open();
-document.querySelector<HTMLButtonElement>('[data-online]')?.addEventListener('click', e => {
-  lobby.open();
-  (e.currentTarget as HTMLButtonElement).blur();
-});
+// Links from the guide page open the game straight into a mode: index.html?mode=cpu|versus|online.
+const startMode = new URLSearchParams(location.search).get('mode');
+// ?debug=paths draws every fireball's path across the screen.
+game.debugPaths = new URLSearchParams(location.search).get('debug') === 'paths';
+if (startMode === 'cpu' || startMode === 'versus') game.start(startMode);
+else if (startMode === 'online') lobby.open();
 
 // ---- fitting the screen ---------------------------------------------------------
-// The view is a fixed 504x320; scale it to fit both the width and the height available,
-// so a phone held sideways or a short laptop screen still shows all of both meadows.
+// The view is 504x320 side by side, or the tall view on a portrait screen during a round
+// (see Game.draw). Scale it to fit both the width and the height available, so a phone
+// either way up, or a short laptop screen, still shows everything.
 const stage = document.getElementById('stage')!;
 const screenEl = document.getElementById('screen')!;
-const RATIO = C.VIEW_W / C.VIEW_H;
+/** A touchscreen device: its first tap asks for real fullscreen (see below). */
+const coarse = matchMedia('(pointer: coarse)').matches;
+/** Set once the player turns fullscreen off with ⛶, so taps don't turn it back on. */
+let userLeftFull = false;
+/** Size the game to fit the window's width and height, keeping the current layout's aspect ratio. */
 function fit(): void {
-  const vv = window.visualViewport;
-  const vw = vv?.width ?? window.innerWidth,
-    vh = vv?.height ?? window.innerHeight;
-  let w: number;
-  if (stage.classList.contains('immersive')) {
-    const cs = getComputedStyle(stage);
-    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight),
-      padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
-    w = Math.min(vw - padX, (vh - padY) * RATIO);
-  } else {
-    const top = stage.getBoundingClientRect().top + window.scrollY;
-    w = Math.min(stage.clientWidth, Math.max(200, vh - top - 10) * RATIO);
-  }
-  screenEl.style.width = `${Math.floor(w)}px`;
-  // On-screen buttons scale with the game, not the window.
-  screenEl.style.setProperty('--sw', `${Math.floor(w)}px`);
-  renderer.resize();
+    const vv = window.visualViewport;
+    const vw = vv?.width ?? window.innerWidth,
+        vh = vv?.height ?? window.innerHeight;
+    renderer.portrait = vh > vw;
+    // In portrait the tall view takes the screen's own shape, so it fills the screen edge to edge.
+    if (renderer.portrait) {
+        const cs = getComputedStyle(stage);
+        const immersive = stage.classList.contains('immersive');
+        const availW = immersive ? vw - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) : stage.clientWidth,
+            availH = immersive
+                ? vh - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
+                : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
+        renderer.tallH = Math.max(C.TALL_H_MIN, Math.min(C.TALL_H_MAX, (C.TALL_W * availH) / Math.max(1, availW)));
+    }
+    const RATIO = renderer.viewW / renderer.viewH;
+    let w: number;
+    if (stage.classList.contains('immersive')) {
+        const cs = getComputedStyle(stage);
+        const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight),
+            padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+        w = Math.min(vw - padX, (vh - padY) * RATIO);
+    } else {
+        const top = stage.getBoundingClientRect().top + window.scrollY;
+        w = Math.min(stage.clientWidth, Math.max(200, vh - top - 10) * RATIO);
+    }
+    screenEl.style.width = `${Math.floor(w)}px`;
+    screenEl.style.setProperty('--view-ratio', `${renderer.viewW} / ${renderer.viewH}`);
+    // On-screen buttons scale with the game, not the window.
+    screenEl.style.setProperty('--sw', `${Math.floor(w)}px`);
+    renderer.resize();
 }
 for (const ev of ['resize', 'orientationchange'] as const)
-  window.addEventListener(ev, () => requestAnimationFrame(fit));
+    window.addEventListener(ev, () => requestAnimationFrame(fit));
 window.visualViewport?.addEventListener('resize', () => requestAnimationFrame(fit));
 fit();
 
+// ---- the page is the game ----------------------------------------------------------
+// The game always fills the window (the stage starts with .immersive). On a touchscreen the first
+// tap also asks for real fullscreen, which hides the browser's bars; ⛶ on the title turns it off or on.
+window.addEventListener(
+    'pointerdown',
+    () => {
+        if (coarse && !userLeftFull && !fsElement() && fsSupported) void enterFull();
+    },
+    { passive: true },
+);
+
 // ---- fullscreen -----------------------------------------------------------------
 // The real Fullscreen API where there is one; elsewhere (iPhone Safari) a fixed full-window layer.
+/** Document with the prefixed fullscreen API older Safari uses. */
 type FsDoc = Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void };
+/** Element with the prefixed fullscreen request older Safari uses. */
 type FsEl = HTMLElement & { webkitRequestFullscreen?: () => void };
 const fsDoc = document as FsDoc;
+/** The element shown fullscreen, if any. */
 const fsElement = () => fsDoc.fullscreenElement ?? fsDoc.webkitFullscreenElement ?? null;
+/** Go fullscreen where the browser allows it (the game already fills the window either way). */
 async function enterFull(): Promise<void> {
-  stage.classList.add('immersive');
-  fit();
-  try {
-    const el = stage as FsEl;
-    if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
-    else el.webkitRequestFullscreen?.();
-  } catch {
-    /* the full-window layer still works */
-  }
-  // Phones: try to hold landscape while playing (Android Chrome allows it in fullscreen).
-  try {
-    await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape');
-  } catch {
-    /* not supported */
-  }
-  fit();
+    try {
+        const el = stage as FsEl;
+        if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
+        else el.webkitRequestFullscreen?.();
+    } catch {
+        /* the full-window layer still works */
+    }
+    // Either way up works (portrait gets the tall layout), so the orientation isn't locked.
+    fit();
 }
+/** Leave fullscreen (the game still fills the window). */
 function exitFull(): void {
-  stage.classList.remove('immersive');
-  if (fsElement()) {
-    if (fsDoc.exitFullscreen) fsDoc.exitFullscreen().catch(() => undefined);
-    else fsDoc.webkitExitFullscreen?.();
-  }
-  fit();
+    if (fsElement()) {
+        if (fsDoc.exitFullscreen) fsDoc.exitFullscreen().catch(() => undefined);
+        else fsDoc.webkitExitFullscreen?.();
+    }
+    fit();
 }
-const onFsChange = () => {
-  if (!fsElement() && stage.classList.contains('immersive') && fsSupported) stage.classList.remove('immersive');
-  fit();
-};
+/** Refit when the browser enters or leaves fullscreen (including on its own, e.g. Esc). */
+const onFsChange = () => fit();
 const fsSupported = !!(document.fullscreenEnabled || (stage as FsEl).webkitRequestFullscreen);
 document.addEventListener('fullscreenchange', onFsChange);
 document.addEventListener('webkitfullscreenchange', onFsChange);
-document.getElementById('fullscreen')?.addEventListener('click', e => {
-  (e.currentTarget as HTMLElement).blur();
-  void enterFull();
+// ⛶ on the title toggles real fullscreen; it hides where the browser has none (iPhone Safari).
+const fullBtn = document.getElementById('tb-full') as HTMLButtonElement | null;
+if (fullBtn && !fsSupported) fullBtn.hidden = true;
+fullBtn?.addEventListener('click', () => {
+    fullBtn.blur();
+    if (fsElement()) {
+        userLeftFull = true;
+        exitFull();
+    } else {
+        userLeftFull = false;
+        void enterFull();
+    }
 });
-document.getElementById('exit-full')?.addEventListener('click', exitFull);
 
 // ---- on-screen touch buttons ------------------------------------------------------
 // Each presses a key while held, so they drive the same code as the keyboard.
 document.querySelectorAll<HTMLButtonElement>('.touch-ui [data-key]').forEach(b => {
-  const key = b.dataset.key!;
-  const release = () => {
-    if (b.classList.contains('active')) {
-      b.classList.remove('active');
-      input.virtual(key, false);
-    }
-  };
-  b.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    b.setPointerCapture(e.pointerId);
-    b.classList.add('active');
-    input.virtual(key, true);
-    sound.unlock();
-  });
-  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) b.addEventListener(ev, release);
-  b.addEventListener('contextmenu', e => e.preventDefault());
+    const key = b.dataset.key!;
+    const release = () => {
+        if (b.classList.contains('active')) {
+            b.classList.remove('active');
+            input.virtual(key, false);
+        }
+    };
+    b.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        b.setPointerCapture(e.pointerId);
+        b.classList.add('active');
+        input.virtual(key, true);
+        sound.unlock();
+    });
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) b.addEventListener(ev, release);
+    b.addEventListener('contextmenu', e => e.preventDefault());
 });
 const menuBtn = document.getElementById('menu-btn') as HTMLButtonElement;
+// Sound on/off from the title screen's corner (M works from the keyboard too).
+const soundBtn = document.getElementById('tb-sound') as HTMLButtonElement | null;
+soundBtn?.addEventListener('click', () => {
+    sound.unlock();
+    sound.toggleMute();
+    soundBtn.blur();
+});
+let shownMuted: boolean | null = null;
 let shownMode = '',
-  shownPhase = '',
-  shownTouch: boolean | null = null;
+    shownPhase = '',
+    shownLayout = '',
+    shownTouch: boolean | null = null;
 /** Keeps the page's touch layer in step with the game: which buttons show, and what the top one does. */
 function syncPage(): void {
-  if (input.touchActive !== shownTouch) {
-    shownTouch = input.touchActive;
-    document.documentElement.classList.toggle('touch', shownTouch);
-  }
-  if (game.modeName !== shownMode || game.phaseName !== shownPhase) {
-    shownMode = screenEl.dataset.mode = game.modeName;
-    shownPhase = screenEl.dataset.phase = game.phaseName;
-    const back = shownPhase === 'select';
-    menuBtn.textContent = back ? '◀' : '❚❚';
-    menuBtn.setAttribute('aria-label', back ? 'Back' : 'Pause');
-    void keepAwake(shownPhase === 'playing' || shownPhase === 'countdown');
-  }
+    if (soundBtn && sound.muted !== shownMuted) {
+        shownMuted = sound.muted;
+        soundBtn.textContent = shownMuted ? '🔇' : '♪';
+        soundBtn.setAttribute('aria-pressed', String(!shownMuted));
+    }
+    // The layout changes with the phase and the orientation: refit to its shape.
+    if (renderer.layout !== shownLayout) {
+        shownLayout = screenEl.dataset.layout = renderer.layout;
+        fit();
+    }
+    if (input.touchActive !== shownTouch) {
+        shownTouch = input.touchActive;
+        document.documentElement.classList.toggle('touch', shownTouch);
+    }
+    if (game.modeName !== shownMode || game.phaseName !== shownPhase) {
+        shownMode = screenEl.dataset.mode = game.modeName;
+        shownPhase = screenEl.dataset.phase = game.phaseName;
+        const back = shownPhase === 'select';
+        menuBtn.textContent = back ? '◀' : '❚❚';
+        menuBtn.setAttribute('aria-label', back ? 'Back' : 'Pause');
+        void keepAwake(shownPhase === 'playing' || shownPhase === 'countdown');
+    }
 }
 
 // ---- background and sleep -------------------------------------------------------
 // Switching apps or tabs pauses an offline round; while playing, ask the screen not to dim.
 let wake: { release(): Promise<void> } | null = null;
+/** Ask the screen not to dim while playing, and let it go otherwise. */
 async function keepAwake(on: boolean): Promise<void> {
-  const nav = navigator as Navigator & {
-    wakeLock?: { request(type: 'screen'): Promise<{ release(): Promise<void> }> };
-  };
-  try {
-    if (on && !wake && nav.wakeLock && document.visibilityState === 'visible')
-      wake = await nav.wakeLock.request('screen');
-    else if (!on && wake) {
-      await wake.release();
-      wake = null;
+    const nav = navigator as Navigator & {
+        wakeLock?: { request(type: 'screen'): Promise<{ release(): Promise<void> }> };
+    };
+    try {
+        if (on && !wake && nav.wakeLock && document.visibilityState === 'visible')
+            wake = await nav.wakeLock.request('screen');
+        else if (!on && wake) {
+            await wake.release();
+            wake = null;
+        }
+    } catch {
+        wake = null;
     }
-  } catch {
-    wake = null;
-  }
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    game.pauseForBackground();
-    wake = null;
-    input.held.clear();
-  } else void keepAwake(shownPhase === 'playing');
+    if (document.visibilityState === 'hidden') {
+        game.pauseForBackground();
+        wake = null;
+        input.held.clear();
+    } else void keepAwake(shownPhase === 'playing');
 });
-
-// The full help is open on desktop, folded away on touchscreens where space is short.
-const help = document.getElementById('help') as HTMLDetailsElement | null;
-if (help && !matchMedia('(pointer: coarse)').matches) help.open = true;
 
 // Installable app: cache the game for offline play where it's served over http(s).
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  window.addEventListener('load', () => void navigator.serviceWorker.register('sw.js').catch(() => undefined));
+    window.addEventListener('load', () => void navigator.serviceWorker.register('sw.js').catch(() => undefined));
 }
-
-document.getElementById('reset')?.addEventListener('click', () => {
-  if (confirm('Reset unlocked fairies and stats?')) game.resetProgress();
-});
-document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach(b =>
-  b.addEventListener('click', () => {
-    lobby.close();
-    game.start(b.dataset.mode as 'cpu' | 'versus');
-    b.blur();
-  }),
-);
 
 // Fixed-step simulation, decoupled from display refresh rate.
 let last = performance.now();
 let acc = 0;
+/** One animation frame: run as many fixed simulation steps as time has passed, then draw. */
 function frame(now: number) {
-  input.pollPads();
-  acc += Math.min(0.25, (now - last) / 1000);
-  last = now;
-  while (acc >= C.STEP) {
-    game.step(C.STEP);
-    input.endFrame();
-    acc -= C.STEP;
-  }
-  game.draw();
-  syncPage();
-  requestAnimationFrame(frame);
+    input.pollPads();
+    acc += Math.min(0.25, (now - last) / 1000);
+    last = now;
+    while (acc >= C.STEP) {
+        game.step(C.STEP);
+        input.endFrame();
+        acc -= C.STEP;
+    }
+    game.draw();
+    syncPage();
+    requestAnimationFrame(frame);
 }
 void (document.fonts?.ready ?? Promise.resolve()).then(() => requestAnimationFrame(frame));
