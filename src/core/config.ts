@@ -9,17 +9,29 @@ export const VIEW_H = FIELD_H;
 
 /**
  * The tall view, used while playing on a portrait screen (one player on the device):
- * your meadow full size at the bottom, the rival's at half size at the top beside a
- * compact console, and a strip under your meadow for the touch buttons.
+ * your meadow at the bottom, as wide as the view and touching its bottom edge (touch play is
+ * all gestures on the meadow, so nothing sits under it), and the rival's at half size at the
+ * top beside a compact console.
  */
 export const TALL_W = FIELD_W + 24;
+/** Height of the band above your meadow that holds the rival's meadow and the console. */
 export const TALL_TOP = 172;
+/** Room the title and select screens are designed for below TALL_TOP + FIELD_H. */
 export const TALL_STRIP = 56;
+/** The tall view's shortest height; on longer screens it stretches to their shape, up to TALL_H_MAX. */
 export const TALL_H = TALL_TOP + FIELD_H + TALL_STRIP;
-/** Where each meadow sits in the tall view: yours (field 0) and the rival's, at half size. */
-export const TALL_OWN = { x: 12, y: TALL_TOP, s: 1 } as const;
+export const TALL_H_MAX = 680;
+/** Your meadow's scale in the tall view: it spans the whole width. */
+export const TALL_OWN_S = TALL_W / FIELD_W;
+/**
+ * The tall view can be shorter than TALL_H, so a squatter phone screen is still filled. In a round the band above
+ * your meadow (rival's meadow and console) shrinks, down to TALL_TOP_MIN; the title and select screens shrink as a
+ * whole (see menu-fit.ts). Below TALL_H_MIN the view stops shrinking and the page shows bars.
+ */
+export const TALL_TOP_MIN = 104;
+export const TALL_H_MIN = Math.ceil(FIELD_H * TALL_OWN_S) + TALL_TOP_MIN;
+/** Where the rival's meadow sits in the tall view, at half size (moved down to centre it in the band above yours). */
 export const TALL_RIVAL = { x: 8, y: 6, s: 0.5 } as const;
-/** The compact console beside the rival's meadow in the tall view. */
 export const TALL_CONSOLE = { x: 136, y: 6, w: 120, h: FIELD_H / 2 } as const;
 
 export const STEP = 1 / 60;
@@ -68,9 +80,8 @@ export const BURST_LIFE = 0.38;
 export const STAR_RADIUS = 7;
 export const BRAMBLE_RADIUS = 12;
 export const BRAMBLE_HP = 4;
+/** A fireball's level: 1 is a Normal Attack, 2 or more a Reverse (higher for fairies with a counter boost). */
 export const MAX_STAR_LEVEL = 3;
-/** Hits a star needs: 1 + its level, so 2 to 4. */
-export const starHp = (level: number) => 1 + level;
 
 export const GAUGE_MAX = 200;
 export const MOTH_HP = 70; // bosses are tough: a few seconds of focused fire won't banish one
@@ -123,8 +134,6 @@ export const GUARDIAN_NUDGE = 18; // sideways speed each shot adds while it exit
 export const FEVER_TIME = 6;
 /** During Fever you fire this many times faster (autofire and tapping alike). The shot pattern doesn't change. */
 export const FEVER_FIRE_RATE = 2;
-/** Most stars a single chain can send during Fever. */
-export const FEVER_STAR_CAP = 12;
 /** When the first moonseed arrives each round, then how often after that. */
 export const MOONSEED_FIRST = 32;
 export const MOONSEED_EVERY = 40;
@@ -138,12 +147,12 @@ export const COMET_RADIUS = 6;
 export const COMET_SPEED = 230;
 
 /**
- * Waves flow like Twinkle Star Sprites: there's no spawn clock. The next
- * formation comes in as soon as the last one is popped or has left the
- * meadow, so clearing fast brings the swarm faster.
+ * Waves flow like Twinkle Star Sprites: there's no spawn clock. Each formation flies in, holds its
+ * shape for a while and flies off (see waves.ts); the next comes in once it's cleared or gone, or as
+ * it starts to leave, so clearing fast brings the swarm faster.
  */
-export const WAVE_GAP = 0.35; // beat between a wave clearing and the next arriving
-export const WAVE_MAX_WAIT = 12; // safety net only: a straggling wave can't stall the meadow longer than this
+export const WAVE_GAP = 0.5; // beat before the next formation sets off
+export const WAVE_MAX_WAIT = 20; // safety net only: a formation can't hold up the next one longer than this
 
 /** Sudden death, part one: at this point every critter speeds up sharply. */
 export const SURGE_TIME = 100;
@@ -214,17 +223,80 @@ export const BOMB_SLOW_TIME = 1.6;
 export const HOLE_Y = 110;
 export const HOLE_PULL = 160;
 
-/** Star flights: chance a star is a seeker or a slant (the rest drop straight). */
-export const SEEKER_CHANCE = 0.25;
-export const SLANT_CHANCE = 0.25;
+/** Extra Attack seekers: how long one lines up before plunging. */
 export const SEEK_TIME = 0.75; // how long a seeker lines up before plunging
+/**
+ * Fireballs (TSS Normal Attacks). A chain of 4 or more sends floor((hits - 2) / 2) of them: 4-5 hits
+ * send 1, 6-7 send 2, 8-9 send 3 and so on. During Fever every hit after the first sends one.
+ */
+export const FIREBALL_MIN_HITS = 4;
+/** Fireballs a chain of `hits` sends. */
+export const fireballsFor = (hits: number) => (hits >= FIREBALL_MIN_HITS ? Math.floor((hits - 2) / 2) : 0);
+/** Fireballs a chain of `hits` sends during Fever. */
+export const feverFireballsFor = (hits: number) => Math.max(0, hits - 1);
+/** Most fireballs one chain can send. */
+export const FIREBALL_CAP = 12;
+/**
+ * A fireball's size comes from the combo hit that sent it: hits 2-5 small, 6-10 medium, 11-15 large,
+ * 16 and up extra large. It takes size + 1 shots to break (2 to 5).
+ */
+/** Size of the fireball sent by combo hit number `hit`. */
+export const fireballSizeAt = (hit: number) => (hit <= 5 ? 1 : hit <= 10 ? 2 : hit <= 15 ? 3 : 4);
+/** Shots a fireball of this size takes to break. */
+export const fireballHp = (size: number) => size + 1;
+/** A fireball's radius by size. */
+export const fireballRadius = (size: number) => 5.5 + size * 1.6;
+/**
+ * A top-drop fireball appears just inside the top and slides along it after the fairy for FIREBALL_TRACK_TIME,
+ * then locks on and falls, faster and faster, to FIREBALL_FALL_SPEED (measured from TSS footage: about 0.75
+ * of the meadow's height a second). Some lean a little, up to FIREBALL_LEAN radians from straight down.
+ */
+export const FIREBALL_TRACK_TIME = 0.5;
+export const FIREBALL_TRACK_SPEED = 150;
+export const FIREBALL_ENTER_SPEED = 24;
+export const FIREBALL_ACCEL = 300;
+export const FIREBALL_FALL_SPEED = 230;
+export const FIREBALL_LEAN_CHANCE = 0.35;
+export const FIREBALL_LEAN = 0.14;
+/**
+ * Speed. Size never changes it. Each reflection multiplies it by SPEED_REVERSE (initial tuning target, not
+ * measured), each Perfect the sender has this round adds PERFECT_SPEED_STEP (up to PERFECT_SPEED_MAX), and
+ * the tempo and sudden death speed everything in flight. FIREBALL_MAX_SPEED caps it so nothing can skip
+ * past a hitbox in one step. SPEED_EXTRA is how much faster an Extra Attack crosses between the meadows.
+ */
+export const SPEED_NORMAL = 1;
+export const SPEED_REVERSE = 1.5;
+export const SPEED_EXTRA = 1.8;
+export const PERFECT_SPEED_STEP = 0.08;
+export const PERFECT_SPEED_MAX = 1.5;
+export const FIREBALL_MAX_SPEED = 420;
+/** A fireball's speed multiplier after `reflects` reflections, with the sender's Perfect `boost`. */
+export const fireballSpeedMul = (reflects: number, boost: number) =>
+    Math.min(3, SPEED_NORMAL * SPEED_REVERSE ** reflects * boost);
+/** Reverse fireballs also lock on sooner. */
+export const REVERSE_TRACK_TIME = 0.25;
+/** A shot that doesn't break a fireball stalls it this long and flashes it this long. */
+export const FIREBALL_STALL = 0.06;
+export const FIREBALL_HIT_FLASH = 0.1;
+/**
+ * A fireball you shoot down flashes, turns into a Reverse where it broke and crosses the screen on one curve
+ * (fireball-path.ts) to where the rival's fairy was, starting at FIREBALL_BACK_START of its reflected speed
+ * and reaching it over FIREBALL_BACK_RAMP seconds.
+ */
+export const FIREBALL_BACK_START = 0.3;
+export const FIREBALL_BACK_RAMP = 0.3;
+export const FIREBALL_FLASH = 0.3;
+/** Positions kept for a Reverse's glowing trail. */
+export const FIREBALL_TAIL = 10;
+/** Fever fireballs reach the rival this much sooner (a share of TRANSIT_TIME). */
+export const FEVER_TRANSIT = 0.6;
 export const SEEK_SLIDE = 170; // how fast it slides across while lining up
 
 export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '15'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '23'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

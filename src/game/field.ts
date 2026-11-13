@@ -9,6 +9,8 @@ import type {
     Crow,
     Fairy,
     FieldSnapshot,
+    Formation,
+    FormationShape,
     Moth,
     Outgoing,
     Particle,
@@ -17,9 +19,9 @@ import type {
     Puff,
     Sfx,
     Shot,
-    StarFlight,
 } from '@/types';
-import { rollWave } from './waves';
+import { curveAt, curveDir, curveStep, enterAt, reverseCurve, shiftCurve } from './fireball-path';
+import { leaving, memberAt, rollFormation, startFormation } from './waves';
 
 /** Which bomb sound each bomb style plays (see Sound.play 'bomb'). */
 const BOMB_SOUND: Record<string, number> = { dash: 0, blast: 1, vortex: 2, fan: 3, beam: 4, hole: 5 };
@@ -45,7 +47,7 @@ const attackRadius = (a: Attack) =>
           ? C.COMET_RADIUS
           : a.kind === 'imp'
             ? C.IMP_RADIUS
-            : C.STAR_RADIUS;
+            : C.fireballRadius(a.size ?? 1);
 
 /** Squared distance between two points (avoids a square root in hit tests). */
 const dist2 = (ax: number, ay: number, bx: number, by: number) => (ax - bx) * (ax - bx) + (ay - by) * (ay - by);
@@ -101,6 +103,15 @@ export class Field {
     private spawnT = 1.2;
     private waveId = 0;
     private waveT = 0;
+    /** Perfects this round (whole formations cleared by one chain): they speed up the fireballs I send. */
+    perfects = 0;
+    /** Which way the rival's meadow lies on screen (+1 right, -1 left): Reverses cross the screen that way. */
+    rivalSide: 1 | -1 = 1;
+    /** Where the rival's fairy is in their meadow (Game keeps it up to date): a Reverse locks on to it. */
+    rivalFairy = { x: C.FIELD_W / 2, y: C.FIELD_H - 40 };
+    /** Formations in play, and the shape of the last one (so the same shape doesn't come twice running). */
+    private forms: Formation[] = [];
+    private lastShape: FormationShape | null = null;
     private surged = false;
     private chains = new Map<number, ChainInfo>();
     private nextChain = 1;
@@ -182,7 +193,8 @@ export class Field {
         this.spawnWaves(critters);
         this.updateShots(own);
         this.updatePuffs(critters);
-        this.updateAttacks(world);
+        // Sudden death speeds the rival's fireballs and Extra Attacks up too, to force a finish.
+        this.updateAttacks(world * (this.surged ? C.SURGE_SPEED : 1));
         this.updateMoth(world);
         this.updateBullets(world);
         this.updateCrows(world);
@@ -324,43 +336,77 @@ export class Field {
             }
             return;
         }
-        // Attacks drop in at the same spot they were sent from, mirrored into this meadow.
+        // Attacks drop in at the same spot they were sent from (or where they're aimed), mirrored into this meadow.
         const x = Math.min(C.FIELD_W - 12, Math.max(12, o.fromX));
-        const speed = o.kind === 'bramble' ? 42 : o.kind === 'comet' ? C.COMET_SPEED : 70 + o.level * 32;
-        let vx = o.kind === 'bramble' ? (this.player.x - x) * 0.2 : 0,
-            vy = speed;
-        // Stars come in three flights; tougher (batted-back) stars lean toward the trickier ones.
-        let flight: StarFlight = 'drop';
         if (o.kind === 'star') {
-            const roll = this.fxRng.next(),
-                bias = (o.level - 1) * 0.1;
-            if (roll < C.SEEKER_CHANCE + bias) flight = 'seeker';
-            else if (roll < C.SEEKER_CHANCE + C.SLANT_CHANCE + bias * 2) flight = 'slant';
+            this.receiveFireball(o, x);
+            return;
         }
-        if (flight === 'slant') {
-            // Angle across the meadow, toward the far side from where it enters.
-            const dir = x < C.FIELD_W / 2 ? 1 : -1;
-            const ang = this.fxRng.range(0.35, 0.6);
-            vx = dir * Math.sin(ang) * speed * 1.1;
-            vy = Math.cos(ang) * speed;
-        }
-        if (flight === 'seeker') {
-            vx = 0;
-            vy = 0;
-        }
+        const speed = o.kind === 'bramble' ? 42 : C.COMET_SPEED;
         this.attacks.push({
             x,
             y: -12,
-            vx,
-            vy,
-            flight,
-            seekT: flight === 'seeker' ? C.SEEK_TIME : 0,
+            vx: o.kind === 'bramble' ? (this.player.x - x) * 0.2 : 0,
+            vy: speed,
+            flight: 'drop',
+            seekT: 0,
             plunge: speed * 1.2,
             kind: o.kind,
             level: o.level,
-            hp: o.kind === 'bramble' ? C.BRAMBLE_HP : o.kind === 'comet' ? Infinity : C.starHp(o.level),
+            hp: o.kind === 'bramble' ? C.BRAMBLE_HP : Infinity,
             spin: this.fxRng.range(0, Math.PI * 2),
             dead: false,
+        });
+    }
+
+    /**
+     * A fireball arrives. A Normal comes in at the top of the meadow, slides along after the fairy, locks on
+     * and falls across the meadow (straight, or leaning a little) and out the bottom. A Reverse arrives
+     * mid-flight on its curve across the screen and carries on along it onto where the fairy was when it was
+     * broken, then straight on out. Size sets hits, never speed; speed comes from reflections and the
+     * sender's Perfects (fireballSpeedMul) and is capped.
+     */
+    private receiveFireball(o: Outgoing, x: number): void {
+        const size = Math.min(4, Math.max(1, o.size ?? 1));
+        const reverse = o.level >= 2;
+        const mul = C.fireballSpeedMul(o.reflects ?? (reverse ? 1 : 0), o.boost ?? 1);
+        const base = {
+            kind: 'star' as const,
+            level: o.level,
+            size,
+            tint: o.tint,
+            fever: !reverse && o.fever,
+            reflects: o.reflects ?? (reverse ? 1 : 0),
+            hp: C.fireballHp(size),
+            spin: this.fxRng.range(0, Math.PI * 2),
+            dead: false,
+            seekT: 0,
+            plunge: 0,
+        };
+        if (o.curve) {
+            // Carry on along the curve it left the sender's meadow on, from where it comes into this one.
+            const curve = shiftCurve(o.curve, o.side ?? 1);
+            const k = enterAt(curve, o.k ?? 0);
+            const p = curveAt(curve, k);
+            const speed = Math.min(C.FIREBALL_MAX_SPEED, o.speed ?? C.FIREBALL_FALL_SPEED * mul);
+            this.attacks.push({ ...base, x: p.x, y: p.y, vx: 0, vy: 1, flight: 'cross', curve, k, t: speed, speed });
+            return;
+        }
+        const fall = Math.min(C.FIREBALL_MAX_SPEED, C.FIREBALL_FALL_SPEED * mul);
+        // Most fall straight; some lean a little.
+        const lean = this.fxRng.next() < C.FIREBALL_LEAN_CHANCE ? this.fxRng.range(-1, 1) * C.FIREBALL_LEAN : 0;
+        this.attacks.push({
+            ...base,
+            x,
+            y: 10,
+            vx: 0,
+            vy: C.FIREBALL_ENTER_SPEED,
+            flight: 'drop',
+            seekT: reverse ? C.REVERSE_TRACK_TIME : C.FIREBALL_TRACK_TIME,
+            plunge: fall,
+            t: C.FIREBALL_ENTER_SPEED,
+            speed: fall,
+            lean,
         });
     }
 
@@ -542,173 +588,80 @@ export class Field {
         return this.nextMoonseed > 0 && this.nextMoonseed - this.time < C.MOONSEED_WARNING;
     }
 
-    /** Spawn the next wave of critters once the current one is cleared or has waited long enough. */
+    /**
+     * Bring in the next formation once the current one is cleared or has flown off, or, for some, as soon
+     * as it starts to leave, so the meadow never sits empty for long (see waves.ts for the choreography).
+     */
     private spawnWaves(dt: number): void {
-        // Formation flow: the next wave waits until every member of the current one
-        // has been popped or has left the meadow, then follows after a short beat.
         this.waveT += dt;
-        const holding =
-            this.waveId > 0 && this.waveT < C.WAVE_MAX_WAIT && this.puffs.some(j => j.wave === this.waveId && !j.dead);
+        this.forms = this.forms.filter(g => this.puffs.some(j => j.form?.g === g && !j.dead));
+        const cur = this.forms.find(g => g.id === this.waveId);
+        const holding = this.waveId > 0 && this.waveT < C.WAVE_MAX_WAIT && cur && !(cur.spec.overlap && leaving(cur));
         if (holding) {
             this.spawnT = C.WAVE_GAP;
             return;
         }
         this.spawnT -= dt;
         if (this.spawnT > 0) return;
-        // Both meadows draw the same sequence of waves from the shared seed; a faster
-        // clearer just meets them sooner. The moonseed rides the first wave after its time.
+        // Both meadows draw the same sequence of formations from the shared seed; a faster
+        // clearer just meets them sooner. The moonseed rides the first formation after its time.
         const withMoonseed = this.time >= this.nextMoonseed;
         if (withMoonseed) this.nextMoonseed += C.MOONSEED_EVERY;
-        const r = this.waveRng;
         const pressure = Math.min(1, this.time / 90);
         this.waveId++;
         this.waveT = 0;
-        const w = rollWave(r, pressure);
-        const firstNew = this.puffs.length;
-        const n = w.count;
-        const size = w.big ? 1.5 : 1;
-        if (w.path === 'rise') this.popup(w.side < 0 ? 50 : C.FIELD_W - 50, C.FIELD_H - 70, 'From below');
-
-        for (let i = 0; i < n; i++) {
-            let x = w.cx,
-                y = -14;
-            const spread = size;
-            switch (w.path) {
-                case 'arc': {
-                    const a = Math.PI * (i / Math.max(1, n - 1));
-                    x = w.cx + Math.cos(a) * 40 * spread;
-                    y = -14 - Math.sin(a) * 26 * spread;
-                    break;
-                }
-                case 'string':
-                    x = w.cx - 50 + i * (100 / n);
-                    y = -14 - i * 12 * spread;
-                    break;
-                case 'ring': {
-                    const a = (Math.PI * 2 * i) / n;
-                    x = w.cx + Math.cos(a) * 26 * spread;
-                    y = -40 + Math.sin(a) * 22 * spread;
-                    break;
-                }
-                case 'leader':
-                    if (i > 0) {
-                        const a = (Math.PI * 2 * (i - 1)) / (n - 1);
-                        x = w.cx + Math.cos(a) * 17;
-                        y = -40 + Math.sin(a) * 17;
-                    } else y = -40;
-                    break;
-            }
-            const phase = (i * 1.7 + w.cx) % 6.28;
-            let vx = ((i * 37) % 16) - 8,
-                vy = w.speed,
-                shell = w.bubble ? 1 : 0;
-            if (w.kind === 'beetle') {
-                vx = w.side * 34;
-                vy = w.speed * 1.35;
-                shell = 2;
-            }
-            if (w.kind === 'spinner') {
-                vx = 0;
-                vy = w.speed * 0.9;
-            }
-            let path: Puff['path'];
-            switch (w.path) {
-                case 'swoop':
-                    path = { type: 'swoop', t: 0, delay: i * 0.32 * size, dir: w.side, ox: 0, oy: 0 };
-                    break;
-                case 'sweep':
-                    path = { type: 'sweep', t: 0, delay: i * 0.42 * size, dir: w.side, ox: 0, oy: w.lane };
-                    break;
-                case 'column':
-                    path = {
-                        type: 'column',
-                        t: 0,
-                        delay: Math.floor(i / 2) * 0.55,
-                        dir: i % 2 ? 1 : -1,
-                        ox: w.cx,
-                        oy: 0,
-                    };
-                    break;
-                case 'rise':
-                    path = { type: 'rise', t: 0, delay: 0.9 + i * 0.4, dir: w.side, ox: 0, oy: 0 };
-                    break;
-            }
-            if (path) {
-                x = -100;
-                y = -100;
-                vx = 0;
-            }
-            const hp = w.hp[i];
+        const spec = rollFormation(this.waveRng, pressure, this.lastShape);
+        this.lastShape = spec.shape;
+        const g = startFormation(this.waveId, spec);
+        this.forms.push(g);
+        const size = spec.big ? 1.5 : 1;
+        const mid = Math.floor(spec.count / 2);
+        for (let i = 0; i < spec.count; i++) {
+            const hp = spec.hp[i];
             this.puffs.push({
-                kind: w.kind,
-                x,
-                y,
-                baseX: x,
-                vx,
-                vy,
-                phase,
+                kind: spec.kind,
+                // Waiting off-screen until its turn to fly in.
+                x: -100,
+                y: -100,
+                baseX: -100,
+                vx: 0,
+                vy: 0,
+                phase: i * 0.9,
                 dead: false,
                 hp,
                 maxHp: hp,
-                shell,
-                path,
+                shell: spec.kind === 'beetle' ? 2 : spec.bubble ? 1 : 0,
                 size,
                 wave: this.waveId,
+                form: { g, i },
+                moonseed: withMoonseed && i === mid ? true : undefined,
             });
-        }
-        if (withMoonseed) {
-            const m = this.puffs[firstNew + Math.floor((this.puffs.length - firstNew) / 2)];
-            if (m) {
-                m.moonseed = true;
-                m.shell = 0;
-            }
+            if (withMoonseed && i === mid) this.puffs[this.puffs.length - 1].shell = 0;
         }
     }
 
-    /** Formation paths: each member follows the same route, a beat behind the one ahead. */
-    private followPath(j: Puff, dt: number): void {
-        const P = j.path!;
-        P.t += dt;
-        const tt = P.t - P.delay;
-        if (tt < 0) {
-            j.x = -100;
-            j.y = -100;
-            return;
-        } // still waiting off-screen
-        const W = C.FIELD_W;
-        if (P.type === 'swoop') {
-            // Enter from a top corner, dive to mid-meadow and curl back up and out.
-            const T = 7,
-                k = tt / T;
-            j.x = (P.dir > 0 ? -10 : W + 10) + P.dir * (W + 20) * k;
-            j.y = -14 + 4 * 175 * k * (1 - k);
-            if (k > 1) j.dead = true;
-        } else if (P.type === 'sweep') {
-            // A line crossing the meadow, sinking slowly.
-            j.x = (P.dir > 0 ? -12 : W + 12) + P.dir * 48 * tt;
-            j.y = P.oy + 6 * tt;
-            if (j.x < -20 || j.x > W + 20) j.dead = true;
-        } else if (P.type === 'rise') {
-            // The sneaky one: climbs up from a bottom corner, across the fairy's level, and out the top.
-            const T = 6,
-                k = tt / T;
-            j.x = (P.dir < 0 ? 14 : W - 14) - P.dir * (W * 0.55) * k + Math.sin(k * Math.PI * 2) * 12;
-            j.y = C.FIELD_H + 14 - (C.FIELD_H + 40) * k;
-            if (k > 1) j.dead = true;
-        } else {
-            // Two columns dropping in pairs, squeezing together as they fall.
-            j.x = P.ox + P.dir * (8 + 24 * Math.max(0, 1 - tt / 3.5));
-            j.y = -14 + 42 * tt;
-            if (j.y > C.FIELD_H + 20) j.dead = true;
-        }
-    }
-
-    /** Move every critter along its formation path or drift. */
+    /** Move every critter: formation members along their choreography, Fever rushes as a loose drift. */
     private updatePuffs(dt: number): void {
+        for (const g of this.forms) g.t += dt;
         for (const j of this.puffs) {
             j.phase += dt * 3;
-            if (j.path) {
-                this.followPath(j, dt);
+            if (j.form) {
+                const p = memberAt(j.form.g, j.form.i, j.kind);
+                if (p === 'gone') {
+                    j.dead = true; // flew out of the meadow; not popped, so no chain or score
+                    j.form.g.escaped = true;
+                } else if (p === 'wait') {
+                    j.x = j.y = j.baseX = -100;
+                    j.vx = j.vy = 0;
+                } else {
+                    if (j.x > -50 && dt > 0) {
+                        // Velocity for facing (beetles) and for the online mirror's extrapolation.
+                        j.vx = (p.x - j.x) / dt;
+                        j.vy = (p.y - j.y) / dt;
+                    }
+                    j.x = j.baseX = p.x;
+                    j.y = p.y;
+                }
                 continue;
             }
             if (j.kind === 'beetle') {
@@ -785,6 +738,7 @@ export class Field {
             if (s.dead) continue;
 
             for (const a of this.attacks) {
+                if (a.flight === 'back') continue; // on its way back: shots pass by
                 const r = attackRadius(a);
                 if (!a.dead && dist2(s.x, s.y, a.x, a.y) < (r + hitR) ** 2) {
                     s.dead = true;
@@ -847,6 +801,13 @@ export class Field {
     /** Pop a critter as part of a chain, setting off a burst of its own. */
     private popPuff(j: Puff, chainId: number, big: boolean): void {
         j.dead = true;
+        const g = j.form?.g;
+        if (g) {
+            // A Perfect: every member of a formation taken by one chain (TSS), none escaping.
+            g.popped = (g.popped ?? 0) + 1;
+            g.chain = g.chain === undefined || g.chain === chainId ? chainId : -1;
+            if (g.popped === g.spec.count && g.chain === chainId && !g.escaped) this.perfect(j.x, j.y);
+        }
         const c = this.chains.get(chainId);
         if (c) {
             c.pops++;
@@ -859,31 +820,79 @@ export class Field {
         this.spray(j.x, j.y, 8, '#fff6d8');
     }
 
+    /**
+     * A Perfect: a whole formation cleared by one chain. Each one speeds up every fireball I send for the
+     * rest of the round (capped; see PERFECT_*).
+     */
+    private perfect(x: number, y: number): void {
+        this.perfects++;
+        this.popup(x, y - 16, 'Perfect!');
+        this.snd('extra');
+    }
+
+    /** How much my Perfects speed up the fireballs I send. */
+    get perfectBoost(): number {
+        return Math.min(C.PERFECT_SPEED_MAX, 1 + C.PERFECT_SPEED_STEP * this.perfects);
+    }
+
     /** Hitting an incoming attack. Spores bounce back at a higher level. */
     private hitAttack(a: Attack, dmg: number, chainId: number | null): void {
         a.hp -= dmg;
         if (a.hp > 0) {
             this.spray(a.x, a.y, 3, a.kind === 'star' ? '#ffe27a' : '#b98ae0');
+            if (a.kind === 'star') {
+                // A fireball takes the hit: it stalls and flashes, and only reverses once it breaks.
+                a.stall = C.FIREBALL_STALL;
+                a.hitT = C.FIREBALL_HIT_FLASH;
+            }
             return;
         }
         a.dead = true;
-        // Countering doesn't add to the chain count; the counter itself is the reward.
         const id = chainId ?? this.newChain(a.x, a.y, false);
+        if (a.kind === 'star') {
+            // A fireball broken in a chain counts as a hit, so popping one can extend a combo (TSS).
+            const c = this.chains.get(id);
+            if (c) {
+                c.pops++;
+                c.x = a.x;
+                c.y = a.y;
+            }
+        }
         if (a.kind === 'bramble') {
             this.addBurst(a.x, a.y, id, C.CHARGED_BURST_RADIUS);
             this.spray(a.x, a.y, 16, '#b98ae0');
             this.gauge = Math.min(C.GAUGE_MAX, this.gauge + 4);
         } else {
-            this.addBurst(a.x, a.y, id, C.BURST_RADIUS);
+            this.addBurst(a.x, a.y, id, C.BURST_RADIUS * (0.85 + (a.size ?? 1) * 0.15));
             this.spray(a.x, a.y, 6, '#ffe27a');
             if (a.level < 2) {
-                // A plain star goes back as a flashing reverse star, tougher.
+                // A Normal fireball flashes and turns into a Reverse right where it broke, then arcs up and out
+                // of the meadow toward the rival's side, on its way back to them (see flyBack).
                 const lvl = Math.min(C.MAX_STAR_LEVEL, 2 + this.fairy.counterBoost);
-                this.outbox.push({ kind: 'star', level: lvl, fromX: a.x, fromY: a.y });
+                a.dead = false;
+                a.flight = 'back';
+                a.level = lvl;
+                a.hp = Infinity;
+                a.fever = false;
+                a.flash = C.FIREBALL_FLASH;
+                a.stall = 0;
+                a.lean = 0;
+                // Lock on to where the rival's fairy is right now: the Reverse crosses the screen to there.
+                a.curve = reverseCurve(a.x, a.y, this.rivalFairy.x, this.rivalFairy.y, this.rivalSide);
+                a.k = 0;
+                // One more reflection: it heads back faster (capped), boosted by my Perfects.
+                a.reflects = (a.reflects ?? 0) + 1;
+                a.speed = Math.min(
+                    C.FIREBALL_MAX_SPEED,
+                    C.FIREBALL_FALL_SPEED * C.fireballSpeedMul(a.reflects, this.perfectBoost),
+                );
+                // Ease up to that speed from a fraction of it.
+                a.t = a.speed * C.FIREBALL_BACK_START;
+                a.tail = [a.x, a.y];
                 this.popup(a.x, a.y - 10, 'Reverse');
                 this.snd('reverse');
             } else {
-                // Breaking a reverse star turns it into one of your Extra Attack critters.
+                // Breaking a Reverse fireball turns it into one of your Extra Attack critters, sent at the rival.
                 this.outbox.push({ kind: 'imp', level: 1, fromX: a.x, fromY: a.y, fairy: this.fairy.id });
                 this.popup(a.x, a.y - 10, this.fairy.extra.name);
                 this.snd('extra');
@@ -917,7 +926,13 @@ export class Field {
                 }
             }
             for (const a of this.attacks) {
-                if (!a.dead && a.kind === 'star' && !b.hits.has(a) && dist2(b.x, b.y, a.x, a.y) < r * r) {
+                if (
+                    !a.dead &&
+                    a.kind === 'star' &&
+                    a.flight !== 'back' &&
+                    !b.hits.has(a) &&
+                    dist2(b.x, b.y, a.x, a.y) < r * r
+                ) {
                     b.hits.add(a);
                     this.hitAttack(a, 1, b.chainId);
                 }
@@ -957,13 +972,24 @@ export class Field {
         this.gauge = Math.min(C.GAUGE_MAX, this.gauge + ((n - 1) * 2 + (c.charged ? 2 : 0)) * (this.fever > 0 ? 2 : 1));
         if (n >= 2) this.popup(c.x, c.y, `${n} chain`);
         const inFever = this.fever > 0;
-        if (n >= 3 || (inFever && n >= 2)) {
-            // During Fever every pop after the first sends a star (a 5-chain sends 4).
-            const stars = inFever ? Math.min(C.FEVER_STAR_CAP, n - 1) : Math.min(3, Math.floor((n - 1) / 2));
-            // Fan a volley out around the chain's last pop so the stars don't stack.
-            for (let i = 0; i < stars; i++) {
-                const off = (i - (stars - 1) / 2) * 16;
-                this.outbox.push({ kind: 'star', level: 1, fromX: c.x + off, fromY: c.y });
+        // Fireballs (TSS Normal Attacks): floor((hits - 2) / 2) from 4 hits, or one per hit after the first in
+        // Fever. Each one's size comes from the hit that sent it: the 1st from hit 4, the 2nd from hit 6...
+        const balls = Math.min(C.FIREBALL_CAP, inFever ? C.feverFireballsFor(n) : C.fireballsFor(n));
+        if (balls > 0) {
+            for (let i = 0; i < balls; i++) {
+                const hit = inFever ? i + 2 : 2 * i + 4;
+                // Fan the volley out around the chain's last pop so they don't stack.
+                const off = (i - (balls - 1) / 2) * 16;
+                this.outbox.push({
+                    kind: 'star',
+                    level: 1,
+                    size: C.fireballSizeAt(hit),
+                    fever: inFever,
+                    reflects: 0,
+                    boost: this.perfectBoost,
+                    fromX: c.x + off,
+                    fromY: c.y,
+                });
             }
             if (n >= 7) this.outbox.push({ kind: 'bramble', level: 1, fromX: c.x, fromY: c.y });
             this.snd('send', n);
@@ -1019,6 +1045,7 @@ export class Field {
 
     /** Move the attacks the rival sent, by their flight style, and let bursts reverse them back. */
     private updateAttacks(dt: number): void {
+        if (dt <= 0) return;
         for (const a of this.attacks) {
             a.spin += dt * (a.kind === 'bramble' ? 1.5 : 4 + a.level);
             if (a.flight === 'zig') {
@@ -1096,6 +1123,53 @@ export class Field {
                     }
                 }
             }
+            if (a.hitT) a.hitT = Math.max(0, a.hitT - dt);
+            if (a.flight === 'back') {
+                this.flyBack(a, dt);
+                continue;
+            }
+            if (a.kind === 'star' && a.stall) {
+                // Knocked back a moment by a shot that didn't break it.
+                a.stall = Math.max(0, a.stall - dt);
+                continue;
+            }
+            if (a.kind === 'star' && a.flight === 'drop') {
+                if (a.seekT > 0) {
+                    // Along the top, sliding after the fairy; where it is when this ends is where it falls.
+                    a.seekT -= dt;
+                    a.y += (22 - a.y) * Math.min(1, dt * 6);
+                    const gap = this.player.x - a.x;
+                    a.vx = Math.sign(gap) * Math.min(Math.abs(gap) / dt, C.FIREBALL_TRACK_SPEED);
+                    a.x += a.vx * dt;
+                    a.vy = C.FIREBALL_ENTER_SPEED;
+                    continue;
+                }
+                // Locked on: down (straight, or leaning a little), faster and faster.
+                a.t = Math.min(a.plunge, (a.t ?? C.FIREBALL_ENTER_SPEED) + C.FIREBALL_ACCEL * dt);
+                const lean = a.lean ?? 0;
+                a.vx = Math.sin(lean) * a.t;
+                a.vy = Math.cos(lean) * a.t;
+            }
+            if (a.kind === 'star' && a.flight === 'cross' && a.curve) {
+                // A Reverse finishing its curve across the screen, onto where the fairy was when it broke.
+                const k = curveStep(a.curve, a.k ?? 0, (a.t ?? C.FIREBALL_FALL_SPEED) * dt);
+                const p = curveAt(a.curve, k);
+                a.vx = (p.x - a.x) / dt;
+                a.vy = (p.y - a.y) / dt;
+                a.x = p.x;
+                a.y = p.y;
+                a.k = k;
+                if (k >= 1) {
+                    // Past its target: straight on the way it was heading, and out of the meadow.
+                    const d = curveDir(a.curve, 1);
+                    a.flight = 'drop';
+                    a.seekT = 0;
+                    a.plunge = a.t ?? C.FIREBALL_FALL_SPEED;
+                    a.lean = Math.atan2(d.x, Math.max(1, d.y));
+                    a.curve = undefined;
+                }
+                continue;
+            }
             if (a.flight === 'seeker' && a.seekT > 0) {
                 // Line up: ease into the top of the meadow while sliding over the fairy.
                 a.seekT -= dt;
@@ -1117,6 +1191,45 @@ export class Field {
                 a.vx = Math.abs(a.vx) * (a.x < 8 ? 1 : -1);
             }
             if (a.y > C.FIELD_H + 20) a.dead = true;
+        }
+    }
+
+    /**
+     * A Reverse on its way back, easing up to speed along its curve across the screen: up and toward the
+     * rival's meadow, a smooth turn, then down onto where their fairy was. Once it's past this meadow's wall
+     * it carries on into theirs (the rest of the curve is flown there, see receiveFireball).
+     */
+    private flyBack(a: Attack, dt: number): void {
+        if (a.flash) a.flash = Math.max(0, a.flash - dt);
+        const full = a.speed ?? C.FIREBALL_FALL_SPEED;
+        const ramp = (full * (1 - C.FIREBALL_BACK_START)) / C.FIREBALL_BACK_RAMP;
+        a.t = Math.min(full, (a.t ?? full) + ramp * dt);
+        const curve = (a.curve ??= reverseCurve(a.x, a.y, this.rivalFairy.x, this.rivalFairy.y, this.rivalSide));
+        const k = curveStep(curve, a.k ?? 0, a.t * dt);
+        const p = curveAt(curve, k);
+        a.vx = (p.x - a.x) / dt;
+        a.vy = (p.y - a.y) / dt;
+        a.x = p.x;
+        a.y = p.y;
+        a.k = k;
+        const tail = (a.tail ??= []);
+        tail.push(a.x, a.y);
+        if (tail.length > C.FIREBALL_TAIL * 2) tail.splice(0, tail.length - C.FIREBALL_TAIL * 2);
+        if (a.x < 0 || a.x > C.FIELD_W || k >= 1) {
+            a.dead = true;
+            this.outbox.push({
+                kind: 'star',
+                level: a.level,
+                size: a.size,
+                reflects: a.reflects,
+                boost: this.perfectBoost,
+                fromX: Math.min(C.FIELD_W, Math.max(0, a.x)),
+                fromY: a.y,
+                curve,
+                k,
+                side: this.rivalSide,
+                speed: a.t,
+            });
         }
     }
 
@@ -1316,7 +1429,7 @@ export class Field {
                 this.spray(b.x, b.y, 2, col);
             }
         for (const a of this.attacks)
-            if (!a.dead && inside(a.x, a.y)) {
+            if (!a.dead && a.flight !== 'back' && inside(a.x, a.y)) {
                 a.dead = true;
                 this.spray(a.x, a.y, 4, col);
             }
@@ -1575,6 +1688,7 @@ export class Field {
         // Attacks from the rival (and guardians and their shots) hit hard; critters just stun.
         let struck = false;
         for (const a of this.attacks) {
+            if (a.flight === 'back') continue; // a reverse star on its way out can't hurt you
             const r = attackRadius(a);
             if (!a.dead && hit(a.x, a.y, r * 0.8)) {
                 a.dead = true;
@@ -1703,9 +1817,9 @@ export class Field {
             bc: this.bestChain,
             p: this.player,
             s: this.shots,
-            pf: this.puffs.map(j => strip(j, 'path', 'baseX')),
+            pf: this.puffs.map(j => strip(j, 'form', 'baseX')),
             bu: this.bursts.map(b => strip(b, 'hits', 'chainId')),
-            at: this.attacks,
+            at: this.attacks.map(a => strip(a, 'tail')),
             bt: this.bullets,
             m: this.moth,
             cr: this.crows,

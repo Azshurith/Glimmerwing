@@ -65,38 +65,15 @@
                 height: 100%;
                 scroll-padding-top: env(safe-area-inset-top, 0px);
             }
+            /* The page is only the game: it fills the window (see .stage.immersive). How to play,
+               controls and settings live on guide.html. */
             body {
                 margin: 0;
                 min-height: 100%;
-                background: var(--bg);
+                background: #05030d;
                 color: var(--ink);
                 font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 1rem;
-                padding: 1rem;
-            }
-            header {
-                width: 100%;
-                max-width: 1000px;
-                display: flex;
-                flex-wrap: wrap;
-                align-items: baseline;
-                justify-content: space-between;
-                gap: 0.75rem;
-            }
-            h1 {
-                margin: 0;
-                font-size: clamp(1.6rem, 4.5vw, 2.6rem);
-                font-weight: 700;
-                font-style: italic;
-                letter-spacing: -0.01em;
-            }
-            .modes {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.5rem;
+                overflow: hidden;
             }
             button {
                 touch-action: manipulation;
@@ -201,16 +178,6 @@
                 left: 50%;
                 transform: translateX(-50%);
             }
-            /* Exit sits in the gap between the meadows, under the pause button, clear of both HUDs. */
-            .tb-exit {
-                top: 17%;
-                left: 50%;
-                transform: translateX(-50%);
-                display: none;
-            }
-            .stage.immersive .tb-exit {
-                display: block;
-            }
             .screen[data-phase='title'] .tb-menu {
                 display: none;
             }
@@ -220,101 +187,50 @@
                 left: 1%;
                 transform: none;
             }
-            .screen:is([data-phase='select'], [data-phase='title']) .tb-exit {
+            /* Corner buttons on the title screen, on every device (the touch layer only shows on touchscreens). */
+            .corner-ui {
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                display: none;
+            }
+            .screen[data-phase='title'] .corner-ui {
+                display: block;
+            }
+            .corner-ui .tb {
+                top: 1%;
+                display: grid;
+                place-items: center;
+                text-decoration: none;
+            }
+            #tb-sound {
+                left: 1.5%;
+            }
+            #tb-guide {
+                right: 1.5%;
+            }
+            #tb-full {
+                right: calc(1.5% + var(--btn) + 8px);
+            }
+            #tb-full[hidden] {
+                display: none;
+            }
+            /* Tall layout (portrait, one player): pause in the top-right corner. Touch play is all
+               gestures (see Input), so there are no other buttons over the meadow. */
+            .screen[data-layout='tall'] .tb-menu {
                 top: 1%;
                 left: auto;
-                right: 1%;
+                right: 1.5%;
                 transform: none;
             }
-            .pad {
-                position: absolute;
-                bottom: 10%;
-                display: none;
-                gap: 0.4rem;
-                align-items: flex-end;
+            /* Tall menus: back (select) and exit sit in the top corners, beside the heading. */
+            .screen[data-layout='tall']:is([data-phase='select'], [data-phase='title']) .tb-menu {
+                top: 1%;
+                bottom: auto;
+                left: 1.5%;
             }
-            .pad .tb {
-                position: static;
-                opacity: 0.85;
-            }
-            .screen:is([data-phase='playing'], [data-phase='countdown'], [data-phase='roundOver']) .pad-a {
-                display: flex;
-            }
-            .pad-a {
-                right: 2.5%;
-            }
-            .screen[data-mode='versus'] .pad-a {
-                right: auto;
-                left: 2.5%;
-                flex-direction: row-reverse;
-            }
-            .screen[data-mode='versus']:is([data-phase='playing'], [data-phase='countdown'], [data-phase='roundOver'])
-                .pad-b {
-                display: flex;
-                right: 2.5%;
-            }
-
-            /* Tall layout (portrait, one player): buttons go in the strip under your meadow,
-               pause and exit in its corners, clear of the meadows and the console. */
-            .screen[data-layout='tall'] .pad-a {
-                bottom: 1.5%;
-                right: 4%;
-            }
-            .screen[data-layout='tall'] .tb-menu {
-                top: auto;
-                bottom: 2%;
-                left: 4%;
-                transform: none;
-            }
-            .screen[data-layout='tall'] .tb-exit {
-                top: auto;
-                bottom: 2%;
-                left: 18%;
-                transform: none;
-            }
-            .rotate-hint {
-                display: none;
-                margin: 0;
-                font-size: 0.85rem;
-                color: var(--muted);
-                text-align: center;
-            }
-            @media (orientation: portrait) and (pointer: coarse) {
-                .rotate-hint {
-                    display: block;
-                }
-            }
-            /* Short screens (phones held sideways): a slim header so the meadows get the height. */
-            @media (max-height: 540px) {
-                body {
-                    padding: 0.4rem 0.75rem;
-                    gap: 0.4rem;
-                }
-                header {
-                    align-items: center;
-                }
-                h1 {
-                    font-size: 1.15rem;
-                }
-                button {
-                    padding: 0.35rem 0.75rem;
-                    font-size: 0.78rem;
-                }
-            }
-            details.help-wrap {
-                width: 100%;
-                max-width: 1000px;
-            }
-            details.help-wrap > summary {
-                cursor: pointer;
-                font-weight: 600;
-                font-style: italic;
-                padding: 0.3rem 0;
-                color: var(--ink);
-            }
-            details.help-wrap > .help {
-                margin-top: 0.5rem;
-            }
+            /* Sound toggle for the full-screen game, where the page's mute button is out of sight.
+               It shows on the title screen, in the corner the pause button leaves free there. */
             #lobby {
                 position: absolute;
                 inset: 0;
@@ -401,62 +317,20 @@
                 font-size: 0.8rem;
                 border-radius: 0;
             }
-            .help {
-                width: 100%;
-                max-width: 1000px;
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-                gap: 0.5rem 2rem;
-                font-size: 0.88rem;
-                line-height: 1.6;
-                color: var(--muted);
-            }
-            .help p {
-                margin: 0;
-            }
-            .help strong {
-                color: var(--ink);
-                font-weight: 600;
-            }
-            kbd {
-                font: inherit;
-                padding: 0 0.35em;
-                border-radius: 4px;
-                box-shadow: inset 0 0 0 1px var(--edge);
-                color: var(--ink);
-            }
         </style>
     </head>
     <body>
-        <header>
-            <h1>Glimmerwing</h1>
-            <div class="modes">
-                <button data-mode="cpu">Play the CPU</button>
-                <button data-mode="versus" class="ghost">Two players</button>
-                <button data-online class="ghost">Play online</button>
-                <button id="fullscreen" class="ghost">Fullscreen</button>
-                <button id="mute" class="ghost" aria-pressed="true">Sound on</button>
-            </div>
-        </header>
-        <p class="rotate-hint">
-            Play either way up: upright shows your meadow big with your rival's above it. Tap Fullscreen to fill the
-            screen.
-        </p>
-        <div class="stage" id="stage">
+        <div class="stage immersive" id="stage">
             <div class="screen" id="screen">
                 <canvas id="game" tabindex="0" aria-label="Glimmerwing playfield"></canvas>
                 <div class="touch-ui" aria-hidden="false">
                     <button class="tb small tb-menu" id="menu-btn" data-key="Escape" aria-label="Pause">❚❚</button>
-                    <button class="tb small tb-exit" id="exit-full" aria-label="Exit fullscreen">✕</button>
-                    <!-- One player (or 1P in versus): B blooms, C autofires while held. -->
-                    <div class="pad pad-a">
-                        <button class="tb" data-key="KeyF" aria-label="Autofire">Auto</button>
-                        <button class="tb" data-key="KeyH" aria-label="Bomb">Bomb</button>
-                    </div>
-                    <div class="pad pad-b">
-                        <button class="tb" data-key="Quote" aria-label="Player two autofire">Auto</button>
-                        <button class="tb" data-key="ShiftRight" aria-label="Player two bomb">Bomb</button>
-                    </div>
+                </div>
+                <!-- Title-screen corners, on every device: sound, fullscreen, and the guide page. -->
+                <div class="corner-ui">
+                    <button class="tb small" id="tb-sound" aria-label="Sound" aria-pressed="true">♪</button>
+                    <button class="tb small" id="tb-full" aria-label="Fullscreen">⛶</button>
+                    <a class="tb small" id="tb-guide" href="guide.html" aria-label="How to play and settings">?</a>
                 </div>
                 <div id="lobby" role="dialog" aria-modal="true" aria-labelledby="lobby-title" hidden>
                     <div class="lobby-card">
@@ -484,110 +358,7 @@
                 </div>
             </div>
         </div>
-        <details class="help-wrap" id="help">
-            <summary>How to play</summary>
-            <section class="help">
-                <p>
-                    <strong>How to win.</strong> Pop a dandelion puff and its pollen burst pops its neighbours. Chains
-                    of three or more send falling stars into your rival’s meadow; seven or more add a thorny bramble.
-                    Popping critters fills your power gauge (bottom of the meadow) through three levels. Hold fire to
-                    charge, one level at a time as far as the gauge allows, and let go: level 1 fires a piercing torpedo
-                    that clears a lane; level 2 also sends your fairy’s Extra Attack, a few small critters that hunt
-                    your rival and can’t be shot down, only dodged or bombed (costs half a level); MAX summons your
-                    guardian into their meadow (costs two levels). With the gauge below level 1 you can’t charge at all.
-                    Breaking three or more reverse stars in one chain also sends your guardian. Guardians rush in,
-                    circle for a moment (clockwise or not, you can’t tell which), lock in place to attack (every few
-                    seconds sliding down close to you before gliding back up, so don’t get touched), then drift down and
-                    off a side. Hit one hard while it circles and it reels, briefly untouchable. Once it’s leaving, your
-                    shots push it sideways, so you can steer it out of your way. A guardian summoned by a reverse chain
-                    skips the circling and attacks at once. Each guardian has three attacks and keeps cycling through
-                    them at random. It doesn’t leave on its own: shoot it down or bomb it while it attacks to get rid of
-                    it. A bomb set off while it’s attacking dispels it on the spot. If both players send a guardian at
-                    almost the same moment, they clash and cancel each other out.
-                </p>
-                <p>
-                    <strong>Bat stars back.</strong> A star’s colour shows the hits it needs: rose takes four, orange
-                    three, gold two, pale one. Break a plain star and it flies back to your rival as a flashing reverse
-                    star, tougher. Break a reverse star and it turns into one of your Extra Attack critters instead.
-                    Most stars drop straight, but watch for seekers, which slide over you and then plunge (a faint line
-                    shows where), and slanted stars that cut diagonals and glance off the walls. The longer a round
-                    runs, the faster everything comes at you (watch the tempo in the corner), and each new round of a
-                    match starts faster. You have five hearts. Running into a critter costs one heart but can never
-                    finish you (it stops at half a heart); it does stun you, so mash buttons to shake it off, and leaves
-                    you slow and weak for about five seconds, while your rival recovers half a heart. Getting hit by an
-                    attack (a star, bramble, Extra Attack, guardian or its shots) costs three hearts and gives your
-                    rival a heart back. Lose all your hearts and you lose the round; best of three takes the match.
-                </p>
-                <p>
-                    <strong>Fever.</strong> About half a minute in, “Moonseed rising” flashes and a pale crescent orb
-                    drifts in with the next puffs. Shots bounce off it; catch it in a pollen burst to break it. That
-                    starts Fever: you fire twice as fast (same shots, just quicker), a rush of puffs, a gauge that fills
-                    twice as fast, and every chain sends one star per pop after the first, so a 5-chain sends four.
-                </p>
-                <p>
-                    <strong>Tough puffs and late rounds.</strong> A puff’s seed tips show the shots it takes, dropping a
-                    step with each hit: purple five, blue four, green three, yellow two, red one. Any pollen burst pops
-                    it outright. Some waves come wrapped in dew bubbles that pop first, big puffs leave extra-wide
-                    bursts, and watch for waves that sneak up from below. Beetles cut diagonals inside a glassy shell
-                    that has to break first; spinners corkscrew down. Waves also swoop in from a corner, sweep across in
-                    a line, or drop in squeezing columns, and some ring a tough leader with small fry: pop the leader to
-                    clear the lot. Tougher critters leave bigger bursts. Waves don’t run on a clock: the next one comes
-                    in as soon as the last is popped or gone, so clearing fast brings the swarm faster. At about a
-                    hundred seconds every critter speeds up sharply, and a moment later a hollow crow, the meadow’s
-                    Death, wakes in one meadow. Its touch is an instant knockout, however many hearts you have. It
-                    circles and dives at the fairy, then crosses into the other meadow, back and forth. Shoot it enough
-                    to drive it off and it reappears in your rival’s meadow, sooner and faster each time.
-                </p>
-                <p>
-                    <strong>Each fairy fights her own way.</strong> Pip’s charge is a steady Sunorb, Bramblewick’s a
-                    slow, heavy Thornburst, Wisp fans out three Frost needles, Clove fires Twin darts, Sorrel’s Ember
-                    fan is a short-range cone, and Umbra’s Dusk crescent sweeps a wide arc. Each sends her own Extra
-                    Attack critters: Pip’s Hearthsparks streak in from the side and burst into a ring of sparks,
-                    Bramblewick’s Burrs hop slowly down the meadow, Wisp’s Glimmers ricochet off the walls, Clove’s
-                    Petal darts home in on you, Sorrel’s Cinders zig-zag, and Umbra’s Dusk moths weave down, then lock
-                    on and dive at where you were. None of them can be shot down. Reverse stars flash purple and green.
-                </p>
-                <p>
-                    <strong>Bombs.</strong> Two per round, shown as flowers by your hearts. Every fairy’s bomb makes her
-                    untouchable for a couple of seconds, clears bullets and incoming stars, pops small fry and stings a
-                    guardian, but each sweeps the meadow her own way. Pip’s Sunflare streaks across her row and ends in
-                    a full-field flash. Bramblewick’s Thornquake is a huge blast that also slows her meadow for a
-                    moment. Wisp’s Frost gale spirals out from the centre. Clove’s Petal storm only covers a cone ahead
-                    of her, but keeps her safe longest. Sorrel’s Ember lance sweeps a beam over everything above her.
-                    Umbra’s Duskfall opens a black hole that drags hazards in, then bursts in lightning. Bombs never
-                    start a chain or send anything, so they’re for getting out of trouble, not scoring.
-                </p>
-                <p>
-                    <strong>Fairies.</strong> Three fairies are ready from the start. Win matches, chain big, and beat
-                    the CPU cleanly to unlock three more. Progress is saved in this browser.
-                    <button class="link" id="reset">Reset progress</button>
-                </p>
-                <p>
-                    <strong>Controls.</strong> Three buttons, like the arcade: <strong>A</strong> shoots (tap) or
-                    charges (hold and let go), <strong>B</strong> sets off a petal bloom, <strong>C</strong> autofires
-                    while held. Vs CPU and online: arrows or <kbd>WASD</kbd> to move, A is <kbd>Z</kbd> or
-                    <kbd>Space</kbd>, B is <kbd>X</kbd>, C is <kbd>C</kbd>. Two players: <kbd>WASD</kbd> with
-                    <kbd>G</kbd> to shoot and charge, <kbd>F</kbd> to autofire, <kbd>H</kbd> to bloom (these work vs CPU
-                    too); arrows with <kbd>Enter</kbd>, right <kbd>Shift</kbd>, <kbd>'</kbd>. Gamepads work too: stick
-                    or d-pad to move, A/B as marked, X or Y to autofire, Start to confirm; the first pad is player one,
-                    the second player two. <kbd>P</kbd> pauses, <kbd>M</kbd> mutes.
-                </p>
-                <p>
-                    <strong>Phones and tablets.</strong> Drag anywhere to fly: your fairy moves with your finger from
-                    wherever she is, so your finger never hides her. Holding charges; lift to fire. Tap <em>Bomb</em> to
-                    bloom (or tap with a second finger), hold <em>Auto</em> to autofire, and the button at the top
-                    pauses. Two players can share a tablet: each drags on their own meadow and has their own buttons.
-                    Turn the device sideways and tap <em>Fullscreen</em> for the biggest meadows. To keep it like an
-                    app, use your browser's <em>Add to Home Screen</em> (or <em>Install</em> on desktop).
-                </p>
-                <p>
-                    <strong>Online.</strong> Press <em>Play online</em> (or <kbd>3</kbd>). <em>Find match</em> pairs you
-                    with the next player looking for a game; <em>Create friend room</em> gives you a four-letter code
-                    for a friend to join. Online you use the single-player controls, and your meadow is always on the
-                    left. <kbd>Esc</kbd> between rounds leaves.
-                </p>
-            </section>
-        </details>
+
         <script>
             /*__BUNDLE__*/
         </script>

@@ -81,6 +81,16 @@ const blank = (): Controls => ({ left: false, right: false, up: false, down: fal
 
 /** Finger travel to fairy travel: a little over 1:1, so a thumb doesn't have to cross the whole meadow. */
 const DRAG_GAIN = 1.3;
+/**
+ * Touch gestures: one finger held steers and autofires; a second finger held charges, and lifting
+ * it fires; a double tap sets off a bomb. A tap is a touch shorter than TAP_MS that moved less than
+ * TAP_MOVE; a double tap is a second touch landing within DOUBLE_TAP_MS of the first tap lifting,
+ * and within DOUBLE_TAP_DIST of it (view units).
+ */
+const TAP_MS = 250;
+const TAP_MOVE = 10;
+const DOUBLE_TAP_MS = 320;
+const DOUBLE_TAP_DIST = 48;
 
 /** A finger (or mouse/pen) on the playfield. */
 interface Finger {
@@ -93,6 +103,9 @@ interface Finger {
     sx: number;
     sy: number;
     anchor: { x: number; y: number } | null;
+    /** When it landed (ms), and whether it has moved far enough not to count as a tap. */
+    t0: number;
+    moved: boolean;
 }
 
 /**
@@ -106,9 +119,11 @@ export class Input {
     pressed = new Set<string>();
     /** Fingers on the playfield, in the order they landed. */
     private fingers: Finger[] = [];
-    /** A second finger landing sets off a bloom: anywhere for one player, on their own side for two. */
-    private extraAny = false;
-    private extraSide: [boolean, boolean] = [false, false];
+    /** A double tap sets off a bloom: anywhere for one player, on their own side for two. */
+    private bombAny = false;
+    private bombSide: [boolean, boolean] = [false, false];
+    /** The last quick tap to lift, for spotting a double tap. */
+    private lastTap: { t: number; x: number; y: number; side: 0 | 1 } | null = null;
     /** True once the last thing the player touched was a touchscreen, for on-screen prompts. */
     touchActive = matchMedia?.('(pointer: coarse)').matches ?? false;
     /** Where the most recent tap landed this frame, in view coordinates. */
@@ -139,18 +154,29 @@ export class Input {
             this.touchActive = e.pointerType !== 'mouse';
             const p = toView(e);
             const side: 0 | 1 = p.x < this.viewSize().w / 2 ? 0 : 1;
-            // A finger landing while another is already steering is a bloom, not a new drag.
-            if (this.fingers.length) this.extraAny = true;
-            if (this.fingers.some(f => f.side === side)) this.extraSide[side] = true;
-            this.fingers.push({ id: e.pointerId, side, ...p, sx: p.x, sy: p.y, anchor: null });
+            const now = performance.now();
+            // A touch landing just after a quick tap, close to it, is a double tap: a bomb.
+            const lt = this.lastTap;
+            if (lt && now - lt.t < DOUBLE_TAP_MS && Math.hypot(p.x - lt.x, p.y - lt.y) < DOUBLE_TAP_DIST) {
+                this.bombAny = true;
+                if (lt.side === side) this.bombSide[side] = true;
+                this.lastTap = null;
+            }
+            this.fingers.push({ id: e.pointerId, side, ...p, sx: p.x, sy: p.y, anchor: null, t0: now, moved: false });
             this.pressed.add('Pointer');
             this.tap = p;
         });
         canvas.addEventListener('pointermove', e => {
             const f = this.fingers.find(f => f.id === e.pointerId);
-            if (f) Object.assign(f, toView(e));
+            if (!f) return;
+            Object.assign(f, toView(e));
+            if (Math.hypot(f.x - f.sx, f.y - f.sy) > TAP_MOVE) f.moved = true;
         });
         const up = (e: PointerEvent) => {
+            const f = this.fingers.find(f => f.id === e.pointerId);
+            const now = performance.now();
+            // Remember a quick, still touch as a tap, so a second one soon after makes a double tap.
+            if (f && !f.moved && now - f.t0 < TAP_MS) this.lastTap = { t: now, x: f.x, y: f.y, side: f.side };
             this.fingers = this.fingers.filter(f => f.id !== e.pointerId);
         };
         canvas.addEventListener('pointerup', up);
@@ -197,8 +223,8 @@ export class Input {
     endFrame(): void {
         this.pressed.clear();
         this.tap = null;
-        this.extraAny = false;
-        this.extraSide = [false, false];
+        this.bombAny = false;
+        this.bombSide = [false, false];
     }
 
     /** Controls from a key map, counting keys held on the keyboard or a pad, or tapped this frame. */
@@ -213,40 +239,43 @@ export class Input {
     }
 
     /**
-     * Touch steering for one player: the fairy moves with the finger, relative to where she
-     * was when it landed, so the finger never hides her and can rest anywhere. Holding charges,
-     * letting go fires. `side` null takes the first finger anywhere (one player on the device).
+     * Touch for one player: the fairy moves with the first finger, relative to where she was when
+     * it landed, so the finger never hides her and can rest anywhere. One finger held autofires;
+     * with a second finger down she charges instead, and lifting it fires the charge.
+     * `side` null takes fingers anywhere (one player on the device).
      */
     private drag(c: Controls, side: 0 | 1 | null, me: Pos | undefined): void {
-        const f = this.fingers.find(f => side === null || f.side === side);
+        const mine = this.fingers.filter(f => side === null || f.side === side);
+        const f = mine[0];
         if (!f || !me) return;
         f.anchor ??= { x: me.x, y: me.y };
         c.target = {
             x: Math.max(0, Math.min(C.FIELD_W, f.anchor.x + (f.x - f.sx) * DRAG_GAIN)),
             y: Math.max(0, Math.min(C.FIELD_H, f.anchor.y + (f.y - f.sy) * DRAG_GAIN)),
         };
-        c.fire = true;
+        c.auto = true;
+        if (mine.length >= 2) c.fire = true;
     }
 
     /** Controls for one player using every input: keys, pads and touch anywhere. */
     solo(me?: Pos): Controls {
         const c = this.read(KEYMAP_SOLO);
         this.drag(c, null, me);
-        if (this.extraAny) c.bloom = true;
+        if (this.bombAny) c.bloom = true;
         return c;
     }
     /** Two players on one device: each steers with fingers on their own meadow. */
     p1(me?: Pos): Controls {
         const c = this.read(KEYMAP_P1);
         this.drag(c, 0, me);
-        if (this.extraSide[0]) c.bloom = true;
+        if (this.bombSide[0]) c.bloom = true;
         return c;
     }
     /** Controls for player 2 when two players share one device. */
     p2(me?: Pos): Controls {
         const c = this.read(KEYMAP_P2);
         this.drag(c, 1, me);
-        if (this.extraSide[1]) c.bloom = true;
+        if (this.bombSide[1]) c.bloom = true;
         return c;
     }
 }
