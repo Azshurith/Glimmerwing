@@ -4,7 +4,7 @@
 // meadows over (FIELD_W + GAP to the right, or to the left), as the two meadows sit side by side on screen.
 // Every point of it stays inside the visible play area: below the top edge, between the outer walls.
 import * as C from '@/core/config';
-import type { Curve } from '@/types';
+import type { Curve, NormalRoute, Point } from '@/types';
 
 /** How far the rival's meadow is from this one, in meadow units, as they sit side by side. */
 export const MEADOW_STEP = C.FIELD_W + C.GAP;
@@ -25,37 +25,76 @@ export function reverseCurve(x: number, y: number, tx: number, ty: number, side:
 }
 
 /**
- * The route a Normal fireball sent from (x, y) flies to the rival's meadow on `side`, in the sender's meadow
- * units: diagonally up toward that side to just under the top border (`top`), never closer to the wall than
- * FIREBALL_ENTRY_X, then along the top border to where it comes into the rival's meadow (`entry`), and the
- * route's length. The rival flies the rest, diagonally down at its fairy, from (`entryX`, `top`) in its units.
+ * The route a Normal fireball sent from (x, y) flies to the rival's fairy at (tx, ty) in the rival's meadow on
+ * `side` (+1 right, -1 left). `points` is the part flown on this side, in the sender's meadow units, up to the
+ * rival's near wall; `enter` is where it comes into the rival's meadow and which way it's heading there, in the
+ * rival's units, with `turnX` where it turns straight down if it came in sliding.
+ * - Close to the top (within FIREBALL_NEAR_TOP): straight across at its height, then down once over the fairy.
+ * - Lower down: diagonally up to FIREBALL_TOP_Y, a bounce, and diagonally down at the fairy. The bounce is where
+ *   a true reflection off the top border would send it at the fairy, kept inside the sender's meadow.
  */
-export function normalRoute(x: number, y: number, side: number) {
-    const ty = Math.min(y, C.FIREBALL_TOP_Y);
-    const far = side > 0 ? C.FIELD_W - C.FIREBALL_ENTRY_X : C.FIREBALL_ENTRY_X;
-    const climb = x + side * (y - ty) * C.FIREBALL_RISE_SLOPE;
-    const tx = side > 0 ? Math.max(x, Math.min(climb, far)) : Math.min(x, Math.max(climb, far));
-    const entryX = side > 0 ? C.FIREBALL_ENTRY_X : C.FIELD_W - C.FIREBALL_ENTRY_X;
-    const top = { x: tx, y: ty },
-        entry = { x: side * MEADOW_STEP + entryX, y: ty };
-    const length = Math.hypot(tx - x, ty - y) + Math.abs(entry.x - tx);
-    return { from: { x, y }, top, entry, entryX, length };
-}
-
-/** The point `d` units along a Normal fireball's route (see normalRoute), and which way it's heading. */
-export function routeAt(r: ReturnType<typeof normalRoute>, d: number) {
-    const climb = Math.hypot(r.top.x - r.from.x, r.top.y - r.from.y);
-    if (d < climb) {
-        const k = d / climb;
+export function normalRoute(x: number, y: number, side: number, tx: number, ty: number): NormalRoute {
+    const wall = side > 0 ? MEADOW_STEP : C.FIELD_W - MEADOW_STEP;
+    const enterX = side > 0 ? 0 : C.FIELD_W;
+    const aimX = Math.min(C.FIELD_W - 12, Math.max(12, tx));
+    if (y <= C.FIREBALL_NEAR_TOP) {
         return {
-            x: r.from.x + (r.top.x - r.from.x) * k,
-            y: r.from.y + (r.top.y - r.from.y) * k,
-            dx: (r.top.x - r.from.x) / climb,
-            dy: (r.top.y - r.from.y) / climb,
+            points: [
+                { x, y },
+                { x: wall, y },
+            ],
+            enter: { x: enterX, y, ux: side, uy: 0, turnX: aimX },
         };
     }
-    const side = Math.sign(r.entry.x - r.top.x) || 1;
-    return { x: r.top.x + side * Math.min(d - climb, Math.abs(r.entry.x - r.top.x)), y: r.top.y, dx: side, dy: 0 };
+    const top = C.FIREBALL_TOP_Y;
+    // The fairy in this meadow's units, and its mirror image above the top border.
+    const fx = side * MEADOW_STEP + aimX,
+        my = 2 * top - ty;
+    const k = (y - top) / (y - my);
+    let bx = x + (fx - x) * k;
+    const inner = side > 0 ? C.FIELD_W - C.FIREBALL_BOUNCE_WALL : C.FIREBALL_BOUNCE_WALL;
+    bx = side > 0 ? Math.max(x, Math.min(bx, inner)) : Math.min(x, Math.max(bx, inner));
+    const dx = fx - bx,
+        dy = ty - top;
+    const len = Math.hypot(dx, dy) || 1;
+    // Where the way down crosses the rival's near wall.
+    const ey = top + (dy * (wall - bx)) / (dx || side);
+    return {
+        points: [
+            { x, y },
+            { x: bx, y: top },
+            { x: wall, y: ey },
+        ],
+        enter: { x: enterX, y: ey, ux: dx / len, uy: dy / len },
+    };
+}
+
+/** How long a polyline is. */
+export function pathLength(points: Point[]): number {
+    let d = 0;
+    for (let i = 1; i < points.length; i++)
+        d += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    return d;
+}
+
+/** The point `d` units along a polyline (held at its end past there), and which way it's heading. */
+export function pathAt(points: Point[], d: number): { x: number; y: number; dx: number; dy: number } {
+    for (let i = 1; i < points.length; i++) {
+        const a = points[i - 1],
+            b = points[i];
+        const seg = Math.hypot(b.x - a.x, b.y - a.y);
+        if (d <= seg || i === points.length - 1) {
+            const k = seg ? Math.min(1, d / seg) : 1;
+            return {
+                x: a.x + (b.x - a.x) * k,
+                y: a.y + (b.y - a.y) * k,
+                dx: (b.x - a.x) / (seg || 1),
+                dy: (b.y - a.y) / (seg || 1),
+            };
+        }
+        d -= seg;
+    }
+    return { x: points[0].x, y: points[0].y, dx: 0, dy: -1 };
 }
 
 /** The point at `k` (0 to 1) along a curve. */
