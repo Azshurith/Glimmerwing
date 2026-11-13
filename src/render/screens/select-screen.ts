@@ -106,8 +106,8 @@ export class SelectScreen {
         this.backdrop = new Backdrop(ctx);
     }
 
-    /** Draw the whole screen, wide or (for a portrait screen) tall. */
-    draw(v: SelectView, t: number, layout: Layout = 'wide', h: number = C.TALL_H): void {
+    /** Draw the whole screen, wide or (for a portrait screen) tall; `bleed` is how far a widened view reaches past each side. */
+    draw(v: SelectView, t: number, layout: Layout = 'wide', h: number = C.TALL_H, bleed = 0): void {
         this.layout = layout;
         const ctx = this.ctx;
         ctx.save();
@@ -125,9 +125,14 @@ export class SelectScreen {
         } else {
             this.h = h;
             this.dy = 0;
-            this.bleed = 0;
-            this.backdrop.draw(t);
-            v.sides.forEach((s, i) => this.panel(s, PANEL_X[i], i === 1, t));
+            // A widened landscape view: the sky and the heading bar reach `bleed` past each side.
+            this.bleed = bleed;
+            ctx.save();
+            ctx.translate(-bleed, 0);
+            this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H);
+            ctx.restore();
+            // On a widened view the two fairies' panels move out to the screen's edges.
+            v.sides.forEach((s, i) => this.panel(s, PANEL_X[i] + (i === 0 ? -bleed : bleed), i === 1, t));
         }
         this.header(v.heading);
         this.centre(v, t);

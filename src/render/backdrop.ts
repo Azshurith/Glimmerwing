@@ -49,11 +49,18 @@ export class Backdrop {
             }
         }
         // Twinkling stars.
+        // Spread across a view wider than usual (a widened landscape menu), clipped to a narrower one.
+        const spread = Math.max(1, w / C.VIEW_W);
         for (const s of this.stars) {
             if (s.x > w) continue;
             ctx.globalAlpha = 0.25 + 0.5 * (0.5 + 0.5 * Math.sin(t * (1.5 + s.s * 2) + s.p));
             ctx.fillStyle = s.s > 0.8 ? '#ffe7a0' : '#d9d0ff';
-            ctx.fillRect(s.x, ((s.y * h) / C.VIEW_H + t * (2 + s.s * 4)) % h, s.s > 0.8 ? 1.5 : 1, s.s > 0.8 ? 1.5 : 1);
+            ctx.fillRect(
+                s.x * spread,
+                ((s.y * h) / C.VIEW_H + t * (2 + s.s * 4)) % h,
+                s.s > 0.8 ? 1.5 : 1,
+                s.s > 0.8 ? 1.5 : 1,
+            );
         }
         ctx.globalAlpha = 1;
         // Vignette.

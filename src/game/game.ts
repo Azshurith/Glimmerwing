@@ -698,6 +698,7 @@ export class Game {
         const inRound = this.phase !== 'title' && this.phase !== 'select';
         // The menus are laid out for the usual meadow width; only a round plays in wider ones.
         if (!inRound && C.FIELD_W !== C.FIELD_W_BASE) C.setFieldWidth(C.FIELD_W_BASE);
+        r.inMenu = !inRound;
         // A round in wider meadows stays side by side even if the screen turns upright mid-round.
         r.layout = r.portrait && !(inRound && this.mode === 'versus') && C.FIELD_W === C.FIELD_W_BASE ? 'tall' : 'wide';
         const tall = r.layout === 'tall' ? tallPlacement(r.viewH) : null;

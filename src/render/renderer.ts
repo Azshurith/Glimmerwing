@@ -59,9 +59,18 @@ export class Renderer {
      */
     fieldWidthToFill: number = C.FIELD_W_BASE;
 
+    /** The title and select screens' view width on a landscape screen, fitted by the page to its shape. */
+    menuW: number = C.VIEW_W;
+    /** Whether a menu (title or select) is showing; Game sets it each frame. */
+    inMenu = false;
+
     /** Width of the view in view units, for the current layout. */
     get viewW(): number {
-        return this.layout === 'tall' ? C.TALL_W : C.VIEW_W;
+        return this.layout === 'tall' ? C.TALL_W : this.inMenu ? Math.max(C.VIEW_W, this.menuW) : C.VIEW_W;
+    }
+    /** How far a widened menu sits in from the left edge (its sky and bars reach out over that much each side). */
+    get viewX(): number {
+        return this.layout === 'tall' ? 0 : (this.viewW - C.VIEW_W) / 2;
     }
     /** Height of the view in view units, for the current layout. */
     get viewH(): number {
@@ -101,7 +110,9 @@ export class Renderer {
         ctx.setTransform(canvas.width / w, 0, 0, canvas.height / h, 0, 0);
         ctx.fillStyle = '#100b24';
         ctx.fillRect(0, 0, w, h);
-        this.hudLayer.setView(w, h);
+        // A widened menu is drawn in its usual units, centred.
+        ctx.translate(this.viewX, 0);
+        this.hudLayer.setView(w - 2 * this.viewX, h);
     }
 
     /** Paint a meadow's sky and drifting motes. */
@@ -424,11 +435,11 @@ export class Renderer {
 
     /** The arcade title screen (see title-screen.ts). */
     title(v: TitleView, time: number): void {
-        this.titleScreen.draw(v, time, this.layout, this.viewH);
+        this.titleScreen.draw(v, time, this.layout, this.viewH, this.viewX);
     }
 
     /** The arcade character-select screen (see select-screen.ts). */
     select(v: SelectView, time: number): void {
-        this.selectScreen.draw(v, time, this.layout, this.viewH);
+        this.selectScreen.draw(v, time, this.layout, this.viewH, this.viewX);
     }
 }
