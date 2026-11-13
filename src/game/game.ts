@@ -24,7 +24,7 @@ import type {
 } from '@/types';
 import { CpuPilot } from './ai';
 import { Field } from './field';
-import { MEADOW_STEP, curveAt, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
+import { curveAt, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 
 /** Seconds from an attack leaving one meadow to arriving in the other: its `stagger`, then its flight. */
@@ -32,8 +32,9 @@ const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
 
 /**
  * Seconds an attack is in flight between the meadows, once any `stagger` is over: a Reverse crossing the screen
- * takes as long as the stretch of its curve between the meadows needs at its speed; any other fireball flies at
- * FIREBALL_TRANSIT_SPEED, faster with reflections and Perfects (fireballSpeedMul); everything else takes
+ * takes as long as the stretch of its curve between the meadows needs at its speed; any other fireball rises out
+ * of the sender's meadow at its transit speed and is then out of sight for FIREBALL_HIDDEN_TIME; everything
+ * else takes
  * TRANSIT_TIME, an Extra Attack less (SPEED_EXTRA).
  */
 const flightTime = (o: Outgoing) => {
@@ -42,15 +43,12 @@ const flightTime = (o: Outgoing) => {
         const kIn = enterAt(shiftCurve(o.curve, o.side ?? 1), k0);
         return Math.max(0.05, curveLength(o.curve, k0, kIn) / Math.max(40, o.speed ?? C.FIREBALL_FALL_SPEED));
     }
-    if (o.kind === 'star') {
-        // Roughly from where it was sent, across into the other meadow and up to its top edge, a little slower
-        // than it then falls (and never faster than FIREBALL_MAX_SPEED).
-        const dist = Math.hypot(MEADOW_STEP, o.fromY + 10);
-        const mul = C.fireballSpeedMul(o.reflects ?? (o.level >= 2 ? 1 : 0), o.boost ?? 1);
-        return dist / Math.min(C.FIREBALL_MAX_SPEED, C.FIREBALL_TRANSIT_SPEED * mul);
-    }
+    if (o.kind === 'star') return (o.fromY - C.FIREBALL_OUT_Y) / riseSpeed(o) + C.FIREBALL_HIDDEN_TIME;
     return C.TRANSIT_TIME / (o.kind === 'imp' ? C.SPEED_EXTRA : C.SPEED_NORMAL);
 };
+
+/** How fast a fireball rises out of the sender's meadow (and then drops into the rival's). */
+const riseSpeed = (o: Outgoing) => C.fireballTransitSpeed(o.reflects ?? (o.level >= 2 ? 1 : 0), o.boost ?? 1);
 
 /** `ghost` transits are only drawn: online, the real attack is delivered on the rival's screen. */
 interface Transit {
@@ -734,16 +732,29 @@ export class Game {
                 r.transitFireball(from.x + p.x * from.s, from.y + p.y * from.s, from.s, this.time, d.x, d.y, tr.o);
                 continue;
             }
+            if (tr.o.kind === 'star' && !tr.o.curve) {
+                // Straight up and out over the top of the sender's meadow; the rival's meadow then takes it.
+                const v = riseSpeed(tr.o);
+                const y = tr.o.fromY - (tr.t - wait) * v;
+                if (y < C.FIREBALL_OUT_Y) continue;
+                r.transitFireball(from.x + tr.o.fromX * from.s, from.y + y * from.s, from.s, this.time, 0, -v, tr.o, {
+                    x: from.x,
+                    y: from.y,
+                    w: C.FIELD_W * from.s,
+                    h: C.FIELD_H * from.s,
+                });
+                continue;
+            }
             const sx = from.x + tr.o.fromX * from.s,
                 sy = from.y + tr.o.fromY * from.s;
-            // A fireball aimed at the fairy lands above her; anything else where it was sent from.
-            const toX = tr.o.aim === undefined ? tr.o.fromX : this.fields[1 - tr.from].player.x + tr.o.aim;
-            const ex = to.x + Math.min(C.FIELD_W - 12, Math.max(12, toX)) * to.s,
+            // Anything else flies a low arc between the meadows, landing where it was sent from.
+            const ex = to.x + Math.min(C.FIELD_W - 12, Math.max(12, tr.o.fromX)) * to.s,
                 ey = to.y - 10 * to.s;
-            // A low arc between the meadows, kept on screen so it can be followed.
+            // Kept on screen so it can be followed.
             const x = sx + (ex - sx) * k,
                 y = Math.max(10 * to.s, sy + (ey - sy) * k - Math.sin(k * Math.PI) * 40);
             if (tr.o.kind === 'star') {
+                // A Reverse in the tall layout, where its curve isn't drawn between the meadows.
                 const s = from.s + (to.s - from.s) * k;
                 const dur = flightTime(tr.o);
                 r.transitFireball(x, y, s, this.time, (ex - sx) / dur, (ey - sy) / dur, tr.o);

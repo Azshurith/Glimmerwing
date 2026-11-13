@@ -401,14 +401,16 @@ export class Field {
         const at = o.aim === undefined ? x : Math.min(C.FIELD_W - 12, Math.max(12, this.player.x + o.aim));
         this.attacks.push({
             ...base,
+            // In over the top edge already moving, at no more than the speed it rose out of the sender's
+            // meadow, so it doesn't stall where it comes in.
             x: at,
-            y: 10,
+            y: C.FIREBALL_OUT_Y,
             vx: 0,
-            vy: C.FIREBALL_ENTER_SPEED,
+            vy: Math.min(fall, C.fireballTransitSpeed(o.reflects ?? 0, o.boost ?? 1)),
             flight: 'drop',
             seekT: 0,
             plunge: fall,
-            t: C.FIREBALL_ENTER_SPEED,
+            t: Math.min(fall, C.fireballTransitSpeed(o.reflects ?? 0, o.boost ?? 1)),
             speed: fall,
         });
     }
@@ -844,7 +846,7 @@ export class Field {
         if (a.hp > 0) {
             this.spray(a.x, a.y, 3, a.kind === 'star' ? '#ffe27a' : '#b98ae0');
             if (a.kind === 'star') {
-                // A fireball takes the hit: it stalls and flashes, and only reverses once it breaks.
+                // A fireball takes the hit: it slows a moment and flashes, and only reverses once it breaks.
                 a.stall = C.FIREBALL_STALL;
                 a.hitT = C.FIREBALL_HIT_FLASH;
             }
@@ -1139,21 +1141,19 @@ export class Field {
                 this.flyBack(a, dt);
                 continue;
             }
-            if (a.kind === 'star' && a.stall) {
-                // Knocked back a moment by a shot that didn't break it.
-                a.stall = Math.max(0, a.stall - dt);
-                continue;
-            }
+            // A shot that didn't break it slows it a moment (it never stops dead, so it doesn't stutter).
+            const slow = a.kind === 'star' && a.stall ? C.FIREBALL_HIT_SLOW : 1;
+            if (a.stall) a.stall = Math.max(0, a.stall - dt);
             if (a.kind === 'star' && a.flight === 'drop') {
                 // Straight down from where it came in, faster and faster: a vertical line, never sideways.
                 a.t = Math.min(a.plunge, (a.t ?? C.FIREBALL_ENTER_SPEED) + C.FIREBALL_ACCEL * dt);
                 a.vx = 0;
-                a.vy = a.t;
+                a.vy = a.t * slow;
             }
             if (a.kind === 'star' && a.flight === 'cross' && a.curve) {
                 // A Reverse finishing its curve across the screen, onto where the fairy was when it broke, and
                 // past there still arcing the same way until it's out of the meadow.
-                const k = curveStep(a.curve, a.k ?? 0, (a.t ?? C.FIREBALL_FALL_SPEED) * dt, Infinity);
+                const k = curveStep(a.curve, a.k ?? 0, (a.t ?? C.FIREBALL_FALL_SPEED) * slow * dt, Infinity);
                 const p = curveAt(a.curve, k);
                 a.vx = (p.x - a.x) / dt;
                 a.vy = (p.y - a.y) / dt;

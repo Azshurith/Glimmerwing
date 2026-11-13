@@ -272,8 +272,9 @@ export const FIREBALL_MAX_SPEED = 300;
 /** A fireball's speed multiplier after `reflects` reflections, with the sender's Perfect `boost`. */
 export const fireballSpeedMul = (reflects: number, boost: number) =>
     Math.min(3, SPEED_NORMAL * SPEED_REVERSE ** reflects * boost);
-/** A shot that doesn't break a fireball stalls it this long and flashes it this long. */
+/** A shot that doesn't break a fireball slows it to FIREBALL_HIT_SLOW for FIREBALL_STALL s and flashes it. */
 export const FIREBALL_STALL = 0.06;
+export const FIREBALL_HIT_SLOW = 0.6;
 export const FIREBALL_HIT_FLASH = 0.1;
 /**
  * A fireball you shoot down flashes, turns into a Reverse where it broke and crosses the screen on one curve
@@ -299,16 +300,21 @@ export const SEEK_SLIDE = 170; // how fast it slides across while lining up
 
 export const TRANSIT_TIME = 0.7;
 /**
- * How fast a fireball crosses between the meadows, in meadow units a second (measured straight; the arc it's
- * drawn on is about 15% longer): a little slower than it then falls, so it can be followed across. Faster with
- * reflections and Perfects (fireballSpeedMul, capped at FIREBALL_MAX_SPEED). Fever fireballs cross at the same
- * speed; their pace only slows their fall.
+ * A fireball leaves the sender's meadow straight up, out over its top edge, at FIREBALL_TRANSIT_SPEED (meadow
+ * units a second, the same as it falls; faster with reflections and Perfects, capped at FIREBALL_MAX_SPEED). It
+ * is out of sight for FIREBALL_HIDDEN_TIME, then drops in over the top of the rival's meadow at that same speed.
  */
-export const FIREBALL_TRANSIT_SPEED = 110;
+export const FIREBALL_TRANSIT_SPEED = 140;
+export const FIREBALL_HIDDEN_TIME = 0.35;
+/** How far above a meadow's top edge a fireball is when it's out of sight, and where it drops in from. */
+export const FIREBALL_OUT_Y = -14;
+/** A fireball's speed between the meadows, given its reflections and its sender's Perfects boost. */
+export const fireballTransitSpeed = (reflects: number, boost: number) =>
+    Math.min(FIREBALL_MAX_SPEED, FIREBALL_TRANSIT_SPEED * fireballSpeedMul(reflects, boost));
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '32'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '33'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout
