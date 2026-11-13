@@ -24,7 +24,7 @@ import type {
 } from '@/types';
 import { CpuPilot } from './ai';
 import { Field } from './field';
-import { curveAt, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
+import { MEADOW_STEP, curveAt, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 
 /** Seconds from an attack leaving one meadow to arriving in the other: its `stagger`, then its flight. */
@@ -32,8 +32,8 @@ const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
 
 /**
  * Seconds an attack is in flight between the meadows, once any `stagger` is over: a Reverse crossing the screen
- * takes as long as the stretch of its curve between the meadows needs at its speed; a Fever fireball takes
- * FEVER_TRANSIT_TIME at its pace; other fireballs and Extra Attacks fly faster with reflections and Perfects
+ * takes as long as the stretch of its curve between the meadows needs at its speed; a Fever fireball flies
+ * at FEVER_TRANSIT_SPEED times its pace; other fireballs and Extra Attacks fly faster with reflections and Perfects
  * (SPEED_*, fireballSpeedMul).
  */
 const flightTime = (o: Outgoing) => {
@@ -42,8 +42,11 @@ const flightTime = (o: Outgoing) => {
         const kIn = enterAt(shiftCurve(o.curve, o.side ?? 1), k0);
         return Math.max(0.05, curveLength(o.curve, k0, kIn) / Math.max(40, o.speed ?? C.FIREBALL_FALL_SPEED));
     }
-    if (o.kind === 'star' && o.fever && o.level < 2)
-        return C.FEVER_TRANSIT_TIME / (C.fireballSpeedMul(o.reflects ?? 0, o.boost ?? 1) * (o.pace ?? 1));
+    if (o.kind === 'star' && o.fever && o.level < 2) {
+        // Roughly from where it was sent, across into the other meadow and up to its top edge.
+        const dist = Math.hypot(MEADOW_STEP, o.fromY + 10);
+        return dist / (C.FEVER_TRANSIT_SPEED * C.fireballSpeedMul(o.reflects ?? 0, o.boost ?? 1) * (o.pace ?? 1));
+    }
     return (
         C.TRANSIT_TIME /
         (o.kind === 'imp'

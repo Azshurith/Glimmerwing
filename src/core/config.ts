@@ -299,14 +299,14 @@ export const SEEK_SLIDE = 170; // how fast it slides across while lining up
 
 export const TRANSIT_TIME = 0.7;
 /**
- * Seconds a Fever fireball takes between the meadows at full pace. Slower than TRANSIT_TIME so a volley crosses
- * as a stream you can follow, and divided by the fireball's `pace`, so it eases up as the round goes on.
+ * How fast a Fever fireball crosses between the meadows at full pace, in meadow units a second: about as fast as
+ * it then falls, so a volley crosses as a stream you can follow. Scaled by its `pace`, Perfects and the tempo.
  */
-export const FEVER_TRANSIT_TIME = 1.1;
+export const FEVER_TRANSIT_SPEED = 180;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '29'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '30'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

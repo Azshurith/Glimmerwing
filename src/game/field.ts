@@ -980,8 +980,9 @@ export class Field {
         if (balls > 0) {
             for (let i = 0; i < balls; i++) {
                 const hit = inFever ? i + 2 : 2 * i + 4;
-                // Fan the volley out around the chain's last pop so they don't stack.
-                const off = (i - (balls - 1) / 2) * 16;
+                // Fan a small volley out around the chain's last pop so they don't stack. A Fever volley is
+                // a stream, one after another from the very spot the chain ended.
+                const off = inFever ? 0 : (i - (balls - 1) / 2) * 16;
                 // Where it comes in, from the rival's fairy: the first right above her, then alternately
                 // to her right and left, FIREBALL_AIM_SPREAD apart.
                 const aim = (i % 2 ? 1 : -1) * Math.ceil(i / 2) * C.FIREBALL_AIM_SPREAD;
