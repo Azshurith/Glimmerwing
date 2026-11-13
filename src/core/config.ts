@@ -255,6 +255,8 @@ export const FIREBALL_ENTER_SPEED = 24;
 export const FIREBALL_ACCEL = 150;
 export const FIREBALL_FALL_SPEED = 140;
 export const FIREBALL_AIM_SPREAD = 22;
+/** Seconds between the fireballs of one volley setting off, so they come down staggered, never in a row. */
+export const FIREBALL_STAGGER = 0.16;
 /**
  * Speed. Size never changes it. Each reflection multiplies it by SPEED_REVERSE (initial tuning target, not
  * measured), each Perfect the sender has this round adds PERFECT_SPEED_STEP (up to PERFECT_SPEED_MAX), and
@@ -291,7 +293,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '26'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '27'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

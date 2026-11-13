@@ -349,6 +349,8 @@ export interface Outgoing {
     speed?: number;
     /** A Normal fireball comes in this far from the receiving fairy's x (0 for the first of a volley). */
     aim?: number;
+    /** Seconds it waits before setting off between the meadows, so a volley comes down staggered. */
+    stagger?: number;
     /** For a fireball: times it has been shot back, and the speed boost from its sender's Perfects. */
     reflects?: number;
     boost?: number;

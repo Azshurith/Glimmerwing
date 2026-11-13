@@ -25,6 +25,9 @@ const TOP = 30,
     BOTTOM = H * 0.6,
     /** Off-screen distance members start from and leave to. */
     OFF = 26;
+/** How fast members fly in (meadow units a second, on average), and the longest a flight in may take. */
+const ENTRY_SPEED = 62,
+    ENTRY_LONGEST = 1.7;
 
 // ---- shapes -----------------------------------------------------------------------
 
@@ -270,9 +273,10 @@ export function rollFormation(r: Rng, pressure: number, prev: FormationShape | n
         spacing,
         cx,
         cy,
-        stagger: (big ? 0.24 : 0.17) * speedUp,
+        stagger: (big ? 0.32 : 0.25) * speedUp,
         exitStagger: exit === 'scatter' ? 0.03 : 0.1,
-        enterTime: (big ? 1.7 : 1.45) * speedUp,
+        // Unhurried flights in, so the formation can be watched forming up.
+        enterTime: (big ? 2.8 : 2.4) * speedUp,
         exitTime: 1.6 * speedUp,
         hold: (big ? 6.5 : 5.5) - pressure * 2 + (morph ? 1.5 : 0),
         reachX,
@@ -285,8 +289,12 @@ export function rollFormation(r: Rng, pressure: number, prev: FormationShape | n
 export function startFormation(id: number, spec: FormationSpec): Formation {
     const slots = shapeSlots(spec.shape, spec.count, spec.spacing);
     const slotsTo = spec.morph ? shapeSlots(spec.morph, spec.count, spec.spacing) : null;
-    const allIn = (spec.count - 1) * spec.stagger + spec.enterTime;
-    return { id, spec, t: 0, slots, slotsTo, exitAt: allIn + spec.hold };
+    return { id, spec, t: 0, slots, slotsTo, exitAt: allInTime(spec) + spec.hold };
+}
+
+/** Seconds from a formation's first member setting off until its last can have arrived. */
+function allInTime(spec: FormationSpec): number {
+    return (spec.count - 1) * spec.stagger + spec.enterTime * ENTRY_LONGEST;
 }
 
 // ---- movement -------------------------------------------------------------------------
@@ -345,8 +353,7 @@ function slotAt(g: Formation, i: number, t: number, kind: CritterKind): Vec {
     let p = g.slots[i];
     if (g.slotsTo) {
         // Re-form a little before halfway through the hold, over 1.2 s.
-        const allIn = (s.count - 1) * s.stagger + s.enterTime;
-        const k = smooth(Math.min(1, Math.max(0, (t - allIn - s.hold * 0.4) / 1.2)));
+        const k = smooth(Math.min(1, Math.max(0, (t - allInTime(s) - s.hold * 0.4) / 1.2)));
         const q = g.slotsTo[i];
         p = { x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k };
     }
@@ -400,6 +407,18 @@ function entryCurve(g: Formation, i: number, to: Vec): { from: Vec; via: Vec } {
             };
         }
     }
+}
+
+/**
+ * Seconds member `i` takes to fly in: its curve's length at a gentle ENTRY_SPEED, never quicker than the
+ * formation's enterTime nor slower than ENTRY_LONGEST times it, so a long swoop is as calm as a short drop.
+ */
+function entryTime(g: Formation, i: number): number {
+    const s = g.spec;
+    const to = { x: s.cx + g.slots[i].x, y: s.cy + g.slots[i].y };
+    const c = entryCurve(g, i, to);
+    const len = Math.hypot(c.via.x - c.from.x, c.via.y - c.from.y) + Math.hypot(to.x - c.via.x, to.y - c.via.y);
+    return Math.min(s.enterTime * ENTRY_LONGEST, Math.max(s.enterTime, (len * 0.8) / ENTRY_SPEED));
 }
 
 /** Where member `i` leaves to, off-screen, and the control point of its curve out, from `from`. */
@@ -456,7 +475,7 @@ export function memberAt(g: Formation, i: number, kind: CritterKind): Vec | 'wai
     const leave = g.exitAt + exitOrder(g, i) * s.exitStagger;
     if (t < leave) {
         const here = slotAt(g, i, t, kind);
-        const k = (t - start) / s.enterTime;
+        const k = (t - start) / entryTime(g, i);
         if (k >= 1) return here;
         const c = entryCurve(g, i, here);
         return bezier(c.from, c.via, here, smooth(k));
