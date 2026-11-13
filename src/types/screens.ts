@@ -59,6 +59,8 @@ export interface RosterView {
     index: number;
     locked: boolean[];
     touch: boolean;
+    /** On a phone, whether the demo's pop-up is open (opened with the PREVIEW button). */
+    demoOpen: boolean;
     /** What the live demo of the fairy in view is showing right now (see game/preview.ts). */
     caption: string;
 }

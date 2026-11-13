@@ -6,7 +6,7 @@ import type { Net } from '@/net/net';
 import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
 import { modeCards, modeColumns } from '@/render/screens/mode-screen';
-import { rosterMedallions } from '@/render/screens/roster-screen';
+import { rosterMedallions, rosterPreviewButton } from '@/render/screens/roster-screen';
 import { titleButtons } from '@/render/screens/title-screen';
 import { PALETTE, PLAYER_COLORS } from '@/render/theme';
 import type {
@@ -97,6 +97,10 @@ function tallPlacement(h: number): { at: readonly [Placement, Placement]; band: 
 }
 const IDLE: Controls = { left: false, right: false, up: false, down: false, fire: false };
 
+/** True if point `p` lies inside box `b`. */
+const inBox = (p: { x: number; y: number }, b: { x: number; y: number; w: number; h: number }) =>
+    p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+
 // Select screen: roster medallions in rows of SELECT_COLS; arrows move, up/down jump a row.
 const COLS = SELECT_COLS;
 /** Seconds to choose offline before the highlighted fairy is picked for you. */
@@ -128,6 +132,8 @@ export class Game {
     private rosterIndex = 0;
     /** The Characters screen's live demo of the fairy in view. */
     private preview = new SkillPreview();
+    /** On a phone, whether the demo's pop-up is open. */
+    private demoOpen = false;
     /** Set by the page: open the Settings panel, and the How to play page. */
     onWantSettings?: () => void;
     onWantGuide?: () => void;
@@ -342,6 +348,7 @@ export class Game {
         this.phase = 'modes';
         this.menu = 'main';
         this.modeIndex = from;
+        this.demoOpen = false;
         this.ui('tick');
     }
 
@@ -349,6 +356,27 @@ export class Game {
     private stepRoster(pr: Set<string>): void {
         const n = FAIRIES.length,
             was = this.rosterIndex;
+        const tall = this.r.layout === 'tall';
+        if (!tall) this.demoOpen = false;
+        // The demo's pop-up (phones): any tap or Esc/Enter/Space closes it, and nothing else happens meanwhile.
+        if (this.demoOpen) {
+            if (this.input.tap || ['Escape', 'Enter', 'Space'].some(k => pr.has(k))) {
+                this.demoOpen = false;
+                this.ui('tick');
+            }
+            return;
+        }
+        const tap0 = this.input.tap;
+        const canDemo = tall && this.isUnlocked(FAIRIES[this.rosterIndex]);
+        if (
+            canDemo &&
+            (pr.has('Enter') || pr.has('Space') || (tap0 && inBox(tap0, rosterPreviewButton(this.r.viewH))))
+        ) {
+            this.demoOpen = true;
+            this.preview.replay();
+            this.ui('ok');
+            return;
+        }
         if (['ArrowLeft', 'KeyA', 'ArrowUp', 'KeyW'].some(k => pr.has(k)))
             this.rosterIndex = (this.rosterIndex + n - 1) % n;
         if (['ArrowRight', 'KeyD', 'ArrowDown', 'KeyS'].some(k => pr.has(k)))
@@ -995,6 +1023,7 @@ export class Game {
                         locked: FAIRIES.map(f => !this.isUnlocked(f)),
                         touch,
                         caption: this.preview.caption,
+                        demoOpen: this.demoOpen,
                     },
                     this.time,
                     this.preview.field,

@@ -45,6 +45,11 @@ export class SkillPreview {
         this.restart();
     }
 
+    /** Start the demo over from the top (when its pop-up opens on a phone). */
+    replay(): void {
+        this.restart();
+    }
+
     /** Start the demo from the top with a fresh meadow. */
     private restart(): void {
         const fy = this.fairy;
