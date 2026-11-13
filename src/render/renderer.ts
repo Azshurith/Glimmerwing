@@ -21,6 +21,7 @@ import {
     drawFireFlash,
     drawFireHit,
     drawReverseTrail,
+    fireLook,
 } from './entities/attacks';
 import { drawBomb } from './entities/bombs';
 import { drawCrow, drawGuardian } from './entities/bosses';
@@ -197,12 +198,12 @@ export class Renderer {
                     a.vy,
                 );
             else {
-                // Fireballs: the sender's colour, Fever yellow, or flashing when they're a Reverse.
+                // Fireballs: orange as sent, purple shot back once, flashing shot back again (fireLook).
                 const size = a.size ?? 1;
-                const look = a.level >= 2 ? 'reverse' : a.fever ? 'fever' : (a.tint ?? 'p1');
+                const look = fireLook(a.reflects ?? (a.level >= 2 ? 1 : 0), a.fever);
                 const full = C.fireballHp(size);
                 const hurt = Number.isFinite(a.hp) ? Math.max(0, Math.min(1, 1 - a.hp / full)) : 0;
-                if (a.tail && a.level >= 2) drawReverseTrail(ctx, a.tail, time, size);
+                if (a.tail && look === 'reverse') drawReverseTrail(ctx, a.tail, time, size);
                 drawFireball(ctx, a.x, a.y, time, a.spin, a.vx, a.vy, size, look, hurt);
                 if (a.flash) drawFireFlash(ctx, a.x, a.y, a.flash / C.FIREBALL_FLASH, size);
                 if (a.hitT) drawFireHit(ctx, a.x, a.y, a.hitT / C.FIREBALL_HIT_FLASH, size);
@@ -356,7 +357,7 @@ export class Renderer {
         }
         ctx.translate(x, y);
         ctx.scale(s, s);
-        const look = o.level >= 2 ? 'reverse' : o.fever ? 'fever' : (o.tint ?? 'p1');
+        const look = fireLook(o.reflects ?? (o.level >= 2 ? 1 : 0), o.fever);
         drawFireball(ctx, 0, 0, time, o.fromX, vx, vy, o.size ?? 1, look, 0);
         ctx.restore();
     }
