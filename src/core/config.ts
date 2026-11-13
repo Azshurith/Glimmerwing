@@ -80,9 +80,8 @@ export const BURST_LIFE = 0.38;
 export const STAR_RADIUS = 7;
 export const BRAMBLE_RADIUS = 12;
 export const BRAMBLE_HP = 4;
+/** A fireball's level: 1 is a Normal Attack, 2 or more a Reverse (higher for fairies with a counter boost). */
 export const MAX_STAR_LEVEL = 3;
-/** Hits a star needs: 1 + its level, so 2 to 4. */
-export const starHp = (level: number) => 1 + level;
 
 export const GAUGE_MAX = 200;
 export const MOTH_HP = 70; // bosses are tough: a few seconds of focused fire won't banish one
@@ -135,8 +134,6 @@ export const GUARDIAN_NUDGE = 18; // sideways speed each shot adds while it exit
 export const FEVER_TIME = 6;
 /** During Fever you fire this many times faster (autofire and tapping alike). The shot pattern doesn't change. */
 export const FEVER_FIRE_RATE = 2;
-/** Most stars a single chain can send during Fever. */
-export const FEVER_STAR_CAP = 12;
 /** When the first moonseed arrives each round, then how often after that. */
 export const MOONSEED_FIRST = 32;
 export const MOONSEED_EVERY = 40;
@@ -229,25 +226,55 @@ export const HOLE_PULL = 160;
 /** Extra Attack seekers: how long one lines up before plunging. */
 export const SEEK_TIME = 0.75; // how long a seeker lines up before plunging
 /**
- * Rival stars (TSS Normal Attacks), measured from footage: each one hangs at the top of the meadow
- * for a moment, then falls faster and faster, to about 0.75 of the meadow's height a second.
- * Most fall straight down; some cut across at an angle and glance off the walls.
+ * Fireballs (TSS Normal Attacks). A chain of 4 or more sends floor((hits - 2) / 2) of them: 4-5 hits
+ * send 1, 6-7 send 2, 8-9 send 3 and so on. During Fever every hit after the first sends one.
  */
-export const STAR_HOLD = 0.4;
-export const STAR_ENTER_SPEED = 24;
-export const STAR_ACCEL = 300;
-export const STAR_TOP_SPEED = 225; // plus STAR_TOP_PER_LEVEL a level
-export const STAR_TOP_PER_LEVEL = 15;
-export const STAR_ANGLED_CHANCE = 0.25;
-/** A star you shoot down flies back up and out at this speed before it reaches your rival as a reverse star. */
-export const STAR_BACK_SPEED = 88;
+export const FIREBALL_MIN_HITS = 4;
+/** Fireballs a chain of `hits` sends. */
+export const fireballsFor = (hits: number) => (hits >= FIREBALL_MIN_HITS ? Math.floor((hits - 2) / 2) : 0);
+/** Fireballs a chain of `hits` sends during Fever. */
+export const feverFireballsFor = (hits: number) => Math.max(0, hits - 1);
+/** Most fireballs one chain can send. */
+export const FIREBALL_CAP = 12;
+/**
+ * A fireball's size comes from the combo hit that sent it: hits 2-5 small, 6-10 medium, 11-15 large,
+ * 16 and up extra large. It takes size + 1 shots to break (2 to 5).
+ */
+/** Size of the fireball sent by combo hit number `hit`. */
+export const fireballSizeAt = (hit: number) => (hit <= 5 ? 1 : hit <= 10 ? 2 : hit <= 15 ? 3 : 4);
+/** Shots a fireball of this size takes to break. */
+export const fireballHp = (size: number) => size + 1;
+/** A fireball's radius by size. */
+export const fireballRadius = (size: number) => 5.5 + size * 1.6;
+/**
+ * A straight fireball appears just inside the top and slides along it after the fairy for FIREBALL_TRACK_TIME,
+ * then locks on and drops straight down, faster and faster (measured from TSS footage: up to about 0.75
+ * of the meadow's height a second).
+ */
+export const FIREBALL_TRACK_TIME = 0.5;
+export const FIREBALL_TRACK_SPEED = 150;
+export const FIREBALL_ENTER_SPEED = 24;
+export const FIREBALL_ACCEL = 300;
+export const FIREBALL_FALL_SPEED = 220; // plus FIREBALL_FALL_PER_SIZE a size
+export const FIREBALL_FALL_PER_SIZE = 8;
+/** An angled fireball curves in from a top corner through the inner meadow at where the fairy was, faster. */
+export const FIREBALL_ANGLED_CHANCE = 0.3;
+export const FIREBALL_ARC_SPEED = 265;
+/** Reverse fireballs come back more dangerous: faster, quicker to lock on, angled more often. */
+export const REVERSE_SPEED = 1.3;
+export const REVERSE_TRACK_TIME = 0.25;
+export const REVERSE_ANGLED_CHANCE = 0.5;
+/** A fireball you shoot down flies back up and out at this speed before it reaches the rival as a Reverse. */
+export const FIREBALL_BACK_SPEED = 88;
+/** Fever fireballs reach the rival this much sooner (a share of TRANSIT_TIME). */
+export const FEVER_TRANSIT = 0.6;
 export const SEEK_SLIDE = 170; // how fast it slides across while lining up
 
 export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '18'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '19'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

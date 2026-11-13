@@ -12,7 +12,7 @@ import type {
     WingShape,
 } from '@/types';
 
-import { drawImp, drawBramble, drawComet, drawStar } from './entities/attacks';
+import { drawImp, drawBramble, drawComet, drawFireball } from './entities/attacks';
 import { drawBomb } from './entities/bombs';
 import { drawCrow, drawGuardian } from './entities/bosses';
 import { drawBeetle, drawMoonseed, drawPuff, drawSpinner } from './entities/critters';
@@ -188,19 +188,12 @@ export class Renderer {
                     a.vy,
                 );
             else {
-                drawStar(ctx, a.x, a.y, a.spin, a.level, a.hp, a.vx, a.vy, a.flight === 'seeker' && a.seekT > 0);
-                // Reverse stars flash purple and green: break one and it becomes your Extra Attack.
-                if (a.level >= 2) {
-                    const purple = Math.floor(time * 12) % 2 === 0;
-                    ctx.strokeStyle = purple ? 'rgba(190,120,255,0.95)' : 'rgba(120,255,160,0.95)';
-                    ctx.lineWidth = 2;
-                    ctx.shadowColor = ctx.strokeStyle;
-                    ctx.shadowBlur = 8;
-                    ctx.beginPath();
-                    ctx.arc(a.x, a.y, C.STAR_RADIUS + 4, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.shadowBlur = 0;
-                }
+                // Fireballs: the sender's colour, Fever yellow, or flashing when they're a Reverse.
+                const size = a.size ?? 1;
+                const look = a.level >= 2 ? 'reverse' : a.fever ? 'fever' : (a.tint ?? 'p1');
+                const full = C.fireballHp(size);
+                const hurt = Number.isFinite(a.hp) ? Math.max(0, Math.min(1, 1 - a.hp / full)) : 0;
+                drawFireball(ctx, a.x, a.y, time, a.spin, a.vx, a.vy, size, look, hurt);
             }
         }
         for (const c of f.crows)

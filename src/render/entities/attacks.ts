@@ -1,90 +1,112 @@
-/* Attacks sent from the rival's meadow: stars, brambles, comets and Extra Attack critters. */
+/* Attacks sent from the rival's meadow: fireballs, brambles, comets and Extra Attack critters. */
 import * as C from '@/core/config';
 
 import { PALETTE } from '@/render/theme';
 
-/** Star colour by hits remaining: 1 pale, 2 gold, 3 orange, 4 rose. */
-const STAR_COLORS: [number, number, number][] = [
-    [235, 245, 255],
-    [255, 214, 92],
-    [255, 145, 64],
-    [255, 84, 128],
-];
+/** Fireball colours: [outer flame, inner flame, core] by state. */
+const FIRE: Record<'p1' | 'p2' | 'fever', [string, string, string]> = {
+    p1: ['#ff6a1a', '#ffb347', '#fff1c4'],
+    p2: ['#9b4dff', '#d29bff', '#f6e8ff'],
+    fever: ['#ffd21a', '#fff27a', '#ffffff'],
+};
+
+/** How a fireball looks: a player's own colour, Fever yellow, or a flashing Reverse. */
+export type FireLook = 'p1' | 'p2' | 'fever' | 'reverse';
+
 /**
- * A falling star with a straight spark trail. Its colour shows how many
- * hits it still needs, and it shrinks a little with each hit.
+ * A fireball (TSS Normal or Reverse Attack): a glowing core with a little face, wrapped in flickering
+ * flame tongues that stream back along its flight. `size` 1 to 4 scales it; `hurt` (0 to 1) is how much
+ * of it has been shot away, shown as a dimmer, smaller core. Fever ones flash yellow, and Reverse ones
+ * cycle through colours so they can't be mistaken.
  */
-export function drawStar(
+export function drawFireball(
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
+    t: number,
     spin: number,
-    level: number,
-    hp: number,
     vx: number,
     vy: number,
-    lining: boolean,
+    size: number,
+    look: FireLook,
+    hurt: number,
 ): void {
-    const [r, g, b] = STAR_COLORS[Math.min(STAR_COLORS.length - 1, Math.max(0, hp - 1))];
-    const size = C.STAR_RADIUS * (0.8 + hp * 0.12);
-    if (lining) {
-        // A seeker lining up: a pulsing halo and a faint line showing where it will fall.
-        ctx.strokeStyle = `rgba(${r},${g},${b},0.18)`;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 5]);
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x, C.FIELD_H);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.strokeStyle = `rgba(${r},${g},${b},0.7)`;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.arc(x, y, size + 4 + Math.sin(spin * 4) * 2, 0, Math.PI * 2);
-        ctx.stroke();
-    } else {
-        // Spark trail pointing back along the direction of travel.
-        const len = 18 + level * 10;
-        const sp = Math.hypot(vx, vy) || 1;
-        const ux = vx / sp,
-            uy = vy / sp;
-        const tx = x - ux * len,
-            ty = y - uy * len;
-        const tg = ctx.createLinearGradient(tx, ty, x, y);
-        tg.addColorStop(0, `rgba(${r},${g},${b},0)`);
-        tg.addColorStop(0.6, `rgba(${r},${g},${b},0.5)`);
-        tg.addColorStop(1, `rgba(${r},${g},${b},0.95)`);
-        ctx.fillStyle = tg;
-        const nx = -uy,
-            ny = ux; // perpendicular, for the trail's width
-        ctx.beginPath();
-        ctx.moveTo(tx + nx * 0.5, ty + ny * 0.5);
-        ctx.lineTo(tx - nx * 0.5, ty - ny * 0.5);
-        ctx.lineTo(x - nx * 4.5, y - ny * 4.5);
-        ctx.lineTo(x + nx * 4.5, y + ny * 4.5);
-        ctx.closePath();
-        ctx.fill();
+    const r = C.fireballRadius(size);
+    let [outer, inner, core] = look === 'reverse' ? FIRE.p1 : FIRE[look];
+    if (look === 'reverse') {
+        const h = (t * 900 + spin * 60) % 360;
+        outer = `hsl(${h}, 100%, 58%)`;
+        inner = `hsl(${(h + 120) % 360}, 100%, 72%)`;
+        core = '#ffffff';
+    } else if (look === 'fever' && Math.floor(t * 14) % 2 === 0) {
+        [outer, inner] = [inner, '#ffffff'];
     }
+    // Flames stream away from the direction of travel (straight up while it's barely moving).
+    const sp = Math.hypot(vx, vy);
+    const ang = sp > 30 ? Math.atan2(-vy, -vx) : -Math.PI / 2;
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(spin);
-    const col = `rgb(${r},${g},${b})`;
-    ctx.shadowColor = col;
-    ctx.shadowBlur = 6 + level * 3;
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-        const rad = i % 2 ? size * 0.45 : size;
-        const a = (Math.PI * i) / 5 - Math.PI / 2;
-        ctx.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
+    ctx.shadowColor = outer;
+    ctx.shadowBlur = 8 + size * 2;
+    const tongues = 5;
+    for (let layer = 0; layer < 2; layer++) {
+        ctx.fillStyle = layer ? inner : outer;
+        const k = layer ? 0.62 : 1;
+        for (let i = 0; i < tongues; i++) {
+            const spread = (i - (tongues - 1) / 2) * 0.32;
+            const flick = 0.75 + 0.25 * Math.sin(t * 22 + i * 1.9 + spin * 3);
+            const len = r * (1.5 + Math.min(1, sp / 200) * 1.2) * flick * k;
+            const a = ang + spread;
+            const tipx = Math.cos(a) * (r * 0.55 + len),
+                tipy = Math.sin(a) * (r * 0.55 + len);
+            const nx = -Math.sin(a) * r * 0.42 * k,
+                ny = Math.cos(a) * r * 0.42 * k;
+            ctx.beginPath();
+            ctx.moveTo(nx, ny);
+            ctx.quadraticCurveTo(tipx * 0.55 + nx * 0.6, tipy * 0.55 + ny * 0.6, tipx, tipy);
+            ctx.quadraticCurveTo(tipx * 0.55 - nx * 0.6, tipy * 0.55 - ny * 0.6, -nx, -ny);
+            ctx.closePath();
+            ctx.fill();
+        }
     }
-    ctx.closePath();
+    // The ball itself.
+    const pulse = 1 + Math.sin(t * 9 + spin) * 0.05;
+    ctx.fillStyle = outer;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * pulse, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    const g = ctx.createRadialGradient(-r * 0.25, -r * 0.3, 0, 0, 0, r);
+    g.addColorStop(0, core);
+    g.addColorStop(0.55, inner);
+    g.addColorStop(1, outer);
+    ctx.fillStyle = g;
+    ctx.globalAlpha = 1 - hurt * 0.35;
     ctx.beginPath();
-    ctx.arc(0, 0, size * 0.22, 0, Math.PI * 2);
+    ctx.arc(0, 0, r * (0.9 - hurt * 0.2) * pulse, 0, Math.PI * 2);
     ctx.fill();
+    ctx.globalAlpha = 1;
+    // A little face, as on the TSS fireballs.
+    ctx.fillStyle = 'rgba(60,20,10,0.85)';
+    const ey = -r * 0.1,
+        ex = r * 0.3;
+    ctx.beginPath();
+    ctx.ellipse(-ex, ey, r * 0.1, r * 0.17, 0, 0, Math.PI * 2);
+    ctx.ellipse(ex, ey, r * 0.1, r * 0.17, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(60,20,10,0.75)';
+    ctx.lineWidth = Math.max(0.8, r * 0.09);
+    ctx.beginPath();
+    ctx.arc(0, r * 0.22, r * 0.18, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+    if (look === 'reverse') {
+        // A flashing ring as well, so a Reverse reads at a glance.
+        ctx.strokeStyle = Math.floor(t * 12) % 2 ? 'rgba(190,120,255,0.95)' : 'rgba(120,255,160,0.95)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, r + 4, 0, Math.PI * 2);
+        ctx.stroke();
+    }
     ctx.restore();
 }
 /** A thorny bramble ball. */

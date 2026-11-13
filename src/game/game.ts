@@ -26,6 +26,13 @@ import { CpuPilot } from './ai';
 import { Field } from './field';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 
+/** Seconds an attack spends between the meadows: Fever fireballs get there sooner. */
+const transitTime = (o: Outgoing) => C.TRANSIT_TIME * (o.kind === 'star' && o.fever ? C.FEVER_TRANSIT : 1);
+
+/** A fireball's colour in flight between the meadows (Reverse ones flash through colours). */
+const fireballColor = (o: Outgoing, t: number) =>
+    o.level >= 2 ? `hsl(${(t * 900) % 360}, 100%, 70%)` : o.fever ? '#fff26a' : o.tint === 'p2' ? '#c27bff' : '#ff9a3c';
+
 /** `ghost` transits are only drawn: online, the real attack is delivered on the rival's screen. */
 interface Transit {
     o: Outgoing;
@@ -384,7 +391,7 @@ export class Game {
             case 'atk':
                 if (this.phase === 'playing' && m.r === this.roundNo) {
                     // The attack already spent half the round trip getting here; start it that far along.
-                    const head = Math.min(this.net!.rtt / 2, C.TRANSIT_TIME * 0.6);
+                    const head = Math.min(this.net!.rtt / 2, transitTime(m.o) * 0.6);
                     this.transits.push({ o: m.o, from: 1, t: head });
                 }
                 break;
@@ -526,14 +533,18 @@ export class Game {
         this.fields[1].update(dt, c1);
 
         this.fields.forEach((f, i) => {
-            for (const o of f.outbox) this.transits.push({ o, from: i as 0 | 1, t: 0 });
+            for (const o of f.outbox) {
+                // Fireballs wear their sender's colour: orange for player 1, purple for player 2.
+                o.tint ??= i === 0 ? 'p1' : 'p2';
+                this.transits.push({ o, from: i as 0 | 1, t: 0 });
+            }
             f.outbox = [];
         });
         for (const tr of this.transits) {
             tr.t += dt;
-            if (tr.t >= C.TRANSIT_TIME) this.fields[1 - tr.from].receive(tr.o);
+            if (tr.t >= transitTime(tr.o)) this.fields[1 - tr.from].receive(tr.o);
         }
-        this.transits = this.transits.filter(tr => tr.t < C.TRANSIT_TIME);
+        this.transits = this.transits.filter(tr => tr.t < transitTime(tr.o));
 
         const dead0 = !this.fields[0].alive,
             dead1 = !this.fields[1].alive;
@@ -550,15 +561,17 @@ export class Game {
         }
         me.update(dt, this.input.solo(me.player));
         for (const o of me.outbox) {
+            // Player 1 is the host, on both screens.
+            o.tint ??= this.net!.isHost ? 'p1' : 'p2';
             this.transits.push({ o, from: 0, t: 0, ghost: true });
             this.net!.peer({ k: 'atk', r: this.roundNo, o });
         }
         me.outbox = [];
         for (const tr of this.transits) {
             tr.t += dt;
-            if (tr.t >= C.TRANSIT_TIME && !tr.ghost) me.receive(tr.o);
+            if (tr.t >= transitTime(tr.o) && !tr.ghost) me.receive(tr.o);
         }
-        this.transits = this.transits.filter(tr => tr.t < C.TRANSIT_TIME);
+        this.transits = this.transits.filter(tr => tr.t < transitTime(tr.o));
         this.checkOnlineEnd(dt);
     }
 
@@ -640,7 +653,7 @@ export class Game {
 
         for (const tr of this.transits) {
             if (tr.o.kind === 'clash' || tr.o.kind === 'heal') continue;
-            const k = tr.t / C.TRANSIT_TIME;
+            const k = tr.t / transitTime(tr.o);
             const from = at[tr.from],
                 to = at[1 - tr.from];
             const sx = from.x + tr.o.fromX * from.s,
@@ -662,7 +675,7 @@ export class Game {
                           ? (FAIRIES.find(f => f.id === tr.o.fairy)?.color ?? PALETTE.star)
                           : tr.o.kind === 'comet'
                             ? '#ff6f9c'
-                            : PALETTE.star,
+                            : fireballColor(tr.o, this.time),
             );
         }
 

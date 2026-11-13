@@ -139,8 +139,9 @@ export interface Attack {
     spin: number;
     dead: boolean;
     /**
-     * How it flies. A rival star is a 'drop' (hangs at the top, then falls faster and faster) or a
-     * 'slant' (the same, at an angle, glancing off the walls), and becomes 'back' once shot down.
+     * How it flies. A fireball (kind 'star', TSS Normal or Reverse Attack) is a 'drop' (tracks the fairy
+     * along the top, then falls straight down where it locked on) or an 'arc' (curves in through the
+     * inner side of the meadow at where the fairy was), and becomes 'back' once shot down.
      * Extra Attack critters use their sender's flight ('seeker', 'zig' and the rest).
      */
     flight: StarFlight;
@@ -151,9 +152,20 @@ export interface Attack {
     /** Extra Attack critters wear the sender's colour and look. */
     color?: string;
     look?: string;
-    /** Flight timer for critters that need a second clock; a falling star keeps its current speed here. */
+    /** Flight timer for critters that need a second clock; a falling fireball keeps its current speed here. */
     t?: number;
+    /** A fireball's size, 1 (small) to 4 (extra large): set by the combo hit that sent it; it takes size + 1 hits. */
+    size?: number;
+    /** Whose fireball it is: orange for player 1, purple for player 2. */
+    tint?: Tint;
+    /** Sent during Fever: flashes yellow. */
+    fever?: boolean;
+    /** An 'arc' fireball's curve: from (x0, y0) bending toward (cx, cy) to its locked target (x1, y1) over T s. */
+    arc?: { x0: number; y0: number; cx: number; cy: number; x1: number; y1: number; t: number; T: number };
 }
+
+/** Which player a fireball belongs to: 'p1' (orange) or 'p2' (purple). */
+export type Tint = 'p1' | 'p2';
 
 /** How an attack star or critter moves after it arrives. */
 export type StarFlight =
@@ -165,7 +177,9 @@ export type StarFlight =
     | 'lateral'
     | 'bounce'
     | 'bat'
-    /** A star you shot down, flying back up and out to your rival as a reverse star (harmless here). */
+    /** A fireball curving in through the meadow at where the fairy was, then on in a straight line. */
+    | 'arc'
+    /** A fireball you shot down, flying back up and out to your rival as a Reverse fireball (harmless here). */
     | 'back';
 
 /** A fairy's Extra Attack: a few small critters sent with a level 2 charge. */
@@ -299,6 +313,10 @@ export interface Outgoing {
     level: number;
     fromX: number;
     fromY: number;
+    /** For a fireball: its size (1 to 4), whose it is, and whether it was sent during Fever. */
+    size?: number;
+    tint?: Tint;
+    fever?: boolean;
 }
 
 /** Where a player's fairy is now, so a drag can move her relative to it. */

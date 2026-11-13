@@ -19,7 +19,6 @@ import type {
     Puff,
     Sfx,
     Shot,
-    StarFlight,
 } from '@/types';
 import { leaving, memberAt, rollFormation, startFormation } from './waves';
 
@@ -47,7 +46,7 @@ const attackRadius = (a: Attack) =>
           ? C.COMET_RADIUS
           : a.kind === 'imp'
             ? C.IMP_RADIUS
-            : C.STAR_RADIUS;
+            : C.fireballRadius(a.size ?? 1);
 
 /** Squared distance between two points (avoids a square root in hit tests). */
 const dist2 = (ax: number, ay: number, bx: number, by: number) => (ax - bx) * (ax - bx) + (ay - by) * (ay - by);
@@ -332,33 +331,7 @@ export class Field {
         // Attacks drop in at the same spot they were sent from, mirrored into this meadow.
         const x = Math.min(C.FIELD_W - 12, Math.max(12, o.fromX));
         if (o.kind === 'star') {
-            // TSS Normal Attack: appears just inside the top, hangs for a moment, then falls faster and
-            // faster. Most fall straight; some cut across at an angle and glance off the walls.
-            let vx = 0,
-                vy = C.STAR_ENTER_SPEED;
-            let flight: StarFlight = 'drop';
-            if (this.fxRng.next() < C.STAR_ANGLED_CHANCE + (o.level - 1) * 0.1) {
-                flight = 'slant';
-                const ang = this.fxRng.range(0.5, 1.15); // from straight down: 30 to 65 degrees
-                const dir = x < C.FIELD_W / 2 ? 1 : -1;
-                vx = dir * Math.sin(ang) * C.STAR_ENTER_SPEED;
-                vy = Math.cos(ang) * C.STAR_ENTER_SPEED;
-            }
-            this.attacks.push({
-                x,
-                y: 10,
-                vx,
-                vy,
-                flight,
-                seekT: C.STAR_HOLD,
-                plunge: C.STAR_TOP_SPEED + C.STAR_TOP_PER_LEVEL * o.level,
-                kind: 'star',
-                level: o.level,
-                hp: C.starHp(o.level),
-                spin: this.fxRng.range(0, Math.PI * 2),
-                dead: false,
-                t: C.STAR_ENTER_SPEED,
-            });
+            this.receiveFireball(o, x);
             return;
         }
         const speed = o.kind === 'bramble' ? 42 : C.COMET_SPEED;
@@ -375,6 +348,62 @@ export class Field {
             hp: o.kind === 'bramble' ? C.BRAMBLE_HP : Infinity,
             spin: this.fxRng.range(0, Math.PI * 2),
             dead: false,
+        });
+    }
+
+    /**
+     * A fireball arrives (TSS Normal Attack, or a Reverse coming back faster). A straight one appears just
+     * inside the top and slides along it after the fairy, then locks on and drops. An angled one curves in
+     * from a top corner through the inner meadow at where the fairy is now, and doesn't turn after that.
+     */
+    private receiveFireball(o: Outgoing, x: number): void {
+        const size = Math.min(4, Math.max(1, o.size ?? 1));
+        const reverse = o.level >= 2;
+        const fast = reverse ? C.REVERSE_SPEED : 1;
+        const base = {
+            kind: 'star' as const,
+            level: o.level,
+            size,
+            tint: o.tint,
+            fever: !reverse && o.fever,
+            hp: C.fireballHp(size),
+            spin: this.fxRng.range(0, Math.PI * 2),
+            dead: false,
+            seekT: 0,
+            plunge: 0,
+        };
+        if (this.fxRng.next() < (reverse ? C.REVERSE_ANGLED_CHANCE : C.FIREBALL_ANGLED_CHANCE)) {
+            const fromLeft = x < C.FIELD_W / 2;
+            const x0 = fromLeft ? 8 : C.FIELD_W - 8,
+                y0 = -10;
+            const x1 = Math.min(C.FIELD_W - 16, Math.max(16, this.player.x)),
+                y1 = this.player.y;
+            // Bow through the inner side: the curve bends toward the middle of the meadow, high up.
+            const cx = C.FIELD_W / 2 + (fromLeft ? 1 : -1) * C.FIELD_W * 0.12,
+                cy = Math.min(y1, C.FIELD_H * 0.22);
+            const len = Math.hypot(cx - x0, cy - y0) + Math.hypot(x1 - cx, y1 - cy);
+            const T = len / ((C.FIREBALL_ARC_SPEED + size * 10) * fast);
+            this.attacks.push({
+                ...base,
+                x: x0,
+                y: y0,
+                vx: 0,
+                vy: 1,
+                flight: 'arc',
+                arc: { x0, y0, cx, cy, x1, y1, t: 0, T },
+            });
+            return;
+        }
+        this.attacks.push({
+            ...base,
+            x,
+            y: 10,
+            vx: 0,
+            vy: C.FIREBALL_ENTER_SPEED,
+            flight: 'drop',
+            seekT: reverse ? C.REVERSE_TRACK_TIME : C.FIREBALL_TRACK_TIME,
+            plunge: (C.FIREBALL_FALL_SPEED + C.FIREBALL_FALL_PER_SIZE * size) * fast,
+            t: C.FIREBALL_ENTER_SPEED,
         });
     }
 
@@ -788,29 +817,39 @@ export class Field {
             return;
         }
         a.dead = true;
-        // Countering doesn't add to the chain count; the counter itself is the reward.
         const id = chainId ?? this.newChain(a.x, a.y, false);
+        if (a.kind === 'star') {
+            // A fireball broken in a chain counts as a hit, so popping one can extend a combo (TSS).
+            const c = this.chains.get(id);
+            if (c) {
+                c.pops++;
+                c.x = a.x;
+                c.y = a.y;
+            }
+        }
         if (a.kind === 'bramble') {
             this.addBurst(a.x, a.y, id, C.CHARGED_BURST_RADIUS);
             this.spray(a.x, a.y, 16, '#b98ae0');
             this.gauge = Math.min(C.GAUGE_MAX, this.gauge + 4);
         } else {
-            this.addBurst(a.x, a.y, id, C.BURST_RADIUS);
+            this.addBurst(a.x, a.y, id, C.BURST_RADIUS * (0.85 + (a.size ?? 1) * 0.15));
             this.spray(a.x, a.y, 6, '#ffe27a');
             if (a.level < 2) {
-                // A plain star turns into a flashing reverse star and flies back up the meadow (TSS);
+                // A Normal fireball turns into a flashing Reverse fireball and flies back up the meadow (TSS);
                 // it reaches the rival once it's out the top (see updateAttacks).
                 const lvl = Math.min(C.MAX_STAR_LEVEL, 2 + this.fairy.counterBoost);
                 a.dead = false;
                 a.flight = 'back';
                 a.level = lvl;
                 a.hp = Infinity;
+                a.fever = false;
+                a.arc = undefined;
                 a.vx = 0;
-                a.vy = -C.STAR_BACK_SPEED;
+                a.vy = -C.FIREBALL_BACK_SPEED;
                 this.popup(a.x, a.y - 10, 'Reverse');
                 this.snd('reverse');
             } else {
-                // Breaking a reverse star turns it into one of your Extra Attack critters.
+                // Breaking a Reverse fireball turns it into one of your Extra Attack critters, sent at the rival.
                 this.outbox.push({ kind: 'imp', level: 1, fromX: a.x, fromY: a.y, fairy: this.fairy.id });
                 this.popup(a.x, a.y - 10, this.fairy.extra.name);
                 this.snd('extra');
@@ -890,13 +929,22 @@ export class Field {
         this.gauge = Math.min(C.GAUGE_MAX, this.gauge + ((n - 1) * 2 + (c.charged ? 2 : 0)) * (this.fever > 0 ? 2 : 1));
         if (n >= 2) this.popup(c.x, c.y, `${n} chain`);
         const inFever = this.fever > 0;
-        if (n >= 3 || (inFever && n >= 2)) {
-            // During Fever every pop after the first sends a star (a 5-chain sends 4).
-            const stars = inFever ? Math.min(C.FEVER_STAR_CAP, n - 1) : Math.min(3, Math.floor((n - 1) / 2));
-            // Fan a volley out around the chain's last pop so the stars don't stack.
-            for (let i = 0; i < stars; i++) {
-                const off = (i - (stars - 1) / 2) * 16;
-                this.outbox.push({ kind: 'star', level: 1, fromX: c.x + off, fromY: c.y });
+        // Fireballs (TSS Normal Attacks): floor((hits - 2) / 2) from 4 hits, or one per hit after the first in
+        // Fever. Each one's size comes from the hit that sent it: the 1st from hit 4, the 2nd from hit 6...
+        const balls = Math.min(C.FIREBALL_CAP, inFever ? C.feverFireballsFor(n) : C.fireballsFor(n));
+        if (balls > 0) {
+            for (let i = 0; i < balls; i++) {
+                const hit = inFever ? i + 2 : 2 * i + 4;
+                // Fan the volley out around the chain's last pop so they don't stack.
+                const off = (i - (balls - 1) / 2) * 16;
+                this.outbox.push({
+                    kind: 'star',
+                    level: 1,
+                    size: C.fireballSizeAt(hit),
+                    fever: inFever,
+                    fromX: c.x + off,
+                    fromY: c.y,
+                });
             }
             if (n >= 7) this.outbox.push({ kind: 'bramble', level: 1, fromX: c.x, fromY: c.y });
             this.snd('send', n);
@@ -952,6 +1000,7 @@ export class Field {
 
     /** Move the attacks the rival sent, by their flight style, and let bursts reverse them back. */
     private updateAttacks(dt: number): void {
+        if (dt <= 0) return;
         for (const a of this.attacks) {
             a.spin += dt * (a.kind === 'bramble' ? 1.5 : 4 + a.level);
             if (a.flight === 'zig') {
@@ -1030,22 +1079,43 @@ export class Field {
                 }
             }
             if (a.flight === 'back') {
-                // Shot down: it flies back up and out, then reaches the rival as a reverse star.
+                // Shot down: it flies back up and out, then reaches the rival as a Reverse fireball.
                 a.y += a.vy * dt;
                 if (a.y < -14) {
                     a.dead = true;
-                    this.outbox.push({ kind: 'star', level: a.level, fromX: a.x, fromY: 0 });
+                    this.outbox.push({ kind: 'star', level: a.level, size: a.size, fromX: a.x, fromY: 0 });
                 }
                 continue;
             }
-            if (a.kind === 'star' && (a.flight === 'drop' || a.flight === 'slant')) {
-                // Hang at the top for a moment, then fall faster and faster up to top speed.
-                if (a.seekT > 0) a.seekT -= dt;
-                else a.t = Math.min(a.plunge, (a.t ?? C.STAR_ENTER_SPEED) + C.STAR_ACCEL * dt);
-                const sp = Math.hypot(a.vx, a.vy) || 1;
-                const v = a.t ?? C.STAR_ENTER_SPEED;
-                a.vx = (a.vx / sp) * v;
-                a.vy = (a.vy / sp) * v;
+            if (a.kind === 'star' && a.flight === 'drop') {
+                if (a.seekT > 0) {
+                    // Along the top, sliding after the fairy; where it is when this ends is where it falls.
+                    a.seekT -= dt;
+                    a.y += (22 - a.y) * Math.min(1, dt * 6);
+                    const gap = this.player.x - a.x;
+                    a.vx = Math.sign(gap) * Math.min(Math.abs(gap) / dt, C.FIREBALL_TRACK_SPEED);
+                    a.x += a.vx * dt;
+                    a.vy = C.FIREBALL_ENTER_SPEED;
+                    continue;
+                }
+                // Locked on: straight down, faster and faster.
+                a.t = Math.min(a.plunge, (a.t ?? C.FIREBALL_ENTER_SPEED) + C.FIREBALL_ACCEL * dt);
+                a.vx = 0;
+                a.vy = a.t;
+            }
+            if (a.kind === 'star' && a.flight === 'arc' && a.arc && a.arc.t < a.arc.T) {
+                // Along its curve to where the fairy was; after that it carries straight on (no homing).
+                const P = a.arc;
+                P.t = Math.min(P.T, P.t + dt);
+                const k = P.t / P.T,
+                    u = 1 - k;
+                const nx = u * u * P.x0 + 2 * u * k * P.cx + k * k * P.x1,
+                    ny = u * u * P.y0 + 2 * u * k * P.cy + k * k * P.y1;
+                a.vx = (nx - a.x) / dt;
+                a.vy = (ny - a.y) / dt;
+                a.x = nx;
+                a.y = ny;
+                continue;
             }
             if (a.flight === 'seeker' && a.seekT > 0) {
                 // Line up: ease into the top of the meadow while sliding over the fairy.
