@@ -27,12 +27,16 @@ import { Field } from './field';
 import { curveAt, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 
+/** Seconds from an attack leaving one meadow to arriving in the other: its `stagger`, then its flight. */
+const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
+
 /**
- * Seconds an attack spends between the meadows: a Reverse crossing the screen takes as long as the stretch
- * of its curve between the meadows needs at its speed; other fireballs and Extra Attacks fly faster with
- * reflections and Perfects (SPEED_*, fireballSpeedMul), and Fever fireballs get there sooner.
+ * Seconds an attack is in flight between the meadows, once any `stagger` is over: a Reverse crossing the screen
+ * takes as long as the stretch of its curve between the meadows needs at its speed; other fireballs and Extra
+ * Attacks fly faster with reflections and Perfects (SPEED_*, fireballSpeedMul), and Fever fireballs get there
+ * sooner.
  */
-const transitTime = (o: Outgoing) => {
+const flightTime = (o: Outgoing) => {
     if (o.kind === 'star' && o.curve) {
         const k0 = o.k ?? 0;
         const kIn = enterAt(shiftCurve(o.curve, o.side ?? 1), k0);
@@ -715,7 +719,10 @@ export class Game {
 
         for (const tr of this.transits) {
             if (tr.o.kind === 'clash' || tr.o.kind === 'heal') continue;
-            const k = tr.t / transitTime(tr.o);
+            // A fireball still waiting its turn in a volley isn't on its way yet.
+            const wait = tr.o.stagger ?? 0;
+            if (tr.t < wait) continue;
+            const k = (tr.t - wait) / flightTime(tr.o);
             const from = at[tr.from],
                 to = at[1 - tr.from];
             if (tr.o.kind === 'star' && tr.o.curve && r.layout === 'wide') {
@@ -738,7 +745,7 @@ export class Game {
                 y = Math.max(10 * to.s, sy + (ey - sy) * k - Math.sin(k * Math.PI) * 40);
             if (tr.o.kind === 'star') {
                 const s = from.s + (to.s - from.s) * k;
-                const dur = transitTime(tr.o);
+                const dur = flightTime(tr.o);
                 r.transitFireball(x, y, s, this.time, (ex - sx) / dur, (ey - sy) / dur, tr.o);
                 continue;
             }

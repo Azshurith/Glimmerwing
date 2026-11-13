@@ -992,6 +992,9 @@ export class Field {
                     fromX: c.x + off,
                     fromY: c.y,
                     aim,
+                    // One after another, not all at once: each a beat behind the last, so they come
+                    // down as a staggered stream rather than a row at the same height.
+                    stagger: i * C.FIREBALL_STAGGER,
                 });
             }
             if (n >= 7) this.outbox.push({ kind: 'bramble', level: 1, fromX: c.x, fromY: c.y });
