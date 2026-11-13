@@ -139,8 +139,9 @@ export interface Attack {
     spin: number;
     dead: boolean;
     /**
-     * How it flies. A rival star is a 'drop' (hangs at the top, then falls faster and faster) or a
-     * 'slant' (the same, at an angle, glancing off the walls), and becomes 'back' once shot down.
+     * How it flies. A Normal fireball (kind 'star') is a 'drop': it comes in at the top, tracks the fairy,
+     * locks on and falls across the meadow. Shot down it becomes 'back', starting its curve across the
+     * screen, and arrives in the sender's meadow as a 'cross' Reverse finishing that curve.
      * Extra Attack critters use their sender's flight ('seeker', 'zig' and the rest).
      */
     flight: StarFlight;
@@ -151,9 +152,48 @@ export interface Attack {
     /** Extra Attack critters wear the sender's colour and look. */
     color?: string;
     look?: string;
-    /** Flight timer for critters that need a second clock; a falling star keeps its current speed here. */
+    /** Flight timer for critters that need a second clock; a falling fireball keeps its current speed here. */
     t?: number;
+    /** A fireball's size, 1 (small) to 4 (extra large): set by the combo hit that sent it; it takes size + 1 hits. */
+    size?: number;
+    /** Whose fireball it is: orange for player 1, purple for player 2. */
+    tint?: Tint;
+    /** Sent during Fever: flashes yellow. */
+    fever?: boolean;
+    /**
+     * `speed` is a fireball's Normal speed, `flash` the seconds left of its breaking flash, and `tail` a
+     * Reverse's recent positions (x, y pairs), drawn as a glowing trail.
+     */
+    speed?: number;
+    flash?: number;
+    tail?: number[];
+    /** Times this fireball has been shot back (0 for a Normal, 1 for a Reverse...): each one speeds it up. */
+    reflects?: number;
+    /** A top-drop fireball's lean from straight down, in radians. */
+    lean?: number;
+    /** Seconds a fireball still stalls after a shot that didn't break it, and its hit flash. */
+    stall?: number;
+    hitT?: number;
+    /** A Reverse's path across the screen (see fireball-path.ts), and how far along it is (0 to 1). */
+    curve?: Curve;
+    k?: number;
 }
+
+/**
+ * A quadratic curve in meadow units: from (x0, y0), bending toward (cx, cy), to (x1, y1). Points past the
+ * meadow's walls lie in the space between the meadows or in the rival's meadow beside it.
+ */
+export interface Curve {
+    x0: number;
+    y0: number;
+    cx: number;
+    cy: number;
+    x1: number;
+    y1: number;
+}
+
+/** Which player a fireball belongs to: 'p1' (orange) or 'p2' (purple). */
+export type Tint = 'p1' | 'p2';
 
 /** How an attack star or critter moves after it arrives. */
 export type StarFlight =
@@ -165,7 +205,9 @@ export type StarFlight =
     | 'lateral'
     | 'bounce'
     | 'bat'
-    /** A star you shot down, flying back up and out to your rival as a reverse star (harmless here). */
+    /** A Reverse coming across from the rival's meadow along its curve, onto where the fairy was. */
+    | 'cross'
+    /** A fireball you shot down, arcing up and out toward your rival as a Reverse fireball (harmless here). */
     | 'back';
 
 /** A fairy's Extra Attack: a few small critters sent with a level 2 charge. */
@@ -299,6 +341,21 @@ export interface Outgoing {
     level: number;
     fromX: number;
     fromY: number;
+    /**
+     * A Reverse crossing the screen: its curve in the sender's meadow units, how far along it was when it
+     * left the sender's meadow, which way the receiver's meadow lies from the sender's, and its speed.
+     */
+    curve?: Curve;
+    k?: number;
+    side?: number;
+    speed?: number;
+    /** For a fireball: times it has been shot back, and the speed boost from its sender's Perfects. */
+    reflects?: number;
+    boost?: number;
+    /** For a fireball: its size (1 to 4), whose it is, and whether it was sent during Fever. */
+    size?: number;
+    tint?: Tint;
+    fever?: boolean;
 }
 
 /** Where a player's fairy is now, so a drag can move her relative to it. */

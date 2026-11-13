@@ -44,7 +44,12 @@ export class CpuPilot {
                 .map(a => ({
                     x: a.x,
                     y: a.y,
-                    r: a.kind === 'bramble' ? C.BRAMBLE_RADIUS : C.STAR_RADIUS + (a.kind === 'comet' ? 6 : 0),
+                    r:
+                        a.kind === 'bramble'
+                            ? C.BRAMBLE_RADIUS
+                            : a.kind === 'star'
+                              ? C.fireballRadius(a.size ?? 1)
+                              : C.STAR_RADIUS + (a.kind === 'comet' ? 6 : 0),
                     rising: false,
                 })),
             ...f.crows.map(c => ({ x: c.x, y: c.y, r: C.CROW_RADIUS + 8, rising: c.vy < 0 })),
