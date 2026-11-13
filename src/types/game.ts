@@ -185,8 +185,9 @@ export interface Attack {
 }
 
 /**
- * A quadratic curve in meadow units: from (x0, y0), bending toward (cx, cy), to (x1, y1). Points past the
- * meadow's walls lie in the space between the meadows or in the rival's meadow beside it.
+ * A Reverse fireball's path in meadow units: from (x0, y0) straight up to the bounce at (cx, cy), then straight
+ * down to (x1, y1) and on. Points past the meadow's walls lie in the space between the meadows or in the rival's
+ * meadow beside it.
  */
 export interface Curve {
     x0: number;
@@ -212,7 +213,7 @@ export type StarFlight =
     | 'bat'
     /** A Reverse coming across from the rival's meadow along its curve, onto where the fairy was. */
     | 'cross'
-    /** A fireball you shot down, arcing up and out toward your rival as a Reverse fireball (harmless here). */
+    /** A fireball you shot down, bouncing off the top line toward your rival as a Reverse fireball (harmless here). */
     | 'back';
 
 /** A fairy's Extra Attack: a few small critters sent with a level 2 charge. */

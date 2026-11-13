@@ -282,7 +282,7 @@ export const FIREBALL_STALL = 0.06;
 export const FIREBALL_HIT_SLOW = 0.6;
 export const FIREBALL_HIT_FLASH = 0.1;
 /**
- * A fireball you shoot down flashes, turns into a Reverse where it broke and crosses the screen on one curve
+ * A fireball you shoot down flashes, turns into a Reverse where it broke and crosses the screen: diagonally up, a bounce off the top line, diagonally down
  * (fireball-path.ts) to where the rival's fairy was, starting at FIREBALL_BACK_START of its reflected speed
  * and reaching it over FIREBALL_BACK_RAMP seconds.
  */
