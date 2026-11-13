@@ -370,7 +370,7 @@ export class Field {
      * A fireball arrives. A Normal comes in at the top of the meadow right above the fairy (a volley's later
      * fireballs a little to either side, by `aim`) and falls straight down in a vertical line and out the
      * bottom; it doesn't follow her once it's in. A Reverse arrives mid-flight on its curve across the screen
-     * and carries on along it onto where the fairy was when it was broken, still arcing on past there. Size
+     * and carries on along it onto where the fairy was when it was broken, still carrying on down that line past there. Size
      * sets hits, never speed: each Normal flies at the speed it was sent with (slower in Fever), and a Reverse faster with
      * each reflection and the Perfects of whoever shot it back (fireballSpeedMul), capped.
      */
@@ -884,7 +884,7 @@ export class Field {
             this.spray(a.x, a.y, 6, '#ffe27a');
             if ((a.reflects ?? (a.level >= 2 ? 1 : 0)) < C.FIREBALL_MAX_REFLECTS) {
                 // A fireball flashes and turns into a Reverse right where it broke (purple the first time,
-                // flashing every colour the second), then arcs up and out of the meadow toward the rival's side,
+                // flashing every colour the second), then flies diagonally up to the top line, bounces and heads down at the rival,
                 // on its way back to them (see flyBack). Broken once more after that, it's an Extra Attack.
                 const lvl = Math.min(C.MAX_STAR_LEVEL, Math.max(a.level, 2 + this.fairy.counterBoost));
                 a.dead = false;
@@ -1188,7 +1188,7 @@ export class Field {
             }
             if (a.kind === 'star' && a.flight === 'cross' && a.curve) {
                 // A Reverse finishing its curve across the screen, onto where the fairy was when it broke, and
-                // past there still arcing the same way until it's out of the meadow.
+                // past there still on the same line until it's out of the meadow.
                 const k = curveStep(a.curve, a.k ?? 0, (a.t ?? C.FIREBALL_FALL_SPEED) * slow * dt, Infinity);
                 const p = curveAt(a.curve, k);
                 a.vx = (p.x - a.x) / dt;

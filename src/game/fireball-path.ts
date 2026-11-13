@@ -1,29 +1,28 @@
 // The path a Reverse fireball flies across the screen, from the meadow it was broken in to the rival who
-// sent it: up and toward the rival's meadow, a smooth turn right up at the top line under the HUD bar, then
-// down onto where the rival's fairy was when it broke. It's one quadratic curve in the sender's meadow units,
-// with the rival's meadow lying `side` meadows over (FIELD_W + GAP to the right, or to the left), as the two
-// meadows sit side by side on screen.
-// Every point of it stays inside the visible play area: below the top edge, between the outer walls.
+// sent it: diagonally up to the top line under the HUD bar, a bounce off it, and diagonally down onto where
+// the rival's fairy was when it broke, carrying on past there the same way. It's two straight legs meeting at
+// the bounce, in the sender's meadow units, with the rival's meadow lying `side` meadows over (FIELD_W + GAP to
+// the right, or to the left), as the two meadows sit side by side on screen.
 import * as C from '@/core/config';
 import type { Curve, NormalRoute, Point } from '@/types';
 
 /** How far the rival's meadow is from this one, in meadow units, as they sit side by side. */
 export const MEADOW_STEP = C.FIELD_W + C.GAP;
-/** How high a Reverse's arc reaches: right up to the top line, just under the HUD bar. */
+/** Where a Reverse bounces: the top line, just under the HUD bar. */
 const TURN_TOP = C.FIREBALL_TOP_Y;
 
 /**
- * The curve for a Reverse broken at (x, y) in this meadow, aimed at (tx, ty) in the rival's meadow on `side`
- * (+1 right, -1 left). Its control point sits midway across, placed so the arc's highest point is exactly
- * TURN_TOP: it always climbs right up to the top before coming down onto the target. (For a quadratic with
- * ends at heights a and b, the highest point is m when the control point is at m - sqrt((a - m)(b - m)).)
+ * The path for a Reverse broken at (x, y) in this meadow, aimed at (tx, ty) in the rival's meadow on `side`
+ * (+1 right, -1 left): diagonally up to TURN_TOP, bouncing off it at (cx, cy) where a true reflection sends it
+ * at the target, then diagonally down to (x1, y1) and on. One broken at or above the top line bounces at once.
  */
 export function reverseCurve(x: number, y: number, tx: number, ty: number, side: number): Curve {
     const x1 = tx + side * MEADOW_STEP,
         y1 = ty;
-    const cx = (x + x1) / 2,
-        cy = TURN_TOP - Math.sqrt(Math.max(0, y - TURN_TOP) * Math.max(0, y1 - TURN_TOP));
-    return { x0: x, y0: y, cx, cy, x1, y1 };
+    if (y <= TURN_TOP) return { x0: x, y0: y, cx: x, cy: y, x1, y1 };
+    // The target's mirror image above the top line; the bounce is where the line to it crosses that line.
+    const k = (y - TURN_TOP) / (y - (2 * TURN_TOP - y1));
+    return { x0: x, y0: y, cx: x + (x1 - x) * k, cy: TURN_TOP, x1, y1 };
 }
 
 /**
@@ -104,27 +103,28 @@ export function pathAt(points: Point[], d: number): { x: number; y: number; dx: 
     return { x: points[0].x, y: points[0].y, dx: 0, dy: -1 };
 }
 
-/** The point at `k` (0 to 1) along a curve. */
+/**
+ * The point at `k` along a Reverse's path: the way up for `k` 0 to 0.5, the bounce at 0.5, the way down to the
+ * target at 1, and on down the same line past 1.
+ */
 export function curveAt(c: Curve, k: number): { x: number; y: number } {
-    const u = 1 - k;
-    return { x: u * u * c.x0 + 2 * u * k * c.cx + k * k * c.x1, y: u * u * c.y0 + 2 * u * k * c.cy + k * k * c.y1 };
+    if (k < 0.5) return { x: c.x0 + (c.cx - c.x0) * 2 * k, y: c.y0 + (c.cy - c.y0) * 2 * k };
+    return { x: c.cx + (c.x1 - c.cx) * (2 * k - 1), y: c.cy + (c.y1 - c.cy) * (2 * k - 1) };
 }
 
-/** The curve's direction (unnormalised) at `k`. */
+/** The path's direction at `k` (unnormalised: how far it moves per unit of `k`). */
 export function curveDir(c: Curve, k: number): { x: number; y: number } {
-    return {
-        x: 2 * (1 - k) * (c.cx - c.x0) + 2 * k * (c.x1 - c.cx),
-        y: 2 * (1 - k) * (c.cy - c.y0) + 2 * k * (c.y1 - c.cy),
-    };
+    return k < 0.5 ? { x: 2 * (c.cx - c.x0), y: 2 * (c.cy - c.y0) } : { x: 2 * (c.x1 - c.cx), y: 2 * (c.y1 - c.cy) };
 }
 
 /**
- * Advance `k` along the curve by `dist` meadow units, up to `limit` (1 is the curve's end; past it the curve
- * carries on bending the same way, which is how a Reverse keeps arcing after its target).
+ * Advance `k` along the curve by `dist` meadow units, up to `limit` (1 is the target; past it the path carries
+ * on down the same line). A step that would cross the bounce stops there, so it never cuts the corner.
  */
 export function curveStep(c: Curve, k: number, dist: number, limit = 1): number {
     const d = curveDir(c, k);
-    return Math.min(limit, k + dist / Math.max(1, Math.hypot(d.x, d.y)));
+    const next = k + dist / Math.max(1, Math.hypot(d.x, d.y));
+    return Math.min(limit, k < 0.5 && next > 0.5 ? 0.5 + 1e-6 : next);
 }
 
 /** The same curve as seen from the meadow `side` meadows over (shifted into that meadow's own units). */
