@@ -69,8 +69,11 @@ export class TitleScreen {
             });
     }
 
-    /** Draw the whole screen, side by side (wide) or stacked for a portrait screen (tall). */
-    draw(v: TitleView, t: number, layout: Layout = 'wide', h: number = C.TALL_H): void {
+    /**
+     * Draw the whole screen, side by side (wide) or stacked for a portrait screen (tall). `bleed` is how far a
+     * widened landscape view reaches past each side of the usual one.
+     */
+    draw(v: TitleView, t: number, layout: Layout = 'wide', h: number = C.TALL_H, bleed = 0): void {
         if (layout === 'tall') {
             const W = C.TALL_W,
                 f = tallMenuFit(h),
@@ -92,11 +95,19 @@ export class TitleScreen {
             this.bleed = 0;
             return;
         }
-        this.backdrop.draw(t, 150, 170);
+        // A widened landscape view: the sky and the footer bar reach `bleed` past each side, and the hero stays
+        // against the left edge of the screen.
+        this.bleed = bleed;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.translate(-bleed, 0);
+        this.backdrop.draw(t, 150 + bleed, 170, C.VIEW_W + 2 * bleed, C.VIEW_H);
+        ctx.restore();
         this.heroArt(t);
         this.logo(t);
         this.menu(v, t, WIDE_BUTTONS);
         this.footer(v, t);
+        this.bleed = 0;
     }
 
     /** The tall layout's hero: the portrait centred across the top, glitter around her. */
@@ -139,7 +150,7 @@ export class TitleScreen {
         if (hero) {
             const w = (hero.width / hero.height) * H;
             // A slow breathing drift, like an attract screen.
-            ctx.drawImage(hero, -18 + Math.sin(t * 0.5) * 3, -4 + Math.sin(t * 0.7) * 2, w, H);
+            ctx.drawImage(hero, -18 - this.bleed + Math.sin(t * 0.5) * 3, -4 + Math.sin(t * 0.7) * 2, w, H);
         } else {
             // No portrait art: her in-game sprite, large.
             const pip = FAIRIES[0];

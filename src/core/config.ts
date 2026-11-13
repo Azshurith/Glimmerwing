@@ -14,6 +14,8 @@ export const GAP = 24;
 /** The side-by-side view: both meadows and the console between them. */
 export let VIEW_W = FIELD_W * 2 + GAP;
 export const VIEW_H = FIELD_H;
+/** The widest the title and select screens' view gets on a wide landscape screen (their sky fills the rest). */
+export const WIDE_W_MAX = 900;
 
 /** Set the meadows' width for the coming round (and the side-by-side view's width with it). */
 export function setFieldWidth(w: number): void {

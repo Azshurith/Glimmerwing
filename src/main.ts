@@ -10,7 +10,7 @@ const renderer = new Renderer(canvas);
 const input = new Input(canvas);
 const sound = new Sound();
 const game = new Game(input, renderer, sound);
-input.viewSize = () => ({ w: renderer.viewW, h: renderer.viewH });
+input.viewSize = () => ({ w: renderer.viewW, h: renderer.viewH, ox: renderer.viewX });
 // Browsers only start audio after a gesture.
 for (const ev of ['keydown', 'pointerdown', 'touchstart'] as const)
     window.addEventListener(ev, () => sound.unlock(), { passive: true });
@@ -59,6 +59,10 @@ function fit(): void {
                 : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
         const fill = ((C.VIEW_H * availW) / Math.max(1, availH) - C.GAP) / 2;
         renderer.fieldWidthToFill = renderer.portrait ? C.FIELD_W_BASE : Math.floor(fill);
+        // The menus widen to the same shape, up to WIDE_W_MAX.
+        renderer.menuW = renderer.portrait
+            ? C.VIEW_W
+            : Math.min(C.WIDE_W_MAX, (C.VIEW_H * availW) / Math.max(1, availH));
     }
     const RATIO = renderer.viewW / renderer.viewH;
     let w: number;

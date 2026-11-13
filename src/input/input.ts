@@ -129,7 +129,7 @@ export class Input {
     /** Where the most recent tap landed this frame, in view coordinates. */
     tap: { x: number; y: number } | null = null;
     /** The current view size in view units; the page points this at the renderer's layout. */
-    viewSize: () => { w: number; h: number } = () => ({ w: C.VIEW_W, h: C.VIEW_H });
+    viewSize: () => { w: number; h: number; ox?: number } = () => ({ w: C.VIEW_W, h: C.VIEW_H });
 
     constructor(canvas: HTMLCanvasElement) {
         window.addEventListener('keydown', e => {
@@ -146,14 +146,19 @@ export class Input {
         const toView = (e: PointerEvent) => {
             const r = canvas.getBoundingClientRect();
             const v = this.viewSize();
-            return { x: ((e.clientX - r.left) / r.width) * v.w, y: ((e.clientY - r.top) / r.height) * v.h };
+            // A widened menu sits `ox` in from the left; touches are in its own units.
+            return {
+                x: ((e.clientX - r.left) / r.width) * v.w - (v.ox ?? 0),
+                y: ((e.clientY - r.top) / r.height) * v.h,
+            };
         };
         canvas.addEventListener('pointerdown', e => {
             e.preventDefault();
             canvas.setPointerCapture(e.pointerId);
             this.touchActive = e.pointerType !== 'mouse';
             const p = toView(e);
-            const side: 0 | 1 = p.x < this.viewSize().w / 2 ? 0 : 1;
+            const vs = this.viewSize();
+            const side: 0 | 1 = p.x < (vs.w - 2 * (vs.ox ?? 0)) / 2 ? 0 : 1;
             const now = performance.now();
             // A touch landing just after a quick tap, close to it, is a double tap: a bomb.
             const lt = this.lastTap;
