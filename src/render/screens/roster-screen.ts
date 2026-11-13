@@ -60,9 +60,10 @@ const LAYOUT = {
     },
     tall: {
         W: C.TALL_W,
-        art: { x: 10, y: 36, w: 86, h: 200 },
-        demo: { x: 104, y: 36, w: 150 },
-        info: { x: 14, y: 258, w: 236 },
+        art: { x: 14, y: 38, w: 236, h: 170 },
+        // On a phone the demo opens full size in a pop-up from the PREVIEW button (see `popup`).
+        demo: { x: 24, y: 0, w: 216 },
+        info: { x: 14, y: 250, w: 236 },
         rowY: 506,
         r: 15,
     },
@@ -92,6 +93,16 @@ export type DemoDraw = (x: number, y: number, scale: number) => void;
 
 /** How far the tall screen's content moves down to sit centred in a view `h` tall. */
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
+
+/** The PREVIEW button on a phone's portrait, in the tall layout's design units (before `tallShift`). */
+const PREVIEW_BTN = { x: 172, y: 46, w: 70, h: 18 };
+
+/** The PREVIEW button in view units, for a view `h` tall: the tap target that opens the demo on a phone. */
+export function rosterPreviewButton(h: number = C.TALL_H): { x: number; y: number; w: number; h: number } {
+    const f = tallMenuFit(h),
+        b = PREVIEW_BTN;
+    return { x: f.x + b.x * f.s, y: (b.y + tallShift(f.h)) * f.s, w: b.w * f.s, h: b.h * f.s };
+}
 
 /** Where each fairy's medallion sits along the bottom, in a layout's design units. */
 function designMedallions(layout: Layout, dy = 0): { x: number; y: number; r: number }[] {
@@ -144,7 +155,8 @@ export class RosterScreen {
         ctx.translate(0, dy);
         const { art, demo: win, info } = layout === 'wide' ? spread(bleed) : L;
         this.art(fy, locked, art, t);
-        this.demo(fy, locked, win, v.caption, demo);
+        if (layout === 'wide') this.demo(fy, locked, win, v.caption, demo);
+        else if (!locked) this.previewButton(fy, t);
         this.info(fy, locked, info, layout === 'tall', t);
         ctx.restore();
         designMedallions(layout, dy).forEach((m, i) => this.medallion(FAIRIES[i], v.locked[i], m, i === v.index, t));
@@ -153,7 +165,54 @@ export class RosterScreen {
         ctx.fillStyle = 'rgba(203,188,245,0.75)';
         const hint = v.touch ? 'TAP A FAIRY  ·  ◀ BACK' : 'LEFT / RIGHT BROWSE  ·  ESC BACK';
         ctx.fillText(hint, L.W / 2, layout === 'tall' ? H - 14 : H - 10, L.W - 16);
+        if (layout === 'tall' && v.demoOpen && !locked) this.popup(fy, v, H, demo);
         ctx.restore();
+    }
+
+    /** The PREVIEW button in the corner of her portrait (phones only), glowing gently. */
+    private previewButton(fy: Fairy, t: number): void {
+        const ctx = this.ctx,
+            b = PREVIEW_BTN;
+        const shape = slanted(b.x, b.y, b.w, b.h, 5);
+        ctx.save();
+        ctx.shadowColor = fy.color;
+        ctx.shadowBlur = 6 + 4 * Math.sin(t * 3);
+        ctx.fillStyle = 'rgba(12,8,32,0.85)';
+        shape(ctx);
+        ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = '#fff3c9';
+        ctx.lineWidth = 1.2;
+        shape(ctx);
+        ctx.stroke();
+        // A play triangle, then the label.
+        ctx.fillStyle = fy.color;
+        ctx.beginPath();
+        ctx.moveTo(b.x + 10, b.y + 5);
+        ctx.lineTo(b.x + 16, b.y + b.h / 2);
+        ctx.lineTo(b.x + 10, b.y + b.h - 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.textAlign = 'left';
+        ctx.font = `7px ${ARCADE}`;
+        ctx.fillStyle = '#fff3c9';
+        ctx.fillText('PREVIEW', b.x + 20, b.y + 12.5, b.w - 24);
+    }
+
+    /** On a phone: the demo, full size, over the dimmed screen, until a tap closes it. */
+    private popup(fy: Fairy, v: RosterView, H: number, draw?: DemoDraw): void {
+        const ctx = this.ctx,
+            L = LAYOUT.tall;
+        ctx.fillStyle = 'rgba(6,4,18,0.82)';
+        ctx.fillRect(-200, 0, L.W + 400, H);
+        const h = (C.FIELD_H_BASE * L.demo.w) / C.FIELD_W_BASE;
+        const y = Math.max(34, (H - h) / 2 - 8);
+        arcadeText(ctx, fy.name.toUpperCase(), L.W / 2, y - 8, 14, ['#ffffff', '#fff0c8', '#ffd27a'], 'center');
+        this.demo(fy, false, { ...L.demo, y }, v.caption, draw);
+        ctx.textAlign = 'center';
+        ctx.font = `7px ${ARCADE}`;
+        ctx.fillStyle = 'rgba(203,188,245,0.85)';
+        ctx.fillText(v.touch ? 'TAP TO CLOSE' : 'ESC TO CLOSE', L.W / 2, y + h + 16);
     }
 
     /** The heading bar across the top, reaching `bleed` past each side. */
