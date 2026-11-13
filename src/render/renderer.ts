@@ -6,13 +6,22 @@ import type {
     HudTag,
     Layer,
     Layout,
+    Outgoing,
     Placement,
     SelectView,
     TitleView,
     WingShape,
 } from '@/types';
 
-import { drawImp, drawBramble, drawComet, drawFireball } from './entities/attacks';
+import {
+    drawImp,
+    drawBramble,
+    drawComet,
+    drawFireball,
+    drawFireFlash,
+    drawFireHit,
+    drawReverseTrail,
+} from './entities/attacks';
 import { drawBomb } from './entities/bombs';
 import { drawCrow, drawGuardian } from './entities/bosses';
 import { drawBeetle, drawMoonseed, drawPuff, drawSpinner } from './entities/critters';
@@ -193,7 +202,10 @@ export class Renderer {
                 const look = a.level >= 2 ? 'reverse' : a.fever ? 'fever' : (a.tint ?? 'p1');
                 const full = C.fireballHp(size);
                 const hurt = Number.isFinite(a.hp) ? Math.max(0, Math.min(1, 1 - a.hp / full)) : 0;
+                if (a.tail && a.level >= 2) drawReverseTrail(ctx, a.tail, time, size);
                 drawFireball(ctx, a.x, a.y, time, a.spin, a.vx, a.vy, size, look, hurt);
+                if (a.flash) drawFireFlash(ctx, a.x, a.y, a.flash / C.FIREBALL_FLASH, size);
+                if (a.hitT) drawFireHit(ctx, a.x, a.y, a.hitT / C.FIREBALL_HIT_FLASH, size);
             }
         }
         for (const c of f.crows)
@@ -320,6 +332,42 @@ export class Renderer {
     }
 
     /** Draw an attack in flight between the meadows as a glowing dot. */
+    /**
+     * A fireball between the meadows, drawn as itself (at the scale `s` of the meadows it's between) so a
+     * Reverse visibly carries on from the meadow it left into the one it's heading for.
+     */
+    transitFireball(x: number, y: number, s: number, time: number, vx: number, vy: number, o: Outgoing): void {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(s, s);
+        const look = o.level >= 2 ? 'reverse' : o.fever ? 'fever' : (o.tint ?? 'p1');
+        drawFireball(ctx, 0, 0, time, o.fromX, vx, vy, o.size ?? 1, look, 0);
+        ctx.restore();
+    }
+
+    /** Debug overlay: a dashed path through view points, with a dot where it ends. */
+    debugPath(pts: { x: number; y: number }[], color: string): void {
+        if (pts.length < 2) return;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const p of pts.slice(1)) ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const end = pts[pts.length - 1];
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(end.x, end.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    /** Something else between the meadows: a glowing dot in its colour. */
     transit(x: number, y: number, color: string): void {
         const ctx = this.ctx;
         ctx.fillStyle = color;
