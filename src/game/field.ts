@@ -895,7 +895,15 @@ export class Field {
                 a.flash = C.FIREBALL_FLASH;
                 a.stall = 0;
                 // Lock on to where the rival's fairy is right now: the Reverse crosses the screen to there.
-                a.curve = reverseCurve(a.x, a.y, this.rivalFairy.x, this.rivalFairy.y, this.rivalSide);
+                // The bounce or the straight route, at random, like a Normal's (FIREBALL_STRAIGHT_CHANCE).
+                a.curve = reverseCurve(
+                    a.x,
+                    a.y,
+                    this.rivalFairy.x,
+                    this.rivalFairy.y,
+                    this.rivalSide,
+                    this.fxRng.next() < C.FIREBALL_STRAIGHT_CHANCE,
+                );
                 a.k = 0;
                 // One more reflection: a set speed for how many times it's been shot back (SPEED_REVERSE more each
                 // time, whatever speed the Normal had), boosted by my Perfects and capped.
@@ -984,7 +992,8 @@ export class Field {
 
     /** A Normal fireball's route from (x, y) to the rival's fairy, `aim` to one side, picked at random (see normalRoute). */
     private routeFor(x: number, y: number, aim: number): { route: Point[]; enter: RouteEntry } {
-        // Which way it goes is a coin toss (FIREBALL_STRAIGHT_CHANCE): the bounce, or up, across and straight down.
+        // Which way it goes is a coin toss (FIREBALL_STRAIGHT_CHANCE), wherever it's sent from: the bounce, or up,
+        // across and straight down.
         const straight = this.fxRng.next() < C.FIREBALL_STRAIGHT_CHANCE;
         const r = normalRoute(x, y, this.rivalSide, this.rivalFairy.x + aim, this.rivalFairy.y, straight);
         return { route: r.points, enter: r.enter };

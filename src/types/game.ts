@@ -185,8 +185,8 @@ export interface Attack {
 }
 
 /**
- * A Reverse fireball's path in meadow units: from (x0, y0) straight up to the bounce at (cx, cy), then straight
- * down to (x1, y1) and on. Points past the meadow's walls lie in the space between the meadows or in the rival's
+ * A Reverse fireball's path in meadow units, in straight legs: from (x0, y0) to the corner at (cx, cy), on to
+ * (tx, ty) if it has a second corner, then to (x1, y1) and on. Points past the meadow's walls lie in the space between the meadows or in the rival's
  * meadow beside it.
  */
 export interface Curve {
@@ -194,6 +194,9 @@ export interface Curve {
     y0: number;
     cx: number;
     cy: number;
+    /** A second corner between the first and the target, for a Reverse taking the straight route. */
+    tx?: number;
+    ty?: number;
     x1: number;
     y1: number;
 }
