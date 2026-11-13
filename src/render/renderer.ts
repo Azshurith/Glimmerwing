@@ -334,11 +334,26 @@ export class Renderer {
     /** Draw an attack in flight between the meadows as a glowing dot. */
     /**
      * A fireball between the meadows, drawn as itself (at the scale `s` of the meadows it's between) so a
-     * Reverse visibly carries on from the meadow it left into the one it's heading for.
+     * Reverse visibly carries on from the meadow it left into the one it's heading for. `clip` keeps it inside
+     * a rectangle of the view (a fireball rising out of its sender's meadow).
      */
-    transitFireball(x: number, y: number, s: number, time: number, vx: number, vy: number, o: Outgoing): void {
+    transitFireball(
+        x: number,
+        y: number,
+        s: number,
+        time: number,
+        vx: number,
+        vy: number,
+        o: Outgoing,
+        clip?: { x: number; y: number; w: number; h: number },
+    ): void {
         const ctx = this.ctx;
         ctx.save();
+        if (clip) {
+            ctx.beginPath();
+            ctx.rect(clip.x, clip.y, clip.w, clip.h);
+            ctx.clip();
+        }
         ctx.translate(x, y);
         ctx.scale(s, s);
         const look = o.level >= 2 ? 'reverse' : o.fever ? 'fever' : (o.tint ?? 'p1');
