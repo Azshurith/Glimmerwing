@@ -46,12 +46,27 @@ document.querySelector<HTMLButtonElement>('[data-online]')?.addEventListener('cl
 // either way up, or a short laptop screen, still shows everything.
 const stage = document.getElementById('stage')!;
 const screenEl = document.getElementById('screen')!;
+/** A touchscreen device; held upright, the game opens full screen (see autoImmersive). */
+const coarse = matchMedia('(pointer: coarse)').matches;
+/** Set once the player leaves full screen with ✕, so it doesn't reopen on its own. */
+let userLeftFull = false;
 /** Size the game to fit the window's width and height, keeping the current layout's aspect ratio. */
 function fit(): void {
     const vv = window.visualViewport;
     const vw = vv?.width ?? window.innerWidth,
         vh = vv?.height ?? window.innerHeight;
     renderer.portrait = vh > vw;
+    autoImmersive();
+    // In portrait the tall view takes the screen's own shape, so it fills the screen edge to edge.
+    if (renderer.portrait) {
+        const cs = getComputedStyle(stage);
+        const immersive = stage.classList.contains('immersive');
+        const availW = immersive ? vw - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) : stage.clientWidth,
+            availH = immersive
+                ? vh - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
+                : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
+        renderer.tallH = Math.max(C.TALL_H, Math.min(C.TALL_H_MAX, (C.TALL_W * availH) / Math.max(1, availW)));
+    }
     const RATIO = renderer.viewW / renderer.viewH;
     let w: number;
     if (stage.classList.contains('immersive')) {
@@ -73,6 +88,22 @@ for (const ev of ['resize', 'orientationchange'] as const)
     window.addEventListener(ev, () => requestAnimationFrame(fit));
 window.visualViewport?.addEventListener('resize', () => requestAnimationFrame(fit));
 fit();
+
+// ---- full screen on phones held upright ----------------------------------------------
+// A touchscreen held upright opens straight into the full-window game; the first tap also asks
+// for real fullscreen, which hides the browser's bars. Tapping ✕ goes back to the page for good.
+/** Fill the window with the game on a phone held upright, unless the player chose the page. */
+function autoImmersive(): void {
+    if (coarse && renderer.portrait && !userLeftFull && !stage.classList.contains('immersive'))
+        stage.classList.add('immersive');
+}
+window.addEventListener(
+    'pointerdown',
+    () => {
+        if (coarse && renderer.portrait && !userLeftFull && !fsElement()) void enterFull();
+    },
+    { passive: true },
+);
 
 // ---- fullscreen -----------------------------------------------------------------
 // The real Fullscreen API where there is one; elsewhere (iPhone Safari) a fixed full-window layer.
@@ -97,8 +128,9 @@ async function enterFull(): Promise<void> {
     // Either way up works (portrait gets the tall layout), so the orientation isn't locked.
     fit();
 }
-/** Leave fullscreen or the full-window layer. */
+/** Leave fullscreen or the full-window layer (and stop opening it on its own). */
 function exitFull(): void {
+    userLeftFull = true;
     stage.classList.remove('immersive');
     if (fsElement()) {
         if (fsDoc.exitFullscreen) fsDoc.exitFullscreen().catch(() => undefined);
@@ -141,12 +173,26 @@ document.querySelectorAll<HTMLButtonElement>('.touch-ui [data-key]').forEach(b =
     b.addEventListener('contextmenu', e => e.preventDefault());
 });
 const menuBtn = document.getElementById('menu-btn') as HTMLButtonElement;
+// The page's mute button is hidden when the game fills the screen, so the touch layer has its own.
+const soundBtn = document.getElementById('tb-sound') as HTMLButtonElement | null;
+soundBtn?.addEventListener('click', () => {
+    sound.unlock();
+    sound.toggleMute();
+    showMute();
+    soundBtn.blur();
+});
+let shownMuted: boolean | null = null;
 let shownMode = '',
     shownPhase = '',
     shownLayout = '',
     shownTouch: boolean | null = null;
 /** Keeps the page's touch layer in step with the game: which buttons show, and what the top one does. */
 function syncPage(): void {
+    if (soundBtn && sound.muted !== shownMuted) {
+        shownMuted = sound.muted;
+        soundBtn.textContent = shownMuted ? '🔇' : '♪';
+        soundBtn.setAttribute('aria-pressed', String(!shownMuted));
+    }
     // The layout changes with the phase and the orientation: refit to its shape.
     if (renderer.layout !== shownLayout) {
         shownLayout = screenEl.dataset.layout = renderer.layout;

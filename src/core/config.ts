@@ -15,7 +15,9 @@ export const VIEW_H = FIELD_H;
 export const TALL_W = FIELD_W + 24;
 export const TALL_TOP = 172;
 export const TALL_STRIP = 56;
+/** The tall view's shortest height; on longer screens it stretches to their shape, up to TALL_H_MAX. */
 export const TALL_H = TALL_TOP + FIELD_H + TALL_STRIP;
+export const TALL_H_MAX = 680;
 /** Where each meadow sits in the tall view: yours (field 0) and the rival's, at half size. */
 export const TALL_OWN = { x: 12, y: TALL_TOP, s: 1 } as const;
 export const TALL_RIVAL = { x: 8, y: 6, s: 0.5 } as const;

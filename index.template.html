@@ -284,6 +284,16 @@
                 left: auto;
                 right: 1.5%;
             }
+            /* Sound toggle for the full-screen game, where the page's mute button is out of sight.
+               It shows on the title screen, in the corner the pause button leaves free there. */
+            .tb-sound {
+                display: none;
+                top: 1%;
+                left: 1.5%;
+            }
+            .stage.immersive .screen[data-phase='title'] .tb-sound {
+                display: block;
+            }
             .rotate-hint {
                 display: none;
                 margin: 0;
@@ -460,6 +470,7 @@
                 <div class="touch-ui" aria-hidden="false">
                     <button class="tb small tb-menu" id="menu-btn" data-key="Escape" aria-label="Pause">❚❚</button>
                     <button class="tb small tb-exit" id="exit-full" aria-label="Exit fullscreen">✕</button>
+                    <button class="tb small tb-sound" id="tb-sound" aria-label="Sound" aria-pressed="true">♪</button>
                     <!-- One player (or 1P in versus): B blooms, C autofires while held. -->
                     <div class="pad pad-a">
                         <button class="tb" data-key="KeyF" aria-label="Autofire">Auto</button>

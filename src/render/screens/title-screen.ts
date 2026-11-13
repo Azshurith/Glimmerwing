@@ -23,12 +23,17 @@ const MENU: { mode: Mode; label: string; sub: string }[] = [
     { mode: 'online', label: 'ONLINE', sub: 'Find a rival or invite a friend' },
 ];
 const WIDE_BUTTONS: TitleButton[] = MENU.map((b, i) => ({ ...b, x: 290, y: 106 + i * 44, w: 192, h: 36 }));
-/** In the tall layout the menu stacks under the hero and the logo. */
-const TALL_BUTTONS: TitleButton[] = MENU.map((b, i) => ({ ...b, x: 40, y: 346 + i * 50, w: 192, h: 40 }));
+/** In the tall layout the menu stacks under the hero and the logo, shifted down `dy` on longer screens. */
+function tallButtons(dy: number): TitleButton[] {
+    return MENU.map((b, i) => ({ ...b, x: 40, y: 346 + dy + i * 50, w: 192, h: 40 }));
+}
 
-/** The title menu, top to bottom, for a layout; also the tap targets (view units). */
-export function titleButtons(layout: Layout): TitleButton[] {
-    return layout === 'tall' ? TALL_BUTTONS : WIDE_BUTTONS;
+/** How far the tall title's content moves down to sit centred in a view `h` tall. */
+const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
+
+/** The title menu, top to bottom, for a layout and view height; also the tap targets (view units). */
+export function titleButtons(layout: Layout, h: number = C.TALL_H): TitleButton[] {
+    return layout === 'tall' ? tallButtons(tallShift(h)) : WIDE_BUTTONS;
 }
 
 const LOGO_X = 386;
@@ -54,15 +59,18 @@ export class TitleScreen {
     }
 
     /** Draw the whole screen, side by side (wide) or stacked for a portrait screen (tall). */
-    draw(v: TitleView, t: number, layout: Layout = 'wide'): void {
+    draw(v: TitleView, t: number, layout: Layout = 'wide', h: number = C.TALL_H): void {
         if (layout === 'tall') {
             const W = C.TALL_W,
-                H = C.TALL_H;
-            this.backdrop.draw(t, W / 2, 170, W, H);
+                dy = tallShift(h);
+            this.backdrop.draw(t, W / 2, 170 + dy, W, h);
+            this.ctx.save();
+            this.ctx.translate(0, dy);
             this.heroArtTall(t);
             this.logo(t, W / 2, TALL.logoY, 24);
-            this.menu(v, t, TALL_BUTTONS);
-            this.footer(v, t, W / 2, TALL.ctaY, W, H);
+            this.ctx.restore();
+            this.menu(v, t, tallButtons(dy));
+            this.footer(v, t, W / 2, TALL.ctaY + dy, W, h);
             return;
         }
         this.backdrop.draw(t, 150, 170);

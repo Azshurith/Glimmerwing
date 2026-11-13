@@ -44,8 +44,14 @@ const WIDE: readonly [Placement, Placement] = [
     { x: 0, y: 0, s: 1 },
     { x: C.FIELD_W + C.GAP, y: 0, s: 1 },
 ];
-/** Where they sit in the tall layout: yours full size at the bottom, the rival's small at the top. */
-const TALL: readonly [Placement, Placement] = [C.TALL_OWN, C.TALL_RIVAL];
+/**
+ * Where they sit in the tall layout: yours full size at the bottom, the rival's small at the top.
+ * On a longer screen the extra height is shared between the gap above your meadow and the button strip.
+ */
+function tallPlacement(h: number): readonly [Placement, Placement] {
+    const extra = Math.max(0, h - C.TALL_H);
+    return [{ ...C.TALL_OWN, y: C.TALL_OWN.y + extra / 2 }, C.TALL_RIVAL];
+}
 const IDLE: Controls = { left: false, right: false, up: false, down: false, fire: false };
 
 // Select screen: roster medallions in rows of SELECT_COLS; arrows move, up/down jump a row.
@@ -198,7 +204,7 @@ export class Game {
     /** The select screen's fairy medallions, with their hit areas for touch. */
     private cards(): SelectCard[] {
         return FAIRIES.map((fairy, i) => {
-            const m = medallionAt(i, this.r.layout);
+            const m = medallionAt(i, this.r.layout, this.r.viewH);
             return { fairy, locked: !this.isUnlocked(fairy), x: m.x - m.r, y: m.y - m.r, w: m.r * 2, h: m.r * 2 };
         });
     }
@@ -428,7 +434,7 @@ export class Game {
             }
             // Arcade menu: up/down (keys, either player's stick) moves the cursor; any fire button
             // or Start plays it. 1/2/3 jump straight in, and tapping a bar plays that one.
-            const buttons = titleButtons(this.r.layout);
+            const buttons = titleButtons(this.r.layout, this.r.viewH);
             const n = buttons.length;
             const was = this.titleIndex;
             if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.titleIndex = (this.titleIndex + n - 1) % n;
@@ -596,7 +602,7 @@ export class Game {
         // round with one player on the device. Two players sharing it keep the meadows side by side.
         const inRound = this.phase !== 'title' && this.phase !== 'select';
         r.layout = r.portrait && !(inRound && this.mode === 'versus') ? 'tall' : 'wide';
-        const at = r.layout === 'tall' ? TALL : WIDE;
+        const at = r.layout === 'tall' ? tallPlacement(r.viewH) : WIDE;
         r.begin();
         const solo = this.mode !== 'versus';
         const tags: [HudTag, HudTag] = [

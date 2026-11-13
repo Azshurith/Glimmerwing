@@ -28,6 +28,8 @@ export class Renderer {
     layout: Layout = 'wide';
     /** Whether the screen is taller than wide; the page keeps this up to date. */
     portrait = false;
+    /** The tall view's height, stretched by the page to the screen's shape (at least TALL_H). */
+    tallH: number = C.TALL_H;
 
     /** Width of the view in view units, for the current layout. */
     get viewW(): number {
@@ -35,7 +37,7 @@ export class Renderer {
     }
     /** Height of the view in view units, for the current layout. */
     get viewH(): number {
-        return this.layout === 'tall' ? C.TALL_H : C.VIEW_H;
+        return this.layout === 'tall' ? this.tallH : C.VIEW_H;
     }
 
     constructor(private canvas: HTMLCanvasElement) {
@@ -341,11 +343,11 @@ export class Renderer {
 
     /** The arcade title screen (see title-screen.ts). */
     title(v: TitleView, time: number): void {
-        this.titleScreen.draw(v, time, this.layout);
+        this.titleScreen.draw(v, time, this.layout, this.viewH);
     }
 
     /** The arcade character-select screen (see select-screen.ts). */
     select(v: SelectView, time: number): void {
-        this.selectScreen.draw(v, time, this.layout);
+        this.selectScreen.draw(v, time, this.layout, this.viewH);
     }
 }
