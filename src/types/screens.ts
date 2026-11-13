@@ -35,8 +35,6 @@ export interface SelectView {
 
 /** Everything the title screen needs to draw a frame. */
 export interface TitleView {
-    /** Which title screen: the opening one (sign in or play as a guest), or the mode menu. */
-    stage: TitleStage;
     /** Highlighted menu item. */
     index: number;
     touch: boolean;
@@ -46,8 +44,11 @@ export interface TitleView {
     bestChain: number;
 }
 
-/** The title's two screens: the opening one (sign in or play as a guest), then the mode menu. */
-export type TitleStage = 'start' | 'modes';
+/** What the mode menu shows: the highlighted card, and whether the player is on a touchscreen. */
+export interface ModeView {
+    index: number;
+    touch: boolean;
+}
 
-/** What a title-menu entry does when it's picked. */
+/** What a title-screen choice or a mode-menu card does when it's picked. */
 export type TitleAction = 'google' | 'guest' | 'story' | 'cpu' | 'versus' | 'online' | 'settings' | 'guide';

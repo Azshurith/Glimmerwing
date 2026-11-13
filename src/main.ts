@@ -218,7 +218,7 @@ function syncPage(): void {
     if (game.modeName !== shownMode || game.phaseName !== shownPhase) {
         shownMode = screenEl.dataset.mode = game.modeName;
         shownPhase = screenEl.dataset.phase = game.phaseName;
-        const back = shownPhase === 'select';
+        const back = shownPhase === 'select' || shownPhase === 'modes';
         menuBtn.textContent = back ? '◀' : '❚❚';
         menuBtn.setAttribute('aria-label', back ? 'Back' : 'Pause');
         void keepAwake(shownPhase === 'playing' || shownPhase === 'countdown');

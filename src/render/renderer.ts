@@ -4,6 +4,7 @@ import type {
     BannerView,
     ConsoleView,
     HudTag,
+    ModeView,
     Layer,
     Layout,
     Outgoing,
@@ -28,6 +29,7 @@ import { drawCrow, drawGuardian } from './entities/bosses';
 import { drawBeetle, drawMoonseed, drawPuff, drawSpinner } from './entities/critters';
 import { drawChargeRing, drawChargeShot, drawFairy } from './entities/fairy';
 import { Hud } from './hud';
+import { ModeScreen } from './screens/mode-screen';
 import { drawCrescentIcon } from './icons';
 import { SelectScreen } from './screens/select-screen';
 import { TitleScreen } from './screens/title-screen';
@@ -42,6 +44,7 @@ export class Renderer {
     private anims = new WeakMap<Field, PlayerAnimator>();
     private selectScreen: SelectScreen;
     private titleScreen: TitleScreen;
+    private modeScreen: ModeScreen;
     /** HUD, console, popups and banners for a match. */
     private hudLayer: Hud;
     /** The layout this frame uses; Game picks it each frame. */
@@ -81,6 +84,7 @@ export class Renderer {
         this.ctx = canvas.getContext('2d')!;
         this.selectScreen = new SelectScreen(this.ctx);
         this.titleScreen = new TitleScreen(this.ctx);
+        this.modeScreen = new ModeScreen(this.ctx);
         this.hudLayer = new Hud(this.ctx);
         for (let i = 0; i < 26; i++) {
             this.motes.push({
@@ -441,6 +445,11 @@ export class Renderer {
     /** The arcade title screen (see title-screen.ts). */
     title(v: TitleView, time: number): void {
         this.titleScreen.draw(v, time, this.layout, this.viewH, this.viewX);
+    }
+
+    /** The mode menu (see mode-screen.ts). */
+    modes(v: ModeView, time: number): void {
+        this.modeScreen.draw(v, time, this.layout, this.viewH, this.viewX);
     }
 
     /** The arcade character-select screen (see select-screen.ts). */

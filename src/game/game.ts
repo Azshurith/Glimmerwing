@@ -5,6 +5,7 @@ import type { Input } from '@/input/input';
 import type { Net } from '@/net/net';
 import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
+import { modeCards, modeColumns } from '@/render/screens/mode-screen';
 import { titleButtons } from '@/render/screens/title-screen';
 import { PALETTE, PLAYER_COLORS } from '@/render/theme';
 import type {
@@ -19,7 +20,6 @@ import type {
     Placement,
     Progress,
     Settings,
-    TitleStage,
     SelectCard,
     SelectSide,
     Sfx,
@@ -116,9 +116,9 @@ export class Game {
     ];
     /** Select-screen clock: seconds since it opened, and when both players were ready (-1: not yet). */
     private selectT = 0;
-    /** Which title screen is showing (opening or mode menu), and its highlighted item. */
-    private titleStage: TitleStage = 'start';
+    /** The highlighted choice on the title screen, and the highlighted card on the mode menu. */
     private titleIndex = 1;
+    private modeIndex = 1;
     /** Set by the page: open the Settings panel, and the How to play page. */
     onWantSettings?: () => void;
     onWantGuide?: () => void;
@@ -176,8 +176,6 @@ export class Game {
 
     /** Called by the page buttons and the title screen. */
     start(mode: Mode): void {
-        // Coming back from a match lands on the mode menu, not the opening screen.
-        this.titleStage = 'modes';
         if (mode !== 'online' && this.net) this.disconnect();
         this.mode = mode;
         this.phase = 'select';
@@ -230,7 +228,7 @@ export class Game {
         this.net = null;
         this.notice = notice;
         this.mode = 'cpu';
-        this.phase = 'title';
+        this.phase = 'modes';
         this.transits = [];
     }
 
@@ -321,6 +319,57 @@ export class Game {
         this.phaseT = 0;
     }
 
+    /**
+     * The mode menu: arrows move round the grid of cards, any fire button or Start picks one, number keys pick by
+     * position, a tap on a card picks it, and Esc goes back to the title. Greyed-out cards do nothing yet.
+     */
+    private stepModes(pr: Set<string>): void {
+        const cards = modeCards(this.r.layout, this.r.viewH);
+        const n = cards.length,
+            cols = modeColumns(this.r.layout);
+        const was = this.modeIndex;
+        if (['ArrowLeft', 'KeyA'].some(k => pr.has(k))) this.modeIndex = (this.modeIndex + n - 1) % n;
+        if (['ArrowRight', 'KeyD'].some(k => pr.has(k))) this.modeIndex = (this.modeIndex + 1) % n;
+        if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.modeIndex = (this.modeIndex + n - cols) % n;
+        if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.modeIndex = (this.modeIndex + cols) % n;
+        if (this.modeIndex !== was) this.ui('tick');
+        if (pr.has('Escape')) {
+            this.phase = 'title';
+            this.ui('tick');
+            return;
+        }
+        let pick = -1;
+        const tap = this.input.tap;
+        if (tap) pick = cards.findIndex(c => tap.x >= c.x && tap.x <= c.x + c.w && tap.y >= c.y && tap.y <= c.y + c.h);
+        cards.forEach((_, i) => {
+            if (pr.has(`Digit${i + 1}`)) pick = i;
+        });
+        if (pick < 0 && ['Space', 'Enter', 'KeyZ', 'KeyG', 'NumpadEnter'].some(k => pr.has(k))) pick = this.modeIndex;
+        if (pick < 0) return;
+        this.modeIndex = pick;
+        const c = cards[pick];
+        if (c.disabled) {
+            this.ui('tick');
+            return;
+        }
+        this.ui('ok');
+        switch (c.action) {
+            case 'online':
+                this.onWantOnline?.();
+                break;
+            case 'settings':
+                this.onWantSettings?.();
+                break;
+            case 'guide':
+                this.onWantGuide?.();
+                break;
+            case 'cpu':
+            case 'versus':
+                this.start(c.action);
+                break;
+        }
+    }
+
     /** Move the select-screen cursors and lock in picks from keys, pads and taps. */
     private stepSelect(dt: number): void {
         const pr = this.input.pressed;
@@ -379,7 +428,7 @@ export class Game {
             this.sendSelection();
         if (pr.has('Escape')) {
             if (this.online) this.disconnect();
-            else this.phase = 'title';
+            else this.phase = 'modes';
             return;
         }
         // Offline, time running out picks whatever is highlighted (or the first open fairy if that's locked).
@@ -422,7 +471,7 @@ export class Game {
 
     /** Act on one message from the online rival: picks, round seeds, snapshots, attacks and results. */
     private onPeer(m: PeerMsg): void {
-        const live = this.phase !== 'title' && this.phase !== 'select';
+        const live = this.phase !== 'title' && this.phase !== 'modes' && this.phase !== 'select';
         switch (m.k) {
             case 'sel':
                 this.pickers[1] = { index: m.i, done: m.done };
@@ -500,33 +549,22 @@ export class Game {
             this.paused = !this.paused;
 
         if (this.phase === 'title') {
-            if (this.notice) {
-                if (pr.size) this.notice = '';
-                return;
-            }
-            // Arcade menu: up/down (keys, either player's stick) moves the cursor; any fire button
-            // or Start picks it. Number keys jump straight to an item, and tapping a bar picks that one.
-            const buttons = titleButtons(this.titleStage, this.r.layout, this.r.viewH);
+            // The opening screen: sign in (not ready yet) or play as a guest. Up/down moves the cursor, any fire
+            // button or Start picks it, a tap on a bar picks that one and a tap anywhere else plays as a guest.
+            const buttons = titleButtons(this.r.layout, this.r.viewH);
             const n = buttons.length;
             const was = this.titleIndex;
             if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.titleIndex = (this.titleIndex + n - 1) % n;
             if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.titleIndex = (this.titleIndex + 1) % n;
             if (this.titleIndex !== was) this.ui('tick');
-            if (this.titleStage === 'modes' && pr.has('Escape')) {
-                // Back to the opening screen.
-                this.titleStage = 'start';
-                this.titleIndex = 1;
-                this.ui('tick');
-                return;
-            }
             let pick = -1;
             const tap = this.input.tap;
-            if (tap)
+            if (tap) {
                 pick = buttons.findIndex(
                     b => tap.x >= b.x - 10 && tap.x <= b.x + b.w && tap.y >= b.y && tap.y <= b.y + b.h,
                 );
-            // On the opening screen ("TAP TO PLAY"), a tap anywhere else plays as a guest.
-            if (tap && pick < 0 && this.titleStage === 'start') pick = buttons.findIndex(b => b.action === 'guest');
+                if (pick < 0) pick = buttons.findIndex(b => b.action === 'guest');
+            }
             buttons.forEach((_, i) => {
                 if (pr.has(`Digit${i + 1}`)) pick = i;
             });
@@ -534,33 +572,23 @@ export class Game {
                 pick = this.titleIndex;
             if (pick >= 0) {
                 this.titleIndex = pick;
-                const b = buttons[pick];
                 // Not ready yet (greyed out): the cursor goes there, but nothing happens.
-                if (b.disabled) {
+                if (buttons[pick].disabled) {
                     this.ui('tick');
                     return;
                 }
                 this.ui('ok');
-                switch (b.action) {
-                    case 'guest':
-                        this.titleStage = 'modes';
-                        this.titleIndex = 1;
-                        break;
-                    case 'online':
-                        this.onWantOnline?.();
-                        break;
-                    case 'settings':
-                        this.onWantSettings?.();
-                        break;
-                    case 'guide':
-                        this.onWantGuide?.();
-                        break;
-                    case 'cpu':
-                    case 'versus':
-                        this.start(b.action);
-                        break;
-                }
+                this.phase = 'modes';
+                this.modeIndex = 1;
             }
+            return;
+        }
+        if (this.phase === 'modes') {
+            if (this.notice) {
+                if (pr.size) this.notice = '';
+                return;
+            }
+            this.stepModes(pr);
             return;
         }
         if (this.phase === 'select') {
@@ -754,7 +782,7 @@ export class Game {
         const touch = this.input.touchActive;
         // A portrait screen gets the tall layout: the menus are redrawn for it, and so is a
         // round with one player on the device. Two players sharing it keep the meadows side by side.
-        const inRound = this.phase !== 'title' && this.phase !== 'select';
+        const inRound = this.phase !== 'title' && this.phase !== 'modes' && this.phase !== 'select';
         // The menus are laid out for the usual meadow width; only a round plays in wider ones.
         if (!inRound && C.FIELD_W !== C.FIELD_W_BASE) C.setFieldWidth(C.FIELD_W_BASE);
         if (!inRound && C.FIELD_H !== C.FIELD_H_BASE) C.setFieldHeight(C.FIELD_H_BASE);
@@ -878,7 +906,6 @@ export class Game {
             case 'title':
                 r.title(
                     {
-                        stage: this.titleStage,
                         index: this.titleIndex,
                         touch,
                         unlocked: FAIRIES.filter(f => this.isUnlocked(f)).length,
@@ -888,6 +915,9 @@ export class Game {
                     },
                     this.time,
                 );
+                break;
+            case 'modes':
+                r.modes({ index: this.modeIndex, touch }, this.time);
                 if (this.notice)
                     r.banner({
                         title: this.notice,

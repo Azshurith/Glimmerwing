@@ -181,8 +181,8 @@
             .screen[data-phase='title'] .tb-menu {
                 display: none;
             }
-            /* On the select screen the header and timer own the top centre; Back goes in the corner. */
-            .screen[data-phase='select'] .tb-menu {
+            /* On the mode menu and select screens the heading owns the top centre; Back goes in the corner. */
+            .screen:is([data-phase='select'], [data-phase='modes']) .tb-menu {
                 top: 1%;
                 left: 1%;
                 transform: none;
@@ -255,7 +255,7 @@
                 transform: none;
             }
             /* Tall menus: back (select) and exit sit in the top corners, beside the heading. */
-            .screen[data-layout='tall']:is([data-phase='select'], [data-phase='title']) .tb-menu {
+            .screen[data-layout='tall']:is([data-phase='select'], [data-phase='modes'], [data-phase='title']) .tb-menu {
                 top: 1%;
                 bottom: auto;
                 left: 1.5%;
