@@ -1,7 +1,7 @@
-// The mode menu: a screen of its own after the title, with a card for each way to play.
+// The main menu (Play, Characters, Profile, Settings) and Play's choice of modes: a screen of cards.
 import * as C from '@/core/config';
 import { FAIRIES } from '@/data/characters';
-import type { Layout, ModeView, TitleAction } from '@/types';
+import type { Layout, ModeMenu, ModeView, TitleAction } from '@/types';
 import { Backdrop } from '@/render/backdrop';
 import { drawFairy } from '@/render/entities/fairy';
 import { arcadeText, sparkle } from '@/render/draw';
@@ -23,31 +23,39 @@ export interface ModeCard {
     h: number;
 }
 
-/** The cards, in reading order. */
-const MODES: Omit<ModeCard, 'x' | 'y' | 'w' | 'h'>[] = [
-    { action: 'story', label: 'STORY MODE', sub: 'Coming soon', color: '#ff9ac8', disabled: true },
-    { action: 'cpu', label: 'VS CPU', sub: 'Battle the computer', color: '#ffd45c' },
-    { action: 'versus', label: '2 PLAYERS', sub: 'Share a keyboard, pads or a tablet', color: '#8ff0a0' },
-    { action: 'online', label: 'ONLINE PLAY', sub: 'Find a rival or invite a friend', color: '#8fd8ff' },
-    { action: 'settings', label: 'SETTINGS', sub: 'Screen and play options', color: '#c9b8ff' },
-    { action: 'guide', label: 'HOW TO PLAY', sub: 'Rules, controls and fairies', color: '#ffb48a' },
-];
+/** The cards of each menu, in reading order: the main menu, and Play's choice of modes. */
+const MENUS: Record<ModeMenu, Omit<ModeCard, 'x' | 'y' | 'w' | 'h'>[]> = {
+    main: [
+        { action: 'play', label: 'PLAY', sub: 'Story, VS CPU, online or two players', color: '#ffd45c' },
+        { action: 'characters', label: 'CHARACTERS', sub: 'Meet the fairies and their skills', color: '#ff9ac8' },
+        { action: 'profile', label: 'PROFILE', sub: 'Your record and unlocks', color: '#8fd8ff' },
+        { action: 'settings', label: 'SETTINGS', sub: 'Screen and play options', color: '#c9b8ff' },
+    ],
+    play: [
+        { action: 'story', label: 'STORY MODE', sub: 'Coming soon', color: '#ff9ac8', disabled: true },
+        { action: 'cpu', label: 'VS CPU', sub: 'Battle the computer', color: '#ffd45c' },
+        { action: 'online', label: 'ONLINE PLAY', sub: 'Find a rival or invite a friend', color: '#8fd8ff' },
+        { action: 'versus', label: '2 PLAYERS', sub: 'Share a keyboard, pads or a tablet', color: '#8ff0a0' },
+    ],
+};
+/** Each menu's heading. */
+const HEADINGS: Record<ModeMenu, string> = { main: 'MAIN MENU', play: 'PLAY' };
 
-/** How many cards to a row: three side by side, two on an upright screen. */
-export const modeColumns = (layout: Layout) => (layout === 'tall' ? 2 : 3);
+/** How many cards to a row: two, so a menu's four cards make a square. */
+export const modeColumns = (_layout: Layout) => 2;
 
 /** Card size and spacing for each layout, in its design units. */
 const GRID = {
-    wide: { w: 150, h: 112, gx: 12, gy: 14, y0: 42, W: C.VIEW_W },
-    tall: { w: 118, h: 132, gx: 8, gy: 12, y0: 64, W: C.TALL_W },
+    wide: { w: 196, h: 112, gx: 14, gy: 14, y0: 44, W: C.VIEW_W },
+    tall: { w: 118, h: 150, gx: 8, gy: 12, y0: 80, W: C.TALL_W },
 } as const;
 
-/** Where the cards sit in a layout's design units (the tall layout as designed, before fitting). */
-function designCards(layout: Layout, dy = 0): ModeCard[] {
+/** Where a menu's cards sit in a layout's design units (the tall layout as designed, before fitting). */
+function designCards(menu: ModeMenu, layout: Layout, dy = 0): ModeCard[] {
     const g = GRID[layout],
         cols = modeColumns(layout);
     const x0 = (g.W - (cols * g.w + (cols - 1) * g.gx)) / 2;
-    return MODES.map((m, i) => ({
+    return MENUS[menu].map((m, i) => ({
         ...m,
         x: x0 + (i % cols) * (g.w + g.gx),
         y: g.y0 + dy + Math.floor(i / cols) * (g.h + g.gy),
@@ -59,11 +67,11 @@ function designCards(layout: Layout, dy = 0): ModeCard[] {
 /** How far the tall screen's content moves down to sit centred in a view `h` tall. */
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
 
-/** The cards for a layout and view height, in view units: also the tap targets. */
-export function modeCards(layout: Layout, h: number = C.TALL_H): ModeCard[] {
-    if (layout !== 'tall') return designCards('wide');
+/** A menu's cards for a layout and view height, in view units: also the tap targets. */
+export function modeCards(menu: ModeMenu, layout: Layout, h: number = C.TALL_H): ModeCard[] {
+    if (layout !== 'tall') return designCards(menu, 'wide');
     const f = tallMenuFit(h);
-    return designCards('tall', tallShift(f.h)).map(c => ({
+    return designCards(menu, 'tall', tallShift(f.h)).map(c => ({
         ...c,
         x: f.x + c.x * f.s,
         y: c.y * f.s,
@@ -102,19 +110,19 @@ export class ModeScreen {
             this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 160, C.VIEW_W + 2 * bleed, C.VIEW_H);
             ctx.restore();
         }
-        this.header(W, bleed, layout === 'tall' ? 14 : 16);
-        designCards(layout, dy).forEach((c, i) => this.card(c, i === v.index, t));
+        this.header(HEADINGS[v.menu], W, bleed, layout === 'tall' ? 14 : 16);
+        designCards(v.menu, layout, dy).forEach((c, i) => this.card(c, i === v.index, t));
         // Hint line along the bottom.
         ctx.textAlign = 'center';
         ctx.font = `7px ${ARCADE}`;
         ctx.fillStyle = 'rgba(203,188,245,0.75)';
-        const hint = v.touch ? 'TAP A MODE  ·  ◀ BACK' : 'ARROWS CHOOSE  ·  ENTER OR Z PICKS  ·  ESC BACK';
+        const hint = v.touch ? 'TAP TO CHOOSE  ·  ◀ BACK' : 'ARROWS CHOOSE  ·  ENTER OR Z PICKS  ·  ESC BACK';
         ctx.fillText(hint, W / 2, layout === 'tall' ? H - 16 : H - 14, W - 16);
         ctx.restore();
     }
 
     /** The heading bar across the top, reaching `bleed` past each side. */
-    private header(W: number, bleed: number, size: number): void {
+    private header(text: string, W: number, bleed: number, size: number): void {
         const ctx = this.ctx;
         const g = ctx.createLinearGradient(0, 0, 0, 28);
         g.addColorStop(0, 'rgba(10,6,28,0.95)');
@@ -125,7 +133,7 @@ export class ModeScreen {
         ctx.fillRect(-bleed, 27, W + 2 * bleed, 1);
         ctx.fillStyle = 'rgba(255,230,160,0.25)';
         ctx.fillRect(-bleed, 28, W + 2 * bleed, 1);
-        arcadeText(ctx, 'SELECT MODE', W / 2, 21, size, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'center', W - 76);
+        arcadeText(ctx, text, W / 2, 21, size, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'center', W - 76);
     }
 
     /** One mode card: a framed panel with its emblem, name and a line about it. */
@@ -243,6 +251,49 @@ export class ModeScreen {
                 drawFairy(ctx, FAIRIES[0], -24, 4 + bob, 1.2, t);
                 drawFairy(ctx, FAIRIES[2] ?? FAIRIES[1], 24, 4 - bob, 1.2, t + 0.5);
                 arcadeText(ctx, 'VS', 0, 6, 9, ['#ffffff', '#ffd1dc', '#ff3d6e'], 'center');
+                break;
+            }
+            case 'play': {
+                // Pip with a burst of stars around her.
+                drawFairy(ctx, FAIRIES[0], 0, 4 + bob, 1.3, t);
+                ctx.fillStyle = '#fff6c8';
+                for (let i = 0; i < 5; i++) {
+                    const a = t * 1.5 + (i * Math.PI * 2) / 5;
+                    sparkle(ctx, Math.cos(a) * 26, Math.sin(a) * 16 - 2, 2.5 + Math.sin(t * 4 + i) * 1);
+                }
+                break;
+            }
+            case 'characters': {
+                // Three fairies side by side.
+                drawFairy(ctx, FAIRIES[1], -26, 6 - bob, 1.05, t + 0.3);
+                drawFairy(ctx, FAIRIES[2], 26, 6 - bob, 1.05, t + 0.6);
+                drawFairy(ctx, FAIRIES[0], 0, 2 + bob, 1.25, t);
+                break;
+            }
+            case 'profile': {
+                // A badge with a star.
+                ctx.beginPath();
+                ctx.arc(0, -2, 16, 0, Math.PI * 2);
+                ctx.globalAlpha = 0.25;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(-10, 12);
+                ctx.lineTo(-14, 26);
+                ctx.lineTo(-4, 20);
+                ctx.moveTo(10, 12);
+                ctx.lineTo(14, 26);
+                ctx.lineTo(4, 20);
+                ctx.stroke();
+                ctx.beginPath();
+                for (let i = 0; i < 10; i++) {
+                    const a = -Math.PI / 2 + (i * Math.PI) / 5,
+                        r = i % 2 ? 4 : 9;
+                    ctx.lineTo(Math.cos(a) * r, -2 + Math.sin(a) * r);
+                }
+                ctx.closePath();
+                ctx.fill();
                 break;
             }
             case 'online': {

@@ -6,6 +6,7 @@ import type { Net } from '@/net/net';
 import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
 import { modeCards, modeColumns } from '@/render/screens/mode-screen';
+import { rosterMedallions } from '@/render/screens/roster-screen';
 import { titleButtons } from '@/render/screens/title-screen';
 import { PALETTE, PLAYER_COLORS } from '@/render/theme';
 import type {
@@ -20,6 +21,7 @@ import type {
     Placement,
     Progress,
     Settings,
+    ModeMenu,
     SelectCard,
     SelectSide,
     Sfx,
@@ -118,7 +120,11 @@ export class Game {
     private selectT = 0;
     /** The highlighted choice on the title screen, and the highlighted card on the mode menu. */
     private titleIndex = 1;
-    private modeIndex = 1;
+    private modeIndex = 0;
+    /** Which menu of cards is showing: the main menu, or Play's choice of modes. */
+    private menu: ModeMenu = 'main';
+    /** The fairy in view on the Characters screen. */
+    private rosterIndex = 0;
     /** Set by the page: open the Settings panel, and the How to play page. */
     onWantSettings?: () => void;
     onWantGuide?: () => void;
@@ -176,6 +182,8 @@ export class Game {
 
     /** Called by the page buttons and the title screen. */
     start(mode: Mode): void {
+        // A match ends back on Play's menu.
+        this.menu = 'play';
         if (mode !== 'online' && this.net) this.disconnect();
         this.mode = mode;
         this.phase = 'select';
@@ -229,6 +237,7 @@ export class Game {
         this.notice = notice;
         this.mode = 'cpu';
         this.phase = 'modes';
+        this.menu = 'play';
         this.transits = [];
     }
 
@@ -319,12 +328,45 @@ export class Game {
         this.phaseT = 0;
     }
 
+    /** True once a match is under way (not on the title, the menus, the Characters or Profile screens, or select). */
+    private get inGame(): boolean {
+        return !['title', 'modes', 'roster', 'profile', 'select'].includes(this.phase);
+    }
+
+    /** Back to the main menu, with the card for where you came from highlighted. */
+    private backToMenu(): void {
+        const from = this.phase === 'roster' ? 1 : this.phase === 'profile' ? 2 : 0;
+        this.phase = 'modes';
+        this.menu = 'main';
+        this.modeIndex = from;
+        this.ui('tick');
+    }
+
+    /** The Characters screen: left/right (or a tap on a medallion) browses the fairies; Esc goes back. */
+    private stepRoster(pr: Set<string>): void {
+        const n = FAIRIES.length,
+            was = this.rosterIndex;
+        if (['ArrowLeft', 'KeyA', 'ArrowUp', 'KeyW'].some(k => pr.has(k)))
+            this.rosterIndex = (this.rosterIndex + n - 1) % n;
+        if (['ArrowRight', 'KeyD', 'ArrowDown', 'KeyS'].some(k => pr.has(k)))
+            this.rosterIndex = (this.rosterIndex + 1) % n;
+        const tap = this.input.tap;
+        if (tap) {
+            const hit = rosterMedallions(this.r.layout, this.r.viewH).findIndex(
+                m => Math.hypot(tap.x - m.x, tap.y - m.y) <= m.r + 6,
+            );
+            if (hit >= 0) this.rosterIndex = hit;
+        }
+        if (this.rosterIndex !== was) this.ui('tick');
+        if (pr.has('Escape')) this.backToMenu();
+    }
+
     /**
      * The mode menu: arrows move round the grid of cards, any fire button or Start picks one, number keys pick by
      * position, a tap on a card picks it, and Esc goes back to the title. Greyed-out cards do nothing yet.
      */
     private stepModes(pr: Set<string>): void {
-        const cards = modeCards(this.r.layout, this.r.viewH);
+        const cards = modeCards(this.menu, this.r.layout, this.r.viewH);
         const n = cards.length,
             cols = modeColumns(this.r.layout);
         const was = this.modeIndex;
@@ -334,7 +376,9 @@ export class Game {
         if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.modeIndex = (this.modeIndex + cols) % n;
         if (this.modeIndex !== was) this.ui('tick');
         if (pr.has('Escape')) {
-            this.phase = 'title';
+            // Play's modes back to the main menu; the main menu back to the title.
+            if (this.menu === 'play') this.backToMenu();
+            else this.phase = 'title';
             this.ui('tick');
             return;
         }
@@ -354,6 +398,16 @@ export class Game {
         }
         this.ui('ok');
         switch (c.action) {
+            case 'play':
+                this.menu = 'play';
+                this.modeIndex = 1;
+                break;
+            case 'characters':
+                this.phase = 'roster';
+                break;
+            case 'profile':
+                this.phase = 'profile';
+                break;
             case 'online':
                 this.onWantOnline?.();
                 break;
@@ -428,7 +482,10 @@ export class Game {
             this.sendSelection();
         if (pr.has('Escape')) {
             if (this.online) this.disconnect();
-            else this.phase = 'modes';
+            else {
+                this.phase = 'modes';
+                this.menu = 'play';
+            }
             return;
         }
         // Offline, time running out picks whatever is highlighted (or the first open fairy if that's locked).
@@ -471,7 +528,7 @@ export class Game {
 
     /** Act on one message from the online rival: picks, round seeds, snapshots, attacks and results. */
     private onPeer(m: PeerMsg): void {
-        const live = this.phase !== 'title' && this.phase !== 'modes' && this.phase !== 'select';
+        const live = this.inGame;
         switch (m.k) {
             case 'sel':
                 this.pickers[1] = { index: m.i, done: m.done };
@@ -579,8 +636,17 @@ export class Game {
                 }
                 this.ui('ok');
                 this.phase = 'modes';
-                this.modeIndex = 1;
+                this.menu = 'main';
+                this.modeIndex = 0;
             }
+            return;
+        }
+        if (this.phase === 'roster') {
+            this.stepRoster(pr);
+            return;
+        }
+        if (this.phase === 'profile') {
+            if (pr.has('Escape') || pr.has('Enter') || pr.has('Space')) this.backToMenu();
             return;
         }
         if (this.phase === 'modes') {
@@ -782,7 +848,7 @@ export class Game {
         const touch = this.input.touchActive;
         // A portrait screen gets the tall layout: the menus are redrawn for it, and so is a
         // round with one player on the device. Two players sharing it keep the meadows side by side.
-        const inRound = this.phase !== 'title' && this.phase !== 'modes' && this.phase !== 'select';
+        const inRound = this.inGame;
         // The menus are laid out for the usual meadow width; only a round plays in wider ones.
         if (!inRound && C.FIELD_W !== C.FIELD_W_BASE) C.setFieldWidth(C.FIELD_W_BASE);
         if (!inRound && C.FIELD_H !== C.FIELD_H_BASE) C.setFieldHeight(C.FIELD_H_BASE);
@@ -916,8 +982,24 @@ export class Game {
                     this.time,
                 );
                 break;
+            case 'roster':
+                r.roster({ index: this.rosterIndex, locked: FAIRIES.map(f => !this.isUnlocked(f)), touch }, this.time);
+                break;
+            case 'profile':
+                r.profile(
+                    {
+                        touch,
+                        wins: this.progress.wins,
+                        bestChain: this.progress.bestChain,
+                        fevers: this.progress.fevers,
+                        flawless: this.progress.flawless,
+                        locked: FAIRIES.map(f => !this.isUnlocked(f)),
+                    },
+                    this.time,
+                );
+                break;
             case 'modes':
-                r.modes({ index: this.modeIndex, touch }, this.time);
+                r.modes({ menu: this.menu, index: this.modeIndex, touch }, this.time);
                 if (this.notice)
                     r.banner({
                         title: this.notice,

@@ -182,7 +182,8 @@
                 display: none;
             }
             /* On the mode menu and select screens the heading owns the top centre; Back goes in the corner. */
-            .screen:is([data-phase='select'], [data-phase='modes']) .tb-menu {
+            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+                .tb-menu {
                 top: 1%;
                 left: 1%;
                 transform: none;
@@ -233,6 +234,10 @@
                 flex: none;
                 accent-color: #ffd86b;
             }
+            .setting-link {
+                color: var(--muted);
+                font-size: 0.85rem;
+            }
             .setting small {
                 display: block;
                 margin-top: 0.2rem;
@@ -255,7 +260,14 @@
                 transform: none;
             }
             /* Tall menus: back (select) and exit sit in the top corners, beside the heading. */
-            .screen[data-layout='tall']:is([data-phase='select'], [data-phase='modes'], [data-phase='title']) .tb-menu {
+            .screen[data-layout='tall']:is(
+                    [data-phase='select'],
+                    [data-phase='modes'],
+                    [data-phase='roster'],
+                    [data-phase='profile'],
+                    [data-phase='title']
+                )
+                .tb-menu {
                 top: 1%;
                 bottom: auto;
                 left: 1.5%;
@@ -375,6 +387,7 @@
                                 >
                             </span>
                         </label>
+                        <a class="setting-link" href="guide.html">How to play &amp; controls</a>
                         <button id="settings-close">Done</button>
                     </div>
                 </div>

@@ -5,6 +5,8 @@ import type {
     ConsoleView,
     HudTag,
     ModeView,
+    ProfileView,
+    RosterView,
     Layer,
     Layout,
     Outgoing,
@@ -30,6 +32,8 @@ import { drawBeetle, drawMoonseed, drawPuff, drawSpinner } from './entities/crit
 import { drawChargeRing, drawChargeShot, drawFairy } from './entities/fairy';
 import { Hud } from './hud';
 import { ModeScreen } from './screens/mode-screen';
+import { ProfileScreen } from './screens/profile-screen';
+import { RosterScreen } from './screens/roster-screen';
 import { drawCrescentIcon } from './icons';
 import { SelectScreen } from './screens/select-screen';
 import { TitleScreen } from './screens/title-screen';
@@ -45,6 +49,8 @@ export class Renderer {
     private selectScreen: SelectScreen;
     private titleScreen: TitleScreen;
     private modeScreen: ModeScreen;
+    private rosterScreen: RosterScreen;
+    private profileScreen: ProfileScreen;
     /** HUD, console, popups and banners for a match. */
     private hudLayer: Hud;
     /** The layout this frame uses; Game picks it each frame. */
@@ -85,6 +91,8 @@ export class Renderer {
         this.selectScreen = new SelectScreen(this.ctx);
         this.titleScreen = new TitleScreen(this.ctx);
         this.modeScreen = new ModeScreen(this.ctx);
+        this.rosterScreen = new RosterScreen(this.ctx);
+        this.profileScreen = new ProfileScreen(this.ctx);
         this.hudLayer = new Hud(this.ctx);
         for (let i = 0; i < 26; i++) {
             this.motes.push({
@@ -450,6 +458,16 @@ export class Renderer {
     /** The mode menu (see mode-screen.ts). */
     modes(v: ModeView, time: number): void {
         this.modeScreen.draw(v, time, this.layout, this.viewH, this.viewX);
+    }
+
+    /** The Characters screen (see roster-screen.ts). */
+    roster(v: RosterView, time: number): void {
+        this.rosterScreen.draw(v, time, this.layout, this.viewH, this.viewX);
+    }
+
+    /** The Profile screen (see profile-screen.ts). */
+    profile(v: ProfileView, time: number): void {
+        this.profileScreen.draw(v, time, this.layout, this.viewH, this.viewX);
     }
 
     /** The arcade character-select screen (see select-screen.ts). */

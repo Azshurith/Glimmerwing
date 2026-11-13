@@ -44,11 +44,43 @@ export interface TitleView {
     bestChain: number;
 }
 
-/** What the mode menu shows: the highlighted card, and whether the player is on a touchscreen. */
+/** The menus shown as a screen of cards: the main menu, and Play's choice of modes. */
+export type ModeMenu = 'main' | 'play';
+
+/** What a menu of cards shows: which menu, the highlighted card, and whether the player is on a touchscreen. */
 export interface ModeView {
+    menu: ModeMenu;
     index: number;
     touch: boolean;
 }
 
+/** What the Characters screen shows: the fairy in view, which fairies are still locked, and the input device. */
+export interface RosterView {
+    index: number;
+    locked: boolean[];
+    touch: boolean;
+}
+
+/** What the Profile screen shows: this browser's record. */
+export interface ProfileView {
+    touch: boolean;
+    wins: number;
+    bestChain: number;
+    fevers: number;
+    flawless: number;
+    locked: boolean[];
+}
+
 /** What a title-screen choice or a mode-menu card does when it's picked. */
-export type TitleAction = 'google' | 'guest' | 'story' | 'cpu' | 'versus' | 'online' | 'settings' | 'guide';
+export type TitleAction =
+    | 'google'
+    | 'guest'
+    | 'play'
+    | 'characters'
+    | 'profile'
+    | 'story'
+    | 'cpu'
+    | 'versus'
+    | 'online'
+    | 'settings'
+    | 'guide';
