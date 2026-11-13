@@ -32,6 +32,7 @@ Do each feature on its own branch (`feature/<name>` or `fix/<name>`) and open a 
 **Game ↔ Field.** [src/game/game.ts](src/game/game.ts) (`Game`) owns the phases (title → select → countdown → playing …), rounds, match flow, the CPU pilot and the online session. Each meadow is its own `Field` ([src/game/field.ts](src/game/field.ts), the largest file), and the two fields never reference each other:
 - A field pushes outgoing attacks to `field.outbox`. `Game` moves them into `transits`, then hands each one to the other side's `field.receive()` after its flight time.
 - A field pushes sound requests to `field.sfx`. `Game.drainSfx()` plays them with stereo pan and volume chosen by side and mode.
+- Fireballs (TSS Normal Attacks, attack kind `'star'`): `Field.resolveChain` sends `fireballsFor(hits)` of them (`feverFireballsFor` in Fever), each sized by the combo hit that sent it and stamped with its sender's `tint` by `Game`. `Field.receiveFireball` flies a Normal as a tracking top `'drop'` that falls across the meadow, at a speed set by reflections and the sender's Perfects (`fireballSpeedMul`, capped by `FIREBALL_MAX_SPEED`), never by size; shot down it flashes, turns into a Reverse where it broke and crosses the screen on one curve ([src/game/fireball-path.ts](src/game/fireball-path.ts): up toward the rival's meadow, a turn inside the top edge, down onto where the rival's fairy was, locked from `Field.rivalFairy`), flown as `'back'` in the breaker's meadow, drawn on the same curve between the meadows, and finished as `'cross'` in the sender's meadow, where it's a Reverse (level 2+) and then falls on out; `?debug=paths` draws every fireball's path. and breaking a Reverse sends the breaker's Extra Attack (`'imp'`). Tuning is under `FIREBALL_*` in config.
 - Both fields are built from the same round seed (seeded RNG in [src/core/rng.ts](src/core/rng.ts)), so both get identical waves. The seed also decides which meadow the Hollow Crow appears in.
 
 **Online netcode** ([src/net/](src/net/), [server/server.mjs](server/server.mjs)):
@@ -50,7 +51,7 @@ Do each feature on its own branch (`feature/<name>` or `fix/<name>`) and open a 
 **Data and tuning.**
 - Every tuning number is in [src/core/config.ts](src/core/config.ts), imported as `* as C`.
 - The fairy roster, stats, unlocks and per-fairy attacks/bombs are in [src/data/characters.ts](src/data/characters.ts).
-- Wave definitions are in [src/game/waves.ts](src/game/waves.ts).
+- Critter formations are in [src/game/waves.ts](src/game/waves.ts): each wave is a seeded `FormationSpec` (shape, entry, group movement, optional re-form, exit) that flies in from off-screen with staggered members, holds its shape while moving as a group, then flies out together. Positions are in meadow units, so formations look the same at every screen size.
 - Saved progress uses localStorage, in [src/game/progress.ts](src/game/progress.ts).
 
 **Audio.** [src/audio/sound.ts](src/audio/sound.ts) synthesizes every effect with WebAudio; there are no audio files. Audio starts only after the first user gesture (`sound.unlock()`).
