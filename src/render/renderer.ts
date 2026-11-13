@@ -12,7 +12,7 @@ import type {
     WingShape,
 } from '@/types';
 
-import { drawImp, drawBramble, drawComet, drawFireball } from './entities/attacks';
+import { drawImp, drawBramble, drawComet, drawFireball, drawFireFlash, drawReverseTrail } from './entities/attacks';
 import { drawBomb } from './entities/bombs';
 import { drawCrow, drawGuardian } from './entities/bosses';
 import { drawBeetle, drawMoonseed, drawPuff, drawSpinner } from './entities/critters';
@@ -193,7 +193,9 @@ export class Renderer {
                 const look = a.level >= 2 ? 'reverse' : a.fever ? 'fever' : (a.tint ?? 'p1');
                 const full = C.fireballHp(size);
                 const hurt = Number.isFinite(a.hp) ? Math.max(0, Math.min(1, 1 - a.hp / full)) : 0;
+                if (a.tail && a.level >= 2) drawReverseTrail(ctx, a.tail, time, size);
                 drawFireball(ctx, a.x, a.y, time, a.spin, a.vx, a.vy, size, look, hurt);
+                if (a.flash) drawFireFlash(ctx, a.x, a.y, a.flash / C.FIREBALL_FLASH, size);
             }
         }
         for (const c of f.crows)

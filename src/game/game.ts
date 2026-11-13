@@ -26,8 +26,13 @@ import { CpuPilot } from './ai';
 import { Field } from './field';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 
-/** Seconds an attack spends between the meadows: Fever fireballs get there sooner. */
-const transitTime = (o: Outgoing) => C.TRANSIT_TIME * (o.kind === 'star' && o.fever ? C.FEVER_TRANSIT : 1);
+/**
+ * Seconds an attack spends between the meadows: Reverse fireballs and Extra Attacks fly faster (SPEED_*),
+ * and Fever fireballs get there sooner.
+ */
+const transitTime = (o: Outgoing) =>
+    (C.TRANSIT_TIME * (o.kind === 'star' && o.fever ? C.FEVER_TRANSIT : 1)) /
+    (o.kind === 'imp' ? C.SPEED_EXTRA : o.kind === 'star' && o.level >= 2 ? C.SPEED_REVERSE : C.SPEED_NORMAL);
 
 /** A fireball's colour in flight between the meadows (Reverse ones flash through colours). */
 const fireballColor = (o: Outgoing, t: number) =>

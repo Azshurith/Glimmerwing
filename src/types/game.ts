@@ -160,6 +160,16 @@ export interface Attack {
     tint?: Tint;
     /** Sent during Fever: flashes yellow. */
     fever?: boolean;
+    /**
+     * A fireball's path so far, as x, y pairs (starting off-screen where it came in); a Reverse retraces it.
+     * `ri` is the point a retracing Reverse is heading for, `speed` its Normal speed, `flash` the seconds
+     * left of its breaking flash, and `tail` its recent positions (x, y pairs), drawn as a glowing trail.
+     */
+    trail?: number[];
+    ri?: number;
+    speed?: number;
+    flash?: number;
+    tail?: number[];
     /** An 'arc' fireball's curve: from (x0, y0) bending toward (cx, cy) to its locked target (x1, y1) over T s. */
     arc?: { x0: number; y0: number; cx: number; cy: number; x1: number; y1: number; t: number; T: number };
 }

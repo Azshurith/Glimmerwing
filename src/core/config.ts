@@ -260,12 +260,27 @@ export const FIREBALL_FALL_PER_SIZE = 8;
 /** An angled fireball curves in from a top corner through the inner meadow at where the fairy was, faster. */
 export const FIREBALL_ANGLED_CHANCE = 0.3;
 export const FIREBALL_ARC_SPEED = 265;
-/** Reverse fireballs come back more dangerous: faster, quicker to lock on, angled more often. */
-export const REVERSE_SPEED = 1.3;
+/**
+ * Projectile speeds as multiples of a Normal fireball's (initial tuning targets, not measured from the
+ * arcade): a Reverse fireball, on its way back and when it arrives, and an Extra Attack between meadows.
+ */
+export const SPEED_NORMAL = 1;
+export const SPEED_REVERSE = 1.5;
+export const SPEED_EXTRA = 1.8;
+/** Reverse fireballs also lock on sooner and come in angled more often. */
 export const REVERSE_TRACK_TIME = 0.25;
 export const REVERSE_ANGLED_CHANCE = 0.5;
-/** A fireball you shoot down flies back up and out at this speed before it reaches the rival as a Reverse. */
-export const FIREBALL_BACK_SPEED = 88;
+/**
+ * A fireball you shoot down flashes, turns into a Reverse where it broke and flies back out along the path
+ * it came in on, starting at FIREBALL_BACK_START of its full speed (SPEED_REVERSE times its Normal speed)
+ * and reaching full speed over FIREBALL_BACK_RAMP seconds.
+ */
+export const FIREBALL_BACK_START = 0.3;
+export const FIREBALL_BACK_RAMP = 0.3;
+export const FIREBALL_FLASH = 0.3;
+/** Points of the path in (meadow units apart), kept so a Reverse can retrace it; and of a Reverse's glowing trail. */
+export const FIREBALL_TRAIL_STEP = 4;
+export const FIREBALL_TAIL = 10;
 /** Fever fireballs reach the rival this much sooner (a share of TRANSIT_TIME). */
 export const FEVER_TRANSIT = 0.6;
 export const SEEK_SLIDE = 170; // how fast it slides across while lining up
@@ -274,7 +289,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '19'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '20'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

@@ -109,6 +109,48 @@ export function drawFireball(
     }
     ctx.restore();
 }
+/**
+ * A Reverse fireball's glowing trail: its recent positions (x, y pairs, oldest first) drawn as a tapering,
+ * colour-cycling streak, so it bends with the path the Reverse is retracing.
+ */
+export function drawReverseTrail(ctx: CanvasRenderingContext2D, tail: number[], t: number, size: number): void {
+    const n = tail.length / 2;
+    if (n < 2) return;
+    const r = C.fireballRadius(size);
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let i = 1; i < n; i++) {
+        const k = i / (n - 1);
+        ctx.strokeStyle = `hsla(${(t * 900 + i * 28) % 360}, 100%, 65%, ${0.15 + k * 0.55})`;
+        ctx.lineWidth = r * (0.4 + k * 1.1);
+        ctx.beginPath();
+        ctx.moveTo(tail[(i - 1) * 2], tail[(i - 1) * 2 + 1]);
+        ctx.lineTo(tail[i * 2], tail[i * 2 + 1]);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+/** The flash as a fireball breaks and turns into a Reverse: a white burst and a widening ring. `k` runs 1 to 0. */
+export function drawFireFlash(ctx: CanvasRenderingContext2D, x: number, y: number, k: number, size: number): void {
+    const r = C.fireballRadius(size);
+    ctx.save();
+    ctx.globalAlpha = k;
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(x, y, r * (1 + (1 - k) * 0.8), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2 * k + 0.5;
+    ctx.beginPath();
+    ctx.arc(x, y, r + (1 - k) * 22, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+}
+
 /** A thorny bramble ball. */
 export function drawBramble(ctx: CanvasRenderingContext2D, x: number, y: number, spin: number): void {
     ctx.save();
