@@ -48,7 +48,9 @@ const flightTime = (o: Outgoing) => {
 };
 
 /** How fast a Normal fireball flies its route between the meadows (and then on into the rival's). */
-const riseSpeed = (o: Outgoing) => C.fireballTransitSpeed(o.reflects ?? (o.level >= 2 ? 1 : 0), o.boost ?? 1);
+const riseSpeed = (o: Outgoing) =>
+    C.fireballTransitSpeed(o.reflects ?? (o.level >= 2 ? 1 : 0), o.boost ?? 1) *
+    (o.fever && o.level < 2 ? (o.pace ?? 1) : 1);
 
 /** `ghost` transits are only drawn: online, the real attack is delivered on the rival's screen. */
 interface Transit {
@@ -563,7 +565,8 @@ export class Game {
             f.outbox = [];
         });
         for (const tr of this.transits) {
-            tr.t += dt;
+            // A fireball flies on the tempo (and sudden death) between the meadows too, as it does in them.
+            tr.t += tr.o.kind === 'star' ? dt * this.fields[tr.from].attackPace : dt;
             if (tr.t >= transitTime(tr.o)) this.fields[1 - tr.from].receive(tr.o);
         }
         this.transits = this.transits.filter(tr => tr.t < transitTime(tr.o));
@@ -632,7 +635,8 @@ export class Game {
         }
         me.outbox = [];
         for (const tr of this.transits) {
-            tr.t += dt;
+            // Both meadows share the tempo and sudden death, so mine stands in for my rival's.
+            tr.t += tr.o.kind === 'star' ? dt * me.attackPace : dt;
             if (tr.t >= transitTime(tr.o) && !tr.ghost) me.receive(tr.o);
         }
         this.transits = this.transits.filter(tr => tr.t < transitTime(tr.o));

@@ -258,9 +258,9 @@ export const FIREBALL_AIM_SPREAD = 22;
 /** Seconds between the fireballs of one volley setting off, so they come down staggered, never in a row. */
 export const FIREBALL_STAGGER = 0.16;
 /**
- * Speed. Size never changes it. Each reflection multiplies it by SPEED_REVERSE (initial tuning target, not
- * measured), each Perfect the sender has this round adds PERFECT_SPEED_STEP (up to PERFECT_SPEED_MAX), and
- * the tempo and sudden death speed everything in flight. FIREBALL_MAX_SPEED caps it so nothing can skip
+ * Speed. Size never changes it. Every Normal flies at the same speed. Each reflection multiplies it by
+ * SPEED_REVERSE (initial tuning target, not measured), each Perfect whoever shot it back has this round adds
+ * PERFECT_SPEED_STEP (up to PERFECT_SPEED_MAX), and the tempo and sudden death speed everything in flight. FIREBALL_MAX_SPEED caps it so nothing can skip
  * past a hitbox in one step. SPEED_EXTRA is how much faster an Extra Attack crosses between the meadows.
  */
 export const SPEED_NORMAL = 1;
@@ -301,14 +301,14 @@ export const SEEK_SLIDE = 170; // how fast it slides across while lining up
 export const TRANSIT_TIME = 0.7;
 /**
  * A Normal fireball's route to the rival (see normalRoute), at FIREBALL_TRANSIT_SPEED (meadow units a second, the
- * same as it falls; faster with reflections and Perfects, capped at FIREBALL_MAX_SPEED). Sent from within
- * FIREBALL_NEAR_TOP of the top, it slides straight across into the rival's meadow at that height and drops
- * straight down once it's over the rival's fairy. From lower down it climbs diagonally to FIREBALL_TOP_Y, just
- * under the top border, bounces off it and comes down diagonally into the rival's meadow at their fairy; the
+ * same as it falls, and the same for every Normal; slower in Fever, by its pace; on the tempo, like everything in
+ * flight). Sent from within FIREBALL_NEAR_TOP of the top, it slides straight across into the rival's meadow at
+ * that height, never above FIREBALL_TOP_Y (just under the HUD bar, so it's never hidden behind it), and drops
+ * straight down once it's over the rival's fairy. From lower down it climbs diagonally to FIREBALL_TOP_Y, bounces off it and comes down diagonally into the rival's meadow at their fairy; the
  * bounce stays at least FIREBALL_BOUNCE_WALL inside the sender's meadow.
  */
 export const FIREBALL_TRANSIT_SPEED = 140;
-export const FIREBALL_TOP_Y = 30;
+export const FIREBALL_TOP_Y = 40;
 export const FIREBALL_NEAR_TOP = 70;
 export const FIREBALL_BOUNCE_WALL = 14;
 /** A fireball's speed between the meadows, given its reflections and its sender's Perfects boost. */
@@ -317,7 +317,7 @@ export const fireballTransitSpeed = (reflects: number, boost: number) =>
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '35'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '36'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout
