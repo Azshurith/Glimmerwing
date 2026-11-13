@@ -1,6 +1,6 @@
 import * as C from '@/core/config';
 import { FAIRIES } from '@/data/characters';
-import type { Layout, Mode, TitleView } from '@/types';
+import type { Layout, TitleAction, TitleStage, TitleView } from '@/types';
 import { Backdrop } from '@/render/backdrop';
 import { arcadeText, slanted, sparkle } from '@/render/draw';
 import { drawSprite } from '@/render/sprites';
@@ -9,34 +9,56 @@ import { ARCADE, FONT } from '@/render/theme';
 
 /** A title menu entry and its tap target, in view units. */
 interface TitleButton {
-    mode: Mode;
+    action: TitleAction;
     label: string;
     sub: string;
+    /** Shown greyed out, and picking it does nothing yet. */
+    disabled?: boolean;
     x: number;
     y: number;
     w: number;
     h: number;
 }
 
-const MENU: { mode: Mode; label: string; sub: string }[] = [
-    { mode: 'cpu', label: 'VS CPU', sub: 'Battle the computer' },
-    { mode: 'versus', label: '2 PLAYERS', sub: 'Share a keyboard, pads or a tablet' },
-    { mode: 'online', label: 'ONLINE', sub: 'Find a rival or invite a friend' },
-];
-const WIDE_BUTTONS: TitleButton[] = MENU.map((b, i) => ({ ...b, x: 290, y: 106 + i * 44, w: 192, h: 36 }));
+/** A menu entry before it's placed. */
+type Entry = Omit<TitleButton, 'x' | 'y' | 'w' | 'h'>;
+
+/** Each title screen's entries: the opening screen's sign-in choices, and the mode menu. */
+const MENUS: Record<TitleStage, Entry[]> = {
+    start: [
+        { action: 'google', label: 'SIGN IN WITH GOOGLE', sub: 'Coming soon', disabled: true },
+        { action: 'guest', label: 'PLAY AS GUEST', sub: 'Progress is saved in this browser' },
+    ],
+    modes: [
+        { action: 'story', label: 'STORY MODE', sub: 'Coming soon', disabled: true },
+        { action: 'cpu', label: 'VS CPU', sub: 'Battle the computer' },
+        { action: 'versus', label: '2 PLAYERS', sub: 'Share a keyboard, pads or a tablet' },
+        { action: 'online', label: 'ONLINE PLAY', sub: 'Find a rival or invite a friend' },
+        { action: 'settings', label: 'SETTINGS', sub: 'Screen and play options' },
+        { action: 'guide', label: 'HOW TO PLAY', sub: 'Rules, controls and fairies' },
+    ],
+};
+/** Where the entries sit in the wide layout: two roomy bars to start, then the mode menu's six compact ones. */
+function wideButtons(stage: TitleStage): TitleButton[] {
+    return stage === 'start'
+        ? MENUS.start.map((b, i) => ({ ...b, x: 290, y: 132 + i * 44, w: 192, h: 36 }))
+        : MENUS.modes.map((b, i) => ({ ...b, x: 290, y: 90 + i * 33, w: 192, h: 28 }));
+}
 /** In the tall layout the menu stacks under the hero and the logo, shifted down `dy` on longer screens. */
-function tallButtons(dy: number): TitleButton[] {
-    return MENU.map((b, i) => ({ ...b, x: 40, y: 346 + dy + i * 50, w: 192, h: 40 }));
+function tallButtons(stage: TitleStage, dy: number): TitleButton[] {
+    return stage === 'start'
+        ? MENUS.start.map((b, i) => ({ ...b, x: 40, y: 360 + dy + i * 50, w: 192, h: 40 }))
+        : MENUS.modes.map((b, i) => ({ ...b, x: 40, y: 326 + dy + i * 34, w: 192, h: 30 }));
 }
 
 /** How far the tall title's content moves down to sit centred in a view `h` tall. */
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
 
-/** The title menu, top to bottom, for a layout and view height; also the tap targets (view units). */
-export function titleButtons(layout: Layout, h: number = C.TALL_H): TitleButton[] {
-    if (layout !== 'tall') return WIDE_BUTTONS;
+/** A title screen's menu, top to bottom, for a layout and view height; also the tap targets (view units). */
+export function titleButtons(stage: TitleStage, layout: Layout, h: number = C.TALL_H): TitleButton[] {
+    if (layout !== 'tall') return wideButtons(stage);
     const f = tallMenuFit(h);
-    return tallButtons(tallShift(f.h)).map(b => ({
+    return tallButtons(stage, tallShift(f.h)).map(b => ({
         ...b,
         x: f.x + b.x * f.s,
         y: b.y * f.s,
@@ -89,7 +111,7 @@ export class TitleScreen {
             this.heroArtTall(t);
             this.logo(t, W / 2, TALL.logoY, 24);
             ctx.restore();
-            this.menu(v, t, tallButtons(dy));
+            this.menu(v, t, tallButtons(v.stage, dy));
             this.footer(v, t, W / 2, TALL.ctaY + dy, W, f.h);
             ctx.restore();
             this.bleed = 0;
@@ -105,7 +127,7 @@ export class TitleScreen {
         ctx.restore();
         this.heroArt(t);
         this.logo(t);
-        this.menu(v, t, WIDE_BUTTONS);
+        this.menu(v, t, wideButtons(v.stage));
         this.footer(v, t);
         this.bleed = 0;
     }
@@ -263,11 +285,18 @@ export class TitleScreen {
         const ctx = this.ctx;
         buttons.forEach((b, i) => {
             const on = i === v.index;
+            const compact = b.h < 34;
             const x = b.x - (on ? 8 : 0);
-            const bar = slanted(x, b.y, b.w, b.h, 10);
+            const bar = slanted(x, b.y, b.w, b.h, compact ? 8 : 10);
+            ctx.save();
+            // Not ready yet: greyed out, whether or not the cursor is on it.
+            if (b.disabled) {
+                ctx.filter = 'grayscale(1)';
+                ctx.globalAlpha = on ? 0.75 : 0.5;
+            }
             ctx.save();
             if (on) {
-                ctx.shadowColor = '#ffb43c';
+                ctx.shadowColor = b.disabled ? '#9a9a9a' : '#ffb43c';
                 ctx.shadowBlur = 14 + 4 * Math.sin(t * 6);
                 const g = ctx.createLinearGradient(x, 0, x + b.w, 0);
                 g.addColorStop(0, '#fff0a8');
@@ -284,20 +313,30 @@ export class TitleScreen {
             ctx.lineWidth = on ? 1.6 : 1;
             bar(ctx);
             ctx.stroke();
-            // Number tag for keys, on the bar's left.
+            // Number tag for keys, on the bar's right.
             if (!v.touch) {
-                ctx.font = `9px ${ARCADE}`;
+                ctx.font = `${compact ? 8 : 9}px ${ARCADE}`;
                 ctx.textAlign = 'center';
                 ctx.fillStyle = on ? 'rgba(42,15,46,0.55)' : 'rgba(201,188,245,0.45)';
                 ctx.fillText(String(i + 1), x + b.w - 14, b.y + b.h / 2 + 4);
             }
             ctx.textAlign = 'left';
-            ctx.font = `${on ? 15 : 13}px ${ARCADE}`;
-            ctx.fillStyle = on ? '#2a0f2e' : '#fff3c9';
-            ctx.fillText(b.label, x + 18, b.y + 18);
-            ctx.font = `italic 600 8.5px ${FONT}`;
-            ctx.fillStyle = on ? 'rgba(70,25,20,0.85)' : 'rgba(203,188,245,0.7)';
-            ctx.fillText(b.sub, x + 16, b.y + 30, b.w - 34);
+            if (compact) {
+                // One line: the label, with the description small beside it on the bar.
+                ctx.font = `${on ? 12 : 11}px ${ARCADE}`;
+                ctx.fillStyle = on ? '#2a0f2e' : '#fff3c9';
+                ctx.fillText(b.label, x + 16, b.y + b.h / 2 + 2);
+                ctx.font = `italic 600 7.5px ${FONT}`;
+                ctx.fillStyle = on ? 'rgba(70,25,20,0.85)' : 'rgba(203,188,245,0.7)';
+                ctx.fillText(b.sub, x + 16, b.y + b.h - 4, b.w - 40);
+            } else {
+                ctx.font = `${on ? 15 : 13}px ${ARCADE}`;
+                ctx.fillStyle = on ? '#2a0f2e' : '#fff3c9';
+                ctx.fillText(b.label, x + 18, b.y + 18, b.w - 36);
+                ctx.font = `italic 600 8.5px ${FONT}`;
+                ctx.fillStyle = on ? 'rgba(70,25,20,0.85)' : 'rgba(203,188,245,0.7)';
+                ctx.fillText(b.sub, x + 16, b.y + 30, b.w - 34);
+            }
             // Bouncing pointer.
             if (on) {
                 const ax = x - 10 + Math.sin(t * 9) * 2.5,
@@ -313,6 +352,7 @@ export class TitleScreen {
                 ctx.stroke();
                 ctx.fill();
             }
+            ctx.restore();
         });
     }
 
@@ -322,23 +362,27 @@ export class TitleScreen {
     private footer(v: TitleView, t: number, cx = LOGO_X, ctaY = 254, W: number = C.VIEW_W, H: number = C.VIEW_H): void {
         const ctx = this.ctx;
         const tall = W !== C.VIEW_W;
-        // Blinking call to action.
+        // Blinking call to action on the opening screen; the mode menu has no room for one.
         const blink = Math.floor(t * 2.2) % 2 === 0;
-        if (blink)
+        if (blink && v.stage === 'start')
             arcadeText(
                 ctx,
-                v.touch ? 'TAP A MODE TO PLAY' : 'PRESS START',
+                v.touch ? 'TAP TO PLAY' : 'PRESS START',
                 cx,
                 ctaY,
                 tall ? 11 : 13,
                 ['#ffffff', '#fff3a0', '#ffb43c'],
                 'center',
             );
-        if (!v.touch) {
+        if (!v.touch && (v.stage === 'start' || !tall)) {
             ctx.font = `7px ${ARCADE}`;
             ctx.textAlign = 'center';
             ctx.fillStyle = 'rgba(203,188,245,0.75)';
-            ctx.fillText('UP / DOWN CHOOSE  ·  ENTER OR Z PLAYS  ·  1 2 3 QUICK START', cx, ctaY + 16, W - 16);
+            const keys =
+                v.stage === 'start'
+                    ? 'UP / DOWN CHOOSE  ·  ENTER OR Z PICKS'
+                    : 'UP / DOWN CHOOSE  ·  ENTER OR Z PICKS  ·  ESC BACK';
+            ctx.fillText(keys, cx, v.stage === 'start' ? ctaY + 16 : H - 26, W - 16);
         }
         // Bottom bar with this browser's record.
         const g = ctx.createLinearGradient(0, H - 20, 0, H);

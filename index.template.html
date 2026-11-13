@@ -206,12 +206,6 @@
             #tb-sound {
                 left: 1.5%;
             }
-            #tb-guide {
-                right: 1.5%;
-            }
-            #tb-settings {
-                left: calc(1.5% + var(--btn) + 8px);
-            }
             #settings {
                 position: absolute;
                 inset: 0;
@@ -247,7 +241,7 @@
                 line-height: 1.35;
             }
             #tb-full {
-                right: calc(1.5% + var(--btn) + 8px);
+                right: 1.5%;
             }
             #tb-full[hidden] {
                 display: none;
@@ -363,12 +357,10 @@
                 <div class="touch-ui" aria-hidden="false">
                     <button class="tb small tb-menu" id="menu-btn" data-key="Escape" aria-label="Pause">❚❚</button>
                 </div>
-                <!-- Title-screen corners, on every device: sound, fullscreen, and the guide page. -->
+                <!-- Title-screen corners, on every device: sound and fullscreen (Settings and How to play are in the menu). -->
                 <div class="corner-ui">
                     <button class="tb small" id="tb-sound" aria-label="Sound" aria-pressed="true">♪</button>
-                    <button class="tb small" id="tb-settings" aria-label="Settings">⚙</button>
                     <button class="tb small" id="tb-full" aria-label="Fullscreen">⛶</button>
-                    <a class="tb small" id="tb-guide" href="guide.html" aria-label="How to play and settings">?</a>
                 </div>
                 <div id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
                     <div class="lobby-card">

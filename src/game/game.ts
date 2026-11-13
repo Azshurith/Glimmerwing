@@ -19,6 +19,7 @@ import type {
     Placement,
     Progress,
     Settings,
+    TitleStage,
     SelectCard,
     SelectSide,
     Sfx,
@@ -115,8 +116,12 @@ export class Game {
     ];
     /** Select-screen clock: seconds since it opened, and when both players were ready (-1: not yet). */
     private selectT = 0;
-    /** Highlighted title-menu item. */
-    private titleIndex = 0;
+    /** Which title screen is showing (opening or mode menu), and its highlighted item. */
+    private titleStage: TitleStage = 'start';
+    private titleIndex = 1;
+    /** Set by the page: open the Settings panel, and the How to play page. */
+    onWantSettings?: () => void;
+    onWantGuide?: () => void;
     private readyAt = -1;
     /** Draw every fireball's path across the screen (`?debug=paths`). */
     debugPaths = false;
@@ -171,6 +176,8 @@ export class Game {
 
     /** Called by the page buttons and the title screen. */
     start(mode: Mode): void {
+        // Coming back from a match lands on the mode menu, not the opening screen.
+        this.titleStage = 'modes';
         if (mode !== 'online' && this.net) this.disconnect();
         this.mode = mode;
         this.phase = 'select';
@@ -498,30 +505,61 @@ export class Game {
                 return;
             }
             // Arcade menu: up/down (keys, either player's stick) moves the cursor; any fire button
-            // or Start plays it. 1/2/3 jump straight in, and tapping a bar plays that one.
-            const buttons = titleButtons(this.r.layout, this.r.viewH);
+            // or Start picks it. Number keys jump straight to an item, and tapping a bar picks that one.
+            const buttons = titleButtons(this.titleStage, this.r.layout, this.r.viewH);
             const n = buttons.length;
             const was = this.titleIndex;
             if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.titleIndex = (this.titleIndex + n - 1) % n;
             if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.titleIndex = (this.titleIndex + 1) % n;
             if (this.titleIndex !== was) this.ui('tick');
+            if (this.titleStage === 'modes' && pr.has('Escape')) {
+                // Back to the opening screen.
+                this.titleStage = 'start';
+                this.titleIndex = 1;
+                this.ui('tick');
+                return;
+            }
             let pick = -1;
             const tap = this.input.tap;
             if (tap)
                 pick = buttons.findIndex(
                     b => tap.x >= b.x - 10 && tap.x <= b.x + b.w && tap.y >= b.y && tap.y <= b.y + b.h,
                 );
-            ['Digit1', 'Digit2', 'Digit3'].forEach((k, i) => {
-                if (pr.has(k)) pick = i;
+            // On the opening screen ("TAP TO PLAY"), a tap anywhere else plays as a guest.
+            if (tap && pick < 0 && this.titleStage === 'start') pick = buttons.findIndex(b => b.action === 'guest');
+            buttons.forEach((_, i) => {
+                if (pr.has(`Digit${i + 1}`)) pick = i;
             });
             if (pick < 0 && ['Space', 'Enter', 'KeyZ', 'KeyG', 'NumpadEnter'].some(k => pr.has(k)))
                 pick = this.titleIndex;
             if (pick >= 0) {
                 this.titleIndex = pick;
+                const b = buttons[pick];
+                // Not ready yet (greyed out): the cursor goes there, but nothing happens.
+                if (b.disabled) {
+                    this.ui('tick');
+                    return;
+                }
                 this.ui('ok');
-                const mode = buttons[pick].mode;
-                if (mode === 'online') this.onWantOnline?.();
-                else this.start(mode);
+                switch (b.action) {
+                    case 'guest':
+                        this.titleStage = 'modes';
+                        this.titleIndex = 1;
+                        break;
+                    case 'online':
+                        this.onWantOnline?.();
+                        break;
+                    case 'settings':
+                        this.onWantSettings?.();
+                        break;
+                    case 'guide':
+                        this.onWantGuide?.();
+                        break;
+                    case 'cpu':
+                    case 'versus':
+                        this.start(b.action);
+                        break;
+                }
             }
             return;
         }
@@ -840,6 +878,7 @@ export class Game {
             case 'title':
                 r.title(
                     {
+                        stage: this.titleStage,
                         index: this.titleIndex,
                         touch,
                         unlocked: FAIRIES.filter(f => this.isUnlocked(f)).length,

@@ -177,10 +177,8 @@ function openSettings(): void {
     settingsEl.hidden = false;
     hideRivalBox.focus();
 }
-document.getElementById('tb-settings')?.addEventListener('click', e => {
-    e.stopPropagation();
-    openSettings();
-});
+game.onWantSettings = openSettings;
+game.onWantGuide = () => (location.href = 'guide.html');
 hideRivalBox?.addEventListener('change', () => game.setSettings({ hideRival: hideRivalBox.checked }));
 document.getElementById('settings-close')?.addEventListener('click', () => {
     if (settingsEl) settingsEl.hidden = true;
