@@ -27,12 +27,16 @@ import { Field } from './field';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 
 /**
- * Seconds an attack spends between the meadows: Reverse fireballs and Extra Attacks fly faster (SPEED_*),
- * and Fever fireballs get there sooner.
+ * Seconds an attack spends between the meadows: reflected and Perfect-boosted fireballs and Extra Attacks
+ * fly faster (SPEED_*, fireballSpeedMul), and Fever fireballs get there sooner.
  */
 const transitTime = (o: Outgoing) =>
     (C.TRANSIT_TIME * (o.kind === 'star' && o.fever ? C.FEVER_TRANSIT : 1)) /
-    (o.kind === 'imp' ? C.SPEED_EXTRA : o.kind === 'star' && o.level >= 2 ? C.SPEED_REVERSE : C.SPEED_NORMAL);
+    (o.kind === 'imp'
+        ? C.SPEED_EXTRA
+        : o.kind === 'star'
+          ? C.fireballSpeedMul(o.reflects ?? (o.level >= 2 ? 1 : 0), o.boost ?? 1)
+          : C.SPEED_NORMAL);
 
 /** `ghost` transits are only drawn: online, the real attack is delivered on the rival's screen. */
 interface Transit {

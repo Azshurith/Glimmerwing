@@ -167,6 +167,13 @@ export interface Attack {
     speed?: number;
     flash?: number;
     tail?: number[];
+    /** Times this fireball has been shot back (0 for a Normal, 1 for a Reverse...): each one speeds it up. */
+    reflects?: number;
+    /** A top-drop fireball's lean from straight down, in radians. */
+    lean?: number;
+    /** Seconds a fireball still stalls after a shot that didn't break it, and its hit flash. */
+    stall?: number;
+    hitT?: number;
     /**
      * An 'arc' fireball's curve: from (x0, y0) bending toward (cx, cy) to its locked target (x1, y1), t of T
      * seconds along. For a Reverse on its way 'back', its arc out of the meadow, with t and T as distances.
@@ -325,6 +332,9 @@ export interface Outgoing {
     fromY: number;
     /** Where it comes into the receiving meadow, if not at fromX (a Reverse comes in on the near side). */
     toX?: number;
+    /** For a fireball: times it has been shot back, and the speed boost from its sender's Perfects. */
+    reflects?: number;
+    boost?: number;
     /** For a fireball: its size (1 to 4), whose it is, and whether it was sent during Fever. */
     size?: number;
     tint?: Tint;

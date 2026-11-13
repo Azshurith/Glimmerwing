@@ -151,6 +151,17 @@ export function drawFireFlash(ctx: CanvasRenderingContext2D, x: number, y: numbe
     ctx.restore();
 }
 
+/** A fireball taking a shot that didn't break it: a brief white flash over it. `k` runs 1 to 0. */
+export function drawFireHit(ctx: CanvasRenderingContext2D, x: number, y: number, k: number, size: number): void {
+    ctx.save();
+    ctx.globalAlpha = 0.75 * k;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x, y, C.fireballRadius(size) * 1.05, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
 /** A thorny bramble ball. */
 export function drawBramble(ctx: CanvasRenderingContext2D, x: number, y: number, spin: number): void {
     ctx.save();
