@@ -60,9 +60,9 @@ const LAYOUT = {
     },
     tall: {
         W: C.TALL_W,
-        art: { x: 14, y: 38, w: 102, h: 170 },
-        demo: { x: 124, y: 38, w: 126 },
-        info: { x: 14, y: 250, w: 236 },
+        art: { x: 10, y: 36, w: 86, h: 200 },
+        demo: { x: 104, y: 36, w: 150 },
+        info: { x: 14, y: 258, w: 236 },
         rowY: 506,
         r: 15,
     },
