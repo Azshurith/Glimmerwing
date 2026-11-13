@@ -882,10 +882,11 @@ export class Field {
         } else {
             this.addBurst(a.x, a.y, id, C.BURST_RADIUS * (0.85 + (a.size ?? 1) * 0.15));
             this.spray(a.x, a.y, 6, '#ffe27a');
-            if (a.level < 2) {
-                // A Normal fireball flashes and turns into a Reverse right where it broke, then arcs up and out
-                // of the meadow toward the rival's side, on its way back to them (see flyBack).
-                const lvl = Math.min(C.MAX_STAR_LEVEL, 2 + this.fairy.counterBoost);
+            if ((a.reflects ?? (a.level >= 2 ? 1 : 0)) < C.FIREBALL_MAX_REFLECTS) {
+                // A fireball flashes and turns into a Reverse right where it broke (purple the first time,
+                // flashing every colour the second), then arcs up and out of the meadow toward the rival's side,
+                // on its way back to them (see flyBack). Broken once more after that, it's an Extra Attack.
+                const lvl = Math.min(C.MAX_STAR_LEVEL, Math.max(a.level, 2 + this.fairy.counterBoost));
                 a.dead = false;
                 a.flight = 'back';
                 a.level = lvl;
@@ -896,19 +897,17 @@ export class Field {
                 // Lock on to where the rival's fairy is right now: the Reverse crosses the screen to there.
                 a.curve = reverseCurve(a.x, a.y, this.rivalFairy.x, this.rivalFairy.y, this.rivalSide);
                 a.k = 0;
-                // One more reflection: it heads back faster (capped), boosted by my Perfects.
+                // One more reflection: it heads back faster than it came (capped), boosted by my Perfects.
+                const came = a.speed ?? a.plunge ?? C.FIREBALL_FALL_SPEED;
                 a.reflects = (a.reflects ?? 0) + 1;
-                a.speed = Math.min(
-                    C.FIREBALL_MAX_SPEED,
-                    C.FIREBALL_FALL_SPEED * C.fireballSpeedMul(a.reflects, this.perfectBoost),
-                );
+                a.speed = Math.min(C.FIREBALL_MAX_SPEED, came * C.SPEED_REVERSE * this.perfectBoost);
                 // Ease up to that speed from a fraction of it.
                 a.t = a.speed * C.FIREBALL_BACK_START;
                 a.tail = [a.x, a.y];
                 this.popup(a.x, a.y - 10, 'Reverse');
                 this.snd('reverse');
             } else {
-                // Breaking a Reverse fireball turns it into one of your Extra Attack critters, sent at the rival.
+                // Broken once it has been shot back as often as it can be, it turns into one of your Extra Attack critters.
                 this.outbox.push({ kind: 'imp', level: 1, fromX: a.x, fromY: a.y, fairy: this.fairy.id });
                 this.popup(a.x, a.y - 10, this.fairy.extra.name);
                 this.snd('extra');
@@ -1062,9 +1061,13 @@ export class Field {
         const cx = r.range(70, C.FIELD_W - 70);
         for (let row = 0; row < 3; row++) {
             for (let col = 0; col < 5; col++) {
+                // They burst into being just under the HUD strip, never drifting in from behind it.
+                const x = cx + (col - 2) * 20 + (row % 2) * 10,
+                    y = C.CRITTER_TOP + row * 18;
+                this.spray(x, y, 3, '#ffd6ec');
                 this.puffs.push({
-                    x: cx + (col - 2) * 20 + (row % 2) * 10,
-                    y: -16 - row * 18,
+                    x,
+                    y,
                     vx: 0,
                     vy: 55,
                     phase: r.range(0, 6.28),
@@ -1074,7 +1077,7 @@ export class Field {
                     shell: 0,
                     maxHp: 1,
                     size: 1,
-                    baseX: cx + (col - 2) * 20 + (row % 2) * 10,
+                    baseX: x,
                 });
             }
         }

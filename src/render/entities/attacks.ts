@@ -10,8 +10,16 @@ const FIRE: Record<'p1' | 'p2' | 'fever', [string, string, string]> = {
     fever: ['#ffd21a', '#fff27a', '#ffffff'],
 };
 
-/** How a fireball looks: a player's own colour, Fever yellow, or a flashing Reverse. */
+/** How a fireball looks: orange as sent ('p1'), purple shot back once ('p2'), Fever yellow, or flashing. */
 export type FireLook = 'p1' | 'p2' | 'fever' | 'reverse';
+
+/**
+ * The look of a fireball shot back `reflects` times, the same on both sides: orange as it's sent (Fever yellow
+ * in Fever), purple once it's been shot back, and flashing every colour once it's been shot back again.
+ */
+export function fireLook(reflects: number, fever?: boolean): FireLook {
+    return reflects >= 2 ? 'reverse' : reflects === 1 ? 'p2' : fever ? 'fever' : 'p1';
+}
 
 /**
  * A fireball (TSS Normal or Reverse Attack): a glowing core with a little face, wrapped in flickering

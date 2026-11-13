@@ -265,9 +265,11 @@ export const FIREBALL_STAGGER = 0.16;
  * past a hitbox in one step. SPEED_EXTRA is how much faster an Extra Attack crosses between the meadows.
  */
 export const SPEED_NORMAL = 1;
-export const FIREBALL_NORMAL_SPEED_MIN = 1.1;
-export const FIREBALL_NORMAL_SPEED_MAX = 1.7;
+export const FIREBALL_NORMAL_SPEED_MIN = 1.4;
+export const FIREBALL_NORMAL_SPEED_MAX = 2;
 export const SPEED_REVERSE = 1.5;
+/** How many times a fireball can be shot back; broken once more after that, it becomes an Extra Attack. */
+export const FIREBALL_MAX_REFLECTS = 2;
 export const SPEED_EXTRA = 1.8;
 export const PERFECT_SPEED_STEP = 0.08;
 export const PERFECT_SPEED_MAX = 1.5;
@@ -312,6 +314,8 @@ export const TRANSIT_TIME = 0.7;
  */
 export const FIREBALL_TRANSIT_SPEED = 140;
 export const FIREBALL_TOP_Y = 40;
+/** The highest a critter flies on screen: just under the HUD strip (24 units deep), never behind it. */
+export const CRITTER_TOP = 38;
 export const FIREBALL_NEAR_TOP = 70;
 export const FIREBALL_BOUNCE_WALL = 14;
 /** A fireball's speed between the meadows, given its reflections and its sender's Perfects boost. */
@@ -320,7 +324,7 @@ export const fireballTransitSpeed = (reflects: number, boost: number) =>
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '37'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '38'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout
