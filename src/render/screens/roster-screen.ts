@@ -50,9 +50,26 @@ const rate = (v: number, max: number) => Math.max(1, Math.min(5, Math.round(1 + 
 
 /** Where things go in each layout, in its design units. */
 const LAYOUT = {
-    wide: { W: C.VIEW_W, art: { x: 14, y: 40, w: 150, h: 206 }, info: { x: 180, y: 52, w: 312 }, rowY: 276, r: 14 },
-    tall: { W: C.TALL_W, art: { x: 14, y: 38, w: 236, h: 170 }, info: { x: 14, y: 250, w: 236 }, rowY: 506, r: 15 },
+    wide: {
+        W: C.VIEW_W,
+        art: { x: 14, y: 40, w: 116, h: 206 },
+        demo: { x: 142, y: 43, w: 150 },
+        info: { x: 306, y: 52, w: 186 },
+        rowY: 276,
+        r: 14,
+    },
+    tall: {
+        W: C.TALL_W,
+        art: { x: 14, y: 38, w: 102, h: 170 },
+        demo: { x: 124, y: 38, w: 126 },
+        info: { x: 14, y: 250, w: 236 },
+        rowY: 506,
+        r: 15,
+    },
 } as const;
+
+/** Draws the live demo meadow at (`x`, `y`) and `scale`, in the screen's design units (see game/preview.ts). */
+export type DemoDraw = (x: number, y: number, scale: number) => void;
 
 /** How far the tall screen's content moves down to sit centred in a view `h` tall. */
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
@@ -81,7 +98,7 @@ export class RosterScreen {
     }
 
     /** Draw the screen; `bleed` is how far a widened landscape view reaches past each side. */
-    draw(v: RosterView, t: number, layout: Layout = 'wide', h: number = C.TALL_H, bleed = 0): void {
+    draw(v: RosterView, t: number, layout: Layout = 'wide', h: number = C.TALL_H, bleed = 0, demo?: DemoDraw): void {
         const ctx = this.ctx;
         ctx.save();
         let H: number = C.VIEW_H,
@@ -107,6 +124,7 @@ export class RosterScreen {
         ctx.save();
         ctx.translate(0, dy);
         this.art(fy, locked, L.art, t);
+        this.demo(fy, locked, L.demo, v.caption, demo);
         this.info(fy, locked, L.info, layout === 'tall', t);
         ctx.restore();
         designMedallions(layout, dy).forEach((m, i) => this.medallion(FAIRIES[i], v.locked[i], m, i === v.index, t));
@@ -183,7 +201,58 @@ export class RosterScreen {
         plate(ctx);
         ctx.stroke();
         const name = locked ? 'LOCKED' : fy.name.toUpperCase();
-        arcadeText(ctx, name, a.x + 12, ny + 18, name.length > 9 ? 13 : 16, ['#ffffff', '#fff0c8', '#ffd27a'], 'left');
+        arcadeText(
+            ctx,
+            name,
+            a.x + 10,
+            ny + 18,
+            name.length > 9 ? 12 : 15,
+            ['#ffffff', '#fff0c8', '#ffd27a'],
+            'left',
+            a.w - 14,
+        );
+    }
+
+    /**
+     * The live demo window: her meadow, run by the real game code, with a caption saying which move she's
+     * showing. A locked fairy's window stays dark.
+     */
+    private demo(
+        fy: Fairy,
+        locked: boolean,
+        d: { x: number; y: number; w: number },
+        caption: string,
+        draw?: DemoDraw,
+    ): void {
+        const ctx = this.ctx;
+        const s = d.w / C.FIELD_W_BASE,
+            h = C.FIELD_H_BASE * s;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(d.x, d.y, d.w, h);
+        ctx.clip();
+        if (!locked && draw) draw(d.x, d.y, s);
+        else {
+            ctx.fillStyle = '#120d2c';
+            ctx.fillRect(d.x, d.y, d.w, h);
+            arcadeText(ctx, '?', d.x + d.w / 2, d.y + h * 0.55, 40, ['#ffffff', '#c9b8ff', '#7a5cff'], 'center');
+        }
+        if (!locked && caption) {
+            // The caption, on a dark band along the bottom.
+            const g = ctx.createLinearGradient(0, d.y + h - 30, 0, d.y + h);
+            g.addColorStop(0, 'rgba(8,5,24,0)');
+            g.addColorStop(1, 'rgba(8,5,24,0.9)');
+            ctx.fillStyle = g;
+            ctx.fillRect(d.x, d.y + h - 30, d.w, 30);
+            ctx.textAlign = 'center';
+            ctx.font = `7px ${ARCADE}`;
+            ctx.fillStyle = '#fff3c9';
+            ctx.fillText(caption.toUpperCase(), d.x + d.w / 2, d.y + h - 8, d.w - 10);
+        }
+        ctx.restore();
+        ctx.strokeStyle = locked ? '#8a7aa8' : fy.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(d.x, d.y, d.w, h);
     }
 
     /** Her blurb, stats and skills (or how to unlock her). */
@@ -207,7 +276,9 @@ export class RosterScreen {
             ['CHARGE', rate(1 / fy.charge, 2)],
             ['DODGE', rate(1 / fy.hitbox, 1 / 0.7)],
         ];
-        const colW = b.w / 2;
+        const colW = b.w / 2,
+            step = Math.min(compact ? 13 : 16, (colW - 46) / 5),
+            bar = step - 3;
         stats.forEach(([label, n], i) => {
             const sx = b.x + (i % 2) * colW,
                 sy = y + 16 + Math.floor(i / 2) * 13;
@@ -217,7 +288,7 @@ export class RosterScreen {
             for (let k = 0; k < 5; k++) {
                 const on = !locked && k < n;
                 ctx.fillStyle = on ? (k >= 4 ? '#ff8a5b' : k >= 3 ? '#ffd45c' : '#8ff0a0') : 'rgba(255,255,255,0.1)';
-                slanted(sx + 42 + k * (compact ? 13 : 16), sy - 6, compact ? 10 : 13, 6, 3)(ctx);
+                slanted(sx + 42 + k * step, sy - 6, bar, 6, 3)(ctx);
                 ctx.fill();
             }
         });

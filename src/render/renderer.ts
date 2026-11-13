@@ -460,9 +460,11 @@ export class Renderer {
         this.modeScreen.draw(v, time, this.layout, this.viewH, this.viewX);
     }
 
-    /** The Characters screen (see roster-screen.ts). */
-    roster(v: RosterView, time: number): void {
-        this.rosterScreen.draw(v, time, this.layout, this.viewH, this.viewX);
+    /** The Characters screen (see roster-screen.ts), with the live demo meadow of the fairy in view. */
+    roster(v: RosterView, time: number, demo: Field | null = null): void {
+        const tag = { label: 'DEMO', color: demo?.fairy.color ?? '#ffffff' };
+        const draw = demo ? (x: number, y: number, s: number) => this.field(demo, x, 0, time, tag, y, s) : undefined;
+        this.rosterScreen.draw(v, time, this.layout, this.viewH, this.viewX, draw);
     }
 
     /** The Profile screen (see profile-screen.ts). */

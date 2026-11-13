@@ -29,6 +29,7 @@ import type {
 import { CpuPilot } from './ai';
 import { Field } from './field';
 import { curveAt, pathAt, pathLength, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
+import { SkillPreview } from './preview';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 import { loadSettings, saveSettings } from './settings';
 
@@ -125,6 +126,8 @@ export class Game {
     private menu: ModeMenu = 'main';
     /** The fairy in view on the Characters screen. */
     private rosterIndex = 0;
+    /** The Characters screen's live demo of the fairy in view. */
+    private preview = new SkillPreview();
     /** Set by the page: open the Settings panel, and the How to play page. */
     onWantSettings?: () => void;
     onWantGuide?: () => void;
@@ -643,6 +646,9 @@ export class Game {
         }
         if (this.phase === 'roster') {
             this.stepRoster(pr);
+            const fy = FAIRIES[this.rosterIndex];
+            this.preview.show(this.phase === 'roster' && this.isUnlocked(fy) ? fy : null);
+            this.preview.update(dt);
             return;
         }
         if (this.phase === 'profile') {
@@ -983,7 +989,16 @@ export class Game {
                 );
                 break;
             case 'roster':
-                r.roster({ index: this.rosterIndex, locked: FAIRIES.map(f => !this.isUnlocked(f)), touch }, this.time);
+                r.roster(
+                    {
+                        index: this.rosterIndex,
+                        locked: FAIRIES.map(f => !this.isUnlocked(f)),
+                        touch,
+                        caption: this.preview.caption,
+                    },
+                    this.time,
+                    this.preview.field,
+                );
                 break;
             case 'profile':
                 r.profile(
