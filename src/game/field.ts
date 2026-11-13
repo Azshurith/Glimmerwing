@@ -360,10 +360,10 @@ export class Field {
     }
 
     /**
-     * A fireball arrives. A Normal comes in at the top of the meadow, slides along after the fairy, locks on
-     * and falls across the meadow (straight, or leaning a little) and out the bottom. A Reverse arrives
-     * mid-flight on its curve across the screen and carries on along it onto where the fairy was when it was
-     * broken, then straight on out. Size sets hits, never speed; speed comes from reflections and the
+     * A fireball arrives. A Normal comes in at the top of the meadow where it was sent from and falls across
+     * the meadow (straight, or leaning a little) and out the bottom; it doesn't follow the fairy. A Reverse
+     * arrives mid-flight on its curve across the screen and carries on along it onto where the fairy was when
+     * it was broken, then straight on out. Size sets hits, never speed; speed comes from reflections and the
      * sender's Perfects (fireballSpeedMul) and is capped.
      */
     private receiveFireball(o: Outgoing, x: number): void {
@@ -402,7 +402,7 @@ export class Field {
             vx: 0,
             vy: C.FIREBALL_ENTER_SPEED,
             flight: 'drop',
-            seekT: reverse ? C.REVERSE_TRACK_TIME : C.FIREBALL_TRACK_TIME,
+            seekT: 0,
             plunge: fall,
             t: C.FIREBALL_ENTER_SPEED,
             speed: fall,
@@ -1134,17 +1134,8 @@ export class Field {
                 continue;
             }
             if (a.kind === 'star' && a.flight === 'drop') {
-                if (a.seekT > 0) {
-                    // Along the top, sliding after the fairy; where it is when this ends is where it falls.
-                    a.seekT -= dt;
-                    a.y += (22 - a.y) * Math.min(1, dt * 6);
-                    const gap = this.player.x - a.x;
-                    a.vx = Math.sign(gap) * Math.min(Math.abs(gap) / dt, C.FIREBALL_TRACK_SPEED);
-                    a.x += a.vx * dt;
-                    a.vy = C.FIREBALL_ENTER_SPEED;
-                    continue;
-                }
-                // Locked on: down (straight, or leaning a little), faster and faster.
+                // Down from where it came in (straight, or leaning a little), faster and faster. It never
+                // follows the fairy: where it enters is where it falls.
                 a.t = Math.min(a.plunge, (a.t ?? C.FIREBALL_ENTER_SPEED) + C.FIREBALL_ACCEL * dt);
                 const lean = a.lean ?? 0;
                 a.vx = Math.sin(lean) * a.t;
