@@ -363,14 +363,17 @@ export class Field {
      * A fireball arrives. A Normal comes in at the top of the meadow right above the fairy (a volley's later
      * fireballs a little to either side, by `aim`) and falls straight down in a vertical line and out the
      * bottom; it doesn't follow her once it's in. A Reverse arrives mid-flight on its curve across the screen
-     * and carries on along it onto where the fairy was when it was broken, then straight down and out. Size
+     * and carries on along it onto where the fairy was when it was broken, still arcing on past there. Size
      * sets hits, never speed; speed comes from reflections and the sender's Perfects (fireballSpeedMul) and is
      * capped.
      */
     private receiveFireball(o: Outgoing, x: number): void {
         const size = Math.min(4, Math.max(1, o.size ?? 1));
         const reverse = o.level >= 2;
-        const mul = C.fireballSpeedMul(o.reflects ?? (reverse ? 1 : 0), o.boost ?? 1);
+        // Fever fireballs come thick and fast, so each one falls slower (FEVER_FIREBALL_SPEED).
+        const mul =
+            C.fireballSpeedMul(o.reflects ?? (reverse ? 1 : 0), o.boost ?? 1) *
+            (!reverse && o.fever ? C.FEVER_FIREBALL_SPEED : 1);
         const base = {
             kind: 'star' as const,
             level: o.level,
@@ -1146,21 +1149,16 @@ export class Field {
                 a.vy = a.t;
             }
             if (a.kind === 'star' && a.flight === 'cross' && a.curve) {
-                // A Reverse finishing its curve across the screen, onto where the fairy was when it broke.
-                const k = curveStep(a.curve, a.k ?? 0, (a.t ?? C.FIREBALL_FALL_SPEED) * dt);
+                // A Reverse finishing its curve across the screen, onto where the fairy was when it broke, and
+                // past there still arcing the same way until it's out of the meadow.
+                const k = curveStep(a.curve, a.k ?? 0, (a.t ?? C.FIREBALL_FALL_SPEED) * dt, Infinity);
                 const p = curveAt(a.curve, k);
                 a.vx = (p.x - a.x) / dt;
                 a.vy = (p.y - a.y) / dt;
                 a.x = p.x;
                 a.y = p.y;
                 a.k = k;
-                if (k >= 1) {
-                    // At its target: from there straight down and out of the meadow.
-                    a.flight = 'drop';
-                    a.seekT = 0;
-                    a.plunge = a.t ?? C.FIREBALL_FALL_SPEED;
-                    a.curve = undefined;
-                }
+                if (a.y > C.FIELD_H + 20 || a.x < -20 || a.x > C.FIELD_W + 20) a.dead = true;
                 continue;
             }
             if (a.flight === 'seeker' && a.seekT > 0) {

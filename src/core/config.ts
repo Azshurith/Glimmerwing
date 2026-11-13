@@ -285,15 +285,15 @@ export const FIREBALL_BACK_RAMP = 0.3;
 export const FIREBALL_FLASH = 0.3;
 /** Positions kept for a Reverse's glowing trail. */
 export const FIREBALL_TAIL = 10;
-/** Fever fireballs reach the rival this much sooner (a share of TRANSIT_TIME). */
-export const FEVER_TRANSIT = 0.6;
+/** Fever fireballs come many at a time, so each falls at this share of the normal speed. */
+export const FEVER_FIREBALL_SPEED = 0.7;
 export const SEEK_SLIDE = 170; // how fast it slides across while lining up
 
 export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '27'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '28'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout
