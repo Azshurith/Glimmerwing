@@ -53,9 +53,16 @@ export class Renderer {
     /** Where the tall view's top band (rival's meadow and console) sits and how much it shrinks; Game sets it. */
     tallBand: Placement = { x: 0, y: 0, s: 1 };
 
+    /** The side-by-side view's width, fitted by the page to a landscape screen's shape (VIEW_W to WIDE_W_MAX). */
+    wideW: number = C.VIEW_W;
+
     /** Width of the view in view units, for the current layout. */
     get viewW(): number {
-        return this.layout === 'tall' ? C.TALL_W : C.VIEW_W;
+        return this.layout === 'tall' ? C.TALL_W : this.wideW;
+    }
+    /** How far the game sits in from the left edge of a widened side-by-side view (its margin on each side). */
+    get viewX(): number {
+        return this.layout === 'tall' ? 0 : (this.wideW - C.VIEW_W) / 2;
     }
     /** Height of the view in view units, for the current layout. */
     get viewH(): number {
@@ -95,7 +102,18 @@ export class Renderer {
         ctx.setTransform(canvas.width / w, 0, 0, canvas.height / h, 0, 0);
         ctx.fillStyle = '#100b24';
         ctx.fillRect(0, 0, w, h);
-        this.hudLayer.setView(w, h);
+        const ox = this.viewX;
+        if (ox > 0) {
+            // A widened view: dusky margins either side that fade into the game, then draw the game itself
+            // (always laid out VIEW_W wide) in the middle.
+            const g = ctx.createLinearGradient(0, 0, 0, h);
+            g.addColorStop(0, '#1d1440');
+            g.addColorStop(1, '#0b0819');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, w, h);
+            ctx.translate(ox, 0);
+        }
+        this.hudLayer.setView(w - 2 * ox, h);
     }
 
     /** Paint a meadow's sky and drifting motes. */

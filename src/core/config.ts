@@ -6,6 +6,11 @@ export const FIELD_H = 320;
 export const GAP = 24;
 export const VIEW_W = FIELD_W * 2 + GAP;
 export const VIEW_H = FIELD_H;
+/**
+ * On a landscape screen wider than the view, the side-by-side view widens to the screen's shape (up to
+ * WIDE_W_MAX) so it fills the screen edge to edge: the game stays centred, with the extra width as margins.
+ */
+export const WIDE_W_MAX = 760;
 
 /**
  * The tall view, used while playing on a portrait screen (one player on the device):

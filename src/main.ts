@@ -10,7 +10,7 @@ const renderer = new Renderer(canvas);
 const input = new Input(canvas);
 const sound = new Sound();
 const game = new Game(input, renderer, sound);
-input.viewSize = () => ({ w: renderer.viewW, h: renderer.viewH });
+input.viewSize = () => ({ w: renderer.viewW, h: renderer.viewH, ox: renderer.viewX });
 // Browsers only start audio after a gesture.
 for (const ev of ['keydown', 'pointerdown', 'touchstart'] as const)
     window.addEventListener(ev, () => sound.unlock(), { passive: true });
@@ -48,6 +48,17 @@ function fit(): void {
                 ? vh - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
                 : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
         renderer.tallH = Math.max(C.TALL_H_MIN, Math.min(C.TALL_H_MAX, (C.TALL_W * availH) / Math.max(1, availW)));
+    }
+    // In landscape the side-by-side view widens to the screen's shape, so it fills the width edge to edge.
+    renderer.wideW = C.VIEW_W;
+    if (!renderer.portrait) {
+        const cs = getComputedStyle(stage);
+        const immersive = stage.classList.contains('immersive');
+        const availW = immersive ? vw - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) : stage.clientWidth,
+            availH = immersive
+                ? vh - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
+                : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
+        renderer.wideW = Math.max(C.VIEW_W, Math.min(C.WIDE_W_MAX, (C.VIEW_H * availW) / Math.max(1, availH)));
     }
     const RATIO = renderer.viewW / renderer.viewH;
     let w: number;
