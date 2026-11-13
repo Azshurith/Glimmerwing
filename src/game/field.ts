@@ -897,10 +897,13 @@ export class Field {
                 // Lock on to where the rival's fairy is right now: the Reverse crosses the screen to there.
                 a.curve = reverseCurve(a.x, a.y, this.rivalFairy.x, this.rivalFairy.y, this.rivalSide);
                 a.k = 0;
-                // One more reflection: it heads back faster than it came (capped), boosted by my Perfects.
-                const came = a.speed ?? a.plunge ?? C.FIREBALL_FALL_SPEED;
+                // One more reflection: a set speed for how many times it's been shot back (SPEED_REVERSE more each
+                // time, whatever speed the Normal had), boosted by my Perfects and capped.
                 a.reflects = (a.reflects ?? 0) + 1;
-                a.speed = Math.min(C.FIREBALL_MAX_SPEED, came * C.SPEED_REVERSE * this.perfectBoost);
+                a.speed = Math.min(
+                    C.FIREBALL_MAX_SPEED,
+                    C.FIREBALL_FALL_SPEED * C.fireballSpeedMul(a.reflects, this.perfectBoost),
+                );
                 // Ease up to that speed from a fraction of it.
                 a.t = a.speed * C.FIREBALL_BACK_START;
                 a.tail = [a.x, a.y];
