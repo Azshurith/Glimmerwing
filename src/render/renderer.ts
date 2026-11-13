@@ -53,6 +53,12 @@ export class Renderer {
     /** Where the tall view's top band (rival's meadow and console) sits and how much it shrinks; Game sets it. */
     tallBand: Placement = { x: 0, y: 0, s: 1 };
 
+    /**
+     * The meadow width that would make the side-by-side view fill the screen, worked out by the page from a
+     * landscape screen's shape (FIELD_W_BASE on an upright or narrower one); Game plays a local round at it.
+     */
+    fieldWidthToFill: number = C.FIELD_W_BASE;
+
     /** Width of the view in view units, for the current layout. */
     get viewW(): number {
         return this.layout === 'tall' ? C.TALL_W : C.VIEW_W;
@@ -109,7 +115,8 @@ export class Renderer {
         // Drifting fireflies in the background.
         for (const m of this.motes) {
             const y = (m.y - time * 6 * m.s + C.FIELD_H * 10) % C.FIELD_H;
-            const x = m.x + Math.sin(time * 0.8 + m.p) * 6;
+            // Spread across however wide the meadow is this round.
+            const x = (m.x * C.FIELD_W) / C.FIELD_W_BASE + Math.sin(time * 0.8 + m.p) * 6;
             ctx.globalAlpha = 0.25 + 0.25 * Math.sin(time * 2 + m.p);
             ctx.fillStyle = '#e9ff9a';
             ctx.beginPath();

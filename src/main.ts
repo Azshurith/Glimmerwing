@@ -49,6 +49,17 @@ function fit(): void {
                 : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
         renderer.tallH = Math.max(C.TALL_H_MIN, Math.min(C.TALL_H_MAX, (C.TALL_W * availH) / Math.max(1, availW)));
     }
+    // On a wide landscape screen, the meadow width that would fill it (used from the next local round on).
+    {
+        const cs = getComputedStyle(stage);
+        const immersive = stage.classList.contains('immersive');
+        const availW = immersive ? vw - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) : stage.clientWidth,
+            availH = immersive
+                ? vh - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
+                : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
+        const fill = ((C.VIEW_H * availW) / Math.max(1, availH) - C.GAP) / 2;
+        renderer.fieldWidthToFill = renderer.portrait ? C.FIELD_W_BASE : Math.floor(fill);
+    }
     const RATIO = renderer.viewW / renderer.viewH;
     let w: number;
     if (stage.classList.contains('immersive')) {
@@ -163,6 +174,8 @@ let shownMode = '',
     shownPhase = '',
     shownLayout = '',
     shownTouch: boolean | null = null;
+/** The view width the page was last fitted to (it changes when a round plays in wider meadows). */
+let shownViewW = 0;
 /** Keeps the page's touch layer in step with the game: which buttons show, and what the top one does. */
 function syncPage(): void {
     if (soundBtn && sound.muted !== shownMuted) {
@@ -171,8 +184,9 @@ function syncPage(): void {
         soundBtn.setAttribute('aria-pressed', String(!shownMuted));
     }
     // The layout changes with the phase and the orientation: refit to its shape.
-    if (renderer.layout !== shownLayout) {
+    if (renderer.layout !== shownLayout || renderer.viewW !== shownViewW) {
         shownLayout = screenEl.dataset.layout = renderer.layout;
+        shownViewW = renderer.viewW;
         fit();
     }
     if (input.touchActive !== shownTouch) {

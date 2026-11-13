@@ -17,7 +17,8 @@ import type {
     Vec,
 } from '@/types';
 
-const W = C.FIELD_W,
+/** The meadow's width (it can change from round to round, see setFieldWidth) and height. */
+const fieldW = () => C.FIELD_W,
     H = C.FIELD_H;
 
 /** Where formations may sit: clear below the HUD strip, and well above the fairy's usual ground. */
@@ -253,12 +254,12 @@ export function rollFormation(r: Rng, pressure: number, prev: FormationShape | n
     // Keep the whole shape (and anything it morphs into, or turns through) inside the meadow.
     const spin = move === 'orbit';
     const left = m + (spin ? ext.rad : -ext.l),
-        right = W - m - (spin ? ext.rad : ext.r),
+        right = fieldW() - m - (spin ? ext.rad : ext.r),
         top = TOP + (spin ? ext.rad : -ext.u),
         bottom = BOTTOM - (spin ? ext.rad : ext.d);
     const cxRoll = r.next(),
         cyRoll = r.next();
-    const cx = right > left ? left + (right - left) * (0.25 + cxRoll * 0.5) : W / 2;
+    const cx = right > left ? left + (right - left) * (0.25 + cxRoll * 0.5) : fieldW() / 2;
     const cy = bottom > top ? top + (bottom - top) * (0.15 + cyRoll * 0.45) : (TOP + BOTTOM) / 2;
     const reachX = Math.max(0, Math.min(cx - left, right - cx, 46));
     const reachY = Math.max(0, Math.min(cy - top, bottom - cy, 26));
@@ -409,23 +410,29 @@ function entryCurve(g: Formation, i: number, to: Vec): { from: Vec; via: Vec } {
             return { from: { x: to.x, y: -OFF }, via: { x: to.x, y: to.y * 0.35 } };
         case 'swoopLeft':
             // In from the top-left corner, dipping below its place and rising into it.
-            return { from: { x: -OFF, y: H * 0.06 }, via: { x: W * 0.62, y: Math.min(BOTTOM + 30, to.y + H * 0.32) } };
+            return {
+                from: { x: -OFF, y: H * 0.06 },
+                via: { x: fieldW() * 0.62, y: Math.min(BOTTOM + 30, to.y + H * 0.32) },
+            };
         case 'swoopRight':
             return {
-                from: { x: W + OFF, y: H * 0.06 },
-                via: { x: W * 0.38, y: Math.min(BOTTOM + 30, to.y + H * 0.32) },
+                from: { x: fieldW() + OFF, y: H * 0.06 },
+                via: { x: fieldW() * 0.38, y: Math.min(BOTTOM + 30, to.y + H * 0.32) },
             };
         case 'sideLeft':
             return { from: { x: -OFF, y: to.y - 18 }, via: { x: to.x * 0.45, y: to.y - 44 } };
         case 'sideRight':
-            return { from: { x: W + OFF, y: to.y - 18 }, via: { x: W - (W - to.x) * 0.45, y: to.y - 44 } };
+            return {
+                from: { x: fieldW() + OFF, y: to.y - 18 },
+                via: { x: fieldW() - (fieldW() - to.x) * 0.45, y: to.y - 44 },
+            };
         case 'loop':
         default: {
             // From the far top corner, round in a wide loop under the formation.
-            const fromLeft = to.x > W / 2;
+            const fromLeft = to.x > fieldW() / 2;
             return {
-                from: { x: fromLeft ? -OFF : W + OFF, y: -OFF },
-                via: { x: W - to.x, y: Math.min(BOTTOM + 40, to.y + H * 0.42) },
+                from: { x: fromLeft ? -OFF : fieldW() + OFF, y: -OFF },
+                via: { x: fieldW() - to.x, y: Math.min(BOTTOM + 40, to.y + H * 0.42) },
             };
         }
     }
@@ -452,18 +459,18 @@ function exitCurve(g: Formation, i: number, from: Vec): { to: Vec; via: Vec } {
         case 'sides': {
             const left = g.slots[i].x < 0 || (g.slots[i].x === 0 && i % 2 === 0);
             return {
-                to: { x: left ? -OFF - 10 : W + OFF + 10, y: from.y - 40 },
+                to: { x: left ? -OFF - 10 : fieldW() + OFF + 10, y: from.y - 40 },
                 via: { x: from.x + (left ? -24 : 24), y: from.y + 24 },
             };
         }
         case 'left':
             return { to: { x: -OFF - 10, y: from.y + 34 }, via: { x: from.x, y: from.y + 34 } };
         case 'right':
-            return { to: { x: W + OFF + 10, y: from.y + 34 }, via: { x: from.x, y: from.y + 34 } };
+            return { to: { x: fieldW() + OFF + 10, y: from.y + 34 }, via: { x: from.x, y: from.y + 34 } };
         case 'dive':
             // A short rise, then down past the fairy and out the bottom.
             return {
-                to: { x: from.x + (from.x < W / 2 ? 46 : -46), y: H + OFF + 10 },
+                to: { x: from.x + (from.x < fieldW() / 2 ? 46 : -46), y: H + OFF + 10 },
                 via: { x: from.x, y: from.y - 34 },
             };
         case 'scatter':
@@ -473,9 +480,9 @@ function exitCurve(g: Formation, i: number, from: Vec): { to: Vec; via: Vec } {
             const ux = d > 1 ? g.slots[i].x / d : i % 2 ? -1 : 1,
                 uy = d > 1 ? g.slots[i].y / d : -1;
             // Always well past a side wall, so nobody vanishes on screen when the flight ends.
-            const side = Math.abs(ux) > 0.2 ? Math.sign(ux) : from.x < W / 2 ? -1 : 1;
+            const side = Math.abs(ux) > 0.2 ? Math.sign(ux) : from.x < fieldW() / 2 ? -1 : 1;
             return {
-                to: { x: side < 0 ? -OFF - 10 : W + OFF + 10, y: from.y + uy * (H * 0.6) - 60 },
+                to: { x: side < 0 ? -OFF - 10 : fieldW() + OFF + 10, y: from.y + uy * (H * 0.6) - 60 },
                 via: { x: from.x - ux * 14, y: from.y - uy * 14 },
             };
         }

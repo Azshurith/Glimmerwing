@@ -1,11 +1,25 @@
 // Tuning constants for Trench Duel. All distances are in field pixels,
 // all times in seconds.
 
-export const FIELD_W = 240;
+/**
+ * A meadow's width. It's FIELD_W_BASE, except that a local match on a wide landscape screen plays in wider meadows
+ * (up to FIELD_W_MAX) so the side-by-side view fills the screen: Game sets it with setFieldWidth at the start of each
+ * round. Online play, the menus and the tall layout always use FIELD_W_BASE.
+ */
+export let FIELD_W = 240;
+export const FIELD_W_BASE = 240,
+    FIELD_W_MAX = 380;
 export const FIELD_H = 320;
 export const GAP = 24;
-export const VIEW_W = FIELD_W * 2 + GAP;
+/** The side-by-side view: both meadows and the console between them. */
+export let VIEW_W = FIELD_W * 2 + GAP;
 export const VIEW_H = FIELD_H;
+
+/** Set the meadows' width for the coming round (and the side-by-side view's width with it). */
+export function setFieldWidth(w: number): void {
+    FIELD_W = Math.round(Math.max(FIELD_W_BASE, Math.min(FIELD_W_MAX, w)));
+    VIEW_W = FIELD_W * 2 + GAP;
+}
 
 /**
  * The tall view, used while playing on a portrait screen (one player on the device):
@@ -13,7 +27,7 @@ export const VIEW_H = FIELD_H;
  * all gestures on the meadow, so nothing sits under it), and the rival's at half size at the
  * top beside a compact console.
  */
-export const TALL_W = FIELD_W + 24;
+export const TALL_W = FIELD_W_BASE + 24;
 /** Height of the band above your meadow that holds the rival's meadow and the console. */
 export const TALL_TOP = 172;
 /** Room the title and select screens are designed for below TALL_TOP + FIELD_H. */
@@ -22,7 +36,7 @@ export const TALL_STRIP = 56;
 export const TALL_H = TALL_TOP + FIELD_H + TALL_STRIP;
 export const TALL_H_MAX = 680;
 /** Your meadow's scale in the tall view: it spans the whole width. */
-export const TALL_OWN_S = TALL_W / FIELD_W;
+export const TALL_OWN_S = TALL_W / FIELD_W_BASE;
 /**
  * The tall view can be shorter than TALL_H, so a squatter phone screen is still filled. In a round the band above
  * your meadow (rival's meadow and console) shrinks, down to TALL_TOP_MIN; the title and select screens shrink as a
@@ -332,7 +346,7 @@ export const fireballTransitSpeed = (reflects: number, boost: number) =>
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '41'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '42'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout
