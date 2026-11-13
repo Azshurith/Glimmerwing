@@ -12,17 +12,30 @@ export const MEADOW_STEP = C.FIELD_W + C.GAP;
 const TURN_TOP = C.FIREBALL_TOP_Y;
 
 /**
+ * Where on the top line a fireball climbing from (x, y) bounces on its way to (fx, fy), all in the sender's
+ * units with the rival's meadow on `side`: near the middle of the screen, over the gap between the meadows. It
+ * starts from where a true reflection off the top line would send it at the target and pulls that most of the
+ * way to the middle (keeping FIREBALL_BOUNCE_SPREAD of the distance), never back behind where it set off.
+ */
+function bounceX(x: number, y: number, fx: number, fy: number, side: number): number {
+    // The target's mirror image above the top line; a true bounce is where the line to it crosses that line.
+    const k = (y - TURN_TOP) / (y - (2 * TURN_TOP - fy));
+    const reflect = x + (fx - x) * k;
+    const middle = side > 0 ? C.FIELD_W + C.GAP / 2 : -C.GAP / 2;
+    const bx = middle + (reflect - middle) * C.FIREBALL_BOUNCE_SPREAD;
+    return side > 0 ? Math.max(x, bx) : Math.min(x, bx);
+}
+
+/**
  * The path for a Reverse broken at (x, y) in this meadow, aimed at (tx, ty) in the rival's meadow on `side`
- * (+1 right, -1 left): diagonally up to TURN_TOP, bouncing off it at (cx, cy) where a true reflection sends it
- * at the target, then diagonally down to (x1, y1) and on. One broken at or above the top line bounces at once.
+ * (+1 right, -1 left): diagonally up to TURN_TOP, bouncing off it at (cx, cy) near the middle of the screen
+ * (bounceX), then diagonally down to (x1, y1) and on. One broken at or above the top line bounces at once.
  */
 export function reverseCurve(x: number, y: number, tx: number, ty: number, side: number): Curve {
     const x1 = tx + side * MEADOW_STEP,
         y1 = ty;
     if (y <= TURN_TOP) return { x0: x, y0: y, cx: x, cy: y, x1, y1 };
-    // The target's mirror image above the top line; the bounce is where the line to it crosses that line.
-    const k = (y - TURN_TOP) / (y - (2 * TURN_TOP - y1));
-    return { x0: x, y0: y, cx: x + (x1 - x) * k, cy: TURN_TOP, x1, y1 };
+    return { x0: x, y0: y, cx: bounceX(x, y, x1, y1, side), cy: TURN_TOP, x1, y1 };
 }
 
 /**
@@ -30,19 +43,21 @@ export function reverseCurve(x: number, y: number, tx: number, ty: number, side:
  * `side` (+1 right, -1 left). `points` is the part flown on this side, in the sender's meadow units, up to the
  * rival's near wall; `enter` is where it comes into the rival's meadow and which way it's heading there, in the
  * rival's units, with `turnX` where it turns straight down if it came in sliding.
- * - Close to the top (within FIREBALL_NEAR_TOP): straight across at its height (dipping first to FIREBALL_TOP_Y if it's
- *   above that), then down once over the fairy.
- * - Lower down: diagonally up to FIREBALL_TOP_Y, a bounce, and diagonally down at the fairy. The bounce is where
- *   a true reflection off the top border would send it at the fairy, kept inside the sender's meadow.
+ * - Close to the top (within FIREBALL_NEAR_TOP): straight across at its height (dipping first to FIREBALL_TOP_Y if
+ *   it's above that), then straight down once over the fairy.
+ * - Lower down and `straight`: straight up to FIREBALL_TOP_Y, straight across, then straight down over the fairy.
+ * - Lower down otherwise: diagonally up to FIREBALL_TOP_Y, a bounce near the middle of the screen (bounceX), and
+ *   diagonally down at the fairy.
  */
-export function normalRoute(x: number, y: number, side: number, tx: number, ty: number): NormalRoute {
+export function normalRoute(x: number, y: number, side: number, tx: number, ty: number, straight = false): NormalRoute {
     const y0 = y;
     const wall = side > 0 ? MEADOW_STEP : C.FIELD_W - MEADOW_STEP;
     const enterX = side > 0 ? 0 : C.FIELD_W;
     const aimX = Math.min(C.FIELD_W - 12, Math.max(12, tx));
-    if (y <= C.FIREBALL_NEAR_TOP) {
-        // Kept below the HUD bar along the top, so it's never hidden behind it.
-        y = Math.max(y, C.FIREBALL_TOP_Y);
+    if (straight || y <= C.FIREBALL_NEAR_TOP) {
+        // Along the top line, or at its own height if it's already that close to the top; kept below the HUD
+        // bar either way, so it's never hidden behind it.
+        y = y <= C.FIREBALL_NEAR_TOP ? Math.max(y, C.FIREBALL_TOP_Y) : C.FIREBALL_TOP_Y;
         return {
             points: [
                 { x, y: y0 },
@@ -53,13 +68,9 @@ export function normalRoute(x: number, y: number, side: number, tx: number, ty: 
         };
     }
     const top = C.FIREBALL_TOP_Y;
-    // The fairy in this meadow's units, and its mirror image above the top border.
-    const fx = side * MEADOW_STEP + aimX,
-        my = 2 * top - ty;
-    const k = (y - top) / (y - my);
-    let bx = x + (fx - x) * k;
-    const inner = side > 0 ? C.FIELD_W - C.FIREBALL_BOUNCE_WALL : C.FIREBALL_BOUNCE_WALL;
-    bx = side > 0 ? Math.max(x, Math.min(bx, inner)) : Math.min(x, Math.max(bx, inner));
+    // The fairy in this meadow's units, and where it bounces near the middle of the screen.
+    const fx = side * MEADOW_STEP + aimX;
+    const bx = bounceX(x, y, fx, ty, side);
     const dx = fx - bx,
         dy = ty - top;
     const len = Math.hypot(dx, dy) || 1;

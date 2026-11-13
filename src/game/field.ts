@@ -897,10 +897,13 @@ export class Field {
                 // Lock on to where the rival's fairy is right now: the Reverse crosses the screen to there.
                 a.curve = reverseCurve(a.x, a.y, this.rivalFairy.x, this.rivalFairy.y, this.rivalSide);
                 a.k = 0;
-                // One more reflection: it heads back faster than it came (capped), boosted by my Perfects.
-                const came = a.speed ?? a.plunge ?? C.FIREBALL_FALL_SPEED;
+                // One more reflection: a set speed for how many times it's been shot back (SPEED_REVERSE more each
+                // time, whatever speed the Normal had), boosted by my Perfects and capped.
                 a.reflects = (a.reflects ?? 0) + 1;
-                a.speed = Math.min(C.FIREBALL_MAX_SPEED, came * C.SPEED_REVERSE * this.perfectBoost);
+                a.speed = Math.min(
+                    C.FIREBALL_MAX_SPEED,
+                    C.FIREBALL_FALL_SPEED * C.fireballSpeedMul(a.reflects, this.perfectBoost),
+                );
                 // Ease up to that speed from a fraction of it.
                 a.t = a.speed * C.FIREBALL_BACK_START;
                 a.tail = [a.x, a.y];
@@ -979,9 +982,11 @@ export class Field {
         this.bursts = this.bursts.filter(b => b.age < C.BURST_LIFE);
     }
 
-    /** A Normal fireball's route from (x, y) to the rival's fairy, `aim` to one side (see normalRoute). */
+    /** A Normal fireball's route from (x, y) to the rival's fairy, `aim` to one side, picked at random (see normalRoute). */
     private routeFor(x: number, y: number, aim: number): { route: Point[]; enter: RouteEntry } {
-        const r = normalRoute(x, y, this.rivalSide, this.rivalFairy.x + aim, this.rivalFairy.y);
+        // Which way it goes is a coin toss (FIREBALL_STRAIGHT_CHANCE): the bounce, or up, across and straight down.
+        const straight = this.fxRng.next() < C.FIREBALL_STRAIGHT_CHANCE;
+        const r = normalRoute(x, y, this.rivalSide, this.rivalFairy.x + aim, this.rivalFairy.y, straight);
         return { route: r.points, enter: r.enter };
     }
 
