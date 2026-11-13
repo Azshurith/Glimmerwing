@@ -397,20 +397,28 @@ export class Field {
             return;
         }
         const fall = Math.min(C.FIREBALL_MAX_SPEED, C.FIREBALL_FALL_SPEED * mul);
-        // In right above where the fairy is now (the rest of a volley close on either side).
+        // In along the top border from the sender's side, then diagonally down at where the fairy is now (the rest
+        // of a volley close on either side), on a line it then keeps to: it doesn't follow her once it's in.
         const at = o.aim === undefined ? x : Math.min(C.FIELD_W - 12, Math.max(12, this.player.x + o.aim));
+        const ex = this.rivalSide < 0 ? C.FIREBALL_ENTRY_X : C.FIELD_W - C.FIREBALL_ENTRY_X;
+        const ey = Math.min(o.fromY, C.FIREBALL_TOP_Y);
+        const dist = Math.hypot(at - ex, this.player.y - ey) || 1;
+        const ux = (at - ex) / dist,
+            uy = (this.player.y - ey) / dist;
+        // Already moving, at no more than the speed it flew in at, so it doesn't stall where it comes in.
+        const v = Math.min(fall, C.fireballTransitSpeed(o.reflects ?? 0, o.boost ?? 1));
         this.attacks.push({
             ...base,
-            // In over the top edge already moving, at no more than the speed it rose out of the sender's
-            // meadow, so it doesn't stall where it comes in.
-            x: at,
-            y: C.FIREBALL_OUT_Y,
-            vx: 0,
-            vy: Math.min(fall, C.fireballTransitSpeed(o.reflects ?? 0, o.boost ?? 1)),
+            x: ex,
+            y: ey,
+            vx: ux * v,
+            vy: uy * v,
+            ux,
+            uy,
             flight: 'drop',
             seekT: 0,
             plunge: fall,
-            t: Math.min(fall, C.fireballTransitSpeed(o.reflects ?? 0, o.boost ?? 1)),
+            t: v,
             speed: fall,
         });
     }
@@ -999,6 +1007,7 @@ export class Field {
                     fromX: c.x + off,
                     fromY: c.y,
                     aim,
+                    side: this.rivalSide,
                     // One after another, not all at once: each a beat behind the last, so they come
                     // down as a staggered stream rather than a row at the same height.
                     stagger: i * C.FIREBALL_STAGGER,
@@ -1145,10 +1154,10 @@ export class Field {
             const slow = a.kind === 'star' && a.stall ? C.FIREBALL_HIT_SLOW : 1;
             if (a.stall) a.stall = Math.max(0, a.stall - dt);
             if (a.kind === 'star' && a.flight === 'drop') {
-                // Straight down from where it came in, faster and faster: a vertical line, never sideways.
+                // On down the line it came in on, faster and faster; it never turns toward the fairy.
                 a.t = Math.min(a.plunge, (a.t ?? C.FIREBALL_ENTER_SPEED) + C.FIREBALL_ACCEL * dt);
-                a.vx = 0;
-                a.vy = a.t * slow;
+                a.vx = (a.ux ?? 0) * a.t * slow;
+                a.vy = (a.uy ?? 1) * a.t * slow;
             }
             if (a.kind === 'star' && a.flight === 'cross' && a.curve) {
                 // A Reverse finishing its curve across the screen, onto where the fairy was when it broke, and

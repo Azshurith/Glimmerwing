@@ -24,7 +24,7 @@ import type {
 } from '@/types';
 import { CpuPilot } from './ai';
 import { Field } from './field';
-import { curveAt, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
+import { curveAt, normalRoute, routeAt, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 
 /** Seconds from an attack leaving one meadow to arriving in the other: its `stagger`, then its flight. */
@@ -32,8 +32,8 @@ const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
 
 /**
  * Seconds an attack is in flight between the meadows, once any `stagger` is over: a Reverse crossing the screen
- * takes as long as the stretch of its curve between the meadows needs at its speed; any other fireball rises out
- * of the sender's meadow at its transit speed and is then out of sight for FIREBALL_HIDDEN_TIME; everything
+ * takes as long as the stretch of its curve between the meadows needs at its speed; any other fireball flies its
+ * route (normalRoute) up to the top border and along it into the rival's meadow at its transit speed; everything
  * else takes
  * TRANSIT_TIME, an Extra Attack less (SPEED_EXTRA).
  */
@@ -43,11 +43,11 @@ const flightTime = (o: Outgoing) => {
         const kIn = enterAt(shiftCurve(o.curve, o.side ?? 1), k0);
         return Math.max(0.05, curveLength(o.curve, k0, kIn) / Math.max(40, o.speed ?? C.FIREBALL_FALL_SPEED));
     }
-    if (o.kind === 'star') return (o.fromY - C.FIREBALL_OUT_Y) / riseSpeed(o) + C.FIREBALL_HIDDEN_TIME;
+    if (o.kind === 'star') return normalRoute(o.fromX, o.fromY, o.side ?? 1).length / riseSpeed(o);
     return C.TRANSIT_TIME / (o.kind === 'imp' ? C.SPEED_EXTRA : C.SPEED_NORMAL);
 };
 
-/** How fast a fireball rises out of the sender's meadow (and then drops into the rival's). */
+/** How fast a Normal fireball flies its route between the meadows (and then on into the rival's). */
 const riseSpeed = (o: Outgoing) => C.fireballTransitSpeed(o.reflects ?? (o.level >= 2 ? 1 : 0), o.boost ?? 1);
 
 /** `ghost` transits are only drawn: online, the real attack is delivered on the rival's screen. */
@@ -733,16 +733,25 @@ export class Game {
                 continue;
             }
             if (tr.o.kind === 'star' && !tr.o.curve) {
-                // Straight up and out over the top of the sender's meadow; the rival's meadow then takes it.
+                // Up diagonally to the top border, then along it into the rival's meadow, which takes it from there.
                 const v = riseSpeed(tr.o);
-                const y = tr.o.fromY - (tr.t - wait) * v;
-                if (y < C.FIREBALL_OUT_Y) continue;
-                r.transitFireball(from.x + tr.o.fromX * from.s, from.y + y * from.s, from.s, this.time, 0, -v, tr.o, {
-                    x: from.x,
-                    y: from.y,
-                    w: C.FIELD_W * from.s,
-                    h: C.FIELD_H * from.s,
-                });
+                const route = normalRoute(tr.o.fromX, tr.o.fromY, tr.o.side ?? 1);
+                const p = routeAt(route, (tr.t - wait) * v);
+                // Side by side it crosses the gap in view; in the tall layout it stays inside the sender's meadow.
+                const clip =
+                    r.layout === 'wide'
+                        ? undefined
+                        : { x: from.x, y: from.y, w: C.FIELD_W * from.s, h: C.FIELD_H * from.s };
+                r.transitFireball(
+                    from.x + p.x * from.s,
+                    from.y + p.y * from.s,
+                    from.s,
+                    this.time,
+                    p.dx * v,
+                    p.dy * v,
+                    tr.o,
+                    clip,
+                );
                 continue;
             }
             const sx = from.x + tr.o.fromX * from.s,
