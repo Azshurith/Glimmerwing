@@ -370,10 +370,10 @@ export class Field {
     private receiveFireball(o: Outgoing, x: number): void {
         const size = Math.min(4, Math.max(1, o.size ?? 1));
         const reverse = o.level >= 2;
-        // Fever fireballs come thick and fast, so each one falls slower (FEVER_FIREBALL_SPEED).
+        // Fever fireballs come thick and fast, so each one falls slower, less so as the round goes on.
         const mul =
             C.fireballSpeedMul(o.reflects ?? (reverse ? 1 : 0), o.boost ?? 1) *
-            (!reverse && o.fever ? C.FEVER_FIREBALL_SPEED : 1);
+            (!reverse && o.fever ? C.feverSpeedAt(this.time) : 1);
         const base = {
             kind: 'star' as const,
             level: o.level,
