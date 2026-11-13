@@ -1061,10 +1061,9 @@ export class Field {
         const cx = r.range(70, C.FIELD_W - 70);
         for (let row = 0; row < 3; row++) {
             for (let col = 0; col < 5; col++) {
-                // They burst into being just under the HUD strip, never drifting in from behind it.
+                // They drift down into the meadow from behind the HUD strip, row after row.
                 const x = cx + (col - 2) * 20 + (row % 2) * 10,
-                    y = C.CRITTER_TOP + row * 18;
-                this.spray(x, y, 3, '#ffd6ec');
+                    y = -16 - row * 18;
                 this.puffs.push({
                     x,
                     y,

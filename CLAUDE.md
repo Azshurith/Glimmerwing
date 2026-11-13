@@ -51,7 +51,7 @@ Do each feature on its own branch (`feature/<name>` or `fix/<name>`) and open a 
 **Data and tuning.**
 - Every tuning number is in [src/core/config.ts](src/core/config.ts), imported as `* as C`.
 - The fairy roster, stats, unlocks and per-fairy attacks/bombs are in [src/data/characters.ts](src/data/characters.ts).
-- Critter formations are in [src/game/waves.ts](src/game/waves.ts) (no critter ever flies above `CRITTER_TOP`, under the HUD strip: entries and exits use the side walls): each wave is a seeded `FormationSpec` (shape, entry, group movement, optional re-form, exit) that flies in from off-screen with staggered members, holds its shape while moving as a group, then flies out together. Positions are in meadow units, so formations look the same at every screen size.
+- Critter formations are in [src/game/waves.ts](src/game/waves.ts) (members glide in from above, behind the HUD strip, but a formation always sits below `CRITTER_TOP` once it's in; fireballs never start above `FIREBALL_TOP_Y`): each wave is a seeded `FormationSpec` (shape, entry, group movement, optional re-form, exit) that flies in from off-screen with staggered members, holds its shape while moving as a group, then flies out together. Positions are in meadow units, so formations look the same at every screen size.
 - Saved progress uses localStorage, in [src/game/progress.ts](src/game/progress.ts).
 
 **Audio.** [src/audio/sound.ts](src/audio/sound.ts) synthesizes every effect with WebAudio; there are no audio files. Audio starts only after the first user gesture (`sound.unlock()`).
