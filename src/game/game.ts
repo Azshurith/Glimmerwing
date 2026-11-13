@@ -32,9 +32,9 @@ const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
 
 /**
  * Seconds an attack is in flight between the meadows, once any `stagger` is over: a Reverse crossing the screen
- * takes as long as the stretch of its curve between the meadows needs at its speed; a Fever fireball flies
- * at FEVER_TRANSIT_SPEED times its pace; other fireballs and Extra Attacks fly faster with reflections and Perfects
- * (SPEED_*, fireballSpeedMul).
+ * takes as long as the stretch of its curve between the meadows needs at its speed; any other fireball
+ * flies at FIREBALL_TRANSIT_SPEED, faster with reflections and Perfects (fireballSpeedMul) and slower in Fever
+ * (its pace); everything else takes TRANSIT_TIME, an Extra Attack less (SPEED_EXTRA).
  */
 const flightTime = (o: Outgoing) => {
     if (o.kind === 'star' && o.curve) {
@@ -42,19 +42,15 @@ const flightTime = (o: Outgoing) => {
         const kIn = enterAt(shiftCurve(o.curve, o.side ?? 1), k0);
         return Math.max(0.05, curveLength(o.curve, k0, kIn) / Math.max(40, o.speed ?? C.FIREBALL_FALL_SPEED));
     }
-    if (o.kind === 'star' && o.fever && o.level < 2) {
-        // Roughly from where it was sent, across into the other meadow and up to its top edge.
+    if (o.kind === 'star') {
+        // Roughly from where it was sent, across into the other meadow and up to its top edge, at about the
+        // speed it then falls (and never faster than FIREBALL_MAX_SPEED).
         const dist = Math.hypot(MEADOW_STEP, o.fromY + 10);
-        return dist / (C.FEVER_TRANSIT_SPEED * C.fireballSpeedMul(o.reflects ?? 0, o.boost ?? 1) * (o.pace ?? 1));
+        const mul = C.fireballSpeedMul(o.reflects ?? (o.level >= 2 ? 1 : 0), o.boost ?? 1);
+        const pace = o.fever && o.level < 2 ? (o.pace ?? 1) : 1;
+        return dist / Math.min(C.FIREBALL_MAX_SPEED, C.FIREBALL_TRANSIT_SPEED * mul * pace);
     }
-    return (
-        C.TRANSIT_TIME /
-        (o.kind === 'imp'
-            ? C.SPEED_EXTRA
-            : o.kind === 'star'
-              ? C.fireballSpeedMul(o.reflects ?? (o.level >= 2 ? 1 : 0), o.boost ?? 1)
-              : C.SPEED_NORMAL)
-    );
+    return C.TRANSIT_TIME / (o.kind === 'imp' ? C.SPEED_EXTRA : C.SPEED_NORMAL);
 };
 
 /** `ghost` transits are only drawn: online, the real attack is delivered on the rival's screen. */
