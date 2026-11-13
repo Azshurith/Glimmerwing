@@ -53,8 +53,8 @@ const LAYOUT = {
     wide: {
         W: C.VIEW_W,
         art: { x: 14, y: 40, w: 116, h: 206 },
-        demo: { x: 142, y: 43, w: 150 },
-        info: { x: 306, y: 52, w: 186 },
+        demo: { x: 340, y: 43, w: 150 },
+        info: { x: 146, y: 52, w: 180 },
         rowY: 276,
         r: 14,
     },
@@ -67,6 +67,25 @@ const LAYOUT = {
         r: 15,
     },
 } as const;
+
+/**
+ * The wide layout spread over a widened view: the portrait against the left edge (a little wider as the
+ * view grows), the demo against the right edge, and her stats and skills in the space between (centred in it once it's wider than they need).
+ */
+function spread(bleed: number): { art: Box; demo: { x: number; y: number; w: number }; info: Box1 } {
+    const L = LAYOUT.wide;
+    const art = { ...L.art, x: L.art.x - bleed, w: L.art.w + Math.min(44, bleed * 0.3) };
+    const demo = { ...L.demo, x: L.demo.x + bleed };
+    const x = art.x + art.w + 16,
+        room = demo.x - 14 - x,
+        w = Math.min(360, room);
+    return { art, demo, info: { x: x + (room - w) / 2, y: L.info.y, w } };
+}
+
+/** A box in design units. */
+type Box = { x: number; y: number; w: number; h: number };
+/** A column in design units: where it starts and how wide it is. */
+type Box1 = { x: number; y: number; w: number };
 
 /** Draws the live demo meadow at (`x`, `y`) and `scale`, in the screen's design units (see game/preview.ts). */
 export type DemoDraw = (x: number, y: number, scale: number) => void;
@@ -123,9 +142,10 @@ export class RosterScreen {
             locked = v.locked[v.index];
         ctx.save();
         ctx.translate(0, dy);
-        this.art(fy, locked, L.art, t);
-        this.demo(fy, locked, L.demo, v.caption, demo);
-        this.info(fy, locked, L.info, layout === 'tall', t);
+        const { art, demo: win, info } = layout === 'wide' ? spread(bleed) : L;
+        this.art(fy, locked, art, t);
+        this.demo(fy, locked, win, v.caption, demo);
+        this.info(fy, locked, info, layout === 'tall', t);
         ctx.restore();
         designMedallions(layout, dy).forEach((m, i) => this.medallion(FAIRIES[i], v.locked[i], m, i === v.index, t));
         ctx.textAlign = 'center';
@@ -276,7 +296,7 @@ export class RosterScreen {
             ['CHARGE', rate(1 / fy.charge, 2)],
             ['DODGE', rate(1 / fy.hitbox, 1 / 0.7)],
         ];
-        const colW = b.w / 2,
+        const colW = Math.min(b.w / 2, 150),
             step = Math.min(compact ? 13 : 16, (colW - 46) / 5),
             bar = step - 3;
         stats.forEach(([label, n], i) => {
