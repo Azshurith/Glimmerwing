@@ -99,7 +99,7 @@ export interface Puff {
     /** 1 for normal critters, larger for big ones. */
     size: number;
     path?: {
-        type: 'swoop' | 'sweep' | 'column' | 'rise';
+        type: 'swoop' | 'sweep' | 'column' | 'rise' | 'file' | 'slide';
         t: number;
         delay: number;
         dir: number;

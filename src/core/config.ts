@@ -154,7 +154,13 @@ export const COMET_SPEED = 230;
  * formation comes in as soon as the last one is popped or has left the
  * meadow, so clearing fast brings the swarm faster.
  */
-export const WAVE_GAP = 0.35; // beat between a wave clearing and the next arriving
+export const WAVE_GAP = 0.5; // beat between a wave clearing and the next arriving (TSS: about half a second)
+/** Some waves let the next one in early, so two groups share the meadow for a moment, as in TSS. */
+export const WAVE_OVERLAP_AFTER = 2.5;
+/** A file: critters in single file dropping straight down, spaced this far apart (meadow units). */
+export const FILE_SPACING = 46;
+/** A slide: a row that drops in to its lane, then slides across in lockstep, this far apart. */
+export const SLIDE_SPACING = 34;
 export const WAVE_MAX_WAIT = 12; // safety net only: a straggling wave can't stall the meadow longer than this
 
 /** Sudden death, part one: at this point every critter speeds up sharply. */
@@ -236,7 +242,7 @@ export const TRANSIT_TIME = 0.7;
 export const ROUNDS_TO_WIN = 2;
 
 /** Online play. */
-export const NET_VERSION = '15'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '16'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
 export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
 export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

@@ -12,6 +12,9 @@ const PATH_WEIGHTS: [WavePath, number, number][] = [
     ['sweep', 1.5, 2],
     ['column', 1, 1.5],
     ['rise', 0, 1],
+    // The two TSS staples: a single file dropping straight down, and a row sliding across.
+    ['file', 2.5, 2],
+    ['slide', 2.5, 2],
 ];
 
 /** Pick a formation path, weighted by pressure: more elaborate paths turn up more as a round goes on. */
@@ -47,7 +50,8 @@ export function rollWave(r: Rng, pressure: number): WaveSpec {
     const kindRoll = r.next(),
         bigRoll = r.next(),
         bubbleRoll = r.next(),
-        sideRoll = r.next();
+        sideRoll = r.next(),
+        overlapRoll = r.next();
     const cx = r.range(50, C.FIELD_W - 50);
     const lane = r.range(36, 110);
     const speed = r.range(26, 38) + pressure * 14;
@@ -67,6 +71,8 @@ export function rollWave(r: Rng, pressure: number): WaveSpec {
     if (kind === 'beetle') count = Math.max(3, count - 2);
     if (big) count = Math.max(3, Math.ceil(count / 2));
     if (path === 'rise') count = Math.min(count, 5);
+    if (path === 'file') count = 6 + Math.floor(pressure * 3) + (count > 5 ? 1 : 0);
+    if (path === 'slide') count = Math.min(6, 4 + Math.floor(pressure * 2) + (count > 5 ? 1 : 0));
 
     let hp = hps.slice(0, count);
     if (path === 'leader') hp = hp.map((_, i) => (i === 0 ? Math.max(3, hps[0] + 1) : 1));
@@ -75,5 +81,6 @@ export function rollWave(r: Rng, pressure: number): WaveSpec {
     if (kind === 'beetle') hp = hp.map(h => Math.min(h, 2));
     if (big) hp = hp.map(h => Math.min(5, h + 1));
 
-    return { path, kind, speed, side: sideRoll < 0.5 ? -1 : 1, big, count, hp, bubble, cx, lane };
+    const overlap = overlapRoll < 0.12 + pressure * 0.18;
+    return { path, kind, speed, side: sideRoll < 0.5 ? -1 : 1, big, count, hp, bubble, cx, lane, overlap };
 }

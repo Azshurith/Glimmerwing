@@ -21,6 +21,11 @@ import type {
 } from '@/types';
 import { rollWave } from './waves';
 
+/** How fast a slide row crosses the meadow, in units a second. */
+const SLIDE_SPEED = 46;
+/** How fast a file drops: brisk, as in TSS, where the column reaches the fairy in under two seconds. */
+const fileSpeed = (speed: number) => 70 + (speed - 26) * 2.5;
+
 /** Which bomb sound each bomb style plays (see Sound.play 'bomb'). */
 const BOMB_SOUND: Record<string, number> = { dash: 0, blast: 1, vortex: 2, fan: 3, beam: 4, hole: 5 };
 
@@ -101,6 +106,8 @@ export class Field {
     private spawnT = 1.2;
     private waveId = 0;
     private waveT = 0;
+    /** Whether the current wave lets the next one in before it's cleared (see WAVE_OVERLAP_AFTER). */
+    private waveOverlap = false;
     private surged = false;
     private chains = new Map<number, ChainInfo>();
     private nextChain = 1;
@@ -547,8 +554,8 @@ export class Field {
         // Formation flow: the next wave waits until every member of the current one
         // has been popped or has left the meadow, then follows after a short beat.
         this.waveT += dt;
-        const holding =
-            this.waveId > 0 && this.waveT < C.WAVE_MAX_WAIT && this.puffs.some(j => j.wave === this.waveId && !j.dead);
+        const wait = this.waveOverlap ? C.WAVE_OVERLAP_AFTER : C.WAVE_MAX_WAIT;
+        const holding = this.waveId > 0 && this.waveT < wait && this.puffs.some(j => j.wave === this.waveId && !j.dead);
         if (holding) {
             this.spawnT = C.WAVE_GAP;
             return;
@@ -564,6 +571,7 @@ export class Field {
         this.waveId++;
         this.waveT = 0;
         const w = rollWave(r, pressure);
+        this.waveOverlap = w.overlap;
         const firstNew = this.puffs.length;
         const n = w.count;
         const size = w.big ? 1.5 : 1;
@@ -598,8 +606,10 @@ export class Field {
                     } else y = -40;
                     break;
             }
-            const phase = (i * 1.7 + w.cx) % 6.28;
-            let vx = ((i * 37) % 16) - 8,
+            // A formation moves in lockstep (TSS): every member shares the wobble and the drift,
+            // so the group keeps its even spacing and one burst can carry through it.
+            const phase = w.cx % 6.28;
+            let vx = ((w.cx * 37) % 16) - 8,
                 vy = w.speed,
                 shell = w.bubble ? 1 : 0;
             if (w.kind === 'beetle') {
@@ -632,6 +642,26 @@ export class Field {
                 case 'rise':
                     path = { type: 'rise', t: 0, delay: 0.9 + i * 0.4, dir: w.side, ox: 0, oy: 0 };
                     break;
+                case 'file': {
+                    // Single file down one lane, evenly spaced: each member a fixed beat behind the last.
+                    const lane = Math.min(C.FIELD_W - 30, Math.max(30, w.cx));
+                    const v = fileSpeed(w.speed);
+                    path = { type: 'file', t: 0, delay: (i * C.FILE_SPACING * size) / v, dir: v, ox: lane, oy: 0 };
+                    break;
+                }
+                case 'slide': {
+                    // A row centred away from the side it slides toward, so it crosses the meadow.
+                    const half = ((n - 1) * C.SLIDE_SPACING * size) / 2;
+                    const lo = half + 16,
+                        hi = C.FIELD_W - half - 16;
+                    const centre = Math.min(
+                        hi,
+                        Math.max(lo, w.side > 0 ? lo + (w.cx - 50) * 0.3 : hi - (w.cx - 50) * 0.3),
+                    );
+                    const ox = centre - half + i * C.SLIDE_SPACING * size;
+                    path = { type: 'slide', t: 0, delay: 0, dir: w.side, ox, oy: 50 + (w.lane - 36) * 0.6 };
+                    break;
+                }
             }
             if (path) {
                 x = -100;
@@ -688,6 +718,24 @@ export class Field {
             j.x = (P.dir > 0 ? -12 : W + 12) + P.dir * 48 * tt;
             j.y = P.oy + 6 * tt;
             if (j.x < -20 || j.x > W + 20) j.dead = true;
+        } else if (P.type === 'file') {
+            // Straight down at an even speed (P.dir holds the speed), out the bottom.
+            j.x = P.ox;
+            j.y = -14 + P.dir * tt;
+            if (j.y > C.FIELD_H + 20) j.dead = true;
+        } else if (P.type === 'slide') {
+            // The row drops in together to its lane, then slides across in lockstep, sinking a little.
+            const IN = 0.8;
+            if (tt < IN) {
+                const k = tt / IN;
+                j.x = P.ox;
+                j.y = -14 + (P.oy + 14) * (1 - (1 - k) * (1 - k));
+            } else {
+                const s = tt - IN;
+                j.x = P.ox + P.dir * SLIDE_SPEED * s;
+                j.y = P.oy + 5 * s;
+                if (j.x < -20 || j.x > C.FIELD_W + 20) j.dead = true;
+            }
         } else if (P.type === 'rise') {
             // The sneaky one: climbs up from a bottom corner, across the fairy's level, and out the top.
             const T = 6,
@@ -724,7 +772,13 @@ export class Field {
                 j.y += j.vy * (0.75 + 0.25 * Math.sin(j.phase * 0.5)) * dt;
             }
             if (j.kind !== 'spinner' && (j.x < 10 || j.x > C.FIELD_W - 10)) {
-                j.vx *= -1;
+                // Beetles ricochet alone; a drifting formation turns as one, so it keeps its spacing.
+                const dir = j.x < 10 ? 1 : -1;
+                if (j.kind === 'puff' && j.wave)
+                    for (const o of this.puffs) {
+                        if (o.wave === j.wave && !o.path && o.kind === 'puff') o.vx = dir * Math.abs(o.vx);
+                    }
+                else j.vx *= -1;
                 j.x = Math.min(C.FIELD_W - 10, Math.max(10, j.x));
             }
             if (j.y > C.FIELD_H + 20) j.dead = true;

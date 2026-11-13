@@ -4,7 +4,7 @@ import type { CritterKind } from './game';
  * Every wave is described by one of these, so new formations can be added as
  * data. `rollWave` picks one from the shared seed, so both meadows match.
  */
-export type WavePath = 'arc' | 'string' | 'ring' | 'leader' | 'swoop' | 'sweep' | 'column' | 'rise';
+export type WavePath = 'arc' | 'string' | 'ring' | 'leader' | 'swoop' | 'sweep' | 'column' | 'rise' | 'file' | 'slide';
 
 /** One wave of critters: path, kind, speed, entry side, size and count. */
 export interface WaveSpec {
@@ -24,4 +24,6 @@ export interface WaveSpec {
     cx: number;
     /** Height of a sweeping line. */
     lane: number;
+    /** The next wave doesn't wait for this one to clear: it follows after WAVE_OVERLAP_AFTER. */
+    overlap: boolean;
 }
