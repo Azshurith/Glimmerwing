@@ -1,26 +1,28 @@
 // The path a Reverse fireball flies across the screen, from the meadow it was broken in to the rival who
-// sent it: up and toward the rival's meadow, a smooth turn, then down onto where the rival's fairy was when
-// it broke. It's one quadratic curve in the sender's meadow units, with the rival's meadow lying `side`
-// meadows over (FIELD_W + GAP to the right, or to the left), as the two meadows sit side by side on screen.
+// sent it: up and toward the rival's meadow, a smooth turn right up at the top line under the HUD bar, then
+// down onto where the rival's fairy was when it broke. It's one quadratic curve in the sender's meadow units,
+// with the rival's meadow lying `side` meadows over (FIELD_W + GAP to the right, or to the left), as the two
+// meadows sit side by side on screen.
 // Every point of it stays inside the visible play area: below the top edge, between the outer walls.
 import * as C from '@/core/config';
 import type { Curve, NormalRoute, Point } from '@/types';
 
 /** How far the rival's meadow is from this one, in meadow units, as they sit side by side. */
 export const MEADOW_STEP = C.FIELD_W + C.GAP;
-/** Highest a Reverse's turn may reach (just under the HUD bar), and how high above its ends it sits. */
-const TURN_TOP = C.FIREBALL_TOP_Y,
-    TURN_RISE = 110;
+/** How high a Reverse's arc reaches: right up to the top line, just under the HUD bar. */
+const TURN_TOP = C.FIREBALL_TOP_Y;
 
 /**
  * The curve for a Reverse broken at (x, y) in this meadow, aimed at (tx, ty) in the rival's meadow on `side`
- * (+1 right, -1 left). The control point sits midway across and above both ends, but never above TURN_TOP.
+ * (+1 right, -1 left). Its control point sits midway across, placed so the arc's highest point is exactly
+ * TURN_TOP: it always climbs right up to the top before coming down onto the target. (For a quadratic with
+ * ends at heights a and b, the highest point is m when the control point is at m - sqrt((a - m)(b - m)).)
  */
 export function reverseCurve(x: number, y: number, tx: number, ty: number, side: number): Curve {
     const x1 = tx + side * MEADOW_STEP,
         y1 = ty;
     const cx = (x + x1) / 2,
-        cy = Math.max(TURN_TOP, Math.min(y, y1) - TURN_RISE);
+        cy = TURN_TOP - Math.sqrt(Math.max(0, y - TURN_TOP) * Math.max(0, y1 - TURN_TOP));
     return { x0: x, y0: y, cx, cy, x1, y1 };
 }
 
