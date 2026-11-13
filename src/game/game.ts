@@ -5,7 +5,7 @@ import type { Input } from '@/input/input';
 import type { Net } from '@/net/net';
 import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
-import { TITLE_BUTTONS } from '@/render/screens/title-screen';
+import { titleButtons } from '@/render/screens/title-screen';
 import { PALETTE, PLAYER_COLORS } from '@/render/theme';
 import type {
     Controls,
@@ -198,7 +198,7 @@ export class Game {
     /** The select screen's fairy medallions, with their hit areas for touch. */
     private cards(): SelectCard[] {
         return FAIRIES.map((fairy, i) => {
-            const m = medallionAt(i);
+            const m = medallionAt(i, this.r.layout);
             return { fairy, locked: !this.isUnlocked(fairy), x: m.x - m.r, y: m.y - m.r, w: m.r * 2, h: m.r * 2 };
         });
     }
@@ -428,7 +428,8 @@ export class Game {
             }
             // Arcade menu: up/down (keys, either player's stick) moves the cursor; any fire button
             // or Start plays it. 1/2/3 jump straight in, and tapping a bar plays that one.
-            const n = TITLE_BUTTONS.length;
+            const buttons = titleButtons(this.r.layout);
+            const n = buttons.length;
             const was = this.titleIndex;
             if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.titleIndex = (this.titleIndex + n - 1) % n;
             if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.titleIndex = (this.titleIndex + 1) % n;
@@ -436,7 +437,7 @@ export class Game {
             let pick = -1;
             const tap = this.input.tap;
             if (tap)
-                pick = TITLE_BUTTONS.findIndex(
+                pick = buttons.findIndex(
                     b => tap.x >= b.x - 10 && tap.x <= b.x + b.w && tap.y >= b.y && tap.y <= b.y + b.h,
                 );
             ['Digit1', 'Digit2', 'Digit3'].forEach((k, i) => {
@@ -447,7 +448,7 @@ export class Game {
             if (pick >= 0) {
                 this.titleIndex = pick;
                 this.ui('ok');
-                const mode = TITLE_BUTTONS[pick].mode;
+                const mode = buttons[pick].mode;
                 if (mode === 'online') this.onWantOnline?.();
                 else this.start(mode);
             }
@@ -591,10 +592,10 @@ export class Game {
         const r = this.r;
         // Prompts follow whatever the player last used: a touchscreen or keys/pad.
         const touch = this.input.touchActive;
-        // A portrait screen gets the tall layout while one player is in a round; menus and
-        // two players sharing the device keep the meadows side by side.
+        // A portrait screen gets the tall layout: the menus are redrawn for it, and so is a
+        // round with one player on the device. Two players sharing it keep the meadows side by side.
         const inRound = this.phase !== 'title' && this.phase !== 'select';
-        r.layout = r.portrait && inRound && this.mode !== 'versus' ? 'tall' : 'wide';
+        r.layout = r.portrait && !(inRound && this.mode === 'versus') ? 'tall' : 'wide';
         const at = r.layout === 'tall' ? TALL : WIDE;
         r.begin();
         const solo = this.mode !== 'versus';

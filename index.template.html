@@ -272,6 +272,18 @@
                 left: 18%;
                 transform: none;
             }
+            /* Tall menus: back (select) and exit sit in the top corners, beside the heading. */
+            .screen[data-layout='tall']:is([data-phase='select'], [data-phase='title']) .tb-menu {
+                top: 1%;
+                bottom: auto;
+                left: 1.5%;
+            }
+            .screen[data-layout='tall']:is([data-phase='select'], [data-phase='title']) .tb-exit {
+                top: 1%;
+                bottom: auto;
+                left: auto;
+                right: 1.5%;
+            }
             .rotate-hint {
                 display: none;
                 margin: 0;
@@ -439,8 +451,8 @@
             </div>
         </header>
         <p class="rotate-hint">
-            Play either way up: upright shows your meadow big with your rival's above it. Tap Fullscreen to fill the
-            screen.
+            Play either way up: upright, the menus stack and your meadow shows big with your rival's above it. Tap
+            Fullscreen to fill the screen.
         </p>
         <div class="stage" id="stage">
             <div class="screen" id="screen">

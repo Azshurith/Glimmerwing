@@ -341,11 +341,11 @@ export class Renderer {
 
     /** The arcade title screen (see title-screen.ts). */
     title(v: TitleView, time: number): void {
-        this.titleScreen.draw(v, time);
+        this.titleScreen.draw(v, time, this.layout);
     }
 
     /** The arcade character-select screen (see select-screen.ts). */
     select(v: SelectView, time: number): void {
-        this.selectScreen.draw(v, time);
+        this.selectScreen.draw(v, time, this.layout);
     }
 }

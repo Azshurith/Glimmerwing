@@ -1,13 +1,13 @@
 import * as C from '@/core/config';
 import { FAIRIES } from '@/data/characters';
-import type { Mode, TitleView } from '@/types';
+import type { Layout, Mode, TitleView } from '@/types';
 import { Backdrop } from '@/render/backdrop';
 import { arcadeText, slanted, sparkle } from '@/render/draw';
 import { drawSprite } from '@/render/sprites';
 import { ARCADE, FONT } from '@/render/theme';
 
-/** The title menu, top to bottom; also the tap targets (view units). */
-export const TITLE_BUTTONS: {
+/** A title menu entry and its tap target, in view units. */
+interface TitleButton {
     mode: Mode;
     label: string;
     sub: string;
@@ -15,13 +15,25 @@ export const TITLE_BUTTONS: {
     y: number;
     w: number;
     h: number;
-}[] = [
+}
+
+const MENU: { mode: Mode; label: string; sub: string }[] = [
     { mode: 'cpu', label: 'VS CPU', sub: 'Battle the computer' },
     { mode: 'versus', label: '2 PLAYERS', sub: 'Share a keyboard, pads or a tablet' },
     { mode: 'online', label: 'ONLINE', sub: 'Find a rival or invite a friend' },
-].map((b, i) => ({ ...b, mode: b.mode as Mode, x: 290, y: 106 + i * 44, w: 192, h: 36 }));
+];
+const WIDE_BUTTONS: TitleButton[] = MENU.map((b, i) => ({ ...b, x: 290, y: 106 + i * 44, w: 192, h: 36 }));
+/** In the tall layout the menu stacks under the hero and the logo. */
+const TALL_BUTTONS: TitleButton[] = MENU.map((b, i) => ({ ...b, x: 40, y: 346 + i * 50, w: 192, h: 40 }));
+
+/** The title menu, top to bottom, for a layout; also the tap targets (view units). */
+export function titleButtons(layout: Layout): TitleButton[] {
+    return layout === 'tall' ? TALL_BUTTONS : WIDE_BUTTONS;
+}
 
 const LOGO_X = 386;
+/** Where the tall layout puts things: the hero's height, the logo, the call to action. */
+const TALL = { heroH: 290, logoY: 300, ctaY: 514 } as const;
 
 /** The title screen: hero art, logo, menu and footer. */
 export class TitleScreen {
@@ -41,13 +53,53 @@ export class TitleScreen {
             });
     }
 
-    /** Draw the whole screen. */
-    draw(v: TitleView, t: number): void {
+    /** Draw the whole screen, side by side (wide) or stacked for a portrait screen (tall). */
+    draw(v: TitleView, t: number, layout: Layout = 'wide'): void {
+        if (layout === 'tall') {
+            const W = C.TALL_W,
+                H = C.TALL_H;
+            this.backdrop.draw(t, W / 2, 170, W, H);
+            this.heroArtTall(t);
+            this.logo(t, W / 2, TALL.logoY, 24);
+            this.menu(v, t, TALL_BUTTONS);
+            this.footer(v, t, W / 2, TALL.ctaY, W, H);
+            return;
+        }
         this.backdrop.draw(t, 150, 170);
         this.heroArt(t);
         this.logo(t);
-        this.menu(v, t);
+        this.menu(v, t, WIDE_BUTTONS);
         this.footer(v, t);
+    }
+
+    /** The tall layout's hero: the portrait centred across the top, glitter around her. */
+    private heroArtTall(t: number): void {
+        const ctx = this.ctx;
+        const hero = this.heroCanvas();
+        const H = TALL.heroH;
+        if (hero) {
+            const w = (hero.width / hero.height) * H;
+            // Her left edge isn't faded, so keep it off-screen; the right edge fades into the scene.
+            ctx.drawImage(hero, -14 + Math.sin(t * 0.5) * 3, Math.sin(t * 0.7) * 2, w, H);
+        } else {
+            const pip = FAIRIES[0];
+            if (pip.sprite)
+                drawSprite(
+                    ctx,
+                    pip.sprite,
+                    { anim: 'idle', frame: Math.floor(t * 6) % 4, alpha: 1 },
+                    C.TALL_W / 2,
+                    160 + Math.sin(t * 2) * 4,
+                    2.6,
+                );
+        }
+        ctx.fillStyle = '#ffe7a0';
+        for (const m of this.motes) {
+            const y = (m.y - t * 14 * m.s + H * 10) % H;
+            ctx.globalAlpha = 0.25 + 0.45 * Math.abs(Math.sin(t * 2 + m.p));
+            sparkle(ctx, m.x + Math.sin(t + m.p) * 6, y, 1.5 + m.s * 1.5);
+        }
+        ctx.globalAlpha = 1;
     }
 
     // ---- hero art -------------------------------------------------------------------
@@ -115,23 +167,25 @@ export class TitleScreen {
 
     // ---- logo -----------------------------------------------------------------------
 
-    /** Draw the GLIMMERWING logo. */
-    private logo(t: number): void {
+    /** Draw the GLIMMERWING logo centred on `cx` (size 30 in the wide layout). */
+    private logo(t: number, cx = LOGO_X, y0 = 58, size = 30): void {
         const ctx = this.ctx;
-        const y = 58 + Math.sin(t * 1.6) * 1.5;
+        const lx = cx,
+            k30 = size / 30;
+        const y = y0 + Math.sin(t * 1.6) * 1.5;
         ctx.save();
         ctx.shadowColor = 'rgba(255,190,90,0.55)';
         ctx.shadowBlur = 18;
-        arcadeText(ctx, 'GLIMMERWING', LOGO_X, y, 30, ['#fffbe0', '#ffd45c', '#ff8a2e'], 'center', 214);
+        arcadeText(ctx, 'GLIMMERWING', lx, y, size, ['#fffbe0', '#ffd45c', '#ff8a2e'], 'center', 214 * k30);
         ctx.restore();
         // A shine sweeping across the letters every few seconds.
         const k = ((t * 0.45) % 1.8) - 0.4;
         if (k > -0.2 && k < 1.2) {
             ctx.save();
-            ctx.font = `30px ${ARCADE}`;
+            ctx.font = `${size}px ${ARCADE}`;
             ctx.textAlign = 'center';
-            const x0 = LOGO_X - 107,
-                x1 = LOGO_X + 107;
+            const x0 = lx - 107 * k30,
+                x1 = lx + 107 * k30;
             const g = ctx.createLinearGradient(x0, 0, x1, 0);
             const c = Math.min(0.98, Math.max(0.02, k));
             g.addColorStop(Math.max(0, c - 0.08), 'rgba(255,255,255,0)');
@@ -139,7 +193,7 @@ export class TitleScreen {
             g.addColorStop(Math.min(1, c + 0.08), 'rgba(255,255,255,0)');
             ctx.globalCompositeOperation = 'lighter';
             ctx.fillStyle = g;
-            ctx.fillText('GLIMMERWING', LOGO_X, y, 214);
+            ctx.fillText('GLIMMERWING', lx, y, 214 * k30);
             ctx.restore();
         }
         // Twinkles at the logo's corners.
@@ -150,24 +204,24 @@ export class TitleScreen {
             [96, -30, 4.2],
         ] as const) {
             const s = Math.max(0, Math.sin(t * 2.4 + ph));
-            if (s > 0.05) sparkle(ctx, LOGO_X + dx, y + dy, 2 + 4 * s);
+            if (s > 0.05) sparkle(ctx, lx + dx * k30, y + dy * k30, 2 + 4 * s);
         }
         // Strapline between gold rules.
         ctx.font = `8px ${ARCADE}`;
         ctx.textAlign = 'center';
         ctx.fillStyle = '#e6d6ff';
-        ctx.fillText('A MEADOW VERSUS SHOOTER', LOGO_X, y + 22);
+        ctx.fillText('A MEADOW VERSUS SHOOTER', lx, y + 22);
         ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(LOGO_X - 104, y + 19, 30, 1);
-        ctx.fillRect(LOGO_X + 74, y + 19, 30, 1);
+        ctx.fillRect(lx - 104 * k30, y + 19, 30 * k30, 1);
+        ctx.fillRect(lx + 74 * k30, y + 19, 30 * k30, 1);
     }
 
     // ---- menu -----------------------------------------------------------------------
 
     /** Draw the menu buttons, highlighting the selected one. */
-    private menu(v: TitleView, t: number): void {
+    private menu(v: TitleView, t: number, buttons: TitleButton[]): void {
         const ctx = this.ctx;
-        TITLE_BUTTONS.forEach((b, i) => {
+        buttons.forEach((b, i) => {
             const on = i === v.index;
             const x = b.x - (on ? 8 : 0);
             const bar = slanted(x, b.y, b.w, b.h, 10);
@@ -225,17 +279,18 @@ export class TitleScreen {
     // ---- footer ---------------------------------------------------------------------
 
     /** Draw the blinking call to action, the controls line and this browser's record. */
-    private footer(v: TitleView, t: number): void {
+    private footer(v: TitleView, t: number, cx = LOGO_X, ctaY = 254, W: number = C.VIEW_W, H: number = C.VIEW_H): void {
         const ctx = this.ctx;
+        const tall = W !== C.VIEW_W;
         // Blinking call to action.
         const blink = Math.floor(t * 2.2) % 2 === 0;
         if (blink)
             arcadeText(
                 ctx,
                 v.touch ? 'TAP A MODE TO PLAY' : 'PRESS START',
-                LOGO_X,
-                254,
-                13,
+                cx,
+                ctaY,
+                tall ? 11 : 13,
                 ['#ffffff', '#fff3a0', '#ffb43c'],
                 'center',
             );
@@ -243,20 +298,20 @@ export class TitleScreen {
             ctx.font = `7px ${ARCADE}`;
             ctx.textAlign = 'center';
             ctx.fillStyle = 'rgba(203,188,245,0.75)';
-            ctx.fillText('UP / DOWN CHOOSE  ·  ENTER OR Z PLAYS  ·  1 2 3 QUICK START', LOGO_X, 270);
+            ctx.fillText('UP / DOWN CHOOSE  ·  ENTER OR Z PLAYS  ·  1 2 3 QUICK START', cx, ctaY + 16, W - 16);
         }
         // Bottom bar with this browser's record.
-        const g = ctx.createLinearGradient(0, C.VIEW_H - 20, 0, C.VIEW_H);
+        const g = ctx.createLinearGradient(0, H - 20, 0, H);
         g.addColorStop(0, 'rgba(10,6,28,0.6)');
         g.addColorStop(1, 'rgba(10,6,28,0.95)');
         ctx.fillStyle = g;
-        ctx.fillRect(0, C.VIEW_H - 20, C.VIEW_W, 20);
+        ctx.fillRect(0, H - 20, W, 20);
         ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(0, C.VIEW_H - 20, C.VIEW_W, 1);
-        ctx.font = `8px ${ARCADE}`;
+        ctx.fillRect(0, H - 20, W, 1);
+        ctx.font = `${tall ? 6.5 : 8}px ${ARCADE}`;
         ctx.fillStyle = '#cbbcf5';
         ctx.textAlign = 'center';
         const stats = [`FAIRIES  ${v.unlocked}/${v.total}`, `WINS  ${v.wins}`, `BEST CHAIN  ${v.bestChain}`];
-        stats.forEach((s, i) => ctx.fillText(s, C.VIEW_W * (0.2 + i * 0.3), C.VIEW_H - 7));
+        stats.forEach((s, i) => ctx.fillText(s, W * (0.18 + i * 0.32), H - 7));
     }
 }
