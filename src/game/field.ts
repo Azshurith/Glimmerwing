@@ -982,9 +982,11 @@ export class Field {
         this.bursts = this.bursts.filter(b => b.age < C.BURST_LIFE);
     }
 
-    /** A Normal fireball's route from (x, y) to the rival's fairy, `aim` to one side (see normalRoute). */
+    /** A Normal fireball's route from (x, y) to the rival's fairy, `aim` to one side, picked at random (see normalRoute). */
     private routeFor(x: number, y: number, aim: number): { route: Point[]; enter: RouteEntry } {
-        const r = normalRoute(x, y, this.rivalSide, this.rivalFairy.x + aim, this.rivalFairy.y);
+        // Which way it goes is a coin toss (FIREBALL_STRAIGHT_CHANCE): the bounce, or up, across and straight down.
+        const straight = this.fxRng.next() < C.FIREBALL_STRAIGHT_CHANCE;
+        const r = normalRoute(x, y, this.rivalSide, this.rivalFairy.x + aim, this.rivalFairy.y, straight);
         return { route: r.points, enter: r.enter };
     }
 

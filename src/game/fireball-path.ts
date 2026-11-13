@@ -43,19 +43,21 @@ export function reverseCurve(x: number, y: number, tx: number, ty: number, side:
  * `side` (+1 right, -1 left). `points` is the part flown on this side, in the sender's meadow units, up to the
  * rival's near wall; `enter` is where it comes into the rival's meadow and which way it's heading there, in the
  * rival's units, with `turnX` where it turns straight down if it came in sliding.
- * - Close to the top (within FIREBALL_NEAR_TOP): straight across at its height (dipping first to FIREBALL_TOP_Y if it's
- *   above that), then down once over the fairy.
- * - Lower down: diagonally up to FIREBALL_TOP_Y, a bounce near the middle of the screen (bounceX), and diagonally
- *   down at the fairy.
+ * - Close to the top (within FIREBALL_NEAR_TOP): straight across at its height (dipping first to FIREBALL_TOP_Y if
+ *   it's above that), then straight down once over the fairy.
+ * - Lower down and `straight`: straight up to FIREBALL_TOP_Y, straight across, then straight down over the fairy.
+ * - Lower down otherwise: diagonally up to FIREBALL_TOP_Y, a bounce near the middle of the screen (bounceX), and
+ *   diagonally down at the fairy.
  */
-export function normalRoute(x: number, y: number, side: number, tx: number, ty: number): NormalRoute {
+export function normalRoute(x: number, y: number, side: number, tx: number, ty: number, straight = false): NormalRoute {
     const y0 = y;
     const wall = side > 0 ? MEADOW_STEP : C.FIELD_W - MEADOW_STEP;
     const enterX = side > 0 ? 0 : C.FIELD_W;
     const aimX = Math.min(C.FIELD_W - 12, Math.max(12, tx));
-    if (y <= C.FIREBALL_NEAR_TOP) {
-        // Kept below the HUD bar along the top, so it's never hidden behind it.
-        y = Math.max(y, C.FIREBALL_TOP_Y);
+    if (straight || y <= C.FIREBALL_NEAR_TOP) {
+        // Along the top line, or at its own height if it's already that close to the top; kept below the HUD
+        // bar either way, so it's never hidden behind it.
+        y = y <= C.FIREBALL_NEAR_TOP ? Math.max(y, C.FIREBALL_TOP_Y) : C.FIREBALL_TOP_Y;
         return {
             points: [
                 { x, y: y0 },
