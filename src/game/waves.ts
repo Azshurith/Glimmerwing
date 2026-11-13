@@ -26,8 +26,8 @@ const TOP = 42,
     /** Off-screen distance members start from and leave to. */
     OFF = 26,
     /**
-     * The highest a member flies anywhere on screen (CRITTER_TOP), so nothing ever comes in from behind the HUD
-     * strip or leaves through it. Members come in and go out over the side walls instead.
+     * The highest a formation sits once it's in (CRITTER_TOP), clear of the HUD strip. Members still fly in from
+     * above, gliding down from behind the strip, and may leave back up through it.
      */
     LANE = C.CRITTER_TOP;
 /** How fast members fly in (meadow units a second, on average), and the longest a flight in may take. */
@@ -404,36 +404,27 @@ function slotAt(g: Formation, i: number, t: number, kind: CritterKind): Vec {
 function entryCurve(g: Formation, i: number, to: Vec): { from: Vec; via: Vec } {
     let e = g.spec.entry;
     if (e === 'split') e = g.slots[i].x < 0 || (g.slots[i].x === 0 && i % 2 === 0) ? 'swoopLeft' : 'swoopRight';
-    // The nearer side wall, for entries that would otherwise come down through the HUD strip.
-    const near = to.x < W / 2 ? -OFF : W + OFF;
     switch (e) {
         case 'drop':
-            // In along just under the HUD strip from the nearer side, then down into place.
-            return { from: { x: near, y: LANE }, via: { x: to.x, y: LANE } };
+            return { from: { x: to.x, y: -OFF }, via: { x: to.x, y: to.y * 0.35 } };
         case 'swoopLeft':
             // In from the top-left corner, dipping below its place and rising into it.
-            return { from: { x: -OFF, y: LANE }, via: { x: W * 0.62, y: Math.min(BOTTOM + 30, to.y + H * 0.32) } };
+            return { from: { x: -OFF, y: H * 0.06 }, via: { x: W * 0.62, y: Math.min(BOTTOM + 30, to.y + H * 0.32) } };
         case 'swoopRight':
             return {
-                from: { x: W + OFF, y: LANE },
+                from: { x: W + OFF, y: H * 0.06 },
                 via: { x: W * 0.38, y: Math.min(BOTTOM + 30, to.y + H * 0.32) },
             };
         case 'sideLeft':
-            return {
-                from: { x: -OFF, y: Math.max(LANE, to.y - 18) },
-                via: { x: to.x * 0.45, y: Math.max(LANE, to.y - 44) },
-            };
+            return { from: { x: -OFF, y: to.y - 18 }, via: { x: to.x * 0.45, y: to.y - 44 } };
         case 'sideRight':
-            return {
-                from: { x: W + OFF, y: Math.max(LANE, to.y - 18) },
-                via: { x: W - (W - to.x) * 0.45, y: Math.max(LANE, to.y - 44) },
-            };
+            return { from: { x: W + OFF, y: to.y - 18 }, via: { x: W - (W - to.x) * 0.45, y: to.y - 44 } };
         case 'loop':
         default: {
-            // From the far side, round in a wide loop under the formation.
+            // From the far top corner, round in a wide loop under the formation.
             const fromLeft = to.x > W / 2;
             return {
-                from: { x: fromLeft ? -OFF : W + OFF, y: LANE },
+                from: { x: fromLeft ? -OFF : W + OFF, y: -OFF },
                 via: { x: W - to.x, y: Math.min(BOTTOM + 40, to.y + H * 0.42) },
             };
         }
@@ -455,15 +446,13 @@ function entryTime(g: Formation, i: number): number {
 /** Where member `i` leaves to, off-screen, and the control point of its curve out, from `from`. */
 function exitCurve(g: Formation, i: number, from: Vec): { to: Vec; via: Vec } {
     const s = g.spec;
-    // Every way out keeps under the HUD strip: up and away means out over the nearer side wall.
-    const near = from.x < W / 2 ? -OFF - 10 : W + OFF + 10;
     switch (s.exit) {
         case 'up':
-            return { to: { x: near, y: LANE }, via: { x: from.x, y: LANE } };
+            return { to: { x: from.x, y: -OFF - 10 }, via: { x: from.x, y: from.y + 26 } };
         case 'sides': {
             const left = g.slots[i].x < 0 || (g.slots[i].x === 0 && i % 2 === 0);
             return {
-                to: { x: left ? -OFF - 10 : W + OFF + 10, y: Math.max(LANE, from.y - 40) },
+                to: { x: left ? -OFF - 10 : W + OFF + 10, y: from.y - 40 },
                 via: { x: from.x + (left ? -24 : 24), y: from.y + 24 },
             };
         }
@@ -475,19 +464,19 @@ function exitCurve(g: Formation, i: number, from: Vec): { to: Vec; via: Vec } {
             // A short rise, then down past the fairy and out the bottom.
             return {
                 to: { x: from.x + (from.x < W / 2 ? 46 : -46), y: H + OFF + 10 },
-                via: { x: from.x, y: Math.max(LANE, from.y - 34) },
+                via: { x: from.x, y: from.y - 34 },
             };
         case 'scatter':
         default: {
-            // Burst outward from the centre, out over the walls rather than the top.
+            // Burst outward from the centre.
             const d = Math.hypot(g.slots[i].x, g.slots[i].y) || 1;
             const ux = d > 1 ? g.slots[i].x / d : i % 2 ? -1 : 1,
                 uy = d > 1 ? g.slots[i].y / d : -1;
             // Always well past a side wall, so nobody vanishes on screen when the flight ends.
             const side = Math.abs(ux) > 0.2 ? Math.sign(ux) : from.x < W / 2 ? -1 : 1;
             return {
-                to: { x: side < 0 ? -OFF - 10 : W + OFF + 10, y: Math.max(LANE, from.y + uy * (H * 0.6) - 60) },
-                via: { x: from.x - ux * 14, y: Math.max(LANE, from.y - uy * 14) },
+                to: { x: side < 0 ? -OFF - 10 : W + OFF + 10, y: from.y + uy * (H * 0.6) - 60 },
+                via: { x: from.x - ux * 14, y: from.y - uy * 14 },
             };
         }
     }

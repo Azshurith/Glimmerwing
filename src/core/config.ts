@@ -314,7 +314,7 @@ export const TRANSIT_TIME = 0.7;
  */
 export const FIREBALL_TRANSIT_SPEED = 140;
 export const FIREBALL_TOP_Y = 40;
-/** The highest a critter flies on screen: just under the HUD strip (24 units deep), never behind it. */
+/** The highest a formation sits once it's in: just under the HUD strip (24 units deep). */
 export const CRITTER_TOP = 38;
 export const FIREBALL_NEAR_TOP = 70;
 export const FIREBALL_BOUNCE_WALL = 14;
