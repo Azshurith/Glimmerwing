@@ -45,7 +45,7 @@ function fit(): void {
             availH = immersive
                 ? vh - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
                 : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
-        renderer.tallH = Math.max(C.TALL_H, Math.min(C.TALL_H_MAX, (C.TALL_W * availH) / Math.max(1, availW)));
+        renderer.tallH = Math.max(renderer.tallMin, Math.min(C.TALL_H_MAX, (C.TALL_W * availH) / Math.max(1, availW)));
     }
     const RATIO = renderer.viewW / renderer.viewH;
     let w: number;
@@ -157,6 +157,7 @@ soundBtn?.addEventListener('click', () => {
     soundBtn.blur();
 });
 let shownMuted: boolean | null = null;
+let shownTallMin = 0;
 let shownMode = '',
     shownPhase = '',
     shownLayout = '',
@@ -169,8 +170,9 @@ function syncPage(): void {
         soundBtn.setAttribute('aria-pressed', String(!shownMuted));
     }
     // The layout changes with the phase and the orientation: refit to its shape.
-    if (renderer.layout !== shownLayout) {
+    if (renderer.layout !== shownLayout || renderer.tallMin !== shownTallMin) {
         shownLayout = screenEl.dataset.layout = renderer.layout;
+        shownTallMin = renderer.tallMin;
         fit();
     }
     if (input.touchActive !== shownTouch) {

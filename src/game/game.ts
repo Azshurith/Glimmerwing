@@ -46,19 +46,21 @@ const WIDE: readonly [Placement, Placement] = [
 ];
 /**
  * Where they sit in the tall layout: yours full width against the bottom edge, the rival's small at the top.
- * Whatever height is left above your meadow is shared evenly above and below the rival's meadow and the
- * console, so `top` is how far that band moves down.
+ * The band left above your meadow holds the rival's meadow and the console, designed TALL_TOP high: on a
+ * shorter screen the band shrinks to fit, on a longer one it stays centred in the spare height.
  */
-function tallPlacement(h: number): { at: readonly [Placement, Placement]; top: number } {
+function tallPlacement(h: number): { at: readonly [Placement, Placement]; band: Placement } {
     const s = C.TALL_OWN_S;
     const ownY = h - C.FIELD_H * s;
-    const top = Math.max(0, (ownY - C.TALL_TOP) / 2);
+    const k = Math.min(1, ownY / C.TALL_TOP);
+    const band = { x: (C.TALL_W * (1 - k)) / 2, y: Math.max(0, (ownY - C.TALL_TOP * k) / 2), s: k };
+    const R = C.TALL_RIVAL;
     return {
         at: [
             { x: 0, y: ownY, s },
-            { ...C.TALL_RIVAL, y: C.TALL_RIVAL.y + top },
+            { x: band.x + R.x * k, y: band.y + R.y * k, s: R.s * k },
         ],
-        top,
+        band,
     };
 }
 const IDLE: Controls = { left: false, right: false, up: false, down: false, fire: false };
@@ -611,9 +613,11 @@ export class Game {
         // round with one player on the device. Two players sharing it keep the meadows side by side.
         const inRound = this.phase !== 'title' && this.phase !== 'select';
         r.layout = r.portrait && !(inRound && this.mode === 'versus') ? 'tall' : 'wide';
+        // A round may squeeze the tall view shorter than the menus can (main.ts refits when this changes).
+        r.tallMin = inRound ? C.TALL_H_PLAY : C.TALL_H;
         const tall = r.layout === 'tall' ? tallPlacement(r.viewH) : null;
         const at = tall ? tall.at : WIDE;
-        r.tallTop = tall ? tall.top : 0;
+        if (tall) r.tallBand = tall.band;
         r.begin();
         const solo = this.mode !== 'versus';
         const tags: [HudTag, HudTag] = [

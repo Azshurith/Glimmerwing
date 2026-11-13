@@ -1,6 +1,16 @@
 import * as C from '@/core/config';
 import type { Field } from '@/game/field';
-import type { BannerView, ConsoleView, HudTag, Layer, Layout, SelectView, TitleView, WingShape } from '@/types';
+import type {
+    BannerView,
+    ConsoleView,
+    HudTag,
+    Layer,
+    Layout,
+    Placement,
+    SelectView,
+    TitleView,
+    WingShape,
+} from '@/types';
 
 import { drawImp, drawBramble, drawComet, drawStar } from './entities/attacks';
 import { drawBomb } from './entities/bombs';
@@ -30,8 +40,10 @@ export class Renderer {
     portrait = false;
     /** The tall view's height, stretched by the page to the screen's shape (at least TALL_H). */
     tallH: number = C.TALL_H;
-    /** How far the tall view's top band (rival's meadow and console) moves down to stay centred; Game sets it. */
-    tallTop = 0;
+    /** The shortest the tall view may be right now; Game sets it (rounds allow a squatter view than menus). */
+    tallMin: number = C.TALL_H;
+    /** Where the tall view's top band (rival's meadow and console) sits and how much it shrinks; Game sets it. */
+    tallBand: Placement = { x: 0, y: 0, s: 1 };
 
     /** Width of the view in view units, for the current layout. */
     get viewW(): number {
@@ -332,7 +344,12 @@ export class Renderer {
     console(v: ConsoleView, time: number): void {
         if (this.layout === 'tall') {
             const b = C.TALL_CONSOLE;
-            this.hudLayer.consoleCompact(v, time, b.x, b.y + this.tallTop, b.w, b.h);
+            const band = this.tallBand;
+            this.ctx.save();
+            this.ctx.translate(band.x, band.y);
+            this.ctx.scale(band.s, band.s);
+            this.hudLayer.consoleCompact(v, time, b.x, b.y, b.w, b.h);
+            this.ctx.restore();
             return;
         }
         this.hudLayer.console(v, time);
