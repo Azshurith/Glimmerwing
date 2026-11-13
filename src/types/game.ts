@@ -358,6 +358,8 @@ export interface Outgoing {
     size?: number;
     tint?: Tint;
     fever?: boolean;
+    /** For a Fever fireball: its speed as a share of normal, set when it's sent (feverSpeedAt). */
+    pace?: number;
 }
 
 /** Where a player's fairy is now, so a drag can move her relative to it. */

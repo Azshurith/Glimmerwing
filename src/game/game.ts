@@ -32,8 +32,9 @@ const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
 
 /**
  * Seconds an attack is in flight between the meadows, once any `stagger` is over: a Reverse crossing the screen
- * takes as long as the stretch of its curve between the meadows needs at its speed; other fireballs and Extra
- * Attacks fly faster with reflections and Perfects (SPEED_*, fireballSpeedMul).
+ * takes as long as the stretch of its curve between the meadows needs at its speed; a Fever fireball takes
+ * FEVER_TRANSIT_TIME at its pace; other fireballs and Extra Attacks fly faster with reflections and Perfects
+ * (SPEED_*, fireballSpeedMul).
  */
 const flightTime = (o: Outgoing) => {
     if (o.kind === 'star' && o.curve) {
@@ -41,6 +42,8 @@ const flightTime = (o: Outgoing) => {
         const kIn = enterAt(shiftCurve(o.curve, o.side ?? 1), k0);
         return Math.max(0.05, curveLength(o.curve, k0, kIn) / Math.max(40, o.speed ?? C.FIREBALL_FALL_SPEED));
     }
+    if (o.kind === 'star' && o.fever && o.level < 2)
+        return C.FEVER_TRANSIT_TIME / (C.fireballSpeedMul(o.reflects ?? 0, o.boost ?? 1) * (o.pace ?? 1));
     return (
         C.TRANSIT_TIME /
         (o.kind === 'imp'
