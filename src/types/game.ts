@@ -169,9 +169,13 @@ export interface Attack {
     tail?: number[];
     /** Times this fireball has been shot back (0 for a Normal, 1 for a Reverse...): each one speeds it up. */
     reflects?: number;
-    /** A Normal fireball's heading as it comes down at the fairy (a unit vector; straight down if unset). */
+    /**
+     * A Normal fireball's heading in the receiver's meadow (a unit vector; straight down if unset), and for one
+     * that came in sliding along the top, the x where it turns straight down.
+     */
     ux?: number;
     uy?: number;
+    turnX?: number;
     /** Seconds a fireball still stalls after a shot that didn't break it, and its hit flash. */
     stall?: number;
     hitT?: number;
@@ -351,6 +355,9 @@ export interface Outgoing {
     k?: number;
     side?: number;
     speed?: number;
+    /** A Normal fireball's route (normalRoute): what it flies on the sender's side, and how it comes in. */
+    route?: Point[];
+    enter?: RouteEntry;
     /** A Normal fireball comes in this far from the receiving fairy's x (0 for the first of a volley). */
     aim?: number;
     /** Seconds it waits before setting off between the meadows, so a volley comes down staggered. */
@@ -370,4 +377,25 @@ export interface Outgoing {
 export interface Pos {
     x: number;
     y: number;
+}
+
+/** A point in meadow units. */
+export interface Point {
+    x: number;
+    y: number;
+}
+
+/** Where a Normal fireball comes into the rival's meadow, which way it's heading, and where it turns down. */
+export interface RouteEntry {
+    x: number;
+    y: number;
+    ux: number;
+    uy: number;
+    turnX?: number;
+}
+
+/** A Normal fireball's route: the part on the sender's side, and how it comes into the rival's meadow. */
+export interface NormalRoute {
+    points: Point[];
+    enter: RouteEntry;
 }

@@ -15,12 +15,14 @@ import type {
     Outgoing,
     Particle,
     Player,
+    Point,
     Popup,
     Puff,
+    RouteEntry,
     Sfx,
     Shot,
 } from '@/types';
-import { curveAt, curveStep, enterAt, reverseCurve, shiftCurve } from './fireball-path';
+import { curveAt, curveStep, enterAt, normalRoute, reverseCurve, shiftCurve } from './fireball-path';
 import { leaving, memberAt, rollFormation, startFormation } from './waves';
 
 /** Which bomb sound each bomb style plays (see Sound.play 'bomb'). */
@@ -397,24 +399,21 @@ export class Field {
             return;
         }
         const fall = Math.min(C.FIREBALL_MAX_SPEED, C.FIREBALL_FALL_SPEED * mul);
-        // In along the top border from the sender's side, then diagonally down at where the fairy is now (the rest
-        // of a volley close on either side), on a line it then keeps to: it doesn't follow her once it's in.
+        // In from the sender's side along its route (see normalRoute), on a line it keeps to: it doesn't follow
+        // the fairy once it's in. Without one, straight down from right above her.
         const at = o.aim === undefined ? x : Math.min(C.FIELD_W - 12, Math.max(12, this.player.x + o.aim));
-        const ex = this.rivalSide < 0 ? C.FIREBALL_ENTRY_X : C.FIELD_W - C.FIREBALL_ENTRY_X;
-        const ey = Math.min(o.fromY, C.FIREBALL_TOP_Y);
-        const dist = Math.hypot(at - ex, this.player.y - ey) || 1;
-        const ux = (at - ex) / dist,
-            uy = (this.player.y - ey) / dist;
+        const e = o.enter ?? { x: at, y: 10, ux: 0, uy: 1 };
         // Already moving, at no more than the speed it flew in at, so it doesn't stall where it comes in.
         const v = Math.min(fall, C.fireballTransitSpeed(o.reflects ?? 0, o.boost ?? 1));
         this.attacks.push({
             ...base,
-            x: ex,
-            y: ey,
-            vx: ux * v,
-            vy: uy * v,
-            ux,
-            uy,
+            x: e.x,
+            y: e.y,
+            vx: e.ux * v,
+            vy: e.uy * v,
+            ux: e.ux,
+            uy: e.uy,
+            turnX: e.turnX,
             flight: 'drop',
             seekT: 0,
             plunge: fall,
@@ -976,6 +975,12 @@ export class Field {
         this.bursts = this.bursts.filter(b => b.age < C.BURST_LIFE);
     }
 
+    /** A Normal fireball's route from (x, y) to the rival's fairy, `aim` to one side (see normalRoute). */
+    private routeFor(x: number, y: number, aim: number): { route: Point[]; enter: RouteEntry } {
+        const r = normalRoute(x, y, this.rivalSide, this.rivalFairy.x + aim, this.rivalFairy.y);
+        return { route: r.points, enter: r.enter };
+    }
+
     /** A finished chain: add to the gauge and Fever, and send the rival attacks to match its length. */
     private resolveChain(c: ChainInfo): void {
         const n = c.pops;
@@ -1008,6 +1013,7 @@ export class Field {
                     fromY: c.y,
                     aim,
                     side: this.rivalSide,
+                    ...this.routeFor(c.x + off, c.y, aim),
                     // One after another, not all at once: each a beat behind the last, so they come
                     // down as a staggered stream rather than a row at the same height.
                     stagger: i * C.FIREBALL_STAGGER,
@@ -1156,6 +1162,13 @@ export class Field {
             if (a.kind === 'star' && a.flight === 'drop') {
                 // On down the line it came in on, faster and faster; it never turns toward the fairy.
                 a.t = Math.min(a.plunge, (a.t ?? C.FIREBALL_ENTER_SPEED) + C.FIREBALL_ACCEL * dt);
+                // Came in sliding along the top: straight down once it's over where the fairy was.
+                if (a.turnX !== undefined && (a.ux ?? 0) * (a.x - a.turnX) >= 0) {
+                    a.x = a.turnX;
+                    a.turnX = undefined;
+                    a.ux = 0;
+                    a.uy = 1;
+                }
                 a.vx = (a.ux ?? 0) * a.t * slow;
                 a.vy = (a.uy ?? 1) * a.t * slow;
             }

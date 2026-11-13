@@ -24,7 +24,7 @@ import type {
 } from '@/types';
 import { CpuPilot } from './ai';
 import { Field } from './field';
-import { curveAt, normalRoute, routeAt, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
+import { curveAt, pathAt, pathLength, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 
 /** Seconds from an attack leaving one meadow to arriving in the other: its `stagger`, then its flight. */
@@ -33,7 +33,7 @@ const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
 /**
  * Seconds an attack is in flight between the meadows, once any `stagger` is over: a Reverse crossing the screen
  * takes as long as the stretch of its curve between the meadows needs at its speed; any other fireball flies its
- * route (normalRoute) up to the top border and along it into the rival's meadow at its transit speed; everything
+ * route (normalRoute) to the rival's near wall at its transit speed; everything
  * else takes
  * TRANSIT_TIME, an Extra Attack less (SPEED_EXTRA).
  */
@@ -43,7 +43,7 @@ const flightTime = (o: Outgoing) => {
         const kIn = enterAt(shiftCurve(o.curve, o.side ?? 1), k0);
         return Math.max(0.05, curveLength(o.curve, k0, kIn) / Math.max(40, o.speed ?? C.FIREBALL_FALL_SPEED));
     }
-    if (o.kind === 'star') return normalRoute(o.fromX, o.fromY, o.side ?? 1).length / riseSpeed(o);
+    if (o.kind === 'star') return pathLength(o.route ?? [{ x: o.fromX, y: o.fromY }]) / riseSpeed(o);
     return C.TRANSIT_TIME / (o.kind === 'imp' ? C.SPEED_EXTRA : C.SPEED_NORMAL);
 };
 
@@ -733,10 +733,10 @@ export class Game {
                 continue;
             }
             if (tr.o.kind === 'star' && !tr.o.curve) {
-                // Up diagonally to the top border, then along it into the rival's meadow, which takes it from there.
+                // Along its route (a slide across the top, or a climb and a bounce) to the rival's near wall; the
+                // rival's meadow takes it from there.
                 const v = riseSpeed(tr.o);
-                const route = normalRoute(tr.o.fromX, tr.o.fromY, tr.o.side ?? 1);
-                const p = routeAt(route, (tr.t - wait) * v);
+                const p = pathAt(tr.o.route ?? [{ x: tr.o.fromX, y: tr.o.fromY }], (tr.t - wait) * v);
                 // Side by side it crosses the gap in view; in the tall layout it stays inside the sender's meadow.
                 const clip =
                     r.layout === 'wide'
