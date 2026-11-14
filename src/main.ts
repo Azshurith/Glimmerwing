@@ -219,7 +219,7 @@ function syncPage(): void {
         shownMode = screenEl.dataset.mode = game.modeName;
         shownPhase = screenEl.dataset.phase = game.phaseName;
         const back = ['select', 'modes', 'roster', 'profile'].includes(shownPhase);
-        menuBtn.textContent = back ? '◀' : '❚❚';
+        menuBtn.textContent = back ? '◀ BACK' : '❚❚';
         menuBtn.setAttribute('aria-label', back ? 'Back' : 'Pause');
         void keepAwake(shownPhase === 'playing' || shownPhase === 'countdown');
     }

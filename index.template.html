@@ -193,6 +193,55 @@
                 left: 1%;
                 transform: none;
             }
+            /* On those screens Back is a slanted gold-edged tab, like the game's own buttons, not a round one. */
+            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+                .tb-menu {
+                --sl: calc(var(--btn) * 0.32);
+                width: auto;
+                height: calc(var(--btn) * 0.82);
+                aspect-ratio: auto;
+                padding: 0 calc(var(--sl) + 0.55em) 0 calc(var(--sl) + 0.35em);
+                border: 0;
+                border-radius: 0;
+                display: flex;
+                align-items: center;
+                gap: 0.45em;
+                isolation: isolate;
+                cursor: pointer;
+                font-size: calc(var(--btn) * 0.3);
+                letter-spacing: 0.08em;
+                color: #fff3c9;
+                text-shadow: 0 1px 0 #3a2410;
+                background: linear-gradient(180deg, #fff0b0, #e0a83e 55%, #a8701e);
+                clip-path: polygon(var(--sl) 0, 100% 0, calc(100% - var(--sl)) 100%, 0 100%);
+                box-shadow: none;
+                -webkit-backdrop-filter: none;
+                backdrop-filter: none;
+                transition: filter 0.15s;
+            }
+            /* The dark face inside the gold edge. */
+            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+                .tb-menu::before {
+                content: '';
+                position: absolute;
+                inset: 2px 3px;
+                z-index: -1;
+                background: linear-gradient(180deg, #3a2a78, #1b1240 60%, #120c2c);
+                clip-path: polygon(var(--sl) 0, 100% 0, calc(100% - var(--sl)) 100%, 0 100%);
+            }
+            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+                .tb-menu:hover {
+                filter: brightness(1.2) drop-shadow(0 0 6px rgba(255, 216, 107, 0.6));
+            }
+            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+                .tb-menu.active::before {
+                background: linear-gradient(180deg, #ffe9a0, #d9a040);
+            }
+            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+                .tb-menu.active {
+                color: #1b1240;
+                text-shadow: none;
+            }
             /* Corner buttons on the title screen, on every device (the touch layer only shows on touchscreens). */
             .corner-ui {
                 position: absolute;
@@ -276,6 +325,7 @@
                 top: 1%;
                 bottom: auto;
                 left: 1.5%;
+                right: auto;
             }
             /* Sound toggle for the full-screen game, where the page's mute button is out of sight.
                It shows on the title screen, in the corner the pause button leaves free there. */
