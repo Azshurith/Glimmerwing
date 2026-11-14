@@ -196,6 +196,8 @@
             /* On those screens Back is a slanted gold-edged tab, like the game's own buttons, not a round one. */
             .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
                 .tb-menu {
+                /* Bigger than the round corner buttons, so it holds its own beside the screen's heading. */
+                --btn: clamp(44px, calc(var(--sw, 600px) * 0.075), 74px);
                 --sl: calc(var(--btn) * 0.32);
                 width: auto;
                 height: calc(var(--btn) * 0.82);
@@ -208,7 +210,7 @@
                 gap: 0.45em;
                 isolation: isolate;
                 cursor: pointer;
-                font-size: calc(var(--btn) * 0.3);
+                font-size: calc(var(--btn) * 0.32);
                 letter-spacing: 0.08em;
                 color: #fff3c9;
                 text-shadow: 0 1px 0 #3a2410;
