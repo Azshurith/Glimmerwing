@@ -191,10 +191,6 @@ export function initSettingsPanel(d: SettingsPanelDeps): { open: () => void; syn
         d.canvas.focus();
     }
     $<HTMLButtonElement>('settings-close')?.addEventListener('click', close);
-    // A click on the dim backdrop, outside the card, closes it too.
-    el?.addEventListener('pointerdown', e => {
-        if (e.target === el) close();
-    });
 
     let shownMuted: boolean | null = null;
     return {
