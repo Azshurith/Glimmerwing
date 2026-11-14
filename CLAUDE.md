@@ -56,7 +56,7 @@ Do each feature on its own branch (`feature/<name>` or `fix/<name>`) and open a 
 
 **Audio.** [src/audio/sound.ts](src/audio/sound.ts) synthesizes every effect with WebAudio; there are no audio files. Audio starts only after the first user gesture (`sound.unlock()`).
 
-**Input.** [src/input/input.ts](src/input/input.ts) merges keyboard, gamepad (polled each frame) and touch. The page's prompts switch to whichever device was used last.
+**Input.** [src/input/input.ts](src/input/input.ts) merges keyboard, gamepad (polled each frame) and touch. The page's prompts switch to whichever device was used last. The page's on-screen buttons (`.touch-ui`) show only on a touchscreen, except the ◀ Back button on the menu screens (modes, select, Characters, Profile), which shows on every device so a mouse can leave them.
 
 ## Conventions
 
