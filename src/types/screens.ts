@@ -88,3 +88,9 @@ export type TitleAction =
     | 'online'
     | 'settings'
     | 'guide';
+
+/** What the map select screen shows: the chosen card (0 is Random, then each map in order). */
+export interface MapSelectView {
+    index: number;
+    touch: boolean;
+}

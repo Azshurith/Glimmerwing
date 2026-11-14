@@ -119,8 +119,10 @@ export class Field {
     private nextChain = 1;
 
     /** `crowFirst`: the Hollow Crow wakes in this meadow (exactly one of the two). */
-    /** The round's seed, which also picks the sky scenery behind this meadow (both meadows share it). */
+    /** The round's seed, which also lays out the scenery behind this meadow (both meadows share it). */
     readonly sceneSeed: number;
+    /** The map this round plays on (see data/maps.ts); set by Game, the same for both meadows. */
+    mapId = '';
 
     constructor(
         seed: number,
