@@ -146,7 +146,13 @@
                 display: block;
             }
             /* The menu screens' Back button shows on every device, so a mouse can leave them too. */
-            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+            .screen:is(
+                    [data-phase='select'],
+                    [data-phase='modes'],
+                    [data-phase='roster'],
+                    [data-phase='profile'],
+                    [data-phase='settings']
+                )
                 .touch-ui {
                 display: block;
             }
@@ -187,18 +193,32 @@
                 display: none;
             }
             /* On the mode menu and select screens the heading owns the top centre; Back goes in the corner. */
-            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+            .screen:is(
+                    [data-phase='select'],
+                    [data-phase='modes'],
+                    [data-phase='roster'],
+                    [data-phase='profile'],
+                    [data-phase='settings']
+                )
                 .tb-menu {
                 top: 1%;
                 left: 1%;
                 transform: none;
             }
             /* On those screens Back is a slanted gold-edged tab, like the game's own buttons, not a round one. */
-            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+            .screen:is(
+                    [data-phase='select'],
+                    [data-phase='modes'],
+                    [data-phase='roster'],
+                    [data-phase='profile'],
+                    [data-phase='settings']
+                )
                 .tb-menu {
                 /* Bigger than the round corner buttons, so it holds its own beside the screen's heading. */
-                --btn: clamp(44px, calc(var(--sw, 600px) * 0.075), 74px);
+                /* …but never taller than the bar it sits in (a phone on its side has a short one), and centred in it. */
+                --btn: min(clamp(44px, calc(var(--sw, 600px) * 0.075), 74px), calc((var(--bar-h, 999px) - 8px) / 0.82));
                 --sl: calc(var(--btn) * 0.32);
+                top: calc((var(--bar-h, 48px) - var(--btn) * 0.82) / 2) !important;
                 width: auto;
                 height: calc(var(--btn) * 0.82);
                 aspect-ratio: auto;
@@ -222,7 +242,13 @@
                 transition: filter 0.15s;
             }
             /* The dark face inside the gold edge. */
-            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+            .screen:is(
+                    [data-phase='select'],
+                    [data-phase='modes'],
+                    [data-phase='roster'],
+                    [data-phase='profile'],
+                    [data-phase='settings']
+                )
                 .tb-menu::before {
                 content: '';
                 position: absolute;
@@ -231,28 +257,44 @@
                 background: linear-gradient(180deg, #3a2a78, #1b1240 60%, #120c2c);
                 clip-path: polygon(var(--sl) 0, 100% 0, calc(100% - var(--sl)) 100%, 0 100%);
             }
-            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+            .screen:is(
+                    [data-phase='select'],
+                    [data-phase='modes'],
+                    [data-phase='roster'],
+                    [data-phase='profile'],
+                    [data-phase='settings']
+                )
                 .tb-menu:hover {
                 filter: brightness(1.2) drop-shadow(0 0 6px rgba(255, 216, 107, 0.6));
             }
-            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+            .screen:is(
+                    [data-phase='select'],
+                    [data-phase='modes'],
+                    [data-phase='roster'],
+                    [data-phase='profile'],
+                    [data-phase='settings']
+                )
                 .tb-menu.active::before {
                 background: linear-gradient(180deg, #ffe9a0, #d9a040);
             }
-            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+            .screen:is(
+                    [data-phase='select'],
+                    [data-phase='modes'],
+                    [data-phase='roster'],
+                    [data-phase='profile'],
+                    [data-phase='settings']
+                )
                 .tb-menu.active {
                 color: #1b1240;
                 text-shadow: none;
             }
             /* ---- Settings: a full panel in the game's own look (gold edges, slanted tabs, Bungee) ---- */
+            /* The Settings panel fills the screen below the canvas's own heading bar (drawn by the game's Settings
+               screen, like every menu screen), so the bar and the ◀ Back tab are the same as everywhere else. */
             #settings {
                 position: absolute;
-                inset: 0;
+                inset: var(--bar-h, 0) 0 0 0;
                 display: flex;
-                background:
-                    radial-gradient(90% 70% at 50% 0%, rgba(122, 92, 255, 0.3), transparent 65%),
-                    radial-gradient(60% 50% at 50% 110%, rgba(255, 150, 60, 0.12), transparent 70%),
-                    linear-gradient(180deg, #1b1248, #110a30 50%, #0b0620);
                 z-index: 5;
                 font-family: 'Fraunces', Georgia, serif;
                 color: #efe6ff;
@@ -262,101 +304,52 @@
             }
             /* A page of its own, like the other menu screens: a heading bar with Back, then the tabs and their
                settings in a centred column that scrolls if it has to. */
+            /* Landscape: the tabs down the left and their settings filling the rest of the width. Portrait: the tabs
+               across the top. Either way the panel spans the whole screen. */
             .set-card {
                 position: relative;
                 flex: 1;
                 min-height: 0;
-                display: flex;
-                flex-direction: column;
+                display: grid;
+                grid-template-columns: clamp(9rem, 22%, 16rem) 1fr;
+                grid-template-rows: 1fr auto;
             }
-            .set-head {
-                position: relative;
-                flex: none;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                min-height: clamp(3rem, 9vmin, 4.6rem);
-                padding: 0.4rem 1rem;
-                border-bottom: 1px solid #c9a24a;
-                box-shadow: 0 1px 0 rgba(255, 230, 160, 0.25);
-                background: linear-gradient(180deg, rgba(10, 6, 28, 0.95), rgba(10, 6, 28, 0.6));
+            .screen[data-layout='tall'] .set-card {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr auto;
             }
             /* Back: the same slanted gold tab as the other menu screens. */
-            .set-back {
-                --sl: 0.75rem;
-                position: absolute;
-                left: clamp(0.4rem, 1.5vw, 1rem);
-                top: 50%;
-                transform: translateY(-50%);
-                height: clamp(2.1rem, 6.5vmin, 3.2rem);
-                padding: 0 calc(var(--sl) + 0.8em) 0 calc(var(--sl) + 0.6em);
-                border: 0;
-                isolation: isolate;
-                cursor: pointer;
-                font:
-                    400 clamp(0.75rem, 2.6vmin, 1.1rem) 'Bungee',
-                    'Arial Black',
-                    sans-serif;
-                letter-spacing: 0.08em;
-                color: #fff3c9;
-                text-shadow: 0 1px 0 #3a2410;
-                background: linear-gradient(180deg, #fff0b0, #e0a83e 55%, #a8701e);
-                clip-path: polygon(var(--sl) 0, 100% 0, calc(100% - var(--sl)) 100%, 0 100%);
-            }
-            .set-back::before {
-                content: '';
-                position: absolute;
-                inset: 2px 3px;
-                z-index: -1;
-                background: linear-gradient(180deg, #3a2a78, #1b1240 60%, #120c2c);
-                clip-path: polygon(var(--sl) 0, 100% 0, calc(100% - var(--sl)) 100%, 0 100%);
-            }
-            .set-back:hover {
-                filter: brightness(1.2) drop-shadow(0 0 6px rgba(255, 216, 107, 0.6));
-            }
-            .set-tabs,
-            .set-body,
-            .set-foot {
-                width: min(100%, 44rem);
-                margin: 0 auto;
-                box-sizing: border-box;
-            }
-            .set-head h2 {
-                margin: 0;
-                font:
-                    400 clamp(1.3rem, 4.5vmin, 1.9rem) 'Bungee',
-                    'Arial Black',
-                    sans-serif;
-                letter-spacing: 0.04em;
-                background: linear-gradient(180deg, #fff7c2, #ffd45c 55%, #ff9a2e);
-                -webkit-background-clip: text;
-                background-clip: text;
-                color: transparent;
-                filter: drop-shadow(0 2px 0 #4a2a10);
-            }
             .set-tabs {
-                flex: none;
                 display: flex;
-                gap: 0.35rem;
-                padding: clamp(0.7rem, 3vmin, 1.4rem) 1rem 0;
+                flex-direction: column;
+                gap: 0.5rem;
+                padding: clamp(0.8rem, 3vmin, 1.6rem) 0 0 clamp(0.6rem, 2vw, 1.4rem);
+                border-right: 1px solid rgba(217, 168, 69, 0.25);
+            }
+            .screen[data-layout='tall'] .set-tabs {
+                flex-direction: row;
+                padding: clamp(0.7rem, 3vmin, 1.2rem) 1rem 0;
+                border-right: 0;
             }
             .set-tab {
                 --sl: 0.6rem;
-                flex: 1;
-                padding: 0.55rem var(--sl) 0.5rem;
+                padding: 0.7rem var(--sl) 0.65rem;
                 border: 0;
                 cursor: pointer;
                 font:
-                    400 clamp(0.72rem, 2.6vmin, 0.92rem) 'Bungee',
+                    400 clamp(0.72rem, 2.6vmin, 1rem) 'Bungee',
                     'Arial Black',
                     sans-serif;
                 letter-spacing: 0.06em;
                 color: #b9a8e8;
-                background: rgba(255, 255, 255, 0.06);
+                background: rgba(10, 6, 28, 0.55);
                 clip-path: polygon(var(--sl) 0, 100% 0, calc(100% - var(--sl)) 100%, 0 100%);
                 transition:
                     background 0.15s,
                     color 0.15s;
+            }
+            .screen[data-layout='tall'] .set-tab {
+                flex: 1;
             }
             .set-tab:hover {
                 color: #fff3c9;
@@ -367,10 +360,9 @@
                 background: linear-gradient(180deg, #fff0b0, #e0a83e 60%, #c48a2a);
             }
             .set-body {
-                flex: 1;
                 min-height: 0;
                 overflow-y: auto;
-                padding: clamp(0.8rem, 3vmin, 1.4rem) 1.2rem 0.6rem;
+                padding: clamp(0.8rem, 3vmin, 1.6rem) clamp(1rem, 3vw, 2.4rem) 0.6rem;
             }
             .set-pane[hidden] {
                 display: none;
@@ -531,7 +523,7 @@
             }
             .set-keys {
                 display: grid;
-                grid-template-columns: 1fr 5.6rem 5.6rem;
+                grid-template-columns: minmax(7rem, 1fr) minmax(5.6rem, 11rem) minmax(5.6rem, 11rem);
                 gap: 0.35rem 0.45rem;
                 align-items: center;
             }
@@ -579,13 +571,14 @@
                 color: #a99fc8;
             }
             .set-foot {
-                flex: none;
+                grid-column: 1 / -1;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 gap: 0.8rem;
                 padding: 0.6rem 1.1rem 0.9rem;
                 border-top: 1px solid rgba(217, 168, 69, 0.25);
+                background: rgba(10, 6, 28, 0.45);
             }
             .set-foot a,
             .set-link {
@@ -612,6 +605,7 @@
                     [data-phase='modes'],
                     [data-phase='roster'],
                     [data-phase='profile'],
+                    [data-phase='settings'],
                     [data-phase='title']
                 )
                 .tb-menu {
@@ -719,10 +713,6 @@
                 </div>
                 <div id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
                     <div class="set-card">
-                        <header class="set-head">
-                            <button class="set-back" id="settings-close" aria-label="Back">◀ Back</button>
-                            <h2 id="settings-title">Settings</h2>
-                        </header>
                         <nav class="set-tabs" role="tablist">
                             <button class="set-tab" role="tab" data-tab="audio" aria-selected="true">Audio</button>
                             <button class="set-tab" role="tab" data-tab="display" aria-selected="false">Display</button>
