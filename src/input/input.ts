@@ -1,49 +1,9 @@
 import * as C from '@/core/config';
-import type { Controls, Pos } from '@/types';
+import type { Controls, KeyAction, KeyBindings, Pos } from '@/types';
+import { defaultKeys, keyMap } from './keys';
 
-// Buttons follow the arcade: A shoots (hold to charge), B blooms (the bomb), C autofires.
-const KEYMAP_SOLO: Record<string, keyof Controls> = {
-    ArrowLeft: 'left',
-    ArrowRight: 'right',
-    ArrowUp: 'up',
-    ArrowDown: 'down',
-    KeyA: 'left',
-    KeyD: 'right',
-    KeyW: 'up',
-    KeyS: 'down',
-    Space: 'fire',
-    KeyZ: 'fire',
-    KeyJ: 'fire',
-    KeyG: 'fire',
-    KeyX: 'bloom',
-    KeyK: 'bloom',
-    ShiftLeft: 'bloom',
-    KeyH: 'bloom',
-    KeyC: 'auto',
-    KeyL: 'auto',
-    KeyF: 'auto',
-};
-const KEYMAP_P1: Record<string, keyof Controls> = {
-    KeyA: 'left',
-    KeyD: 'right',
-    KeyW: 'up',
-    KeyS: 'down',
-    KeyF: 'auto',
-    KeyG: 'fire',
-    KeyH: 'bloom',
-};
-const KEYMAP_P2: Record<string, keyof Controls> = {
-    ArrowLeft: 'left',
-    ArrowRight: 'right',
-    ArrowUp: 'up',
-    ArrowDown: 'down',
-    Enter: 'fire',
-    Slash: 'fire',
-    ShiftRight: 'bloom',
-    Period: 'bloom',
-    Quote: 'auto',
-};
-
+// Buttons follow the arcade: A shoots (hold to charge), B blooms (the bomb), C autofires. The keyboard's keys are
+// the player's own (Settings → Controls, see keys.ts); `setBindings` hands them in.
 /**
  * Gamepads (standard mapping) press the same keys a keyboard player would, so
  * menus and modes need nothing special. Pad 1 plays as player one (WASD side),
@@ -116,6 +76,14 @@ export class Input {
     readonly held = new Set<string>();
     /** Keys currently held by a gamepad, kept apart so keyboard key-ups can't cancel them. */
     private padHeld = new Set<string>();
+    /** What each gamepad is doing in play, by action, so rebinding the keyboard never changes a pad. */
+    private padActs: Set<KeyAction>[] = [new Set(), new Set()];
+    /** The keyboard maps for one player alone and for two sharing a keyboard. */
+    private maps: Record<'solo' | 'p1' | 'p2', Record<string, KeyAction>> = {
+        solo: keyMap(defaultKeys(), 'solo'),
+        p1: keyMap(defaultKeys(), 'p1'),
+        p2: keyMap(defaultKeys(), 'p2'),
+    };
     pressed = new Set<string>();
     /** Fingers on the playfield, in the order they landed. */
     private fingers: Finger[] = [];
@@ -135,6 +103,7 @@ export class Input {
         window.addEventListener('keydown', e => {
             // Typing a room code in the online lobby, or using the Settings panel, shouldn't steer a fairy.
             if ((e.target as HTMLElement | null)?.closest?.('#lobby, #settings')) return;
+            if (document.getElementById('settings')?.hidden === false) return;
             if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
             if (!this.held.has(e.code)) this.pressed.add(e.code);
             this.held.add(e.code);
@@ -190,6 +159,11 @@ export class Input {
         canvas.addEventListener('contextmenu', e => e.preventDefault());
     }
 
+    /** Use the player's own keyboard keys from now on. */
+    setBindings(b: KeyBindings): void {
+        this.maps = { solo: keyMap(b, 'solo'), p1: keyMap(b, 'p1'), p2: keyMap(b, 'p2') };
+    }
+
     /** On-screen buttons press and release keys, so they work everywhere keys do. */
     virtual(code: string, down: boolean): void {
         if (down) {
@@ -203,25 +177,33 @@ export class Input {
     pollPads(): void {
         const pads = navigator.getGamepads?.() ?? [];
         const now = new Set<string>();
+        const acts: Set<KeyAction>[] = [new Set(), new Set()];
         let slot = 0;
         for (const pad of pads) {
             if (!pad || !pad.connected || slot >= PAD_KEYS.length) continue;
+            const act = acts[slot];
             const k = PAD_KEYS[slot++];
             const b = (i: number) => !!pad.buttons[i]?.pressed;
             const ax = pad.axes[0] ?? 0,
                 ay = pad.axes[1] ?? 0;
-            if (b(14) || ax < -STICK_DEADZONE) now.add(k.left);
-            if (b(15) || ax > STICK_DEADZONE) now.add(k.right);
-            if (b(12) || ay < -STICK_DEADZONE) now.add(k.up);
-            if (b(13) || ay > STICK_DEADZONE) now.add(k.down);
-            if (b(0)) now.add(k.a);
-            if (b(1)) now.add(k.b);
-            if (b(2) || b(3)) now.add(k.c);
+            /** Press the menu key `code` and do `a` in play. */
+            const hit = (code: string, a: KeyAction) => {
+                now.add(code);
+                act.add(a);
+            };
+            if (b(14) || ax < -STICK_DEADZONE) hit(k.left, 'left');
+            if (b(15) || ax > STICK_DEADZONE) hit(k.right, 'right');
+            if (b(12) || ay < -STICK_DEADZONE) hit(k.up, 'up');
+            if (b(13) || ay > STICK_DEADZONE) hit(k.down, 'down');
+            if (b(0)) hit(k.a, 'fire');
+            if (b(1)) hit(k.b, 'bloom');
+            if (b(2) || b(3)) hit(k.c, 'auto');
             if (b(9)) now.add(k.start);
             if (b(8)) now.add(k.back);
         }
         for (const code of now) if (!this.padHeld.has(code) && !this.held.has(code)) this.pressed.add(code);
         this.padHeld = now;
+        this.padActs = acts;
     }
 
     /** Forget this frame's presses and taps; called after each simulation step. */
@@ -232,14 +214,15 @@ export class Input {
         this.bombSide = [false, false];
     }
 
-    /** Controls from a key map, counting keys held on the keyboard or a pad, or tapped this frame. */
-    private read(map: Record<string, keyof Controls>): Controls {
+    /** Controls from a key map (keys held, or tapped this frame) and the actions of the listed gamepads. */
+    private read(map: Record<string, KeyAction>, pads: number[]): Controls {
         const c = blank();
+        const set = c as unknown as Record<KeyAction, boolean>;
         for (const [code, action] of Object.entries(map)) {
             // A very quick tap can start and end between frames; still count it.
-            if (this.held.has(code) || this.padHeld.has(code) || this.pressed.has(code))
-                (c as unknown as Record<string, boolean>)[action] = true;
+            if (this.held.has(code) || this.pressed.has(code)) set[action] = true;
         }
+        for (const p of pads) for (const a of this.padActs[p]) set[a] = true;
         return c;
     }
 
@@ -264,21 +247,21 @@ export class Input {
 
     /** Controls for one player using every input: keys, pads and touch anywhere. */
     solo(me?: Pos): Controls {
-        const c = this.read(KEYMAP_SOLO);
+        const c = this.read(this.maps.solo, [0, 1]);
         this.drag(c, null, me);
         if (this.bombAny) c.bloom = true;
         return c;
     }
     /** Two players on one device: each steers with fingers on their own meadow. */
     p1(me?: Pos): Controls {
-        const c = this.read(KEYMAP_P1);
+        const c = this.read(this.maps.p1, [0]);
         this.drag(c, 0, me);
         if (this.bombSide[0]) c.bloom = true;
         return c;
     }
     /** Controls for player 2 when two players share one device. */
     p2(me?: Pos): Controls {
-        const c = this.read(KEYMAP_P2);
+        const c = this.read(this.maps.p2, [1]);
         this.drag(c, 1, me);
         if (this.bombSide[1]) c.bloom = true;
         return c;
