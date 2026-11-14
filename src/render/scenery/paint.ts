@@ -243,10 +243,13 @@ function cliffFace(
             let col: number;
             switch (m.cliffStyle) {
                 case 'bricks': {
-                    const row = Math.floor((k - 1) / 4);
-                    const j = (k - 1) % 4 === 3 || (x + (row % 2) * 3) % 6 === 0;
-                    col = j ? joint : row === 0 ? hi : t < 0.45 ? face : shade;
-                    if (!j && rng.next() < 0.06) col = shade;
+                    // Bevelled bricks: each lit along its top and left, shaded along its right, darker lower down.
+                    const row = Math.floor((k - 1) / 4),
+                        bx = (x + (row % 2) * 3) % 6,
+                        by = (k - 1) % 4;
+                    const j = by === 3 || bx === 0;
+                    col = j ? joint : by === 0 || bx === 1 ? hi : bx === 5 || t > 0.6 ? shade : face;
+                    if (!j && rng.next() < 0.05) col = shade;
                     break;
                 }
                 case 'wall': {
@@ -292,7 +295,18 @@ function topFace(
     const area = s.w * s.d;
     switch (m.ground) {
         case 'grass':
-            for (let i = 0; i < area / 4; i++) {
+            // Gently rolling turf, lit from the upper left and dithered through a ramp of greens.
+            {
+                const tones = topRamp(m, c);
+                for (let y = 0; y < p.h; y++)
+                    for (let x = 0; x < p.w; x++) {
+                        if (!onTop(x, y)) continue;
+                        const sl =
+                            (noise((x - 1) / 7, (y - 1) / 7, s.seed) - noise((x + 1) / 7, (y + 1) / 7, s.seed)) * 1.6;
+                        p.set(x, y, ramp(tones, 0.58 + sl + (noise(x / 3, y / 3, s.seed + 1) - 0.5) * 0.18, x, y));
+                    }
+            }
+            for (let i = 0; i < area / 7; i++) {
                 const x = rng.int(0, p.w - 1),
                     y = rng.int(0, p.h - 1);
                 if (!onTop(x, y) || !onTop(x, y + 1)) continue;
@@ -390,7 +404,7 @@ function prop(kind: Prop, p: Pix, x: number, y: number, r: number, c: Paint, m: 
         case 'palm':
             return palm(p, x, y, s, c, m, rng);
         case 'cactus':
-            return cactus(p, x, y, Math.round(rng.int(8, 14) * s), c, m, rng);
+            return cactus(p, x, y, Math.round(rng.int(8, 14) * s), s, c, m, rng);
         case 'crystal':
             return crystal(p, x, y, Math.round(rng.int(6, 12) * s), c, m, rng);
         case 'glowshroom':
@@ -457,28 +471,33 @@ function palm(p: Pix, x: number, y: number, s: number, c: Paint, m: MapTheme, rn
     p.oval(tx + 1.5 * s, ty + 1.5 * s, 1.3 * s, c('#6a3c1c'));
 }
 
-/** A saguaro-like cactus with one or two arms and a flower on top. */
-function cactus(p: Pix, x: number, y: number, h: number, c: Paint, m: MapTheme, rng: Rng): void {
-    const [, body, light] = m.leaves.map(c);
+/** A saguaro-like cactus `s` times its usual size: ribbed, rounded columns with one or two arms and a flower. */
+function cactus(p: Pix, x: number, y: number, h: number, s: number, c: Paint, m: MapTheme, rng: Rng): void {
+    const [rim, body, light] = m.leaves.map(c);
     const ink = c(m.ink);
-    p.oval(x + 2, y, 4, c(m.top[2]), 1.5);
-    /** A rounded column from (cx, bottom) up `len`. */
+    const r = Math.max(2, Math.round(2 * s));
+    p.oval(x + 2 * s, y, 4 * s, c(m.top[2]), 1.5 * s);
+    /** A rounded, ribbed column centred on cx, rising `len` from `bottom`. */
     const column = (cx: number, bottom: number, len: number) => {
-        p.rect(cx - 2, bottom - len, 5, len + 1, ink);
-        p.rect(cx - 1, bottom - len + 1, 3, len - 1, body);
-        p.rect(cx - 1, bottom - len + 1, 1, len - 1, light);
+        p.oval(cx, bottom - len + r, r + 1, ink);
+        p.rect(cx - r - 1, bottom - len + r, 2 * r + 3, len - r + 1, ink);
+        p.oval(cx, bottom - len + r, r, body);
+        for (let i = -r; i <= r; i++) {
+            const col = i < -r / 2 ? light : i > r / 2 ? rim : (i + r) % 2 === 0 ? body : rim;
+            p.rect(cx + i, bottom - len + r, 1, len - r, col);
+        }
     };
     column(x, y, h);
-    const arms = rng.int(1, 2);
-    for (let a = 0; a < arms; a++) {
-        const side = a === 0 ? -1 : 1,
-            ay = y - rng.int(Math.round(h * 0.35), Math.round(h * 0.6));
-        p.rect(x + side * 2, ay - 1, 3 * side, 3, ink);
-        p.rect(Math.min(x + side * 2, x + side * 4), ay, 2, 1, body);
-        column(x + side * 4, ay + 1, rng.int(4, 6));
+    for (let a = rng.int(1, 2); a > 0; a--) {
+        const side = a === 1 ? -1 : 1,
+            ay = y - rng.int(Math.round(h * 0.35), Math.round(h * 0.6)),
+            reach = r * 2 + 2;
+        p.rect(Math.min(x, x + side * reach), ay - r, reach, 2 * r, ink);
+        p.rect(Math.min(x, x + side * reach), ay - r + 1, reach, 2 * r - 2, body);
+        column(x + side * reach, ay + r, Math.round(rng.int(4, 7) * s));
     }
-    p.set(x, y - h, c(m.flower[0]));
-    p.set(x, y - h - 1, c(m.flower[1]));
+    p.oval(x, y - h, Math.max(1, s * 0.8), c(m.flower[0]));
+    p.set(x, y - h, c(m.flower[1]));
 }
 
 /** A cluster of glowing crystal prisms. */
@@ -790,64 +809,101 @@ function fbm(x: number, y: number, seed: number): number {
     );
 }
 
+/** The 4×4 ordered-dither thresholds that blend neighbouring tones in a 16-bit checker pattern. */
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+
+/** A ramp of tones, darkest first, picked by `v` (0 to 1) with ordered dithering between neighbours at (x, y). */
+function ramp(tones: number[], v: number, x: number, y: number): number {
+    const f = Math.max(0, Math.min(0.999, v)) * (tones.length - 1);
+    const i = Math.floor(f);
+    return tones[Math.min(tones.length - 1, f - i > BAYER[(y & 3) * 4 + (x & 3)] ? i + 1 : i)];
+}
+
+/** `hex` mixed toward `to` by `t`, as '#rrggbb'. */
+function mix(hex: string, to: string, t: number): string {
+    const a = parseInt(hex.slice(1), 16),
+        b = parseInt(to.slice(1), 16);
+    const ch = (sh: number) => Math.round(((a >> sh) & 255) * (1 - t) + ((b >> sh) & 255) * t);
+    return '#' + ((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0');
+}
+
+/** A five-tone ramp from a map's top colours: a deep shade under its darkest, up to a light above its highlight. */
+function topRamp(m: MapTheme, c: Paint): number[] {
+    return [mix(m.top[3], m.ink, 0.35), m.top[3], m.top[2], m.top[1], m.top[0], mix(m.top[0], '#ffffff', 0.35)].map(c);
+}
+
 /**
  * Paint a band of a ground map's terrain, `w` wide and `h` tall, whose bottom edge sits `wy` world units up.
- * Everything comes from world position alone, so neighbouring bands meet without a seam.
+ * The terrain is a height field lit from the upper left and shaded through a dithered ramp, so slopes catch the
+ * light and hollows fall into shade. Everything comes from world position alone, so bands meet without a seam.
  */
 export function paintGround(m: MapTheme, seed: number, wy: number, w: number, h: number): HTMLCanvasElement {
     const p = new Pix(w, h);
     const c = palette(m, 0);
-    const [hi, body, tex, edge] = m.top.map(c);
+    const tones = topRamp(m, c);
     const [deep, water, light] = m.water.map(c);
     const abyss = c(m.sky[0]),
-        ink = c(m.ink),
-        leaf = m.leaves.map(c);
+        ink = c(m.ink);
+    const leaves = [mix(m.leaves[0], m.ink, 0.4), m.leaves[0], m.leaves[1], m.leaves[2]].map(c);
+    /** Terrain height at world (x, Y). */
+    const height = (x: number, Y: number): number => {
+        switch (m.ground) {
+            case 'sand': {
+                // Dunes: long soft swells with a sharp crest where two slopes meet.
+                const n = fbm(x / 90, Y / 60, seed);
+                return 1 - Math.abs(n * 2 - 1) * 0.8 + fbm(x / 30, Y / 30, seed + 4) * 0.15;
+            }
+            case 'rock':
+                // Lumpy stone: boulders and hollows.
+                return fbm(x / 28, Y / 24, seed) * 0.8 + fbm(x / 9, Y / 9, seed + 8) * 0.2;
+            default:
+                return fbm(x / 40, Y / 40, seed);
+        }
+    };
     for (let y = 0; y < h; y++) {
         const Y = wy + (h - 1 - y); // world height of this row
         for (let x = 0; x < w; x++) {
-            const n = fbm(x / 70, Y / 55, seed);
-            const dither = (x + Y) % 2 === 0 ? 0.012 : -0.012;
             let col: number;
-            switch (m.ground) {
-                case 'sand': {
-                    // Dunes in bands of shade, with wind ripples curving across them.
-                    const v = n + dither;
-                    col = v < 0.36 ? edge : v < 0.47 ? tex : v < 0.66 ? body : hi;
-                    const rip = Math.sin((Y + n * 46) * 0.55 + x * 0.04);
-                    if (rip > 0.97) col = v < 0.47 ? body : hi;
-                    else if (rip < -0.985) col = v < 0.47 ? edge : tex;
-                    // Now and then an oasis: water ringed with damp, darker sand.
+            if (m.ground === 'tiles') {
+                // Bevelled flagstones: each stone its own shade, lit along its top and left edges.
+                const row = Math.floor(Y / 8),
+                    off = (row % 2) * 6;
+                const lx = (x + off) % 12,
+                    ly = Y % 8;
+                const stone = noise(Math.floor((x + off) / 12) * 1.7, row * 1.3, seed + 5);
+                const wear = fbm(x / 6, Y / 6, seed + 9) * 0.18;
+                let v = 0.42 + stone * 0.28 + wear;
+                if (lx === 0 || ly === 0) v = 0.08;
+                else if (lx === 1 || ly === 7) v += 0.22;
+                else if (lx === 11 || ly === 1) v -= 0.2;
+                col = ramp(tones, v, x, Y);
+                // Garden beds of clipped hedge, raised and shaded, between the stones.
+                const bed = fbm(x / 54, Y / 54, seed + 21);
+                if (bed > 0.68) {
+                    const lit = (fbm((x - 1) / 9, Y / 9, seed + 2) - fbm((x + 1) / 9, Y / 9, seed + 2)) * 9;
+                    col = bed < 0.7 ? tones[0] : ramp(leaves, 0.55 + lit + (bed - 0.7) * 1.5, x, Y);
+                }
+            } else {
+                const hgt = height(x, Y);
+                // Light from the upper left: slopes facing it are lit, the others shaded.
+                const slope = (height(x - 1, Y + 1) - height(x + 1, Y - 1)) * (m.ground === 'sand' ? 26 : 14);
+                let v = 0.5 + slope + (hgt - 0.5) * 0.35;
+                if (m.ground === 'sand') v += Math.sin((Y + hgt * 60) * 0.6 + x * 0.05) * 0.04; // fine ripples
+                col = ramp(tones, v, x, Y);
+                if (m.ground === 'sand') {
+                    // An oasis now and then: water ringed with damp sand.
                     const oasis = fbm(x / 40, Y / 40, seed + 99);
-                    if (oasis > 0.78) col = oasis > 0.81 ? (oasis > 0.84 ? light : water) : deep;
-                    else if (oasis > 0.765) col = edge;
-                    break;
-                }
-                case 'rock': {
-                    // Cave floor: stone with cracks, dark chasms and glowing pools.
-                    const v = n + dither;
-                    col = v < 0.4 ? edge : v < 0.52 ? tex : v < 0.66 ? body : hi;
-                    const ridge = Math.abs(fbm(x / 26, Y / 26, seed + 3) - 0.5);
-                    if (ridge < 0.012) col = ink;
+                    if (oasis > 0.78)
+                        col = oasis > 0.8 ? ramp([deep, water, light], (oasis - 0.8) * 9 + slope, x, Y) : tones[1];
+                    else if (oasis > 0.765) col = tones[2];
+                } else if (m.ground === 'rock') {
+                    // Dark chasms with a lit rim, and pools of glowing water.
                     const pit = fbm(x / 48, Y / 48, seed + 51);
-                    if (pit < 0.28) col = pit < 0.26 ? abyss : ink;
-                    else if (pit > 0.75) col = pit > 0.79 ? light : pit > 0.77 ? water : deep;
-                    break;
-                }
-                case 'tiles': {
-                    // A courtyard of flagstones, each its own shade, with garden beds of hedge between.
-                    const row = Math.floor(Y / 7),
-                        tx = Math.floor((x + (row % 2) * 5) / 10);
-                    const joint = Y % 7 === 0 || (x + (row % 2) * 5) % 10 === 0;
-                    const shade = noise(tx * 1.7, row * 1.3, seed + 5);
-                    col = joint ? tex : Y % 7 === 6 ? hi : shade < 0.35 ? tex : shade < 0.8 ? body : hi;
-                    const bed = fbm(x / 50, Y / 50, seed + 21);
-                    if (bed > 0.7) col = bed > 0.72 ? ((x + Y) % 3 === 0 ? leaf[2] : leaf[1]) : leaf[0];
-                    if (bed > 0.66 && bed <= 0.7) col = edge;
-                    break;
-                }
-                default: {
-                    const v = n + dither;
-                    col = v < 0.42 ? tex : v < 0.7 ? body : hi;
+                    if (pit < 0.27) col = pit < 0.255 ? abyss : ink;
+                    else if (pit < 0.29) col = tones[5];
+                    else if (pit > 0.76) col = ramp([deep, water, light], (pit - 0.76) * 14, x, Y);
+                    const crack = Math.abs(fbm(x / 22, Y / 22, seed + 3) - 0.5);
+                    if (crack < 0.01 && pit >= 0.29 && pit <= 0.76) col = tones[0];
                 }
             }
             p.set(x, y, col);
@@ -860,9 +916,9 @@ export function paintGround(m: MapTheme, seed: number, wy: number, w: number, h:
  * Paint one standing prop on its own, `s` times its usual size, anchored at the middle of its base: the big things
  * of a ground map (palms, towers, crystals…), drawn standing on the terrain.
  */
-export function paintProp(kind: Prop, seed: number, m: MapTheme, s: number): Painted {
+export function paintProp(kind: Prop, seed: number, m: MapTheme, s: number, fade: Fade = 0): Painted {
     const rng = new Rng(seed);
-    const c = palette(m, 0);
+    const c = palette(m, fade);
     const W = Math.round(46 * s + 16),
         H = Math.round(62 * s + 16);
     const p = new Pix(W, H);

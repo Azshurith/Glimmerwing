@@ -82,6 +82,11 @@ export interface MapTheme {
     /** Big things (one per ~30 pixels of island width at weight 1) and small things, each with its weight. */
     big: Partial<Record<Prop, number>>;
     small: Partial<Record<Prop, number>>;
+    /**
+     * The map's mood: a colour laid over everything, how bright its light rays are (0 for none), what flies
+     * across now and then, and which giant faint shapes pass in the foreground.
+     */
+    mood: { tint: string; rays: number; flyers: 'birds' | 'bats' | 'none'; giants: Prop[] };
     /** How likely an island is to have each of these. */
     odds: { pond: number; cottage: number; path: number; fence: number; falls: number };
 }

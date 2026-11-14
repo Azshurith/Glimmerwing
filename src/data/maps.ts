@@ -30,6 +30,7 @@ export const MAPS: MapTheme[] = [
         veil: [0.42, 0.12],
         big: { tree: 1.5, cone: 0.12 },
         small: { flowers: 3, bush: 2, lupine: 1, rock: 0.6 },
+        mood: { tint: 'rgba(255,236,190,0.06)', rays: 0.09, flyers: 'birds', giants: ['tree'] },
         odds: { pond: 0.3, cottage: 0.14, path: 0.3, fence: 0.3, falls: 0.45 },
     },
     {
@@ -54,8 +55,9 @@ export const MAPS: MapTheme[] = [
         cone: ['#7ef0ff', '#3a9ad8'],
         mote: '#8cfaf0',
         veil: [0.35, 0.05],
-        big: { crystal: 1.1, glowshroom: 0.8, cone: 0.4 },
+        big: { crystal: 1.4, glowshroom: 1, rock: 0.4 },
         small: { rock: 2, glowshroom: 1.2, crystal: 1, bones: 0.3 },
+        mood: { tint: 'rgba(70,30,150,0.1)', rays: 0, flyers: 'bats', giants: ['crystal'] },
         odds: { pond: 0.3, cottage: 0, path: 0, fence: 0, falls: 0.35 },
     },
     {
@@ -82,6 +84,7 @@ export const MAPS: MapTheme[] = [
         veil: [0.4, 0.12],
         big: { palm: 2.4, cactus: 0.5, cone: 0.3 },
         small: { rock: 1.2, cactus: 0.6, bones: 0.5, palm: 0.6 },
+        mood: { tint: 'rgba(255,140,120,0.1)', rays: 0.08, flyers: 'birds', giants: ['palm'] },
         odds: { pond: 0.18, cottage: 0, path: 0, fence: 0, falls: 0.12 },
     },
     {
@@ -108,6 +111,7 @@ export const MAPS: MapTheme[] = [
         veil: [0.4, 0.1],
         big: { tower: 1.4, tree: 0.9, torch: 0.4 },
         small: { torch: 1, bush: 1.2, flowers: 0.8, rock: 0.4 },
+        mood: { tint: 'rgba(110,70,200,0.08)', rays: 0.06, flyers: 'bats', giants: ['tower', 'tree'] },
         odds: { pond: 0.15, cottage: 0, path: 0.5, fence: 0, falls: 0.25 },
     },
 ];

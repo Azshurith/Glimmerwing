@@ -48,6 +48,9 @@ interface Item {
     alpha: number;
     /** A bridge to another island in the same cell, by index. */
     bridgeTo: number;
+    /** A soft pulsing light round it (crystals, glowing mushrooms, torches), and how far it reaches. */
+    glow?: string;
+    glowR?: number;
 }
 
 /** A painted sprite and when it was last drawn. */
@@ -139,6 +142,7 @@ export class SkyScenery {
             this.layer(ctx, seed, map, 'near', climb, clock, w, h);
         }
         ctx.imageSmoothingEnabled = smooth;
+        atmosphere(ctx, map, clock, w, h);
         // A soft veil over it all keeps the fairies, critters and fireballs the brightest things on screen.
         const v = ctx.createLinearGradient(0, 0, 0, h);
         const [edge, mid] = map.veil;
@@ -175,6 +179,21 @@ export class SkyScenery {
             c.used = this.frame;
             if (visible)
                 ctx.drawImage(c.art.canvas, 0, 0, Math.min(w, GROUND_W), cellH, 0, top, Math.min(w, GROUND_W), cellH);
+        }
+        // The shadows of clouds high above, sliding over the ground a little faster than it scrolls.
+        for (let i = 0; i < 3; i++) {
+            const span = h + 260;
+            const y = ((((i * 211 + a * 1.5) % span) + span) % span) - 130;
+            const x = ((i * 0.39 + 0.15) % 1) * w + Math.sin(a * 0.004 + i * 2) * 30;
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(1.7, 1);
+            const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 60);
+            g.addColorStop(0, 'rgba(14,8,40,0.2)');
+            g.addColorStop(1, 'rgba(14,8,40,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(-60, -60, 120, 120);
+            ctx.restore();
         }
     }
 
@@ -236,6 +255,8 @@ export class SkyScenery {
                 ctx.globalAlpha = it.alpha;
                 ctx.drawImage(art.canvas, dx, dy);
                 ctx.globalAlpha = 1;
+                if (it.glow && it.glowR)
+                    glow(ctx, dx + art.cx, dy + art.cy - art.canvas.height * 0.3, it.glowR, it.glow, clock + it.x * 9);
                 // Waterfalls pour off the front edge, down over the cliff face and on into the sky below.
                 it.fallLen.forEach((len, j) => {
                     const f = art.falls[j];
@@ -401,6 +422,7 @@ function plan(r: Rng, m: MapTheme, name: LayerName, cellH: number): Item[] {
     }
     if (r.next() < 0.3)
         items.push(cloud(r.next(), r.range(0, cellH), Math.round(r.range(70, 130)), 0, r.range(-6, 6), 0.3));
+    giant(items, r, m, cellH, seedOf);
     return items;
 }
 
@@ -429,16 +451,130 @@ function planGround(
                 drift: 0,
                 alpha: 1,
                 bridgeTo: -1,
+                glow: glowOf(kind, m),
+                glowR: scale * 9,
             });
         };
         for (let i = r.int(2, 4); i > 0; i--) add(m.big, r.range(2.2, 3.4));
         for (let i = r.int(3, 6); i > 0; i--) add(m.small, r.range(1.3, 1.8));
         // Back to front, so nearer things overlap farther ones.
         items.sort((a, b) => b.y - a.y);
-    } else if (name === 'near')
+    } else if (name === 'near') {
         for (let i = r.int(1, 3); i > 0; i--)
             items.push(cloud(r.next(), r.range(0, cellH), Math.round(r.range(100, 190)), 0, r.range(-4, 4), 0.6));
+        giant(items, r, m, cellH, seedOf);
+    }
     return items;
+}
+
+/**
+ * Now and then, a giant faint shape passing close by at one side (a huge palm, tree, crystal or tower), hazy and
+ * see-through, for depth: the big soft silhouettes of a classic arcade backdrop.
+ */
+function giant(items: Item[], r: Rng, m: MapTheme, cellH: number, seedOf: () => number): void {
+    if (!m.mood.giants.length || r.next() > 0.32) return;
+    const kind = m.mood.giants[r.int(0, m.mood.giants.length - 1)];
+    const s = seedOf(),
+        scale = r.range(4.6, 6.2);
+    items.push({
+        kind: 'prop',
+        x: r.next() < 0.5 ? r.range(-0.12, 0.06) : r.range(0.94, 1.12),
+        y: r.range(0, cellH),
+        paint: () => paintProp(kind, s, m, scale, 0.45),
+        fallLen: [],
+        drift: 0,
+        alpha: 0.32,
+        bridgeTo: -1,
+    });
+}
+
+/** The light a prop gives off, if it glows. */
+function glowOf(kind: Prop, m: MapTheme): string | undefined {
+    return kind === 'crystal'
+        ? m.cone[0]
+        : kind === 'glowshroom'
+          ? m.leaves[2]
+          : kind === 'torch'
+            ? '#ffb04a'
+            : undefined;
+}
+
+/** Soft round lights, one painted per colour and reused, scaled to each glow. */
+const glowSprites = new Map<string, HTMLCanvasElement>();
+
+/** A soft pulsing light of colour `color` at (x, y), reaching `r`. */
+function glow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, t: number): void {
+    let sprite = glowSprites.get(color);
+    if (!sprite) {
+        sprite = document.createElement('canvas');
+        sprite.width = sprite.height = 64;
+        const gc = sprite.getContext('2d')!;
+        const g = gc.createRadialGradient(32, 32, 0, 32, 32, 32);
+        g.addColorStop(0, color);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        gc.fillStyle = g;
+        gc.fillRect(0, 0, 64, 64);
+        glowSprites.set(color, sprite);
+    }
+    const rr = r * (1 + 0.12 * Math.sin(t * 2.4));
+    const op = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.32;
+    ctx.drawImage(sprite, x - rr, y - rr, rr * 2, rr * 2);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = op;
+}
+
+/** The map's mood over everything: slow light rays, the odd flock of birds or bats crossing, and a colour tint. */
+function atmosphere(ctx: CanvasRenderingContext2D, m: MapTheme, clock: number, w: number, h: number): void {
+    const mood = m.mood;
+    if (mood.rays > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 3; i++) {
+            const x = w * (0.15 + 0.32 * i) + Math.sin(clock * 0.18 + i * 1.7) * 18;
+            const bw = 26 + 14 * Math.sin(clock * 0.31 + i);
+            const g = ctx.createLinearGradient(0, 0, 0, h);
+            g.addColorStop(0, `rgba(255,248,220,${mood.rays})`);
+            g.addColorStop(1, 'rgba(255,248,220,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x + bw, 0);
+            ctx.lineTo(x + bw + h * 0.45, h);
+            ctx.lineTo(x + h * 0.45 - bw * 0.5, h);
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+    if (mood.flyers !== 'none') {
+        // A flock crosses for six seconds out of every fifteen, in a V, flapping.
+        const cycle = 15,
+            n = Math.floor(clock / cycle),
+            t = (clock % cycle) / 6;
+        if (t < 1) {
+            const fromLeft = n % 2 === 0;
+            const bats = mood.flyers === 'bats';
+            const y0 = h * (0.25 + ((n * 0.37) % 0.5)) - t * h * 0.2;
+            ctx.fillStyle = bats ? 'rgba(30,18,60,0.85)' : 'rgba(40,30,70,0.7)';
+            for (let i = 0; i < 5; i++) {
+                const row = Math.ceil(i / 2) * (i % 2 ? 1 : -1);
+                const x =
+                    (fromLeft ? -20 + t * (w + 40) : w + 20 - t * (w + 40)) - Math.abs(row) * 7 * (fromLeft ? 1 : -1);
+                const y = y0 + row * 6 + Math.sin(clock * 3 + i) * 1.5;
+                const wing = Math.floor(clock * (bats ? 12 : 7) + i) % 2 === 0 ? -1 : 1;
+                const px = Math.round(x),
+                    py = Math.round(y);
+                ctx.fillRect(px - 1, py, 3, 1);
+                ctx.fillRect(px - 3, py + wing, 2, 1);
+                ctx.fillRect(px + 2, py + wing, 2, 1);
+                if (bats) ctx.fillRect(px, py - 1, 1, 1);
+            }
+        }
+    }
+    ctx.fillStyle = mood.tint;
+    ctx.fillRect(0, 0, w, h);
 }
 
 /** A key from a table of weights, picked at random, or null if the table is empty. */
