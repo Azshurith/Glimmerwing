@@ -31,6 +31,7 @@ import { drawCrow, drawGuardian } from './entities/bosses';
 import { drawBeetle, drawMoonseed, drawPuff, drawSpinner } from './entities/critters';
 import { drawChargeRing, drawChargeShot, drawFairy } from './entities/fairy';
 import { Hud } from './hud';
+import { SkyScenery } from './scenery/scenery';
 import { ModeScreen } from './screens/mode-screen';
 import { ProfileScreen } from './screens/profile-screen';
 import { SettingsScreen } from './screens/settings-screen';
@@ -39,12 +40,12 @@ import { drawCrescentIcon } from './icons';
 import { SelectScreen } from './screens/select-screen';
 import { TitleScreen } from './screens/title-screen';
 import { drawSprite, PlayerAnimator } from './sprites';
-import { PALETTE } from './theme';
 
 /** Draws the game onto the canvas from read-only game state; the simulation never draws. */
 export class Renderer {
     private ctx: CanvasRenderingContext2D;
-    private motes: { x: number; y: number; s: number; p: number }[] = [];
+    /** The endless floating-island sky behind every meadow (see scenery/scenery.ts). */
+    private scenery = new SkyScenery();
     /** Per-meadow animation state for sprite characters; a new round's Field starts fresh (and revives). */
     private anims = new WeakMap<Field, PlayerAnimator>();
     private selectScreen: SelectScreen;
@@ -97,14 +98,6 @@ export class Renderer {
         this.profileScreen = new ProfileScreen(this.ctx);
         this.settingsScreen = new SettingsScreen(this.ctx);
         this.hudLayer = new Hud(this.ctx);
-        for (let i = 0; i < 26; i++) {
-            this.motes.push({
-                x: Math.random() * C.FIELD_W,
-                y: Math.random() * C.FIELD_H,
-                s: 0.5 + Math.random(),
-                p: Math.random() * 6,
-            });
-        }
     }
 
     /** Match the canvas's pixel size to its size on screen. */
@@ -125,42 +118,10 @@ export class Renderer {
         ctx.setTransform(canvas.width / w, 0, 0, canvas.height / h, 0, 0);
         ctx.fillStyle = '#100b24';
         ctx.fillRect(0, 0, w, h);
+        this.scenery.beginFrame();
         // A widened menu is drawn in its usual units, centred.
         ctx.translate(this.viewX, 0);
         this.hudLayer.setView(w - 2 * this.viewX, h);
-    }
-
-    /** Paint a meadow's sky and drifting motes. */
-    private sky(time: number): void {
-        const ctx = this.ctx;
-        const g = ctx.createLinearGradient(0, 0, 0, C.FIELD_H);
-        g.addColorStop(0, PALETTE.skyTop);
-        g.addColorStop(1, PALETTE.skyBottom);
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, C.FIELD_W, C.FIELD_H);
-        // Drifting fireflies in the background.
-        for (const m of this.motes) {
-            const y = ((((m.y * C.FIELD_H) / C.FIELD_H_BASE - time * 6 * m.s) % C.FIELD_H) + C.FIELD_H) % C.FIELD_H;
-            // Spread across however wide the meadow is this round.
-            const x = (m.x * C.FIELD_W) / C.FIELD_W_BASE + Math.sin(time * 0.8 + m.p) * 6;
-            ctx.globalAlpha = 0.25 + 0.25 * Math.sin(time * 2 + m.p);
-            ctx.fillStyle = '#e9ff9a';
-            ctx.beginPath();
-            ctx.arc(x, y, m.s, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-        // Meadow grass along the bottom.
-        ctx.fillStyle = PALETTE.grass;
-        ctx.beginPath();
-        ctx.moveTo(0, C.FIELD_H);
-        for (let x = 0; x <= C.FIELD_W; x += 6) {
-            const h = 10 + ((x * 37) % 11) + Math.sin(time * 1.5 + x * 0.2) * 1.5;
-            ctx.lineTo(x, C.FIELD_H - h);
-            ctx.lineTo(x + 3, C.FIELD_H - 6);
-        }
-        ctx.lineTo(C.FIELD_W, C.FIELD_H);
-        ctx.fill();
     }
 
     /**
@@ -178,7 +139,7 @@ export class Renderer {
         ctx.beginPath();
         ctx.rect(0, 0, C.FIELD_W, C.FIELD_H);
         ctx.clip();
-        this.sky(time);
+        this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W, C.FIELD_H);
 
         if (f.fever > 0) {
             ctx.fillStyle = `rgba(255,170,120,${0.08 + 0.05 * Math.sin(time * 10)})`;

@@ -119,6 +119,9 @@ export class Field {
     private nextChain = 1;
 
     /** `crowFirst`: the Hollow Crow wakes in this meadow (exactly one of the two). */
+    /** The round's seed, which also picks the sky scenery behind this meadow (both meadows share it). */
+    readonly sceneSeed: number;
+
     constructor(
         seed: number,
         readonly fairy: Fairy,
@@ -126,6 +129,7 @@ export class Field {
         private crowFirst = false,
     ) {
         // Both fields get the same wave seed, so the swarms are identical and fair.
+        this.sceneSeed = seed;
         this.waveRng = new Rng(seed);
         this.fxRng = new Rng(seed ^ 0x9e3779b9);
         this.player = {
