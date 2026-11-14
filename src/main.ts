@@ -29,10 +29,6 @@ else if (startMode === 'online') lobby.open();
 // either way up, or a short laptop screen, still shows everything.
 const stage = document.getElementById('stage')!;
 const screenEl = document.getElementById('screen')!;
-/** A touchscreen device: its first tap asks for real fullscreen (see below). */
-const coarse = matchMedia('(pointer: coarse)').matches;
-/** Set once the player turns fullscreen off with ⛶, so taps don't turn it back on. */
-let userLeftFull = false;
 /** Size the game to fit the window's width and height, keeping the current layout's aspect ratio. */
 function fit(): void {
     const vv = window.visualViewport;
@@ -87,15 +83,8 @@ window.visualViewport?.addEventListener('resize', () => requestAnimationFrame(fi
 fit();
 
 // ---- the page is the game ----------------------------------------------------------
-// The game always fills the window (the stage starts with .immersive). On a touchscreen the first
-// tap also asks for real fullscreen, which hides the browser's bars; ⛶ on the title turns it off or on.
-window.addEventListener(
-    'pointerdown',
-    () => {
-        if (coarse && !userLeftFull && !fsElement() && fsSupported) void enterFull();
-    },
-    { passive: true },
-);
+// The game always fills the window (the stage starts with .immersive). Real fullscreen, which also hides
+// the browser's bars, is only ever asked for from Settings: a tap never turns it on by itself.
 
 // ---- fullscreen -----------------------------------------------------------------
 // The real Fullscreen API where there is one; elsewhere (iPhone Safari) a fixed full-window layer.
@@ -127,22 +116,20 @@ function exitFull(): void {
     fit();
 }
 /** Refit when the browser enters or leaves fullscreen (including on its own, e.g. Esc). */
-const onFsChange = () => fit();
+const onFsChange = () => {
+    fit();
+    if (fullBox) fullBox.checked = !!fsElement();
+};
 const fsSupported = !!(document.fullscreenEnabled || (stage as FsEl).webkitRequestFullscreen);
 document.addEventListener('fullscreenchange', onFsChange);
 document.addEventListener('webkitfullscreenchange', onFsChange);
-// ⛶ on the title toggles real fullscreen; it hides where the browser has none (iPhone Safari).
-const fullBtn = document.getElementById('tb-full') as HTMLButtonElement | null;
-if (fullBtn && !fsSupported) fullBtn.hidden = true;
-fullBtn?.addEventListener('click', () => {
-    fullBtn.blur();
-    if (fsElement()) {
-        userLeftFull = true;
-        exitFull();
-    } else {
-        userLeftFull = false;
-        void enterFull();
-    }
+// Settings' Fullscreen box toggles real fullscreen; its row hides where the browser has none (iPhone Safari).
+const fullBox = document.getElementById('set-full') as HTMLInputElement | null;
+const fullRow = document.getElementById('set-full-row');
+if (fullRow && !fsSupported) fullRow.hidden = true;
+fullBox?.addEventListener('change', () => {
+    if (fullBox.checked) void enterFull();
+    else exitFull();
 });
 
 // ---- on-screen touch buttons ------------------------------------------------------
@@ -166,7 +153,6 @@ document.querySelectorAll<HTMLButtonElement>('.touch-ui [data-key]').forEach(b =
     b.addEventListener('contextmenu', e => e.preventDefault());
 });
 const menuBtn = document.getElementById('menu-btn') as HTMLButtonElement;
-// Sound on/off from the title screen's corner (M works from the keyboard too).
 // ---- settings ------------------------------------------------------------------
 const settingsEl = document.getElementById('settings');
 const hideRivalBox = document.getElementById('set-hide-rival') as HTMLInputElement | null;
@@ -174,6 +160,8 @@ const hideRivalBox = document.getElementById('set-hide-rival') as HTMLInputEleme
 function openSettings(): void {
     if (!settingsEl || !hideRivalBox) return;
     hideRivalBox.checked = game.settings.hideRival;
+    if (soundBox) soundBox.checked = !sound.muted;
+    if (fullBox) fullBox.checked = !!fsElement();
     settingsEl.hidden = false;
     hideRivalBox.focus();
 }
@@ -185,11 +173,11 @@ document.getElementById('settings-close')?.addEventListener('click', () => {
     canvas.focus();
 });
 
-const soundBtn = document.getElementById('tb-sound') as HTMLButtonElement | null;
-soundBtn?.addEventListener('click', () => {
+// Sound on/off from Settings (M works from the keyboard too).
+const soundBox = document.getElementById('set-sound') as HTMLInputElement | null;
+soundBox?.addEventListener('change', () => {
     sound.unlock();
-    sound.toggleMute();
-    soundBtn.blur();
+    if (soundBox.checked === sound.muted) sound.toggleMute();
 });
 let shownMuted: boolean | null = null;
 let shownMode = '',
@@ -200,10 +188,9 @@ let shownMode = '',
 let shownViewW = 0;
 /** Keeps the page's touch layer in step with the game: which buttons show, and what the top one does. */
 function syncPage(): void {
-    if (soundBtn && sound.muted !== shownMuted) {
+    if (soundBox && sound.muted !== shownMuted) {
         shownMuted = sound.muted;
-        soundBtn.textContent = shownMuted ? '🔇' : '♪';
-        soundBtn.setAttribute('aria-pressed', String(!shownMuted));
+        soundBox.checked = !shownMuted;
     }
     // The layout changes with the phase and the orientation: refit to its shape.
     if (renderer.layout !== shownLayout || renderer.viewW !== shownViewW) {

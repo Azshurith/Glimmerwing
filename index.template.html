@@ -244,25 +244,6 @@
                 color: #1b1240;
                 text-shadow: none;
             }
-            /* Corner buttons on the title screen, on every device (the touch layer only shows on touchscreens). */
-            .corner-ui {
-                position: absolute;
-                inset: 0;
-                pointer-events: none;
-                display: none;
-            }
-            .screen[data-phase='title'] .corner-ui {
-                display: block;
-            }
-            .corner-ui .tb {
-                top: 1%;
-                display: grid;
-                place-items: center;
-                text-decoration: none;
-            }
-            #tb-sound {
-                left: 1.5%;
-            }
             #settings {
                 position: absolute;
                 inset: 0;
@@ -301,10 +282,7 @@
                 font-size: 0.8rem;
                 line-height: 1.35;
             }
-            #tb-full {
-                right: 1.5%;
-            }
-            #tb-full[hidden] {
+            .setting[hidden] {
                 display: none;
             }
             /* Tall layout (portrait, one player): pause in the top-right corner. Touch play is all
@@ -426,11 +404,6 @@
                 <div class="touch-ui" aria-hidden="false">
                     <button class="tb small tb-menu" id="menu-btn" data-key="Escape" aria-label="Pause">❚❚</button>
                 </div>
-                <!-- Title-screen corners, on every device: sound and fullscreen (Settings and How to play are in the menu). -->
-                <div class="corner-ui">
-                    <button class="tb small" id="tb-sound" aria-label="Sound" aria-pressed="true">♪</button>
-                    <button class="tb small" id="tb-full" aria-label="Fullscreen">⛶</button>
-                </div>
                 <div id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
                     <div class="lobby-card">
                         <h2 id="settings-title">Settings</h2>
@@ -442,6 +415,20 @@
                                     >On a phone held upright, against the CPU: your meadow fills the whole screen, with
                                     a slim bar for the round and the rival's hearts.</small
                                 >
+                            </span>
+                        </label>
+                        <label class="setting">
+                            <input type="checkbox" id="set-sound" />
+                            <span>
+                                <strong>Sound</strong>
+                                <small>Music and effects (M toggles it from the keyboard).</small>
+                            </span>
+                        </label>
+                        <label class="setting" id="set-full-row">
+                            <input type="checkbox" id="set-full" />
+                            <span>
+                                <strong>Fullscreen</strong>
+                                <small>Fill the whole screen, with the browser's bars hidden.</small>
                             </span>
                         </label>
                         <a class="setting-link" href="guide.html">How to play &amp; controls</a>
