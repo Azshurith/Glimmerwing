@@ -13,6 +13,8 @@ interface SettingsPanelDeps {
     input: Input;
     /** Where focus goes back to when the panel closes. */
     canvas: HTMLCanvasElement;
+    /** Leave the Settings screen (Esc pressed in the panel). */
+    back: () => void;
     /** Real fullscreen: whether the browser has it, whether it's on, and switching it. */
     fullscreen: { supported: boolean; isOn: () => boolean; enter: () => void; exit: () => void };
 }
@@ -20,8 +22,11 @@ interface SettingsPanelDeps {
 /** The panel's controls, looked up once. */
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
 
-/** Wire up the Settings panel; returns `open` (for the main menu's Settings card) and `sync` (called each frame). */
-export function initSettingsPanel(d: SettingsPanelDeps): { open: () => void; sync: () => void } {
+/**
+ * Wire up the Settings panel; returns `open` and `hide` (the page calls them as the game enters and leaves its
+ * Settings screen) and `sync` (called each frame).
+ */
+export function initSettingsPanel(d: SettingsPanelDeps): { open: () => void; hide: () => void; sync: () => void } {
     const el = $<HTMLElement>('settings');
     const music = $<HTMLInputElement>('set-music'),
         musicVal = $<HTMLOutputElement>('set-music-val'),
@@ -177,20 +182,19 @@ export function initSettingsPanel(d: SettingsPanelDeps): { open: () => void; syn
             if (e.code === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
-                close();
+                d.back();
             }
         },
         true,
     );
 
-    /** Close the panel and give the game the keyboard back. */
-    function close(): void {
-        if (!el) return;
+    /** Hide the panel and give the game the keyboard back. */
+    function hide(): void {
+        if (!el || el.hidden) return;
         stopListening();
         el.hidden = true;
         d.canvas.focus();
     }
-    $<HTMLButtonElement>('settings-close')?.addEventListener('click', close);
 
     let shownMuted: boolean | null = null;
     return {
@@ -208,6 +212,7 @@ export function initSettingsPanel(d: SettingsPanelDeps): { open: () => void; syn
             el.hidden = false;
             tabs[0]?.focus();
         },
+        hide,
         sync() {
             // M (or anything else) can change mute while the panel is open; and fullscreen can end on its own.
             if (soundBox && d.sound.muted !== shownMuted) {

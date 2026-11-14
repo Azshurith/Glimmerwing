@@ -134,8 +134,7 @@ export class Game {
     private preview = new SkillPreview();
     /** On a phone, whether the demo's pop-up is open. */
     private demoOpen = false;
-    /** Set by the page: open the Settings panel, and the How to play page. */
-    onWantSettings?: () => void;
+    /** Set by the page: open the How to play page. */
     onWantGuide?: () => void;
     private readyAt = -1;
     /** Draw every fireball's path across the screen (`?debug=paths`). */
@@ -339,12 +338,17 @@ export class Game {
 
     /** True once a match is under way (not on the title, the menus, the Characters or Profile screens, or select). */
     private get inGame(): boolean {
-        return !['title', 'modes', 'roster', 'profile', 'select'].includes(this.phase);
+        return !['title', 'modes', 'roster', 'profile', 'settings', 'select'].includes(this.phase);
+    }
+
+    /** Leave the Settings screen (its page panel's Esc). */
+    closeSettings(): void {
+        if (this.phase === 'settings') this.backToMenu();
     }
 
     /** Back to the main menu, with the card for where you came from highlighted. */
     private backToMenu(): void {
-        const from = this.phase === 'roster' ? 1 : this.phase === 'profile' ? 2 : 0;
+        const from = this.phase === 'roster' ? 1 : this.phase === 'profile' ? 2 : this.phase === 'settings' ? 3 : 0;
         this.phase = 'modes';
         this.menu = 'main';
         this.modeIndex = from;
@@ -443,7 +447,7 @@ export class Game {
                 this.onWantOnline?.();
                 break;
             case 'settings':
-                this.onWantSettings?.();
+                this.phase = 'settings';
                 break;
             case 'guide':
                 this.onWantGuide?.();
@@ -681,6 +685,11 @@ export class Game {
         }
         if (this.phase === 'profile') {
             if (pr.has('Escape') || pr.has('Enter') || pr.has('Space')) this.backToMenu();
+            return;
+        }
+        // Settings is the page's own panel under the heading bar; here only Esc (or ◀ Back) leaves it.
+        if (this.phase === 'settings') {
+            if (pr.has('Escape')) this.backToMenu();
             return;
         }
         if (this.phase === 'modes') {
@@ -1028,6 +1037,9 @@ export class Game {
                     this.time,
                     this.preview.field,
                 );
+                break;
+            case 'settings':
+                r.settings(this.time);
                 break;
             case 'profile':
                 r.profile(

@@ -1,8 +1,18 @@
 // The heading bar across the top of the menu screens (main menu, Play, Characters, Profile, select).
+import * as C from '@/core/config';
 import { arcadeText } from '@/render/draw';
+import { tallMenuFit } from './menu-fit';
 
 /** How tall the bar is, in design units: taller on a phone held upright, where it holds the Back tab. */
 export const TOP_BAR_H = { wide: 27, tall: 36 } as const;
+
+/**
+ * Where the bar ends (its gold line included), in view units down from the top, for a view `h` tall: the page's
+ * Settings panel starts there, so it sits under the same bar as the other screens.
+ */
+export function topBarBottom(tall: boolean, h: number = C.TALL_H): number {
+    return tall ? (TOP_BAR_H.tall + 2) * tallMenuFit(h).s : TOP_BAR_H.wide + 2;
+}
 
 /**
  * Draw the heading bar, `W` wide and reaching `bleed` past each side, with `text` centred on `mid` at `size`.

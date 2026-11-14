@@ -33,6 +33,7 @@ import { drawChargeRing, drawChargeShot, drawFairy } from './entities/fairy';
 import { Hud } from './hud';
 import { ModeScreen } from './screens/mode-screen';
 import { ProfileScreen } from './screens/profile-screen';
+import { SettingsScreen } from './screens/settings-screen';
 import { RosterScreen } from './screens/roster-screen';
 import { drawCrescentIcon } from './icons';
 import { SelectScreen } from './screens/select-screen';
@@ -50,6 +51,7 @@ export class Renderer {
     private titleScreen: TitleScreen;
     private modeScreen: ModeScreen;
     private rosterScreen: RosterScreen;
+    private settingsScreen: SettingsScreen;
     private profileScreen: ProfileScreen;
     /** HUD, console, popups and banners for a match. */
     private hudLayer: Hud;
@@ -93,6 +95,7 @@ export class Renderer {
         this.modeScreen = new ModeScreen(this.ctx);
         this.rosterScreen = new RosterScreen(this.ctx);
         this.profileScreen = new ProfileScreen(this.ctx);
+        this.settingsScreen = new SettingsScreen(this.ctx);
         this.hudLayer = new Hud(this.ctx);
         for (let i = 0; i < 26; i++) {
             this.motes.push({
@@ -470,6 +473,11 @@ export class Renderer {
     /** The Profile screen (see profile-screen.ts). */
     profile(v: ProfileView, time: number): void {
         this.profileScreen.draw(v, time, this.layout, this.viewH, this.viewX);
+    }
+
+    /** The Settings screen's sky and heading bar; the settings are the page's panel (see settings-screen.ts). */
+    settings(time: number): void {
+        this.settingsScreen.draw(time, this.layout, this.viewH, this.viewX);
     }
 
     /** The arcade character-select screen (see select-screen.ts). */

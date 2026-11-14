@@ -17,6 +17,7 @@ export type Phase =
     | 'modes'
     | 'roster'
     | 'profile'
+    | 'settings'
     | 'select'
     | 'countdown'
     | 'playing'

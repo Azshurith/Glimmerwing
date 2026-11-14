@@ -5,6 +5,7 @@ import { Lobby } from './net/lobby';
 import { Sound } from './audio/sound';
 import { Renderer } from './render/renderer';
 import { initSettingsPanel } from './page/settings-panel';
+import { topBarBottom } from './render/screens/top-bar';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
@@ -77,6 +78,9 @@ function fit(): void {
     screenEl.style.setProperty('--view-ratio', `${renderer.viewW} / ${renderer.viewH}`);
     // On-screen buttons scale with the game, not the window.
     screenEl.style.setProperty('--sw', `${Math.floor(w)}px`);
+    // Where the menu screens' heading bar ends, so the Settings panel can start just under it.
+    const barPx = topBarBottom(renderer.layout === 'tall', renderer.viewH) * (Math.floor(w) / renderer.viewW);
+    screenEl.style.setProperty('--bar-h', `${barPx}px`);
     renderer.resize();
 }
 for (const ev of ['resize', 'orientationchange'] as const)
@@ -151,9 +155,9 @@ const settings = initSettingsPanel({
     sound,
     input,
     canvas,
+    back: () => game.closeSettings(),
     fullscreen: { supported: fsSupported, isOn: () => !!fsElement(), enter: () => void enterFull(), exit: exitFull },
 });
-game.onWantSettings = settings.open;
 game.onWantGuide = () => (location.href = 'guide.html');
 
 let shownMode = '',
@@ -178,12 +182,15 @@ function syncPage(): void {
     if (game.modeName !== shownMode || game.phaseName !== shownPhase) {
         shownMode = screenEl.dataset.mode = game.modeName;
         shownPhase = screenEl.dataset.phase = game.phaseName;
-        const back = ['select', 'modes', 'roster', 'profile'].includes(shownPhase);
+        const back = ['select', 'modes', 'roster', 'profile', 'settings'].includes(shownPhase);
         menuBtn.textContent = back ? '◀ BACK' : '❚❚';
         menuBtn.setAttribute('aria-label', back ? 'Back' : 'Pause');
         void keepAwake(shownPhase === 'playing' || shownPhase === 'countdown');
+        // Settings is the page's panel, shown while the game is on its Settings screen.
+        if (shownPhase === 'settings') settings.open();
+        else settings.hide();
         // The menus have their own calm loop; everything from the countdown on plays the round's.
-        const menus = ['title', 'modes', 'roster', 'profile', 'select'].includes(shownPhase);
+        const menus = ['title', 'modes', 'roster', 'profile', 'settings', 'select'].includes(shownPhase);
         sound.playMusic(menus ? 'menu' : 'battle');
     }
 }
