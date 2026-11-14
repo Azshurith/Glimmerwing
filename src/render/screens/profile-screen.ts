@@ -5,6 +5,7 @@ import type { Layout, ProfileView } from '@/types';
 import { Backdrop } from '@/render/backdrop';
 import { drawFairy } from '@/render/entities/fairy';
 import { arcadeText, shade } from '@/render/draw';
+import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 
@@ -42,15 +43,7 @@ export class ProfileScreen {
             this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H);
             ctx.restore();
         }
-        // Heading bar.
-        const hg = ctx.createLinearGradient(0, 0, 0, 28);
-        hg.addColorStop(0, 'rgba(10,6,28,0.95)');
-        hg.addColorStop(1, 'rgba(10,6,28,0.6)');
-        ctx.fillStyle = hg;
-        ctx.fillRect(-bleed, 0, W + 2 * bleed, 27);
-        ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(-bleed, 27, W + 2 * bleed, 1);
-        arcadeText(ctx, 'PROFILE', W / 2, 21, 16, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'center');
+        drawTopBar(ctx, 'PROFILE', W, bleed, tall, 16);
 
         ctx.translate(0, dy);
         // Player card: an avatar (Pip's face for now), the name, and the sign-in status.

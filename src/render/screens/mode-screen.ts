@@ -5,6 +5,7 @@ import type { Layout, ModeMenu, ModeView, TitleAction } from '@/types';
 import { Backdrop } from '@/render/backdrop';
 import { drawFairy } from '@/render/entities/fairy';
 import { arcadeText, sparkle } from '@/render/draw';
+import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 
@@ -110,7 +111,7 @@ export class ModeScreen {
             this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 160, C.VIEW_W + 2 * bleed, C.VIEW_H);
             ctx.restore();
         }
-        this.header(HEADINGS[v.menu], W, bleed, layout === 'tall' ? 14 : 16);
+        drawTopBar(this.ctx, HEADINGS[v.menu], W, bleed, layout === 'tall', 16);
         designCards(v.menu, layout, dy).forEach((c, i) => this.card(c, i === v.index, t));
         // Hint line along the bottom.
         ctx.textAlign = 'center';
@@ -119,21 +120,6 @@ export class ModeScreen {
         const hint = v.touch ? 'TAP TO CHOOSE  ·  ◀ BACK' : 'ARROWS CHOOSE  ·  ENTER OR Z PICKS  ·  ESC BACK';
         ctx.fillText(hint, W / 2, layout === 'tall' ? H - 16 : H - 14, W - 16);
         ctx.restore();
-    }
-
-    /** The heading bar across the top, reaching `bleed` past each side. */
-    private header(text: string, W: number, bleed: number, size: number): void {
-        const ctx = this.ctx;
-        const g = ctx.createLinearGradient(0, 0, 0, 28);
-        g.addColorStop(0, 'rgba(10,6,28,0.95)');
-        g.addColorStop(1, 'rgba(10,6,28,0.6)');
-        ctx.fillStyle = g;
-        ctx.fillRect(-bleed, 0, W + 2 * bleed, 27);
-        ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(-bleed, 27, W + 2 * bleed, 1);
-        ctx.fillStyle = 'rgba(255,230,160,0.25)';
-        ctx.fillRect(-bleed, 28, W + 2 * bleed, 1);
-        arcadeText(ctx, text, W / 2, 21, size, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'center', W - 76);
     }
 
     /** One mode card: a framed panel with its emblem, name and a line about it. */
