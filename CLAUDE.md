@@ -46,6 +46,7 @@ Do each feature on its own branch (`feature/<name>` or `fix/<name>`) and open a 
 - [src/render/renderer.ts](src/render/renderer.ts) (`Renderer`) sets up each frame and composes a meadow layer by layer.
 - The drawing itself is plain functions that take the canvas context first, e.g. `drawStar(ctx, …)`. They're grouped by what they draw in `src/render/entities/`: `fairy`, `critters`, `attacks`, `bosses` and `bombs`. HUD icons are in `icons.ts`.
 - To draw something new, add a function to the matching entities module and call it from `Renderer.field()`.
+- The menu screens share their heading bar, `drawTopBar` in `screens/top-bar.ts` (taller on a phone, where the page's Back tab sits in it).
 - The HUD, the title and select screens (`screens/`), the backdrop and sprite animation each have their own module. Colours and fonts are in `theme.ts`.
 
 **Data and tuning.**

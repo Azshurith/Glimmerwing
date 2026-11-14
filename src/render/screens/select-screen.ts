@@ -4,6 +4,7 @@ import type { Layout, SelectSide, SelectView } from '@/types';
 import { Backdrop } from '@/render/backdrop';
 import { drawFairy } from '@/render/entities/fairy';
 import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
+import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 
@@ -28,7 +29,7 @@ interface PanelGeom {
     compact: boolean;
 }
 const WIDE_PANEL: PanelGeom = { w: PANEL_W, artY: ART_Y, artH: ART_H, compact: false };
-const TALL_PANEL: PanelGeom = { w: 122, artY: 36, artH: 150, compact: true };
+const TALL_PANEL: PanelGeom = { w: 122, artY: 48, artH: 140, compact: true };
 const TALL_PANEL_X = [6, C.TALL_W - 6 - 122] as const;
 
 /** Where the centre column's pieces go in each layout. */
@@ -41,18 +42,16 @@ const CENTRE = {
         vsSize: 34,
         hintY: 282,
         hintW: 230,
-        headSize: 16,
         W: C.VIEW_W,
     },
     tall: {
         mid: C.TALL_W / 2,
         timeY: 290,
         vsX: C.TALL_W / 2,
-        vsY: 106,
+        vsY: 112,
         vsSize: 22,
         hintY: 494,
         hintW: 250,
-        headSize: 12,
         W: C.TALL_W,
     },
 } as const;
@@ -143,20 +142,9 @@ export class SelectScreen {
 
     /** Draw the heading bar across the top. */
     private header(text: string): void {
-        const ctx = this.ctx;
         const cg = CENTRE[this.layout];
-        const g = ctx.createLinearGradient(0, 0, 0, 28);
-        g.addColorStop(0, 'rgba(10,6,28,0.95)');
-        g.addColorStop(1, 'rgba(10,6,28,0.6)');
-        ctx.fillStyle = g;
-        const b = this.bleed;
-        ctx.fillRect(-b, 0, cg.W + 2 * b, 27);
-        ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(-b, 27, cg.W + 2 * b, 1);
-        ctx.fillStyle = 'rgba(255,230,160,0.25)';
-        ctx.fillRect(-b, 28, cg.W + 2 * b, 1);
-        // On the tall screen the corners hold the back and exit buttons, so the heading keeps to the middle.
-        arcadeText(ctx, text, cg.mid, 21, cg.headSize, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'center', cg.W - 76);
+        const tall = this.layout === 'tall';
+        drawTopBar(this.ctx, text, cg.W, this.bleed, tall, tall ? 14 : 16, cg.mid);
     }
 
     // ---- side panels ------------------------------------------------------------

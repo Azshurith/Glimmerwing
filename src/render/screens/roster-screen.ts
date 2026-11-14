@@ -5,6 +5,7 @@ import type { Fairy, Layout, RosterView } from '@/types';
 import { Backdrop } from '@/render/backdrop';
 import { drawFairy } from '@/render/entities/fairy';
 import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
+import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 
@@ -60,7 +61,7 @@ const LAYOUT = {
     },
     tall: {
         W: C.TALL_W,
-        art: { x: 14, y: 38, w: 236, h: 170 },
+        art: { x: 14, y: 46, w: 236, h: 164 },
         // On a phone the demo opens full size in a pop-up from the PREVIEW button (see `popup`).
         demo: { x: 24, y: 0, w: 216 },
         info: { x: 14, y: 250, w: 236 },
@@ -95,7 +96,7 @@ export type DemoDraw = (x: number, y: number, scale: number) => void;
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
 
 /** The PREVIEW button on a phone's portrait, in the tall layout's design units (before `tallShift`). */
-const PREVIEW_BTN = { x: 172, y: 46, w: 70, h: 18 };
+const PREVIEW_BTN = { x: 172, y: 54, w: 70, h: 18 };
 
 /** The PREVIEW button in view units, for a view `h` tall: the tap target that opens the demo on a phone. */
 export function rosterPreviewButton(h: number = C.TALL_H): { x: number; y: number; w: number; h: number } {
@@ -148,7 +149,7 @@ export class RosterScreen {
             ctx.restore();
         }
         const L = LAYOUT[layout];
-        this.header(L.W, bleed);
+        drawTopBar(ctx, 'CHARACTERS', L.W, bleed, layout === 'tall', 16);
         const fy = FAIRIES[v.index],
             locked = v.locked[v.index];
         ctx.save();
@@ -213,19 +214,6 @@ export class RosterScreen {
         ctx.font = `7px ${ARCADE}`;
         ctx.fillStyle = 'rgba(203,188,245,0.85)';
         ctx.fillText(v.touch ? 'TAP TO CLOSE' : 'ESC TO CLOSE', L.W / 2, y + h + 16);
-    }
-
-    /** The heading bar across the top, reaching `bleed` past each side. */
-    private header(W: number, bleed: number): void {
-        const ctx = this.ctx;
-        const g = ctx.createLinearGradient(0, 0, 0, 28);
-        g.addColorStop(0, 'rgba(10,6,28,0.95)');
-        g.addColorStop(1, 'rgba(10,6,28,0.6)');
-        ctx.fillStyle = g;
-        ctx.fillRect(-bleed, 0, W + 2 * bleed, 27);
-        ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(-bleed, 27, W + 2 * bleed, 1);
-        arcadeText(ctx, 'CHARACTERS', W / 2, 21, 16, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'center', W - 76);
     }
 
     /** The fairy's portrait (or her in-game look, large) in a framed window, with her name on a plate. */
