@@ -1,21 +1,22 @@
-// The endless sky behind each meadow: a floating-island forest that scrolls down past the meadow as the round goes
-// on, so the fairy seems to keep climbing. Three parallax layers (far, mid, near), each cut into horizontal bands
+// The endless sky behind each meadow: a floating-island garden seen from above at an angle, scrolling down past the
+// meadow as the round goes on, so the fairy seems to keep flying onward over it. Three parallax layers (far, mid, near), each cut into horizontal bands
 // ("cells") of world height. What a cell holds is worked out from the round's seed and the cell's number alone, so
 // it's always the same (nothing pops) and never runs out; the sprites are painted once when a cell comes near and
 // dropped again once it's long gone. It's only scenery: nothing here touches the game.
 import { Rng } from '@/core/rng';
+import { MAPS } from '@/data/maps';
 import { SCENERY_STRIPS } from '@/data/scenery';
-import type { IslandSpec, Painted } from '@/types';
-import { paintCloud, paintIsland, paintSpire } from './paint';
+import type { IslandSpec, MapTheme, Painted, Prop } from '@/types';
+import { paintCloud, paintGround, paintIsland, paintProp } from './paint';
 
 /** The three layers, back to front. */
 type LayerName = 'far' | 'mid' | 'near';
 
 /** How each layer moves and how tall its cells are, in world units. */
 const LAYERS: Record<LayerName, { speed: number; cellH: number }> = {
-    far: { speed: 0.22, cellH: 130 },
-    mid: { speed: 0.55, cellH: 170 },
-    near: { speed: 1, cellH: 240 },
+    far: { speed: 0.3, cellH: 110 },
+    mid: { speed: 0.62, cellH: 150 },
+    near: { speed: 1, cellH: 230 },
 };
 const ORDER: LayerName[] = ['far', 'mid', 'near'];
 
@@ -26,12 +27,14 @@ const AHEAD = 320;
 const BEHIND = 60;
 /** Sprites painted per frame at most, so a busy stretch never hitches a frame. */
 const PAINT_BUDGET = 2;
+/** How wide a band of ground is painted: enough for the widest meadow. */
+const GROUND_W = 384;
 /** Sprites and cells kept after they were last needed, in frames, before they're let go. */
 const KEEP_FRAMES = 900;
 
-/** One thing in a cell: an island, a cloud or a distant spire. */
+/** One thing in a cell: an island, a cloud, or (on a ground map) something standing on the ground. */
 interface Item {
-    kind: 'island' | 'cloud' | 'spire';
+    kind: 'island' | 'cloud' | 'prop';
     /** Across the meadow, as a share of its width (a near island can sit partly off the side). */
     x: number;
     /** Up from the bottom of its cell, in world units. */
@@ -61,7 +64,7 @@ function hash(a: number, b: number, c: number): number {
     return (h ^ (h >>> 13)) >>> 0;
 }
 
-/** A painted sprite as a Painted with no anchors (clouds and spires are drawn from their top-left). */
+/** A painted cloud as a Painted, anchored at its top middle. */
 const plain = (canvas: HTMLCanvasElement): Painted => ({
     canvas,
     cx: canvas.width / 2,
@@ -77,6 +80,8 @@ export class SkyScenery {
     private art = new Map<string, Cached>();
     private frame = 0;
     private painted = 0;
+    /** Sprites painted per frame at most (raised while a screen shows several maps at once). */
+    budget = PAINT_BUDGET;
     private strips: HTMLImageElement[] = SCENERY_STRIPS.map(src => {
         const img = new Image();
         img.src = src;
@@ -99,34 +104,78 @@ export class SkyScenery {
     }
 
     /**
-     * Paint the sky behind a meadow `w` × `h`: `seed` picks the world, `time` (seconds into the round) how far
-     * it has climbed, and `clock` drives the animation (waterfalls, drifting clouds, twinkling motes).
+     * Paint the sky behind a meadow `w` × `h` in map `map`'s look: `seed` picks the world, `time` (seconds into
+     * the round) how far it has come, and `clock` drives the animation (waterfalls, drifting clouds, motes).
      */
-    draw(ctx: CanvasRenderingContext2D, seed: number, time: number, clock: number, w: number, h: number): void {
+    draw(
+        ctx: CanvasRenderingContext2D,
+        seed: number,
+        time: number,
+        clock: number,
+        w: number,
+        h: number,
+        map: MapTheme = MAPS[0],
+    ): void {
         const climb = time * CLIMB;
         const smooth = ctx.imageSmoothingEnabled;
         ctx.imageSmoothingEnabled = false;
-        if (!this.drawStrips(ctx, climb * LAYERS.far.speed, w, h)) {
+        if (map.terrain === 'ground') {
+            // Solid ground far below, with big things standing on it, and haze drifting over it all.
+            this.ground(ctx, seed, map, climb * LAYERS.mid.speed, w, h);
+            this.layer(ctx, seed, map, 'mid', climb, clock, w, h);
+            this.drawMotes(ctx, map.mote, climb, clock, w, h);
+            this.layer(ctx, seed, map, 'near', climb, clock, w, h);
+        } else if (!this.drawStrips(ctx, climb * LAYERS.far.speed, w, h)) {
             const g = ctx.createLinearGradient(0, 0, 0, h);
-            g.addColorStop(0, '#3a6cc4');
-            g.addColorStop(0.55, '#6ea6e2');
-            g.addColorStop(1, '#a6d2f0');
+            g.addColorStop(0, map.sky[0]);
+            g.addColorStop(1, map.sky[1]);
             ctx.fillStyle = g;
             ctx.fillRect(0, 0, w, h);
-            this.layer(ctx, seed, 'far', climb, clock, w, h);
+            this.layer(ctx, seed, map, 'far', climb, clock, w, h);
         }
-        this.layer(ctx, seed, 'mid', climb, clock, w, h);
-        this.drawMotes(ctx, climb, clock, w, h);
-        this.layer(ctx, seed, 'near', climb, clock, w, h);
+        if (map.terrain !== 'ground') {
+            this.layer(ctx, seed, map, 'mid', climb, clock, w, h);
+            this.drawMotes(ctx, map.mote, climb, clock, w, h);
+            this.layer(ctx, seed, map, 'near', climb, clock, w, h);
+        }
         ctx.imageSmoothingEnabled = smooth;
         // A soft veil over it all keeps the fairies, critters and fireballs the brightest things on screen.
         const v = ctx.createLinearGradient(0, 0, 0, h);
-        v.addColorStop(0, 'rgba(20,14,56,0.42)');
-        v.addColorStop(0.18, 'rgba(20,14,56,0.24)');
-        v.addColorStop(0.8, 'rgba(20,14,56,0.24)');
-        v.addColorStop(1, 'rgba(20,14,56,0.45)');
+        const [edge, mid] = map.veil;
+        v.addColorStop(0, `rgba(16,14,52,${edge})`);
+        v.addColorStop(0.14, `rgba(16,14,52,${mid})`);
+        v.addColorStop(0.84, `rgba(16,14,52,${mid})`);
+        v.addColorStop(1, `rgba(16,14,52,${edge})`);
         ctx.fillStyle = v;
         ctx.fillRect(0, 0, w, h);
+    }
+
+    /**
+     * A ground map's terrain: bands of ground one cell tall, painted from world position so they meet without a
+     * seam. A band about to scroll into view is painted ahead within the frame's budget; one already in view is
+     * painted at once, so there's never a gap.
+     */
+    private ground(ctx: CanvasRenderingContext2D, seed: number, map: MapTheme, a: number, w: number, h: number): void {
+        const cellH = LAYERS.mid.cellH;
+        ctx.fillStyle = map.top[1];
+        ctx.fillRect(0, 0, w, h);
+        const k0 = Math.floor(a / cellH),
+            k1 = Math.floor((a + h + AHEAD) / cellH);
+        for (let k = k0; k <= k1; k++) {
+            const top = Math.round(h - ((k + 1) * cellH - a));
+            const visible = top < h && top + cellH > 0;
+            const key = `${map.id}|${seed}|ground|${k}`;
+            let c = this.art.get(key);
+            if (!c && (visible || this.painted < this.budget)) {
+                this.painted++;
+                c = { art: plain(paintGround(map, seed, k * cellH, GROUND_W, cellH)), used: 0 };
+                this.art.set(key, c);
+            }
+            if (!c?.art) continue;
+            c.used = this.frame;
+            if (visible)
+                ctx.drawImage(c.art.canvas, 0, 0, Math.min(w, GROUND_W), cellH, 0, top, Math.min(w, GROUND_W), cellH);
+        }
     }
 
     /** The far layer from the painted strip images, if any are listed and loaded; false to paint it instead. */
@@ -153,6 +202,7 @@ export class SkyScenery {
     private layer(
         ctx: CanvasRenderingContext2D,
         seed: number,
+        map: MapTheme,
         name: LayerName,
         climb: number,
         clock: number,
@@ -163,11 +213,12 @@ export class SkyScenery {
         const a = climb * L.speed;
         const k0 = Math.floor((a - BEHIND) / L.cellH),
             k1 = Math.floor((a + h + AHEAD) / L.cellH);
-        for (let k = k0; k <= k1; k++) {
-            const items = this.cell(seed, name, k);
+        // Top of the view first, so things lower down (nearer the viewer) overlap the ones above them.
+        for (let k = k1; k >= k0; k--) {
+            const items = this.cell(seed, map, name, k);
             const spots: ({ x: number; y: number; art: Painted } | null)[] = [];
             items.forEach((it, i) => {
-                const art = this.sprite(`${seed}|${name}|${k}|${i}`, it);
+                const art = this.sprite(`${map.id}|${seed}|${name}|${k}|${i}`, it);
                 if (!art) return void spots.push(null);
                 let x = it.x * w;
                 if (it.drift) {
@@ -182,14 +233,14 @@ export class SkyScenery {
                 spots.push({ x: dx, y: dy, art });
                 if (dy > h || dy + art.canvas.height + Math.max(0, ...it.fallLen) < 0) return;
                 if (dx > w || dx + art.canvas.width < 0) return;
-                // Waterfalls pour from behind the island's lip, so they're drawn first.
+                ctx.globalAlpha = it.alpha;
+                ctx.drawImage(art.canvas, dx, dy);
+                ctx.globalAlpha = 1;
+                // Waterfalls pour off the front edge, down over the cliff face and on into the sky below.
                 it.fallLen.forEach((len, j) => {
                     const f = art.falls[j];
                     if (f) waterfall(ctx, dx + f.x, dy + f.y, len, name === 'far' ? 2 : name === 'mid' ? 3 : 4, clock);
                 });
-                ctx.globalAlpha = it.alpha;
-                ctx.drawImage(art.canvas, dx, dy);
-                ctx.globalAlpha = 1;
             });
             items.forEach((it, i) => {
                 const a1 = spots[i],
@@ -207,11 +258,11 @@ export class SkyScenery {
     }
 
     /** A cell's contents, worked out once from (seed, layer, cell) and kept while it's in use. */
-    private cell(seed: number, name: LayerName, k: number): Item[] {
-        const key = `${seed}|${name}|${k}`;
+    private cell(seed: number, map: MapTheme, name: LayerName, k: number): Item[] {
+        const key = `${map.id}|${seed}|${name}|${k}`;
         let c = this.cells.get(key);
         if (!c) {
-            c = { items: plan(new Rng(hash(seed, ORDER.indexOf(name) + 1, k)), name, L(name).cellH), used: 0 };
+            c = { items: plan(new Rng(hash(seed, ORDER.indexOf(name) + 1, k)), map, name, L(name).cellH), used: 0 };
             this.cells.set(key, c);
         }
         c.used = this.frame;
@@ -222,7 +273,7 @@ export class SkyScenery {
     private sprite(key: string, it: Item): Painted | null {
         let c = this.art.get(key);
         if (!c) {
-            if (this.painted >= PAINT_BUDGET) return null;
+            if (this.painted >= this.budget) return null;
             this.painted++;
             c = { art: it.paint(), used: 0 };
             this.art.set(key, c);
@@ -232,9 +283,16 @@ export class SkyScenery {
     }
 
     /** Glowing motes drifting through the middle distance. */
-    private drawMotes(ctx: CanvasRenderingContext2D, climb: number, clock: number, w: number, h: number): void {
+    private drawMotes(
+        ctx: CanvasRenderingContext2D,
+        color: string,
+        climb: number,
+        clock: number,
+        w: number,
+        h: number,
+    ): void {
         const a = climb * 0.75;
-        ctx.fillStyle = '#fff4b0';
+        ctx.fillStyle = color;
         for (const m of this.motes) {
             const y = (((m.y * h + a * m.v + clock * 4 * m.v) % h) + h) % h;
             const x = m.x * w + Math.sin(clock * 0.7 + m.p) * 5;
@@ -249,16 +307,16 @@ export class SkyScenery {
 /** A layer's settings. */
 const L = (name: LayerName) => LAYERS[name];
 
-/** Decide what a cell holds: sizes, places and what grows on each island, all from its own random stream. */
-function plan(r: Rng, name: LayerName, cellH: number): Item[] {
+/** Decide what a cell holds: sizes, places and what's on each island, all from its own random stream. */
+function plan(r: Rng, m: MapTheme, name: LayerName, cellH: number): Item[] {
     const items: Item[] = [];
     const seedOf = () => Math.floor(r.next() * 2 ** 31);
-    /** An island item with features rolled for this layer. */
+    /** An island item. */
     const island = (x: number, y: number, spec: IslandSpec, falls: number[], alpha = 1): Item => ({
         kind: 'island',
         x,
         y,
-        paint: () => paintIsland(spec),
+        paint: () => paintIsland(spec, m),
         fallLen: falls,
         drift: 0,
         alpha,
@@ -271,80 +329,129 @@ function plan(r: Rng, name: LayerName, cellH: number): Item[] {
             kind: 'cloud',
             x,
             y,
-            paint: () => plain(paintCloud(s, cw, fade)),
+            paint: () => plain(paintCloud(s, cw, fade, m)),
             fallLen: [],
             drift,
-            alpha,
+            alpha: alpha * m.cloudAlpha,
             bridgeTo: -1,
         };
     };
-    /** The rest of an island's spec, rolled. */
-    const spec = (w: number, fade: number, rich: boolean): IslandSpec => ({
-        seed: seedOf(),
-        w,
-        depth: r.range(0.45, 0.78),
-        fade,
-        trees: rich ? r.int(1, Math.max(1, Math.round(w / 22))) : r.int(0, 2),
-        pines: r.next() < 0.4,
-        cottage: rich && r.next() < 0.18,
-        ruins: rich && r.next() < 0.16,
-        pond: rich && r.next() < 0.25,
-        falls: r.next() < (rich ? 0.5 : 0.3) ? (r.next() < 0.25 ? 2 : 1) : 0,
-        vines: r.next() < 0.5,
-    });
+    /** An island's spec: its size, and what's on it rolled from the map's odds (`rich`: the full set). */
+    const spec = (w: number, fade: number, rich: boolean): IslandSpec => {
+        const o = m.odds;
+        return {
+            seed: seedOf(),
+            w,
+            d: Math.round(w * r.range(0.4, 0.62)),
+            cliff: Math.round(Math.max(6, w * r.range(0.16, 0.24))),
+            fade,
+            big: Math.max(rich ? 1 : 0, Math.round((w / 26) * sum(m.big) * r.range(0.6, 1.3))),
+            small: Math.round(((w * w * 0.5) / 110) * Math.min(1, sum(m.small) / 4) * r.range(0.7, 1.2)),
+            pond: rich && w > 50 && r.next() < o.pond,
+            cottage: rich && w > 70 && r.next() < o.cottage,
+            fence: rich && r.next() < o.fence,
+            path: rich && r.next() < o.path,
+            falls: r.next() < o.falls ? (r.next() < 0.3 ? 2 : 1) : 0,
+        };
+    };
+
+    if (m.terrain === 'ground') return planGround(r, m, name, cellH, cloud, seedOf);
 
     if (name === 'far') {
-        for (let i = r.int(1, 2); i > 0; i--)
-            items.push(cloud(r.next(), r.range(0, cellH), Math.round(r.range(50, 120)), 0.35, r.range(-2.5, 2.5), 0.8));
-        for (let i = r.int(0, 2); i > 0; i--) {
-            const s = spec(Math.round(r.range(16, 40)), 0.55, false);
-            items.push(island(r.next(), r.range(10, cellH), s, falls(s.falls, 18, 45, r)));
-        }
-        if (r.next() < 0.25) {
-            const s = seedOf(),
-                sw = Math.round(r.range(9, 18));
-            items.push({
-                kind: 'spire',
-                x: r.next(),
-                y: r.range(0, cellH),
-                paint: () => plain(paintSpire(s, sw, 0.55)),
-                fallLen: [],
-                drift: 0,
-                alpha: 1,
-                bridgeTo: -1,
-            });
+        // The sea of clouds far below, and small islands down among it.
+        for (let i = r.int(7, 10); i > 0; i--)
+            items.push(cloud(r.next(), r.range(0, cellH), Math.round(r.range(22, 70)), 0.06, r.range(-1.5, 1.5), 1));
+        for (let i = r.next() < 0.7 ? r.int(1, 2) : 0; i > 0; i--) {
+            const s = spec(Math.round(r.range(24, 46)), 0.4, false);
+            items.push(island(r.next(), r.range(10, cellH), s, falls(s.falls, 20, 45, r)));
         }
         return items;
     }
 
     if (name === 'mid') {
-        const n = r.next() < 0.15 ? 0 : r.next() < 0.55 ? 1 : 2;
+        const n = r.next() < 0.3 ? 3 : 2;
         const ys: number[] = [];
         for (let i = 0; i < n; i++) {
-            const x = n === 2 ? (i === 0 ? r.range(0.1, 0.36) : r.range(0.64, 0.9)) : r.range(0.15, 0.85);
-            const y = i === 1 && r.next() < 0.5 ? ys[0] + r.range(-12, 12) : r.range(20, cellH);
+            // Spread across the meadow: left, right, and a third somewhere between at another height.
+            const x = i === 0 ? r.range(0.06, 0.32) : i === 1 ? r.range(0.68, 0.94) : r.range(0.35, 0.65);
+            const y =
+                i === 1 && r.next() < 0.5
+                    ? ys[0] + r.range(-8, 8)
+                    : i === 2
+                      ? (ys[0] + cellH / 2 + r.range(-20, 20)) % cellH
+                      : r.range(20, cellH);
             ys.push(y);
-            const s = spec(Math.round(r.range(46, 100)), 0.28, true);
-            items.push(island(x, y, s, falls(s.falls, 40, 110, r)));
+            const s = spec(Math.round(r.range(i === 2 ? 44 : 56, i === 2 ? 70 : 100)), 0.08, true);
+            items.push(island(x, y, s, falls(s.falls, 40, 100, r)));
         }
-        // Two islands at about the same height can be joined by a rope bridge.
-        if (n === 2 && Math.abs(ys[0] - ys[1]) < 14 && r.next() < 0.55) items[0].bridgeTo = 1;
-        if (r.next() < 0.3)
-            items.push(cloud(r.next(), r.range(0, cellH), Math.round(r.range(60, 110)), 0.15, r.range(-4, 4), 0.55));
+        // Two islands at about the same height can be joined by a stone arch.
+        if (n === 2 && Math.abs(ys[0] - ys[1]) < 10 && r.next() < 0.6) items[0].bridgeTo = 1;
+        if (r.next() < 0.25)
+            items.push(cloud(r.next(), r.range(0, cellH), Math.round(r.range(40, 80)), 0.05, r.range(-4, 4), 0.6));
         return items;
     }
 
     // Near: big islands that pass by at the sides, leaving the middle of the meadow clear for play.
-    if (r.next() < 0.62) {
-        const left = r.next() < 0.5;
-        const x = left ? r.range(-0.14, 0.06) : r.range(0.94, 1.14);
-        const s = spec(Math.round(r.range(90, 150)), 0, true);
-        s.cottage = false;
-        items.push(island(x, r.range(30, cellH), s, falls(s.falls, 60, 140, r), 0.95));
+    for (const left of [true, false]) {
+        if (r.next() > 0.45) continue;
+        const x = left ? r.range(-0.12, 0.08) : r.range(0.92, 1.12);
+        const s = spec(Math.round(r.range(80, 130)), 0, true);
+        s.cottage = s.cottage && r.next() < 0.5;
+        items.push(island(x, r.range(30, cellH), s, falls(s.falls, 70, 150, r), 0.96));
     }
-    if (r.next() < 0.35)
-        items.push(cloud(r.next(), r.range(0, cellH), Math.round(r.range(80, 150)), 0, r.range(-6, 6), 0.32));
+    if (r.next() < 0.3)
+        items.push(cloud(r.next(), r.range(0, cellH), Math.round(r.range(70, 130)), 0, r.range(-6, 6), 0.3));
     return items;
+}
+
+/** A ground map's cell: big and small things standing on the ground (mid), or haze drifting over it (near). */
+function planGround(
+    r: Rng,
+    m: MapTheme,
+    name: LayerName,
+    cellH: number,
+    cloud: (x: number, y: number, cw: number, fade: number, drift: number, alpha: number) => Item,
+    seedOf: () => number,
+): Item[] {
+    const items: Item[] = [];
+    if (name === 'mid') {
+        /** Something standing at a random spot, picked from `table`, `scale` times its usual size. */
+        const add = (table: Partial<Record<Prop, number>>, scale: number) => {
+            const kind = weighted(table, r);
+            if (!kind) return;
+            const s = seedOf();
+            items.push({
+                kind: 'prop',
+                x: r.range(-0.05, 1.05),
+                y: r.range(0, cellH),
+                paint: () => paintProp(kind, s, m, scale),
+                fallLen: [],
+                drift: 0,
+                alpha: 1,
+                bridgeTo: -1,
+            });
+        };
+        for (let i = r.int(2, 4); i > 0; i--) add(m.big, r.range(2.2, 3.4));
+        for (let i = r.int(3, 6); i > 0; i--) add(m.small, r.range(1.3, 1.8));
+        // Back to front, so nearer things overlap farther ones.
+        items.sort((a, b) => b.y - a.y);
+    } else if (name === 'near')
+        for (let i = r.int(1, 3); i > 0; i--)
+            items.push(cloud(r.next(), r.range(0, cellH), Math.round(r.range(100, 190)), 0, r.range(-4, 4), 0.6));
+    return items;
+}
+
+/** A key from a table of weights, picked at random, or null if the table is empty. */
+function weighted<K extends string>(table: Partial<Record<K, number>>, r: Rng): K | null {
+    const entries = Object.entries(table) as [K, number][];
+    let roll = r.next() * sum(table);
+    for (const [k, w] of entries) if ((roll -= w) <= 0) return k;
+    return entries.length ? entries[entries.length - 1][0] : null;
+}
+
+/** The sum of a table of weights. */
+function sum(t: Partial<Record<string, number>>): number {
+    return Object.values(t).reduce((a: number, b) => a + (b ?? 0), 0);
 }
 
 /** `n` waterfall lengths between `a` and `b`. */
@@ -374,20 +481,22 @@ function waterfall(ctx: CanvasRenderingContext2D, x: number, y: number, len: num
     ctx.fillRect(x0 - 2 + Math.round(Math.sin(t * 3) * 1), by + 3, width + 4, 1);
 }
 
-/** A rope bridge of planks from (x0, y0) to (x1, y1), sagging in the middle. */
+/** A stone arch bridge from (x0, y0) to (x1, y1), rising in the middle, with a lit walkway and a shaded side. */
 function bridge(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number): void {
     const n = Math.max(2, Math.round(Math.abs(x1 - x0)));
-    const sag = Math.min(8, n * 0.12);
+    const rise = Math.min(16, n * 0.28);
     for (let i = 0; i <= n; i++) {
         const t = i / n;
         const x = Math.round(x0 + (x1 - x0) * t),
-            y = Math.round(y0 + (y1 - y0) * t + Math.sin(Math.PI * t) * sag);
-        ctx.fillStyle = i % 3 === 0 ? '#5a3a24' : '#9a6a3c';
-        ctx.fillRect(x, y, 1, 2);
-        ctx.fillStyle = '#c9a77a';
-        ctx.fillRect(x, y - 4 + Math.round(Math.sin(Math.PI * t) * -1), 1, 1);
+            y = Math.round(y0 + (y1 - y0) * t - Math.sin(Math.PI * t) * rise);
+        // Outline, walkway, then the arch's shaded face below it.
+        ctx.fillStyle = '#23285c';
+        ctx.fillRect(x, y - 3, 1, 10);
+        ctx.fillStyle = i % 4 === 0 ? '#b4a6d0' : '#d6cce8';
+        ctx.fillRect(x, y - 2, 1, 3);
+        ctx.fillStyle = '#9486b8';
+        ctx.fillRect(x, y + 1, 1, 4);
+        ctx.fillStyle = '#7466a0';
+        ctx.fillRect(x, y + 5, 1, 1);
     }
-    ctx.fillStyle = '#5a3a24';
-    ctx.fillRect(Math.round(x0), Math.round(y0) - 5, 1, 5);
-    ctx.fillRect(Math.round(x1), Math.round(y1) - 5, 1, 5);
 }

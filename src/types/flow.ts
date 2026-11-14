@@ -19,6 +19,7 @@ export type Phase =
     | 'profile'
     | 'settings'
     | 'select'
+    | 'mapselect'
     | 'countdown'
     | 'playing'
     | 'roundOver'

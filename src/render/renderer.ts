@@ -1,6 +1,7 @@
 import * as C from '@/core/config';
 import type { Field } from '@/game/field';
 import type {
+    MapSelectView,
     BannerView,
     ConsoleView,
     HudTag,
@@ -30,8 +31,10 @@ import { drawBomb } from './entities/bombs';
 import { drawCrow, drawGuardian } from './entities/bosses';
 import { drawBeetle, drawMoonseed, drawPuff, drawSpinner } from './entities/critters';
 import { drawChargeRing, drawChargeShot, drawFairy } from './entities/fairy';
+import { mapById, mapForSeed } from '@/data/maps';
 import { Hud } from './hud';
 import { SkyScenery } from './scenery/scenery';
+import { MapScreen } from './screens/map-screen';
 import { ModeScreen } from './screens/mode-screen';
 import { ProfileScreen } from './screens/profile-screen';
 import { SettingsScreen } from './screens/settings-screen';
@@ -53,6 +56,10 @@ export class Renderer {
     private modeScreen: ModeScreen;
     private rosterScreen: RosterScreen;
     private settingsScreen: SettingsScreen;
+    private mapScreen: MapScreen;
+    /** The map select cards' scenery, each drawn into its own canvas (see mapSelect). */
+    private mapCards: HTMLCanvasElement[] = [];
+    private mapFrame = 0;
     private profileScreen: ProfileScreen;
     /** HUD, console, popups and banners for a match. */
     private hudLayer: Hud;
@@ -97,6 +104,7 @@ export class Renderer {
         this.rosterScreen = new RosterScreen(this.ctx);
         this.profileScreen = new ProfileScreen(this.ctx);
         this.settingsScreen = new SettingsScreen(this.ctx);
+        this.mapScreen = new MapScreen(this.ctx);
         this.hudLayer = new Hud(this.ctx);
     }
 
@@ -139,7 +147,15 @@ export class Renderer {
         ctx.beginPath();
         ctx.rect(0, 0, C.FIELD_W, C.FIELD_H);
         ctx.clip();
-        this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W, C.FIELD_H);
+        this.scenery.draw(
+            ctx,
+            f.sceneSeed,
+            f.time,
+            time,
+            C.FIELD_W,
+            C.FIELD_H,
+            mapById(f.mapId) ?? mapForSeed(f.sceneSeed),
+        );
 
         if (f.fever > 0) {
             ctx.fillStyle = `rgba(255,170,120,${0.08 + 0.05 * Math.sin(time * 10)})`;
@@ -439,6 +455,39 @@ export class Renderer {
     /** The Settings screen's sky and heading bar; the settings are the page's panel (see settings-screen.ts). */
     settings(time: number): void {
         this.settingsScreen.draw(time, this.layout, this.viewH, this.viewX);
+    }
+
+    /** The map select screen, each card with its map's scenery scrolling live inside (see map-screen.ts). */
+    mapSelect(v: MapSelectView, time: number): void {
+        const ctx = this.ctx;
+        this.mapFrame++;
+        // Five cards fill in at once here, so the scenery may paint more sprites a frame than in a round.
+        this.scenery.budget = 10;
+        let card = 0;
+        this.mapScreen.draw(v, time, this.layout, this.viewH, this.viewX, (map, x, y, w, h) => {
+            // Each card's scenery is drawn into its own canvas, half the cards each frame, then copied in every
+            // frame: smooth enough to read as live, at half the cost of five full sceneries a frame.
+            const i = card++;
+            const px = ctx.getTransform().a;
+            let off = this.mapCards[i];
+            const cw = Math.max(1, Math.round(w * px)),
+                ch = Math.max(1, Math.round(h * px));
+            const fresh = !off || off.width !== cw || off.height !== ch;
+            if (fresh) {
+                off = document.createElement('canvas');
+                off.width = cw;
+                off.height = ch;
+                this.mapCards[i] = off;
+            }
+            if (fresh || (this.mapFrame + i) % 2 === 0) {
+                const oc = off!.getContext('2d')!;
+                const k = 0.62;
+                oc.setTransform(px * k, 0, 0, px * k, 0, 0);
+                this.scenery.draw(oc, 4242, time * 1.5, time, w / k, h / k, map);
+            }
+            ctx.drawImage(off!, x, y, w, h);
+        });
+        this.scenery.budget = 2;
     }
 
     /** The arcade character-select screen (see select-screen.ts). */

@@ -7,6 +7,8 @@ import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
 import { modeCards, modeColumns } from '@/render/screens/mode-screen';
 import { rosterMedallions, rosterPreviewButton } from '@/render/screens/roster-screen';
+import { MAP_CARDS, mapCards } from '@/render/screens/map-screen';
+import { MAPS, mapById, mapForSeed } from '@/data/maps';
 import { titleButtons } from '@/render/screens/title-screen';
 import { PALETTE, PLAYER_COLORS } from '@/render/theme';
 import type {
@@ -139,6 +141,13 @@ export class Game {
     private readyAt = -1;
     /** Draw every fireball's path across the screen (`?debug=paths`). */
     debugPaths = false;
+    /** The map card chosen on the map select screen: 0 is Random, then each map in order. Kept between matches. */
+    private mapIndex = 0;
+    /** The map this match plays on (empty online, where each round's seed picks it). */
+    private matchMap = '';
+    /** A map forced by the page's address (`?map=<id>`), for trying a map out. */
+    private forcedMap =
+        typeof location === 'undefined' ? null : mapById(new URLSearchParams(location.search).get('map'));
     private fields: [Field, Field] = [new Field(1, FAIRIES[0]), new Field(1, FAIRIES[1])];
     private wins: [number, number] = [0, 0];
     private transits: Transit[] = [];
@@ -282,6 +291,12 @@ export class Game {
             const others = FAIRIES.filter(f => f !== this.picks[0]);
             this.picks[1] = others[Math.floor(Math.random() * others.length)];
         }
+        // Random picks a map for the whole match; online, each round's seed picks one instead (both sides agree).
+        this.matchMap = this.online
+            ? ''
+            : this.mapIndex === 0
+              ? MAPS[Math.floor(Math.random() * MAPS.length)].id
+              : MAPS[this.mapIndex - 1].id;
         this.wins = [0, 0];
         this.matchBestChain = 0;
         this.newlyUnlocked = [];
@@ -330,6 +345,8 @@ export class Game {
         ];
         // The second meadow's rival is to its left, so its countered fireballs arc off that way.
         this.fields[1].rivalSide = -1;
+        const map = this.forcedMap?.id ?? (this.matchMap || mapForSeed(seed).id);
+        for (const f of this.fields) f.mapId = map;
         this.transits = [];
         this.cpu = new CpuPilot();
         this.phase = 'countdown';
@@ -338,7 +355,7 @@ export class Game {
 
     /** True once a match is under way (not on the title, the menus, the Characters or Profile screens, or select). */
     private get inGame(): boolean {
-        return !['title', 'modes', 'roster', 'profile', 'settings', 'select'].includes(this.phase);
+        return !['title', 'modes', 'roster', 'profile', 'settings', 'select', 'mapselect'].includes(this.phase);
     }
 
     /** Leave the Settings screen (its page panel's Esc). */
@@ -538,8 +555,50 @@ export class Game {
             // Hold on the READY! stamps a moment, then go.
             if (this.readyAt < 0) this.readyAt = this.selectT;
             // Online, only the host starts the match; the guest waits for the first round.
-            if (this.selectT - this.readyAt >= READY_HOLD && (!this.online || this.net!.isHost)) this.beginMatch();
+            // Then the map: chosen on its own screen in a local match; online, the round seeds pick it.
+            if (this.selectT - this.readyAt >= READY_HOLD) {
+                if (!this.online) this.phase = 'mapselect';
+                else if (this.net!.isHost) this.beginMatch();
+            }
         } else this.readyAt = -1;
+    }
+
+    /** The map select screen: arrows choose a card, Enter/Z/Space (or a tap) plays it, Esc goes back to the fairies. */
+    private stepMapSelect(): void {
+        const pr = this.input.pressed;
+        /** True if any of `keys` was pressed this frame. */
+        const any = (keys: string[]) => keys.some(k => pr.has(k));
+        if (pr.has('Escape')) {
+            this.ui('tick');
+            this.start(this.mode);
+            return;
+        }
+        const n = MAP_CARDS,
+            was = this.mapIndex;
+        const tall = this.r.layout === 'tall';
+        if (any(['ArrowLeft', 'KeyA'])) this.mapIndex = (this.mapIndex + n - 1) % n;
+        if (any(['ArrowRight', 'KeyD'])) this.mapIndex = (this.mapIndex + 1) % n;
+        // On a phone the maps sit two by two under Random, so up and down jump a row.
+        if (tall && any(['ArrowDown', 'KeyS']))
+            this.mapIndex = this.mapIndex === 0 ? 1 : Math.min(n - 1, this.mapIndex + 2);
+        if (tall && any(['ArrowUp', 'KeyW'])) this.mapIndex = this.mapIndex <= 2 ? 0 : this.mapIndex - 2;
+        if (this.mapIndex !== was) this.ui('tick');
+        const tap = this.input.tap;
+        if (tap) {
+            const hit = mapCards(this.r.layout, this.r.viewH).findIndex(
+                c => tap.x >= c.x && tap.x <= c.x + c.w && tap.y >= c.y && tap.y <= c.y + c.h,
+            );
+            if (hit >= 0) {
+                this.mapIndex = hit;
+                this.ui('ok');
+                this.beginMatch();
+                return;
+            }
+        }
+        if (any(['Enter', 'Space', 'KeyZ'])) {
+            this.ui('ok');
+            this.beginMatch();
+        }
     }
 
     // ---- online messages ------------------------------------------------------
@@ -702,6 +761,10 @@ export class Game {
         }
         if (this.phase === 'select') {
             this.stepSelect(dt);
+            return;
+        }
+        if (this.phase === 'mapselect') {
+            this.stepMapSelect();
             return;
         }
         if (this.paused) return;
@@ -1040,6 +1103,9 @@ export class Game {
                 break;
             case 'settings':
                 r.settings(this.time);
+                break;
+            case 'mapselect':
+                r.mapSelect({ index: this.mapIndex, touch }, this.time);
                 break;
             case 'profile':
                 r.profile(
