@@ -28,3 +28,27 @@ export interface Layer {
     frame: number;
     alpha: number;
 }
+
+/** The kinds of monster a map's sheet holds, one row each. */
+export type MonsterKind = 'slime' | 'mushroom' | 'bee' | 'leaf' | 'tree';
+
+/**
+ * A map's monster sheet: one row of eight "appear" frames per monster (sparkle, flash,
+ * glowing outline, filled outline, arriving, idle, talking, happy), then a row of a
+ * sparkle overlay that plays over any monster as it appears.
+ */
+export interface MonsterSheet {
+    img: HTMLImageElement;
+    /** Cell size in sheet pixels; every frame is centred in its cell. */
+    cell: number;
+    /** Each monster's row. */
+    rows: Record<MonsterKind, number>;
+    /** The overlay's row. */
+    overlay: number;
+    /** Which monster a plain critter may be, picked per formation; big critters are always `big`. */
+    roster: MonsterKind[];
+    big: MonsterKind;
+    /** The shelled critter (its shell drawn as a bubble) and the corkscrewing one. */
+    shelled: MonsterKind;
+    spinner: MonsterKind;
+}

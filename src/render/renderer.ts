@@ -2,6 +2,8 @@ import * as C from '@/core/config';
 import type { Field } from '@/game/field';
 import type {
     MapSelectView,
+    MonsterSheet,
+    Puff,
     BannerView,
     ConsoleView,
     HudTag,
@@ -29,7 +31,8 @@ import {
 } from './entities/attacks';
 import { drawBomb } from './entities/bombs';
 import { drawCrow, drawGuardian } from './entities/bosses';
-import { drawBeetle, drawMoonseed, drawPuff, drawSpinner } from './entities/critters';
+import { drawBeetle, drawMonster, drawMoonseed, drawPuff, drawSpinner, monsterLook } from './entities/critters';
+import { monstersFor } from '@/data/monsters';
 import { drawChargeRing, drawChargeShot, drawFairy } from './entities/fairy';
 import { mapById, mapForSeed } from '@/data/maps';
 import { Hud } from './hud';
@@ -132,6 +135,24 @@ export class Renderer {
         this.hudLayer.setView(w - 2 * this.viewX, h);
     }
 
+    /** One critter: as its map's monster where the map has a sheet, else in its code-drawn look. */
+    private critter(
+        ctx: CanvasRenderingContext2D,
+        p: Puff,
+        monsters: MonsterSheet | undefined,
+        fieldTime: number,
+        time: number,
+    ): void {
+        if (p.moonseed) return drawMoonseed(ctx, p.x, p.y, time);
+        if (monsters) {
+            const look = monsterLook(monsters, p.kind, p.x, p.y, p.size, p.maxHp, p.wave);
+            if (drawMonster(ctx, monsters, look, p.x, p.y, p.phase, p.hp, p.size, p.shell, fieldTime)) return;
+        }
+        if (p.kind === 'beetle') drawBeetle(ctx, p.x, p.y, p.vx, p.hp, p.shell);
+        else if (p.kind === 'spinner') drawSpinner(ctx, p.x, p.y, p.phase);
+        else drawPuff(ctx, p.x, p.y, p.phase, p.hp, p.size, p.shell);
+    }
+
     /**
      * Draw one meadow at (`ox`, `oy`) and `scale` (the tall layout shows the rival's at half size):
      * sky, critters, shots, bursts, attacks, bosses, the fairy and its HUD.
@@ -147,15 +168,8 @@ export class Renderer {
         ctx.beginPath();
         ctx.rect(0, 0, C.FIELD_W, C.FIELD_H);
         ctx.clip();
-        this.scenery.draw(
-            ctx,
-            f.sceneSeed,
-            f.time,
-            time,
-            C.FIELD_W,
-            C.FIELD_H,
-            mapById(f.mapId) ?? mapForSeed(f.sceneSeed),
-        );
+        const map = mapById(f.mapId) ?? mapForSeed(f.sceneSeed);
+        this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W, C.FIELD_H, map);
 
         if (f.fever > 0) {
             ctx.fillStyle = `rgba(255,170,120,${0.08 + 0.05 * Math.sin(time * 10)})`;
@@ -180,12 +194,8 @@ export class Renderer {
         }
         ctx.globalAlpha = 1;
 
-        for (const p of f.puffs) {
-            if (p.moonseed) drawMoonseed(ctx, p.x, p.y, time);
-            else if (p.kind === 'beetle') drawBeetle(ctx, p.x, p.y, p.vx, p.hp, p.shell);
-            else if (p.kind === 'spinner') drawSpinner(ctx, p.x, p.y, p.phase);
-            else drawPuff(ctx, p.x, p.y, p.phase, p.hp, p.size, p.shell);
-        }
+        const monsters = monstersFor(map.id);
+        for (const p of f.puffs) this.critter(ctx, p, monsters, f.time, time);
         if (f.moonseedWarning)
             this.hudLayer.cue('Moonseed rising', '#cfe9ff', time, 52, (x, y) => drawCrescentIcon(ctx, x, y));
         if (f.hitstop > 0) {
