@@ -145,6 +145,11 @@
             html.touch .touch-ui {
                 display: block;
             }
+            /* The menu screens' Back button shows on every device, so a mouse can leave them too. */
+            .screen:is([data-phase='select'], [data-phase='modes'], [data-phase='roster'], [data-phase='profile'])
+                .touch-ui {
+                display: block;
+            }
             .tb {
                 pointer-events: auto;
                 touch-action: none;
