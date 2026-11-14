@@ -4,12 +4,14 @@ import { Input } from './input/input';
 import { Lobby } from './net/lobby';
 import { Sound } from './audio/sound';
 import { Renderer } from './render/renderer';
+import { initSettingsPanel } from './page/settings-panel';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const renderer = new Renderer(canvas);
 const input = new Input(canvas);
 const sound = new Sound();
 const game = new Game(input, renderer, sound);
+input.setBindings(game.settings.keys);
 input.viewSize = () => ({ w: renderer.viewW, h: renderer.viewH, ox: renderer.viewX });
 // Browsers only start audio after a gesture.
 for (const ev of ['keydown', 'pointerdown', 'touchstart'] as const)
@@ -116,21 +118,10 @@ function exitFull(): void {
     fit();
 }
 /** Refit when the browser enters or leaves fullscreen (including on its own, e.g. Esc). */
-const onFsChange = () => {
-    fit();
-    if (fullBox) fullBox.checked = !!fsElement();
-};
+const onFsChange = () => fit();
 const fsSupported = !!(document.fullscreenEnabled || (stage as FsEl).webkitRequestFullscreen);
 document.addEventListener('fullscreenchange', onFsChange);
 document.addEventListener('webkitfullscreenchange', onFsChange);
-// Settings' Fullscreen box toggles real fullscreen; its row hides where the browser has none (iPhone Safari).
-const fullBox = document.getElementById('set-full') as HTMLInputElement | null;
-const fullRow = document.getElementById('set-full-row');
-if (fullRow && !fsSupported) fullRow.hidden = true;
-fullBox?.addEventListener('change', () => {
-    if (fullBox.checked) void enterFull();
-    else exitFull();
-});
 
 // ---- on-screen touch buttons ------------------------------------------------------
 // Each presses a key while held, so they drive the same code as the keyboard.
@@ -154,32 +145,17 @@ document.querySelectorAll<HTMLButtonElement>('.touch-ui [data-key]').forEach(b =
 });
 const menuBtn = document.getElementById('menu-btn') as HTMLButtonElement;
 // ---- settings ------------------------------------------------------------------
-const settingsEl = document.getElementById('settings');
-const hideRivalBox = document.getElementById('set-hide-rival') as HTMLInputElement | null;
-/** Open the Settings panel, showing the current settings. */
-function openSettings(): void {
-    if (!settingsEl || !hideRivalBox) return;
-    hideRivalBox.checked = game.settings.hideRival;
-    if (soundBox) soundBox.checked = !sound.muted;
-    if (fullBox) fullBox.checked = !!fsElement();
-    settingsEl.hidden = false;
-    hideRivalBox.focus();
-}
-game.onWantSettings = openSettings;
+// The panel (src/page/settings-panel.ts): volumes, sound, fullscreen, hiding the rival, and the keys.
+const settings = initSettingsPanel({
+    game,
+    sound,
+    input,
+    canvas,
+    fullscreen: { supported: fsSupported, isOn: () => !!fsElement(), enter: () => void enterFull(), exit: exitFull },
+});
+game.onWantSettings = settings.open;
 game.onWantGuide = () => (location.href = 'guide.html');
-hideRivalBox?.addEventListener('change', () => game.setSettings({ hideRival: hideRivalBox.checked }));
-document.getElementById('settings-close')?.addEventListener('click', () => {
-    if (settingsEl) settingsEl.hidden = true;
-    canvas.focus();
-});
 
-// Sound on/off from Settings (M works from the keyboard too).
-const soundBox = document.getElementById('set-sound') as HTMLInputElement | null;
-soundBox?.addEventListener('change', () => {
-    sound.unlock();
-    if (soundBox.checked === sound.muted) sound.toggleMute();
-});
-let shownMuted: boolean | null = null;
 let shownMode = '',
     shownPhase = '',
     shownLayout = '',
@@ -188,10 +164,7 @@ let shownMode = '',
 let shownViewW = 0;
 /** Keeps the page's touch layer in step with the game: which buttons show, and what the top one does. */
 function syncPage(): void {
-    if (soundBox && sound.muted !== shownMuted) {
-        shownMuted = sound.muted;
-        soundBox.checked = !shownMuted;
-    }
+    settings.sync();
     // The layout changes with the phase and the orientation: refit to its shape.
     if (renderer.layout !== shownLayout || renderer.viewW !== shownViewW) {
         shownLayout = screenEl.dataset.layout = renderer.layout;
@@ -209,6 +182,9 @@ function syncPage(): void {
         menuBtn.textContent = back ? '◀ BACK' : '❚❚';
         menuBtn.setAttribute('aria-label', back ? 'Back' : 'Pause');
         void keepAwake(shownPhase === 'playing' || shownPhase === 'countdown');
+        // The menus have their own calm loop; everything from the countdown on plays the round's.
+        const menus = ['title', 'modes', 'roster', 'profile', 'select'].includes(shownPhase);
+        sound.playMusic(menus ? 'menu' : 'battle');
     }
 }
 

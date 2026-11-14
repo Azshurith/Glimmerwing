@@ -244,46 +244,338 @@
                 color: #1b1240;
                 text-shadow: none;
             }
+            /* ---- Settings: a full panel in the game's own look (gold edges, slanted tabs, Bungee) ---- */
             #settings {
                 position: absolute;
                 inset: 0;
                 display: grid;
                 place-items: center;
-                background: rgba(16, 11, 36, 0.72);
-                border-radius: 14px;
-                padding: 1rem;
+                background: rgba(8, 5, 22, 0.78);
+                -webkit-backdrop-filter: blur(3px);
+                backdrop-filter: blur(3px);
+                padding: clamp(0.4rem, 2vmin, 1.2rem);
                 z-index: 5;
+                font-family: 'Fraunces', Georgia, serif;
+                color: #efe6ff;
             }
             #settings[hidden] {
                 display: none;
             }
-            .setting {
+            .set-card {
+                position: relative;
+                width: min(100%, 34rem);
+                max-height: 100%;
                 display: flex;
-                gap: 0.7rem;
-                align-items: flex-start;
-                text-align: left;
+                flex-direction: column;
+                background:
+                    radial-gradient(120% 60% at 50% 0%, rgba(122, 92, 255, 0.28), transparent 60%),
+                    linear-gradient(180deg, #221656, #140c34 55%, #0e0826);
+                border: 2px solid #d9a845;
+                border-radius: 6px;
+                box-shadow:
+                    0 0 0 1px rgba(255, 230, 160, 0.25) inset,
+                    0 0 30px rgba(255, 196, 80, 0.18),
+                    0 18px 50px rgba(0, 0, 0, 0.55);
+                overflow: hidden;
+            }
+            .set-head {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0.8rem 1rem 0.55rem;
+                border-bottom: 1px solid rgba(217, 168, 69, 0.6);
+                background: linear-gradient(180deg, rgba(10, 6, 28, 0.9), rgba(10, 6, 28, 0.4));
+            }
+            .set-head h2 {
+                margin: 0;
+                font:
+                    400 clamp(1.3rem, 4.5vmin, 1.9rem) 'Bungee',
+                    'Arial Black',
+                    sans-serif;
+                letter-spacing: 0.04em;
+                background: linear-gradient(180deg, #fff7c2, #ffd45c 55%, #ff9a2e);
+                -webkit-background-clip: text;
+                background-clip: text;
+                color: transparent;
+                filter: drop-shadow(0 2px 0 #4a2a10);
+            }
+            .set-tabs {
+                display: flex;
+                gap: 0.35rem;
+                padding: 0.7rem 0.9rem 0;
+            }
+            .set-tab {
+                --sl: 0.6rem;
+                flex: 1;
+                padding: 0.55rem var(--sl) 0.5rem;
+                border: 0;
                 cursor: pointer;
+                font:
+                    400 clamp(0.72rem, 2.6vmin, 0.92rem) 'Bungee',
+                    'Arial Black',
+                    sans-serif;
+                letter-spacing: 0.06em;
+                color: #b9a8e8;
+                background: rgba(255, 255, 255, 0.06);
+                clip-path: polygon(var(--sl) 0, 100% 0, calc(100% - var(--sl)) 100%, 0 100%);
+                transition:
+                    background 0.15s,
+                    color 0.15s;
             }
-            .setting input {
-                width: 1.3rem;
-                height: 1.3rem;
-                margin-top: 0.15rem;
-                flex: none;
-                accent-color: #ffd86b;
+            .set-tab:hover {
+                color: #fff3c9;
+                background: rgba(255, 255, 255, 0.12);
             }
-            .setting-link {
-                color: var(--muted);
-                font-size: 0.85rem;
+            .set-tab[aria-selected='true'] {
+                color: #1b1240;
+                background: linear-gradient(180deg, #fff0b0, #e0a83e 60%, #c48a2a);
             }
-            .setting small {
+            .set-body {
+                overflow-y: auto;
+                padding: 0.9rem 1.1rem 0.4rem;
+                min-height: 14rem;
+            }
+            .set-pane[hidden] {
+                display: none;
+            }
+            .set-row {
+                display: grid;
+                grid-template-columns: 1fr auto;
+                align-items: center;
+                gap: 0.4rem 1rem;
+                padding: 0.65rem 0.2rem;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            }
+            .set-row[hidden] {
+                display: none;
+            }
+            .set-name {
+                font:
+                    400 clamp(0.78rem, 2.6vmin, 0.95rem) 'Bungee',
+                    'Arial Black',
+                    sans-serif;
+                letter-spacing: 0.04em;
+                color: #fff3c9;
+            }
+            .set-row small {
                 display: block;
-                margin-top: 0.2rem;
-                color: var(--muted);
+                margin-top: 0.15rem;
+                font-style: italic;
                 font-size: 0.8rem;
                 line-height: 1.35;
+                color: #a99fc8;
             }
-            .setting[hidden] {
-                display: none;
+            /* Volume: a gold slider with its value beside it. */
+            .set-vol {
+                grid-column: 1 / -1;
+                display: flex;
+                align-items: center;
+                gap: 0.8rem;
+            }
+            .set-vol output {
+                min-width: 2.8rem;
+                text-align: right;
+                font:
+                    400 0.85rem 'Bungee',
+                    'Arial Black',
+                    sans-serif;
+                color: #ffd86b;
+            }
+            #settings input[type='range'] {
+                flex: 1;
+                height: 1.6rem;
+                appearance: none;
+                -webkit-appearance: none;
+                background: transparent;
+                cursor: pointer;
+                --p: 50%;
+            }
+            #settings input[type='range']::-webkit-slider-runnable-track {
+                height: 0.5rem;
+                border-radius: 0.25rem;
+                background: linear-gradient(90deg, #ffd86b var(--p), rgba(255, 255, 255, 0.12) var(--p));
+                box-shadow: 0 0 0 1px rgba(217, 168, 69, 0.5);
+            }
+            #settings input[type='range']::-moz-range-track {
+                height: 0.5rem;
+                border-radius: 0.25rem;
+                background: linear-gradient(90deg, #ffd86b var(--p), rgba(255, 255, 255, 0.12) var(--p));
+            }
+            #settings input[type='range']::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                width: 1.15rem;
+                height: 1.15rem;
+                margin-top: -0.33rem;
+                border-radius: 50%;
+                background: radial-gradient(circle at 35% 35%, #fffbe6, #ffd86b 55%, #c48a2a);
+                box-shadow:
+                    0 0 0 2px #1b1240,
+                    0 0 8px rgba(255, 216, 107, 0.7);
+            }
+            #settings input[type='range']::-moz-range-thumb {
+                width: 1.15rem;
+                height: 1.15rem;
+                border: 0;
+                border-radius: 50%;
+                background: radial-gradient(circle at 35% 35%, #fffbe6, #ffd86b 55%, #c48a2a);
+                box-shadow: 0 0 0 2px #1b1240;
+            }
+            /* On/off: a switch rather than a bare checkbox. */
+            .set-switch {
+                position: relative;
+                width: 3.1rem;
+                height: 1.6rem;
+                flex: none;
+            }
+            .set-switch input {
+                position: absolute;
+                inset: 0;
+                margin: 0;
+                opacity: 0;
+                cursor: pointer;
+                z-index: 1;
+            }
+            .set-switch span {
+                position: absolute;
+                inset: 0;
+                border-radius: 1rem;
+                background: rgba(255, 255, 255, 0.12);
+                box-shadow: 0 0 0 1px rgba(217, 168, 69, 0.5) inset;
+                transition: background 0.15s;
+            }
+            .set-switch span::after {
+                content: '';
+                position: absolute;
+                top: 0.2rem;
+                left: 0.2rem;
+                width: 1.2rem;
+                height: 1.2rem;
+                border-radius: 50%;
+                background: #b9a8e8;
+                transition:
+                    transform 0.15s,
+                    background 0.15s;
+            }
+            .set-switch input:checked + span {
+                background: linear-gradient(180deg, #ffe9a0, #d9a040);
+            }
+            .set-switch input:checked + span::after {
+                transform: translateX(1.5rem);
+                background: #1b1240;
+            }
+            .set-switch input:focus-visible + span {
+                outline: 2px solid #fff3c9;
+                outline-offset: 2px;
+            }
+            /* Controls: whose keys, then a key table. */
+            .set-schemes {
+                display: flex;
+                gap: 0.3rem;
+                margin-bottom: 0.4rem;
+            }
+            .set-scheme {
+                flex: 1;
+                padding: 0.45rem 0.3rem;
+                border: 1px solid rgba(217, 168, 69, 0.45);
+                border-radius: 4px;
+                background: transparent;
+                color: #b9a8e8;
+                cursor: pointer;
+                font:
+                    400 clamp(0.62rem, 2.2vmin, 0.78rem) 'Bungee',
+                    'Arial Black',
+                    sans-serif;
+                letter-spacing: 0.04em;
+            }
+            .set-scheme[aria-pressed='true'] {
+                background: rgba(255, 216, 107, 0.16);
+                border-color: #ffd86b;
+                color: #fff3c9;
+            }
+            .set-keys {
+                display: grid;
+                grid-template-columns: 1fr 5.6rem 5.6rem;
+                gap: 0.35rem 0.45rem;
+                align-items: center;
+            }
+            .set-keys .set-name {
+                font-size: clamp(0.66rem, 2.3vmin, 0.82rem);
+            }
+            .set-key {
+                height: 2rem;
+                border: 1px solid rgba(217, 168, 69, 0.55);
+                border-radius: 4px;
+                background: rgba(10, 6, 28, 0.7);
+                color: #fff3c9;
+                cursor: pointer;
+                font:
+                    400 0.8rem 'Bungee',
+                    'Arial Black',
+                    sans-serif;
+                letter-spacing: 0.03em;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .set-key:hover {
+                border-color: #ffd86b;
+                background: rgba(255, 216, 107, 0.12);
+            }
+            .set-key.empty {
+                color: rgba(185, 168, 232, 0.5);
+            }
+            .set-key.listening {
+                border-color: #fff3c9;
+                background: rgba(255, 216, 107, 0.25);
+                animation: set-blink 0.8s ease-in-out infinite;
+            }
+            @keyframes set-blink {
+                50% {
+                    background: rgba(255, 216, 107, 0.05);
+                }
+            }
+            .set-hint {
+                margin: 0.7rem 0 0.2rem;
+                font-size: 0.8rem;
+                font-style: italic;
+                line-height: 1.4;
+                color: #a99fc8;
+            }
+            .set-foot {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.8rem;
+                padding: 0.7rem 1.1rem 0.9rem;
+                border-top: 1px solid rgba(217, 168, 69, 0.35);
+            }
+            .set-foot a,
+            .set-link {
+                color: #b9a8e8;
+                font-size: 0.85rem;
+                background: none;
+                border: 0;
+                padding: 0;
+                cursor: pointer;
+                text-decoration: underline;
+                font-family: inherit;
+            }
+            .set-done {
+                --sl: 0.7rem;
+                padding: 0.6rem calc(var(--sl) + 1.4rem);
+                border: 0;
+                cursor: pointer;
+                font:
+                    400 0.95rem 'Bungee',
+                    'Arial Black',
+                    sans-serif;
+                letter-spacing: 0.08em;
+                color: #1b1240;
+                background: linear-gradient(180deg, #fff0b0, #e0a83e 60%, #c48a2a);
+                clip-path: polygon(var(--sl) 0, 100% 0, calc(100% - var(--sl)) 100%, 0 100%);
+            }
+            .set-done:hover {
+                filter: brightness(1.1);
             }
             /* Tall layout (portrait, one player): pause in the top-right corner. Touch play is all
                gestures (see Input), so there are no other buttons over the meadow. */
@@ -405,34 +697,101 @@
                     <button class="tb small tb-menu" id="menu-btn" data-key="Escape" aria-label="Pause">❚❚</button>
                 </div>
                 <div id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
-                    <div class="lobby-card">
-                        <h2 id="settings-title">Settings</h2>
-                        <label class="setting">
-                            <input type="checkbox" id="set-hide-rival" />
-                            <span>
-                                <strong>Hide the rival's meadow</strong>
-                                <small
-                                    >On a phone held upright, against the CPU: your meadow fills the whole screen, with
-                                    a slim bar for the round and the rival's hearts.</small
-                                >
-                            </span>
-                        </label>
-                        <label class="setting">
-                            <input type="checkbox" id="set-sound" />
-                            <span>
-                                <strong>Sound</strong>
-                                <small>Music and effects (M toggles it from the keyboard).</small>
-                            </span>
-                        </label>
-                        <label class="setting" id="set-full-row">
-                            <input type="checkbox" id="set-full" />
-                            <span>
-                                <strong>Fullscreen</strong>
-                                <small>Fill the whole screen, with the browser's bars hidden.</small>
-                            </span>
-                        </label>
-                        <a class="setting-link" href="guide.html">How to play &amp; controls</a>
-                        <button id="settings-close">Done</button>
+                    <div class="set-card">
+                        <header class="set-head"><h2 id="settings-title">Settings</h2></header>
+                        <nav class="set-tabs" role="tablist">
+                            <button class="set-tab" role="tab" data-tab="audio" aria-selected="true">Audio</button>
+                            <button class="set-tab" role="tab" data-tab="display" aria-selected="false">Display</button>
+                            <button class="set-tab" role="tab" data-tab="controls" aria-selected="false">
+                                Controls
+                            </button>
+                        </nav>
+                        <div class="set-body">
+                            <section class="set-pane" data-pane="audio" role="tabpanel">
+                                <div class="set-row">
+                                    <span class="set-name">Music</span>
+                                    <div class="set-vol">
+                                        <input
+                                            type="range"
+                                            id="set-music"
+                                            min="0"
+                                            max="100"
+                                            step="5"
+                                            aria-label="Music volume"
+                                        />
+                                        <output for="set-music" id="set-music-val">50%</output>
+                                    </div>
+                                </div>
+                                <div class="set-row">
+                                    <span class="set-name">Sound effects</span>
+                                    <div class="set-vol">
+                                        <input
+                                            type="range"
+                                            id="set-sfx"
+                                            min="0"
+                                            max="100"
+                                            step="5"
+                                            aria-label="Sound effects volume"
+                                        />
+                                        <output for="set-sfx" id="set-sfx-val">70%</output>
+                                    </div>
+                                </div>
+                                <label class="set-row">
+                                    <span
+                                        ><span class="set-name">Sound on</span
+                                        ><small>M switches all sound on or off from the keyboard.</small></span
+                                    >
+                                    <span class="set-switch"
+                                        ><input type="checkbox" id="set-sound" /><span></span
+                                    ></span>
+                                </label>
+                            </section>
+                            <section class="set-pane" data-pane="display" role="tabpanel" hidden>
+                                <label class="set-row" id="set-full-row">
+                                    <span
+                                        ><span class="set-name">Fullscreen</span
+                                        ><small>Fill the whole screen, with the browser's bars hidden.</small></span
+                                    >
+                                    <span class="set-switch"><input type="checkbox" id="set-full" /><span></span></span>
+                                </label>
+                                <label class="set-row">
+                                    <span
+                                        ><span class="set-name">Hide the rival's meadow</span
+                                        ><small
+                                            >On a phone held upright, against the CPU: your meadow fills the whole
+                                            screen, with a slim bar for the round and the rival's hearts.</small
+                                        ></span
+                                    >
+                                    <span class="set-switch"
+                                        ><input type="checkbox" id="set-hide-rival" /><span></span
+                                    ></span>
+                                </label>
+                            </section>
+                            <section class="set-pane" data-pane="controls" role="tabpanel" hidden>
+                                <div class="set-schemes" role="group" aria-label="Whose keys">
+                                    <button class="set-scheme" data-scheme="solo" aria-pressed="true">
+                                        One player
+                                    </button>
+                                    <button class="set-scheme" data-scheme="p1" aria-pressed="false">
+                                        2P: Player 1
+                                    </button>
+                                    <button class="set-scheme" data-scheme="p2" aria-pressed="false">
+                                        2P: Player 2
+                                    </button>
+                                </div>
+                                <div class="set-keys" id="set-keys"></div>
+                                <p class="set-hint">
+                                    Click a key, then press the new one. Esc cancels, Backspace clears it. Gamepads keep
+                                    their own buttons: A shoots, B bombs, X or Y autofires. Menus always take the
+                                    arrows, Enter, Z and Esc.
+                                </p>
+                                <button class="set-link" id="set-keys-reset">Reset these keys to the defaults</button>
+                            </section>
+                        </div>
+                        <footer class="set-foot">
+                            <a href="guide.html">How to play</a>
+                            <button class="set-done" id="settings-close">Done</button>
+                        </footer>
                     </div>
                 </div>
                 <div id="lobby" role="dialog" aria-modal="true" aria-labelledby="lobby-title" hidden>

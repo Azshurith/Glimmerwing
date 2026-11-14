@@ -25,3 +25,6 @@ export type Sfx =
     | 'start'
     | 'win'
     | 'lose';
+
+/** The background music loops: a calm one for the menus and a driving one for rounds. */
+export type MusicTrack = 'menu' | 'battle';

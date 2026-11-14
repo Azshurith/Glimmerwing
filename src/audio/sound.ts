@@ -1,4 +1,5 @@
-import type { Sfx } from '@/types';
+import type { MusicTrack, Sfx } from '@/types';
+import { Music } from './music';
 
 /**
  * Sound effects, synthesised on the fly with Web Audio: no audio files, so the
@@ -15,16 +16,30 @@ const STORE = 'glimmerwing.sound';
 export class Sound {
     private ctx: AudioContext | null = null;
     private master: GainNode | null = null;
+    /** Effects and music each go through their own gain, so each has its own volume. */
+    private sfxBus: GainNode | null = null;
+    private musicBus: GainNode | null = null;
     private noiseBuf: AudioBuffer | null = null;
     private last = new Map<string, number>();
+    private music: Music | null = null;
+    /** The music asked for, kept until audio is unlocked. */
+    private track: MusicTrack | null = null;
     muted = false;
-    volume = 0.6;
+    /** Effects volume, 0 to 1. */
+    volume = 0.7;
+    /** Music volume, 0 to 1. */
+    musicVolume = 0.5;
 
     constructor() {
         try {
-            const s = JSON.parse(localStorage.getItem(STORE) ?? '{}') as { muted?: unknown; volume?: unknown };
+            const s = JSON.parse(localStorage.getItem(STORE) ?? '{}') as {
+                muted?: unknown;
+                volume?: unknown;
+                music?: unknown;
+            };
             if (typeof s.muted === 'boolean') this.muted = s.muted;
             if (typeof s.volume === 'number') this.volume = s.volume;
+            if (typeof s.music === 'number') this.musicVolume = s.music;
         } catch {
             /* storage unavailable: defaults */
         }
@@ -44,11 +59,17 @@ export class Sound {
             comp.threshold.value = -14;
             comp.ratio.value = 6;
             this.master.connect(comp).connect(this.ctx.destination);
+            this.sfxBus = this.ctx.createGain();
+            this.sfxBus.connect(this.master);
+            this.musicBus = this.ctx.createGain();
+            this.musicBus.connect(this.master);
             this.applyVolume();
             const len = this.ctx.sampleRate;
             this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
             const d = this.noiseBuf.getChannelData(0);
             for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+            this.music = new Music(this.ctx, this.musicBus, this.noiseBuf);
+            this.music.play(this.track);
         }
         if (this.ctx.state === 'suspended') void this.ctx.resume();
     }
@@ -61,16 +82,43 @@ export class Sound {
         return this.muted;
     }
 
-    /** Ease the master gain to the current volume (or to silence when muted). */
-    private applyVolume(): void {
-        if (this.master && this.ctx)
-            this.master.gain.setTargetAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime, 0.02);
+    /** Set the effects volume (0 to 1) and remember it. */
+    setVolume(v: number): void {
+        this.volume = Math.max(0, Math.min(1, v));
+        this.applyVolume();
+        this.save();
     }
 
-    /** Remember mute and volume in localStorage for the next visit. */
+    /** Set the music volume (0 to 1) and remember it. */
+    setMusicVolume(v: number): void {
+        this.musicVolume = Math.max(0, Math.min(1, v));
+        this.applyVolume();
+        this.save();
+    }
+
+    /** Play a music loop (null for silence); it starts once audio is unlocked. */
+    playMusic(track: MusicTrack | null): void {
+        this.track = track;
+        this.music?.play(track);
+    }
+
+    /** Ease each gain to its volume (or everything to silence when muted). */
+    private applyVolume(): void {
+        if (!this.master || !this.ctx) return;
+        const t = this.ctx.currentTime;
+        this.master.gain.setTargetAtTime(this.muted ? 0 : 1, t, 0.02);
+        // Squared, so the sliders feel even: half way sounds about half as loud.
+        this.sfxBus?.gain.setTargetAtTime(this.volume ** 2 * 1.2, t, 0.02);
+        this.musicBus?.gain.setTargetAtTime(this.musicVolume ** 2 * 1.6, t, 0.02);
+    }
+
+    /** Remember mute and both volumes in localStorage for the next visit. */
     private save(): void {
         try {
-            localStorage.setItem(STORE, JSON.stringify({ muted: this.muted, volume: this.volume }));
+            localStorage.setItem(
+                STORE,
+                JSON.stringify({ muted: this.muted, volume: this.volume, music: this.musicVolume }),
+            );
         } catch {
             /* ignore */
         }
@@ -94,8 +142,8 @@ export class Sound {
         if (pan && ctx.createStereoPanner) {
             const p = ctx.createStereoPanner();
             p.pan.value = pan;
-            g.connect(p).connect(this.master!);
-        } else g.connect(this.master!);
+            g.connect(p).connect(this.sfxBus!);
+        } else g.connect(this.sfxBus!);
         return g;
     }
 
