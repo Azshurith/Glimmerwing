@@ -51,10 +51,13 @@ export class ProfileScreen {
         ctx.translate(0, dy);
         // Player card: an avatar (Pip's face for now), the name, and the sign-in status.
         // On a widened landscape screen the player card keeps to the left edge and the record fills the rest.
-        const cx = tall ? W / 2 : 120 - bleed * 0.6,
+        // In landscape the card is a framed panel right against the left edge, the same 14 in as the record's right edge.
+        const card = { x: 14 - bleed, y: 46, w: 196, h: 228 };
+        const cx = tall ? W / 2 : card.x + card.w / 2,
             cy = tall ? 92 : 104;
-        const regionX = tall ? 0 : Math.max(236 - bleed, cx + 116),
+        const regionX = tall ? 0 : card.x + card.w + 14,
             regionW = tall ? W : W + bleed - 14 - regionX;
+        if (!tall) this.panel(card.x, card.y, card.w, card.h);
         this.avatar(cx, cy, tall ? 40 : 44, t);
         ctx.textAlign = 'center';
         arcadeText(ctx, 'GUEST', cx, cy + (tall ? 64 : 70), 18, ['#ffffff', '#fff0c8', '#ffd27a'], 'center');
@@ -158,6 +161,19 @@ export class ProfileScreen {
         ctx.fillStyle = 'rgba(203,188,245,0.75)';
         ctx.fillText(v.touch ? '◀ BACK' : 'ESC BACK', W / 2, tall ? H - 14 : H - 10);
         ctx.restore();
+    }
+
+    /** The player card's frame in landscape: a dark panel with a gold edge, like the record's tiles. */
+    private panel(x: number, y: number, w: number, h: number): void {
+        const ctx = this.ctx;
+        const g = ctx.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, 'rgba(40,26,88,0.85)');
+        g.addColorStop(1, 'rgba(16,10,40,0.85)');
+        ctx.fillStyle = g;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = 'rgba(201,162,74,0.6)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     }
 
     /** A round avatar: Pip's portrait face if it's loaded, else her in-game look. */
