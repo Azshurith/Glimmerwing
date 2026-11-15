@@ -1,9 +1,7 @@
 // The main menu (Play, Characters, Maps, Profile, Settings) and Play's choice of modes: a screen of cards.
 import * as C from '@/core/config';
-import { FAIRIES } from '@/data/characters';
 import type { Layout, ModeMenu, ModeView, TitleAction } from '@/types';
 import { Backdrop } from '@/render/backdrop';
-import { drawFairy } from '@/render/entities/fairy';
 import { arcadeText, sparkle } from '@/render/draw';
 import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
@@ -43,37 +41,28 @@ const MENUS: Record<ModeMenu, Omit<ModeCard, 'x' | 'y' | 'w' | 'h'>[]> = {
 /** Each menu's heading. */
 const HEADINGS: Record<ModeMenu, string> = { main: 'MAIN MENU', play: 'PLAY' };
 
-/** How many cards to a row: two, so four cards make a square; the five-card main menu has three across a wide screen. */
-export const modeColumns = (layout: Layout, menu: ModeMenu = 'play') =>
-    layout === 'wide' && MENUS[menu].length > 4 ? 3 : 2;
+/** How many cards to a row: the whole menu in one row on a landscape screen, one card per row on a phone. */
+export const modeColumns = (layout: Layout, menu: ModeMenu = 'play') => (layout === 'wide' ? MENUS[menu].length : 1);
 
-/** Card size and spacing for each layout, in its design units (a menu of more than four cards gets smaller ones). */
+/**
+ * Card size and spacing for each layout, in its design units: tall cards side by side on a landscape screen, and
+ * full-width buttons stacked down a phone. Every card in every menu is the same size, so the menus look alike.
+ */
 const GRID = {
-    wide: { w: 196, h: 112, gx: 14, gy: 14, y0: 44, W: C.VIEW_W },
-    tall: { w: 118, h: 150, gx: 8, gy: 12, y0: 80, W: C.TALL_W },
-} as const;
-const GRID_FIVE = {
-    wide: { w: 150, h: 112, gx: 12, gy: 14, y0: 44, W: C.VIEW_W },
-    tall: { w: 118, h: 116, gx: 8, gy: 10, y0: 66, W: C.TALL_W },
+    wide: { w: 88, h: 214, gap: 9, y0: 50, W: C.VIEW_W },
+    tall: { w: 236, h: 70, gap: 10, y0: 62, W: C.TALL_W },
 } as const;
 
 /** Where a menu's cards sit in a layout's design units (the tall layout as designed, before fitting). */
 function designCards(menu: ModeMenu, layout: Layout, dy = 0): ModeCard[] {
-    const n = MENUS[menu].length;
-    const g = (n > 4 ? GRID_FIVE : GRID)[layout],
-        cols = modeColumns(layout, menu);
-    /** Left edge of row `row`: each row centred, so a short last row sits in the middle. */
-    const rowX = (row: number) => {
-        const inRow = Math.min(cols, n - row * cols);
-        return (g.W - (inRow * g.w + (inRow - 1) * g.gx)) / 2;
-    };
-    return MENUS[menu].map((m, i) => ({
-        ...m,
-        x: rowX(Math.floor(i / cols)) + (i % cols) * (g.w + g.gx),
-        y: g.y0 + dy + Math.floor(i / cols) * (g.h + g.gy),
-        w: g.w,
-        h: g.h,
-    }));
+    const g = GRID[layout],
+        n = MENUS[menu].length;
+    if (layout === 'wide') {
+        const x0 = (g.W - (n * g.w + (n - 1) * g.gap)) / 2;
+        return MENUS[menu].map((m, i) => ({ ...m, x: x0 + i * (g.w + g.gap), y: g.y0, w: g.w, h: g.h }));
+    }
+    const x0 = (g.W - g.w) / 2;
+    return MENUS[menu].map((m, i) => ({ ...m, x: x0, y: g.y0 + dy + i * (g.h + g.gap), w: g.w, h: g.h }));
 }
 
 /** How far the tall screen's content moves down to sit centred in a view `h` tall. */
@@ -133,60 +122,105 @@ export class ModeScreen {
         ctx.restore();
     }
 
-    /** One mode card: a framed panel with its emblem, name and a line about it. */
+    /**
+     * One card, the same for every choice: a framed panel with its emblem on a round badge in its colour, its name
+     * and a line about it, and a stripe of its colour along the edge. Tall cards stack the three; a phone's
+     * wide buttons put the badge on the left and the words beside it. The chosen card lifts and glows.
+     */
     private card(c: ModeCard, on: boolean, t: number): void {
         const ctx = this.ctx;
-        const lift = on && !c.disabled ? -3 + Math.sin(t * 4) : 0;
-        const x = c.x,
+        const row = c.w > c.h * 2;
+        const lift = on && !c.disabled ? -2 + Math.sin(t * 4) * (row ? 0.5 : 1) : 0;
+        const x = c.x + (row && on && !c.disabled ? 2 : 0),
             y = c.y + lift;
+        const r = 10;
         ctx.save();
         if (c.disabled) {
             ctx.filter = 'grayscale(1)';
             ctx.globalAlpha = on ? 0.8 : 0.55;
         }
-        // Panel.
+        // Panel, with a glow in its colour when chosen.
         ctx.save();
         if (on) {
             ctx.shadowColor = c.color;
-            ctx.shadowBlur = 16 + 5 * Math.sin(t * 6);
+            ctx.shadowBlur = 14 + 4 * Math.sin(t * 6);
         }
         const g = ctx.createLinearGradient(0, y, 0, y + c.h);
-        g.addColorStop(0, on ? 'rgba(52,32,104,0.96)' : 'rgba(30,20,68,0.9)');
-        g.addColorStop(1, 'rgba(12,8,32,0.95)');
+        g.addColorStop(0, on ? 'rgba(56,34,110,0.97)' : 'rgba(32,22,72,0.92)');
+        g.addColorStop(1, on ? 'rgba(22,12,52,0.97)' : 'rgba(12,8,32,0.94)');
         ctx.fillStyle = g;
-        roundRect(ctx, x, y, c.w, c.h, 8);
+        roundRect(ctx, x, y, c.w, c.h, r);
         ctx.fill();
         ctx.restore();
-        ctx.strokeStyle = on ? c.color : 'rgba(201,162,74,0.6)';
+        ctx.save();
+        roundRect(ctx, x, y, c.w, c.h, r);
+        ctx.clip();
+        // A soft wash of its colour behind the badge, and its stripe along the bottom (or the left on a phone).
+        const bx = row ? x + 38 : x + c.w / 2,
+            by = row ? y + c.h / 2 : y + 72;
+        const wash = ctx.createRadialGradient(bx, by, 4, bx, by, row ? 70 : 80);
+        wash.addColorStop(0, hexA(c.color, on ? 0.3 : 0.14));
+        wash.addColorStop(1, hexA(c.color, 0));
+        ctx.fillStyle = wash;
+        ctx.fillRect(x, y, c.w, c.h);
+        ctx.fillStyle = hexA(c.color, on ? 1 : 0.7);
+        if (row) ctx.fillRect(x, y, 4, c.h);
+        else ctx.fillRect(x, y + c.h - 4, c.w, 4);
+        // A sheen across the top.
+        const sh = ctx.createLinearGradient(0, y, 0, y + 18);
+        sh.addColorStop(0, 'rgba(255,255,255,0.12)');
+        sh.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = sh;
+        ctx.fillRect(x, y, c.w, 18);
+        ctx.restore();
+        ctx.strokeStyle = on ? c.color : 'rgba(201,162,74,0.55)';
         ctx.lineWidth = on ? 2 : 1;
-        roundRect(ctx, x + 0.5, y + 0.5, c.w - 1, c.h - 1, 8);
+        roundRect(ctx, x + 0.5, y + 0.5, c.w - 1, c.h - 1, r);
         ctx.stroke();
-        // Emblem, in a soft glow of the card's colour.
-        const ex = x + c.w / 2,
-            ey = y + c.h * 0.38;
-        const glow = ctx.createRadialGradient(ex, ey, 2, ex, ey, c.h * 0.36);
-        glow.addColorStop(0, hexA(c.color, on ? 0.35 : 0.18));
-        glow.addColorStop(1, hexA(c.color, 0));
-        ctx.fillStyle = glow;
-        ctx.fillRect(x, y, c.w, c.h * 0.75);
-        this.emblem(c, ex, ey, Math.min(c.w, c.h) / 112, t, on);
+        // The badge and its emblem.
+        const br = row ? 24 : 30;
+        this.badge(c, bx, by, br, on, t);
+        this.emblem(c, bx, by, br / 34, t, on);
         // Name and line.
-        ctx.textAlign = 'center';
-        ctx.font = `${on ? 12 : 11}px ${ARCADE}`;
-        ctx.fillStyle = on ? '#fff7c2' : '#fff3c9';
-        ctx.fillText(c.label, ex, y + c.h - 22, c.w - 12);
-        ctx.font = `italic 600 7.5px ${FONT}`;
-        ctx.fillStyle = 'rgba(203,188,245,0.8)';
-        ctx.fillText(c.sub, ex, y + c.h - 10, c.w - 14);
+        if (row) {
+            ctx.textAlign = 'left';
+            ctx.font = `${on ? 13 : 12}px ${ARCADE}`;
+            ctx.fillStyle = on ? '#fff7c2' : '#fff3c9';
+            ctx.fillText(c.label, x + 74, y + 32, c.w - 100);
+            ctx.font = `italic 600 8.5px ${FONT}`;
+            ctx.fillStyle = 'rgba(203,188,245,0.85)';
+            ctx.fillText(c.sub, x + 74, y + 48, c.w - 100);
+            // A chevron at the right edge.
+            ctx.strokeStyle = on ? c.color : 'rgba(203,188,245,0.5)';
+            ctx.lineWidth = 2;
+            const cx = x + c.w - 16 + (on ? Math.sin(t * 6) * 1.5 : 0);
+            ctx.beginPath();
+            ctx.moveTo(cx - 4, y + c.h / 2 - 7);
+            ctx.lineTo(cx + 3, y + c.h / 2);
+            ctx.lineTo(cx - 4, y + c.h / 2 + 7);
+            ctx.stroke();
+        } else {
+            ctx.textAlign = 'center';
+            ctx.font = `${on ? 11 : 10}px ${ARCADE}`;
+            ctx.fillStyle = on ? '#fff7c2' : '#fff3c9';
+            ctx.fillText(c.label, x + c.w / 2, y + 136, c.w - 8);
+            // A short rule, then the line about it, wrapped to the card.
+            ctx.fillStyle = hexA(c.color, 0.6);
+            ctx.fillRect(x + c.w / 2 - 12, y + 144, 24, 1.5);
+            ctx.font = `italic 600 8px ${FONT}`;
+            ctx.fillStyle = 'rgba(203,188,245,0.85)';
+            wrap(ctx, c.sub, c.w - 14).forEach((line, i) => ctx.fillText(line, x + c.w / 2, y + 160 + i * 11));
+        }
         if (c.disabled) {
             // A "coming soon" ribbon across the top corner, trimmed to the card.
             ctx.save();
-            roundRect(ctx, x, y, c.w, c.h, 8);
+            roundRect(ctx, x, y, c.w, c.h, r);
             ctx.clip();
-            ctx.translate(x + c.w - 22, y + 16);
+            ctx.translate(x + c.w - 18, y + 14);
             ctx.rotate(Math.PI / 4);
             ctx.fillStyle = '#444';
             ctx.fillRect(-34, -6, 68, 12);
+            ctx.textAlign = 'center';
             ctx.font = `6px ${ARCADE}`;
             ctx.fillStyle = '#ddd';
             ctx.fillText('SOON', 0, 2.5);
@@ -195,15 +229,40 @@ export class ModeScreen {
         ctx.restore();
     }
 
+    /** The round badge an emblem sits on: a disc in the card's colour with a gold ring, brighter when chosen. */
+    private badge(c: ModeCard, x: number, y: number, r: number, on: boolean, t: number): void {
+        const ctx = this.ctx;
+        const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.4, 2, x, y, r);
+        g.addColorStop(0, hexA(c.color, on ? 0.75 : 0.5));
+        g.addColorStop(0.7, hexA(c.color, on ? 0.35 : 0.22));
+        g.addColorStop(1, 'rgba(20,12,48,0.9)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = on ? '#ffd86b' : 'rgba(201,162,74,0.8)';
+        ctx.lineWidth = on ? 2 + Math.sin(t * 6) * 0.3 : 1.5;
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(x, y, r - 4, Math.PI * 1.1, Math.PI * 1.65);
+        ctx.stroke();
+    }
+
     /** The picture at the top of a card, centred on (x, y), at scale `k`. */
     private emblem(c: ModeCard, x: number, y: number, k: number, t: number, on: boolean): void {
         const ctx = this.ctx;
         ctx.save();
         ctx.translate(x, y);
         ctx.scale(k, k);
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = c.color;
-        ctx.fillStyle = c.color;
+        ctx.lineWidth = 2.2;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        // Every emblem is a simple line picture in cream, so the badges read as one set.
+        const ink = '#fff6dc';
+        ctx.strokeStyle = ink;
+        ctx.fillStyle = ink;
         const bob = on ? Math.sin(t * 3) * 1.5 : 0;
         switch (c.action) {
             case 'story': {
@@ -228,43 +287,85 @@ export class ModeScreen {
                 break;
             }
             case 'cpu': {
-                // Pip facing a little chip-faced rival.
-                drawFairy(ctx, FAIRIES[0], -20, 4 + bob, 1.2, t);
-                ctx.fillStyle = '#2a1d55';
-                ctx.fillRect(10, -12, 24, 22);
-                ctx.strokeRect(10, -12, 24, 22);
-                ctx.fillStyle = c.color;
-                ctx.fillRect(15, -5, 4, 4);
-                ctx.fillRect(25, -5, 4, 4);
-                ctx.fillRect(16, 3, 12, 2);
-                for (let i = 0; i < 3; i++) {
-                    ctx.fillRect(13 + i * 7, 10, 2, 4);
-                    ctx.fillRect(13 + i * 7, -16, 2, 4);
-                }
+                // A little robot face with an antenna.
+                ctx.beginPath();
+                roundRect(ctx, -15, -10 + bob, 30, 24, 6);
+                ctx.globalAlpha = 0.25;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, -10 + bob);
+                ctx.lineTo(0, -17 + bob);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(0, -19 + bob, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                const blink = Math.sin(t * 2.3) > 0.95 ? 0.6 : 4;
+                ctx.fillRect(-9, -2 + bob, 5, blink);
+                ctx.fillRect(4, -2 + bob, 5, blink);
+                ctx.fillRect(-6, 7 + bob, 12, 2);
+                ctx.fillRect(-19, -2 + bob, 4, 8);
+                ctx.fillRect(15, -2 + bob, 4, 8);
                 break;
             }
             case 'versus': {
-                // Two fairies, face to face.
-                drawFairy(ctx, FAIRIES[0], -24, 4 + bob, 1.2, t);
-                drawFairy(ctx, FAIRIES[2] ?? FAIRIES[1], 24, 4 - bob, 1.2, t + 0.5);
-                arcadeText(ctx, 'VS', 0, 6, 9, ['#ffffff', '#ffd1dc', '#ff3d6e'], 'center');
+                // Two crossed wands with star tips.
+                for (const sgn of [-1, 1]) {
+                    ctx.save();
+                    ctx.rotate(sgn * 0.75 + (on ? sgn * Math.sin(t * 4) * 0.06 : 0));
+                    ctx.beginPath();
+                    ctx.moveTo(0, 18);
+                    ctx.lineTo(0, -8);
+                    ctx.stroke();
+                    star(ctx, 0, -13, 7, 3.2);
+                    ctx.fill();
+                    ctx.restore();
+                }
                 break;
             }
             case 'play': {
-                // Pip with a burst of stars around her.
-                drawFairy(ctx, FAIRIES[0], 0, 4 + bob, 1.3, t);
-                ctx.fillStyle = '#fff6c8';
-                for (let i = 0; i < 5; i++) {
-                    const a = t * 1.5 + (i * Math.PI * 2) / 5;
-                    sparkle(ctx, Math.cos(a) * 26, Math.sin(a) * 16 - 2, 2.5 + Math.sin(t * 4 + i) * 1);
+                // A play triangle with stars circling it.
+                ctx.beginPath();
+                ctx.moveTo(-8, -14);
+                ctx.lineTo(14, 0);
+                ctx.lineTo(-8, 14);
+                ctx.closePath();
+                ctx.globalAlpha = 0.3;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.stroke();
+                for (let i = 0; i < 3; i++) {
+                    const a = t * 1.4 + (i * Math.PI * 2) / 3;
+                    sparkle(ctx, Math.cos(a) * 21, Math.sin(a) * 21, 2 + Math.sin(t * 4 + i) * 0.8);
                 }
                 break;
             }
             case 'characters': {
-                // Three fairies side by side.
-                drawFairy(ctx, FAIRIES[1], -26, 6 - bob, 1.05, t + 0.3);
-                drawFairy(ctx, FAIRIES[2], 26, 6 - bob, 1.05, t + 0.6);
-                drawFairy(ctx, FAIRIES[0], 0, 2 + bob, 1.25, t);
+                // A fairy: head, body and two pairs of wings.
+                ctx.save();
+                ctx.translate(0, bob);
+                for (const sgn of [-1, 1]) {
+                    ctx.beginPath();
+                    ctx.ellipse(sgn * 11, -4, 9, 6, sgn * -0.5, 0, Math.PI * 2);
+                    ctx.globalAlpha = 0.25;
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.ellipse(sgn * 8, 8, 6, 4, sgn * 0.5, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.beginPath();
+                ctx.arc(0, -12, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(0, -6);
+                ctx.lineTo(-4, 14);
+                ctx.lineTo(4, 14);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
                 break;
             }
             case 'profile': {
@@ -413,4 +514,31 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 function hexA(hex: string, a: number): string {
     const n = parseInt(hex.slice(1), 16);
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+/** Trace a five-pointed star of outer radius `r` and inner radius `ri` centred on (x, y). */
+function star(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, ri: number): void {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5,
+            d = i % 2 ? ri : r;
+        ctx.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d);
+    }
+    ctx.closePath();
+}
+
+/** Split `text` into lines no wider than `w` in the current font (at most three). */
+function wrap(ctx: CanvasRenderingContext2D, text: string, w: number): string[] {
+    const words = text.split(' '),
+        lines: string[] = [];
+    let cur = '';
+    for (const word of words) {
+        const next = cur ? `${cur} ${word}` : word;
+        if (cur && ctx.measureText(next).width > w) {
+            lines.push(cur);
+            cur = word;
+        } else cur = next;
+    }
+    if (cur) lines.push(cur);
+    return lines.slice(0, 3);
 }
