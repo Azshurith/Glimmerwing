@@ -18,7 +18,7 @@ export interface Painted {
 export type Fade = number;
 
 /** What an island's top is made of. */
-export type Ground = 'grass' | 'sand' | 'rock' | 'tiles' | 'lava';
+export type Ground = 'grass' | 'sand' | 'rock' | 'tiles' | 'lava' | 'shore';
 /** How an island's cliff face is built. */
 export type CliffStyle = 'bricks' | 'strata' | 'crag' | 'wall';
 /** The things that can stand on an island: big ones (trees, towers…) and small ones (flowers, rocks…). */
