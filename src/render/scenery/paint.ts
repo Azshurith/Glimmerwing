@@ -835,9 +835,10 @@ function topRamp(m: MapTheme, c: Paint): number[] {
 /**
  * Paint a band of a ground map's terrain, `w` wide and `h` tall, whose bottom edge sits `wy` world units up.
  * The terrain is a height field lit from the upper left and shaded through a dithered ramp, so slopes catch the
- * light and hollows fall into shade. Everything comes from world position alone, so bands meet without a seam.
+ * light and hollows fall into shade. Everything comes from world position alone, so bands meet without a seam;
+ * `x0` is how far across the world the band's left edge is, so the two meadows' ground runs on into each other.
  */
-export function paintGround(m: MapTheme, seed: number, wy: number, w: number, h: number): HTMLCanvasElement {
+export function paintGround(m: MapTheme, seed: number, wy: number, w: number, h: number, x0 = 0): HTMLCanvasElement {
     const p = new Pix(w, h);
     const c = palette(m, 0);
     const tones = topRamp(m, c);
@@ -862,7 +863,8 @@ export function paintGround(m: MapTheme, seed: number, wy: number, w: number, h:
     };
     for (let y = 0; y < h; y++) {
         const Y = wy + (h - 1 - y); // world height of this row
-        for (let x = 0; x < w; x++) {
+        for (let px = 0; px < w; px++) {
+            const x = x0 + px; // world position across the meadows
             let col: number;
             if (m.ground === 'tiles') {
                 // Bevelled flagstones: each stone its own shade, lit along its top and left edges.
@@ -906,7 +908,7 @@ export function paintGround(m: MapTheme, seed: number, wy: number, w: number, h:
                     if (crack < 0.01 && pit >= 0.29 && pit <= 0.76) col = tones[0];
                 }
             }
-            p.set(x, y, col);
+            p.set(px, y, col);
         }
     }
     return p.canvas();

@@ -83,6 +83,11 @@ export class SkyScenery {
     private art = new Map<string, Cached>();
     private frame = 0;
     private painted = 0;
+    /**
+     * The world this draw looks into: `ox` how far across it this meadow's left edge is, `ww` its whole width,
+     * `lanes` how many meadow-wide lanes of contents it has (one, or two with a `gap` between).
+     */
+    private view = { ox: 0, ww: 0, lanes: 1, gap: 0 };
     /** Sprites painted per frame at most (raised while a screen shows several maps at once). */
     budget = PAINT_BUDGET;
     private strips: HTMLImageElement[] = SCENERY_STRIPS.map(src => {
@@ -109,6 +114,7 @@ export class SkyScenery {
     /**
      * Paint the sky behind a meadow `w` × `h` in map `map`'s look: `seed` picks the world, `time` (seconds into
      * the round) how far it has come, and `clock` drives the animation (waterfalls, drifting clouds, motes).
+     * With a `gap`, the world spans two meadows that far apart and this is meadow `side` (0 left, 1 right).
      */
     draw(
         ctx: CanvasRenderingContext2D,
@@ -118,7 +124,12 @@ export class SkyScenery {
         w: number,
         h: number,
         map: MapTheme = MAPS[0],
+        side = 0,
+        gap = 0,
     ): void {
+        // Both meadows look into one world: the second sits `gap` to the right of the first, so what crosses
+        // the middle runs on from one meadow into the other.
+        this.view = { ox: side * (w + gap), ww: gap > 0 ? 2 * w + gap : w, lanes: gap > 0 ? 2 : 1, gap };
         const climb = time * CLIMB;
         const smooth = ctx.imageSmoothingEnabled;
         ctx.imageSmoothingEnabled = false;
@@ -168,11 +179,12 @@ export class SkyScenery {
         for (let k = k0; k <= k1; k++) {
             const top = Math.round(h - ((k + 1) * cellH - a));
             const visible = top < h && top + cellH > 0;
-            const key = `${map.id}|${seed}|ground|${k}`;
+            const ox = this.view.ox;
+            const key = `${map.id}|${seed}|ground|${k}|${ox}`;
             let c = this.art.get(key);
             if (!c && (visible || this.painted < this.budget)) {
                 this.painted++;
-                c = { art: plain(paintGround(map, seed, k * cellH, GROUND_W, cellH)), used: 0 };
+                c = { art: plain(paintGround(map, seed, k * cellH, GROUND_W, cellH, ox)), used: 0 };
                 this.art.set(key, c);
             }
             if (!c?.art) continue;
@@ -181,10 +193,12 @@ export class SkyScenery {
                 ctx.drawImage(c.art.canvas, 0, 0, Math.min(w, GROUND_W), cellH, 0, top, Math.min(w, GROUND_W), cellH);
         }
         // The shadows of clouds high above, sliding over the ground a little faster than it scrolls.
-        for (let i = 0; i < 3; i++) {
+        const { ox, lanes } = this.view;
+        for (let i = 0; i < 3 * lanes; i++) {
             const span = h + 260;
             const y = ((((i * 211 + a * 1.5) % span) + span) % span) - 130;
-            const x = ((i * 0.39 + 0.15) % 1) * w + Math.sin(a * 0.004 + i * 2) * 30;
+            const x = ((i * 0.39 + 0.15) % 1) * this.view.ww - ox + Math.sin(a * 0.004 + i * 2) * 30;
+            if (x < -110 || x > w + 110) continue;
             ctx.save();
             ctx.translate(x, y);
             ctx.scale(1.7, 1);
@@ -233,18 +247,47 @@ export class SkyScenery {
         const k0 = Math.floor((a - BEHIND) / L.cellH),
             k1 = Math.floor((a + h + AHEAD) / L.cellH);
         // Top of the view first, so things lower down (nearer the viewer) overlap the ones above them.
-        for (let k = k1; k >= k0; k--) {
+        const { ox, ww, lanes, gap } = this.view;
+        for (let k = k1; k >= k0; k--)
+            for (let lane = 0; lane < lanes; lane++) {
+                // Each meadow-wide lane of the world has its own contents; things near its edge reach over.
+                const laneX = lane * (w + gap);
+                if (laneX - w > ox + w || laneX + 2 * w < ox) continue;
+                this.drawCell(ctx, seed + lane * 7919, map, name, k, a, clock, w, h, laneX - ox, ww, ox);
+            }
+    }
+
+    /**
+     * One cell of a layer in one lane of the world: its sprites, glows, waterfalls and bridges, `shift` across
+     * from this meadow's left edge (clouds drift and wrap around the whole world, `ww` wide, seen from `ox`).
+     */
+    private drawCell(
+        ctx: CanvasRenderingContext2D,
+        seed: number,
+        map: MapTheme,
+        name: LayerName,
+        k: number,
+        a: number,
+        clock: number,
+        w: number,
+        h: number,
+        shift: number,
+        ww: number,
+        ox: number,
+    ): void {
+        const L = LAYERS[name];
+        {
             const items = this.cell(seed, map, name, k);
             const spots: ({ x: number; y: number; art: Painted } | null)[] = [];
             items.forEach((it, i) => {
                 const art = this.sprite(`${map.id}|${seed}|${name}|${k}|${i}`, it);
                 if (!art) return void spots.push(null);
-                let x = it.x * w;
+                let x = it.x * w + shift;
                 if (it.drift) {
-                    // Clouds drift sideways and wrap around the meadow.
+                    // Clouds drift sideways and wrap around the world.
                     const cw = art.canvas.width,
-                        span = w + cw;
-                    x = ((((x + it.drift * clock + cw / 2) % span) + span) % span) - cw / 2;
+                        span = ww + cw;
+                    x = ((((x + ox + it.drift * clock + cw / 2) % span) + span) % span) - cw / 2 - ox;
                 }
                 const y = h - (k * L.cellH + it.y - a);
                 const dx = Math.round(x - art.cx),
