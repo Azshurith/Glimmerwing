@@ -73,6 +73,8 @@ export interface ProfileView {
     fevers: number;
     flawless: number;
     locked: boolean[];
+    trophies: number;
+    bestTrophies: number;
 }
 
 /** What a title-screen choice or a mode-menu card does when it's picked. */
@@ -93,4 +95,8 @@ export type TitleAction =
 export interface MapSelectView {
     index: number;
     touch: boolean;
+    /** The player's trophies, shown in the heading. */
+    trophies: number;
+    /** Per map (in MAPS order), whether its stage is still locked. */
+    locked: boolean[];
 }

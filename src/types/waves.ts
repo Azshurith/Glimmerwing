@@ -76,3 +76,41 @@ export interface Formation {
     chain?: number;
     escaped?: boolean;
 }
+
+/**
+ * How a stage's formations differ from the plain mix: weight multipliers on what gets rolled, and how hard
+ * and fast the round gets. Every roll is still drawn in the same order, so both meadows still match.
+ */
+export interface WaveStyle {
+    /** Multipliers on each shape's weight (1 if missing). */
+    shapes?: Partial<Record<FormationShape, number>>;
+    /** Multipliers on each critter kind's weight. */
+    kinds?: Partial<Record<'puff' | 'beetle' | 'spinner', number>>;
+    /** Multipliers on each group movement's weight. */
+    moves?: Partial<Record<FormationMove, number>>;
+    /** Multipliers on each exit's weight. */
+    exits?: Partial<Record<FormationExit, number>>;
+    /** Pressure (0 to 1) the round starts at, and seconds it takes to climb from there to full. */
+    start: number;
+    ramp: number;
+    /** Extra pressure on how many shots members take (tougher critters without more of them). */
+    hp: number;
+    /** Extra members per formation. */
+    extra: number;
+    /** Multipliers on the chance of a re-form, of big critters and of dew bubbles. */
+    morph: number;
+    big: number;
+    bubble: number;
+    /** Scales the flights in, the holds and the flights out: below 1 is a busier stage. */
+    pace: number;
+}
+
+/** A stage on the trophy road: a map, the trophies that open it, its formations and how sharp its CPU is. */
+export interface Stage {
+    mapId: string;
+    /** Trophies needed to unlock it (the best ever reached counts, so it stays open). */
+    trophies: number;
+    /** The CPU's reaction time here, in seconds; lower is sharper. */
+    cpuReaction: number;
+    waves: WaveStyle;
+}

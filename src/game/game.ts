@@ -9,6 +9,7 @@ import { modeCards, modeColumns } from '@/render/screens/mode-screen';
 import { rosterMedallions, rosterPreviewButton } from '@/render/screens/roster-screen';
 import { MAP_CARDS, mapCards } from '@/render/screens/map-screen';
 import { MAPS, mapById, mapForSeed } from '@/data/maps';
+import { stageFor, stageOpen } from '@/data/stages';
 import { titleButtons } from '@/render/screens/title-screen';
 import { PALETTE, PLAYER_COLORS } from '@/render/theme';
 import type {
@@ -159,6 +160,9 @@ export class Game {
     settings: Settings = loadSettings();
     private matchBestChain = 0;
     private newlyUnlocked: Fairy[] = [];
+    /** Stages the last match's trophies opened, and how many trophies it won or lost. */
+    private newStages: string[] = [];
+    private trophyDelta = 0;
     time = 0;
 
     // ---- online ----
@@ -292,15 +296,24 @@ export class Game {
             this.picks[1] = others[Math.floor(Math.random() * others.length)];
         }
         // Random picks a map for the whole match; online, each round's seed picks one instead (both sides agree).
-        this.matchMap = this.online
-            ? ''
-            : this.mapIndex === 0
-              ? MAPS[Math.floor(Math.random() * MAPS.length)].id
-              : MAPS[this.mapIndex - 1].id;
+        this.matchMap = this.online ? '' : this.mapIndex === 0 ? this.randomOpenMap() : MAPS[this.mapIndex - 1].id;
         this.wins = [0, 0];
         this.matchBestChain = 0;
         this.newlyUnlocked = [];
+        this.newStages = [];
+        this.trophyDelta = 0;
         this.newRound(seed);
+    }
+
+    /** Whether map `i` (in MAPS order) is open on the trophy road. */
+    private mapOpen(i: number): boolean {
+        return stageOpen(this.progress, MAPS[i].id);
+    }
+
+    /** Random's pick: any map whose stage is open. */
+    private randomOpenMap(): string {
+        const open = MAPS.filter((_, i) => this.mapOpen(i));
+        return open[Math.floor(Math.random() * open.length)].id;
     }
 
     /** Change the player's settings and save them; they apply from the next round. */
@@ -348,7 +361,8 @@ export class Game {
         const map = this.forcedMap?.id ?? (this.matchMap || mapForSeed(seed).id);
         for (const f of this.fields) f.mapId = map;
         this.transits = [];
-        this.cpu = new CpuPilot();
+        // The CPU is sharper further along the trophy road.
+        this.cpu = new CpuPilot(stageFor(map).cpuReaction);
         this.phase = 'countdown';
         this.phaseT = 0;
     }
@@ -557,8 +571,11 @@ export class Game {
             // Online, only the host starts the match; the guest waits for the first round.
             // Then the map: chosen on its own screen in a local match; online, the round seeds pick it.
             if (this.selectT - this.readyAt >= READY_HOLD) {
-                if (!this.online) this.phase = 'mapselect';
-                else if (this.net!.isHost) this.beginMatch();
+                if (!this.online) {
+                    this.phase = 'mapselect';
+                    // A card for a stage that's still locked can't stay chosen.
+                    if (this.mapIndex > 0 && !this.mapOpen(this.mapIndex - 1)) this.mapIndex = 0;
+                } else if (this.net!.isHost) this.beginMatch();
             }
         } else this.readyAt = -1;
     }
@@ -590,15 +607,21 @@ export class Game {
             );
             if (hit >= 0) {
                 this.mapIndex = hit;
-                this.ui('ok');
-                this.beginMatch();
+                this.playMap();
                 return;
             }
         }
-        if (any(['Enter', 'Space', 'KeyZ'])) {
-            this.ui('ok');
-            this.beginMatch();
+        if (any(['Enter', 'Space', 'KeyZ'])) this.playMap();
+    }
+
+    /** Play the chosen map card, unless its stage is still locked (then just a tick). */
+    private playMap(): void {
+        if (this.mapIndex > 0 && !this.mapOpen(this.mapIndex - 1)) {
+            this.ui('tick');
+            return;
         }
+        this.ui('ok');
+        this.beginMatch();
     }
 
     // ---- online messages ------------------------------------------------------
@@ -938,6 +961,16 @@ export class Game {
         if (humanWon) p.wins++;
         if (this.mode === 'cpu' && this.wins[0] > this.wins[1] && this.wins[1] === 0) p.flawless++;
         p.bestChain = Math.max(p.bestChain, this.matchBestChain);
+        // Trophies on the road: VS CPU and Online only (two players on one screen just play).
+        if (this.mode === 'cpu' || this.mode === 'online') {
+            const won = this.wins[0] > this.wins[1];
+            const before = p.trophies;
+            p.trophies = Math.max(0, p.trophies + (won ? C.TROPHY_WIN : -C.TROPHY_LOSS));
+            this.trophyDelta = p.trophies - before;
+            const was = p.bestTrophies;
+            p.bestTrophies = Math.max(p.bestTrophies, p.trophies);
+            for (const m of MAPS) if (stageFor(m.id).trophies > was && stageOpen(p, m.id)) this.newStages.push(m.name);
+        }
         for (const f of FAIRIES) {
             if (f.unlock && !p.unlocked.includes(f.id) && f.unlock.met(p)) {
                 p.unlocked.push(f.id);
@@ -1105,7 +1138,15 @@ export class Game {
                 r.settings(this.time);
                 break;
             case 'mapselect':
-                r.mapSelect({ index: this.mapIndex, touch }, this.time);
+                r.mapSelect(
+                    {
+                        index: this.mapIndex,
+                        touch,
+                        trophies: this.progress.trophies,
+                        locked: MAPS.map((_, i) => !this.mapOpen(i)),
+                    },
+                    this.time,
+                );
                 break;
             case 'profile':
                 r.profile(
@@ -1116,6 +1157,8 @@ export class Game {
                         fevers: this.progress.fevers,
                         flawless: this.progress.flawless,
                         locked: FAIRIES.map(f => !this.isUnlocked(f)),
+                        trophies: this.progress.trophies,
+                        bestTrophies: this.progress.bestTrophies,
                     },
                     this.time,
                 );
@@ -1214,9 +1257,14 @@ export class Game {
             case 'matchOver': {
                 const w = this.wins[0] > this.wins[1] ? 0 : 1;
                 const title = solo ? (w === 0 ? 'You win!' : `${names[1]} wins`) : `${names[w]} wins!`;
-                const unlocked = this.newlyUnlocked.length
-                    ? `New fairy unlocked: ${this.newlyUnlocked.map(f => f.name).join(', ')}`
-                    : undefined;
+                // Under the result: trophies won or lost, and anything the match opened up.
+                const notes: string[] = [];
+                if (this.mode === 'cpu' || this.mode === 'online')
+                    notes.push(`${this.trophyDelta >= 0 ? '+' : ''}${this.trophyDelta} trophies`);
+                if (this.newStages.length) notes.push(`New stage: ${this.newStages.join(', ')}`);
+                if (this.newlyUnlocked.length)
+                    notes.push(`New fairy: ${this.newlyUnlocked.map(f => f.name).join(', ')}`);
+                const unlocked = notes.length ? notes.join('  ·  ') : undefined;
                 r.banner({
                     title,
                     sub: touch ? 'Tap to choose again' : 'Press Space or tap to choose again',

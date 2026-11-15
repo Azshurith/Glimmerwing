@@ -15,6 +15,7 @@ import type {
     FormationShape,
     FormationSpec,
     Vec,
+    WaveStyle,
 } from '@/types';
 
 /** The meadow's width (it can change from round to round, see setFieldWidth) and height. */
@@ -161,12 +162,21 @@ const ENTRIES: Record<FormationShape, FormationEntry[]> = {
     wave: ['sideLeft', 'sideRight', 'swoopLeft', 'swoopRight', 'drop'],
 };
 
+/** The plain mix, for a meadow with no stage (every multiplier 1, the usual pressure ramp). */
+const PLAIN: WaveStyle = { start: 0, ramp: 90, hp: 0, extra: 0, morph: 1, big: 1, bubble: 1, pace: 1 };
+
 /**
  * Roll the next formation from the meadow's wave RNG. Every roll is drawn in the same order whatever
  * happens in play, so both meadows get the same sequence; `pressure` runs 0 to 1 over a round and
- * brings bigger, tougher, busier formations; `prev` keeps the same shape from coming twice running.
+ * brings bigger, tougher, busier formations; `prev` keeps the same shape from coming twice running; `style` is the stage's own mix.
  */
-export function rollFormation(r: Rng, pressure: number, prev: FormationShape | null): FormationSpec {
+export function rollFormation(
+    r: Rng,
+    pressure: number,
+    prev: FormationShape | null,
+    style: WaveStyle = PLAIN,
+): FormationSpec {
+    const w = <K extends string>(table: Partial<Record<K, number>> | undefined, k: K) => table?.[k] ?? 1;
     const shapeRoll: [FormationShape, number][] = (
         [
             ['line', 3],
@@ -179,23 +189,24 @@ export function rollFormation(r: Rng, pressure: number, prev: FormationShape | n
             ['ring', 1 + pressure * 1.5],
             ['wave', 1.5],
         ] as [FormationShape, number][]
-    ).map(([s, w]) => [s, s === prev ? w * 0.15 : w]);
+    ).map(([s, wt]) => [s, wt * w(style.shapes, s) * (s === prev ? 0.15 : 1)]);
     const shape = pick(r, shapeRoll);
     const kind: CritterKind = pick(r, [
-        ['puff', 6],
-        ['spinner', 1 + pressure * 2],
-        ['beetle', 0.6 + pressure * 2],
+        ['puff', 6 * w(style.kinds, 'puff')],
+        ['spinner', (1 + pressure * 2) * w(style.kinds, 'spinner')],
+        ['beetle', (0.6 + pressure * 2) * w(style.kinds, 'beetle')],
     ]);
     const bigRoll = r.next(),
         bubbleRoll = r.next(),
         morphRoll = r.next(),
         overlapRoll = r.next();
-    const big = kind === 'puff' && bigRoll < 0.08 + pressure * 0.1;
-    let count = r.int(5, 7) + Math.floor(pressure * 3);
+    const big = kind === 'puff' && bigRoll < (0.08 + pressure * 0.1) * style.big;
+    let count = r.int(5, 7) + Math.floor(pressure * 3) + style.extra;
     if (big) count = Math.ceil(count * 0.6);
     if (kind === 'beetle') count = Math.max(4, count - 1);
     count = Math.min(SHAPE_MAX[shape], count);
-    const hps = Array.from({ length: 12 }, () => rollHp(r, pressure));
+    const hpPressure = Math.max(0, Math.min(1, pressure + style.hp));
+    const hps = Array.from({ length: 12 }, () => rollHp(r, hpPressure));
     let hp = hps.slice(0, count);
     if (kind === 'spinner') hp = hp.map(() => 1);
     if (kind === 'beetle') hp = hp.map(h => Math.min(h, 2));
@@ -203,17 +214,21 @@ export function rollFormation(r: Rng, pressure: number, prev: FormationShape | n
 
     const entryOpts = ENTRIES[shape];
     const entry = entryOpts[Math.floor(r.next() * entryOpts.length) % entryOpts.length];
-    const exit: FormationExit = pick(r, [
-        ['up', 3],
-        ['sides', 2.5],
-        ['left', 1],
-        ['right', 1],
-        ['scatter', 1 + pressure],
-        ['dive', 0.4 + pressure * 2.2],
-    ]);
-    // Kinds move in their own way: beetles march, spinners wheel, puffs float.
-    const move: FormationMove = pick(
+    const exit: FormationExit = pick(
         r,
+        (
+            [
+                ['up', 3],
+                ['sides', 2.5],
+                ['left', 1],
+                ['right', 1],
+                ['scatter', 1 + pressure],
+                ['dive', 0.4 + pressure * 2.2],
+            ] as [FormationExit, number][]
+        ).map(([e, wt]) => [e, wt * w(style.exits, e)]),
+    );
+    // Kinds move in their own way: beetles march, spinners wheel, puffs float.
+    const moves: [FormationMove, number][] =
         kind === 'beetle'
             ? [
                   ['march', 4],
@@ -232,7 +247,10 @@ export function rollFormation(r: Rng, pressure: number, prev: FormationShape | n
                     ['figure8', 1.5],
                     ['creep', 1 + pressure],
                     ['orbit', shape === 'ring' ? 3 : 0.4],
-                ],
+                ];
+    const move = pick(
+        r,
+        moves.map(([m, wt]) => [m, wt * w(style.moves, m)]),
     );
     const morphTo = pick<FormationShape>(r, [
         ['line', 1],
@@ -243,7 +261,9 @@ export function rollFormation(r: Rng, pressure: number, prev: FormationShape | n
         ['grid', 1],
     ]);
     const morph =
-        morphRoll < 0.15 + pressure * 0.3 && morphTo !== shape && count <= SHAPE_MAX[morphTo] ? morphTo : null;
+        morphRoll < (0.15 + pressure * 0.3) * style.morph && morphTo !== shape && count <= SHAPE_MAX[morphTo]
+            ? morphTo
+            : null;
 
     // Neighbours sit just inside burst range, so one pop can carry through the whole formation (TSS).
     const spacing = (big ? 40 : C.BURST_RADIUS + 1) * (kind === 'beetle' ? 1.05 : 1);
@@ -264,7 +284,7 @@ export function rollFormation(r: Rng, pressure: number, prev: FormationShape | n
     const reachX = Math.max(0, Math.min(cx - left, right - cx, 46));
     const reachY = Math.max(0, Math.min(cy - top, bottom - cy, 26));
 
-    const speedUp = 1 - pressure * 0.25;
+    const speedUp = (1 - pressure * 0.25) * style.pace;
     return {
         shape,
         morph,
@@ -275,7 +295,7 @@ export function rollFormation(r: Rng, pressure: number, prev: FormationShape | n
         count,
         hp,
         big,
-        bubble: kind === 'puff' && bubbleRoll < 0.08 + pressure * 0.16,
+        bubble: kind === 'puff' && bubbleRoll < (0.08 + pressure * 0.16) * style.bubble,
         spacing,
         cx,
         cy,
@@ -284,7 +304,7 @@ export function rollFormation(r: Rng, pressure: number, prev: FormationShape | n
         // Unhurried flights in, so the formation can be watched forming up.
         enterTime: (big ? 2.8 : 2.4) * speedUp,
         exitTime: 1.6 * speedUp,
-        hold: (big ? 6.5 : 5.5) - pressure * 2 + (morph ? 1.5 : 0),
+        hold: ((big ? 6.5 : 5.5) - pressure * 2 + (morph ? 1.5 : 0)) * style.pace,
         reachX,
         reachY,
         overlap: overlapRoll < 0.5 + pressure * 0.3,

@@ -5,6 +5,10 @@ export interface Progress {
     fevers: number;
     flawless: number;
     unlocked: string[];
+    /** Trophies now: won in VS CPU and Online matches, some lost on a defeat. */
+    trophies: number;
+    /** The most trophies ever held; stages open by this, so a losing run never locks one again. */
+    bestTrophies: number;
 }
 
 /** The player's settings, saved in this browser. */
