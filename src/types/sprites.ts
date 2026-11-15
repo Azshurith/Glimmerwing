@@ -29,8 +29,8 @@ export interface Layer {
     alpha: number;
 }
 
-/** The kinds of monster a map's sheet holds, one row each. */
-export type MonsterKind = 'slime' | 'mushroom' | 'bee' | 'leaf' | 'tree';
+/** The kinds of monster across the maps' sheets; each sheet holds some of them, one row each. */
+export type MonsterKind = 'slime' | 'mushroom' | 'bee' | 'leaf' | 'tree' | 'bat' | 'bug' | 'wisp';
 
 /**
  * A map's monster sheet: one row of eight "appear" frames per monster (sparkle, flash,
@@ -41,8 +41,8 @@ export interface MonsterSheet {
     img: HTMLImageElement;
     /** Cell size in sheet pixels; every frame is centred in its cell. */
     cell: number;
-    /** Each monster's row. */
-    rows: Record<MonsterKind, number>;
+    /** The row of each monster on this sheet. */
+    rows: Partial<Record<MonsterKind, number>>;
     /** The overlay's row. */
     overlay: number;
     /** Which monster a plain critter may be, picked per formation; big critters are always `big`. */

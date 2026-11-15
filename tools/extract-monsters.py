@@ -1,4 +1,6 @@
-"""Usage: python extract-monsters.py <sheet.png> <out.png> <out.json>
+"""Usage: python tools/extract-monsters.py <map>   (e.g. forest, cave)
+
+Reads assets/source/<map>-monsters.png and writes assets/monsters/<map>.png and .json.
 
 Cut a map's monster sheet (five monsters x eight "appear" frames, then one row of a
 reusable appear overlay, on black) into an atlas of equal cells, one row per monster.
@@ -11,24 +13,48 @@ from PIL import Image
 import numpy as np
 from scipy import ndimage
 
-SRC, OUT_PNG, OUT_JSON = sys.argv[1], sys.argv[2], sys.argv[3]
+MAP = sys.argv[1]
+SRC = f'assets/source/{MAP}-monsters.png'
+OUT_PNG, OUT_JSON = f'assets/monsters/{MAP}.png', f'assets/monsters/{MAP}.json'
 im = np.array(Image.open(SRC).convert('RGB')).astype(np.float64)
 
 CELL = 112  # atlas cell size; source frames are about 140 px
-COLS = [98, 240, 381, 524, 668, 813, 960, 1110]
 SLOT = 70  # half the width each frame may take
 BOX = 164  # every frame is centred in a square this big before scaling
-# name: (top, bottom just above the frame numbers, label box to blank out x0, x1, y1)
-ROWS = [
-    ('slime', 112, 231, (0, 330, 120)),
-    ('mushroom', 268, 428, (0, 378, 322)),
-    ('bee', 460, 619, (0, 318, 518)),
-    ('leaf', 650, 802, (0, 320, 707)),
-    ('tree', 836, 996, (0, 318, 890)),
-    ('appear', 1110, 1220, (0, 0, 0)),
-]
-RIGHT = 1168  # nothing to the right of this is part of a frame
-SOLID_FROM = 4  # frames 5-8 are the monster itself; 1-4 are sparkles and glowing outlines
+RIGHT = 1168  # nothing to the right of this is part of a frame (the overlay row's border)
+# Each sheet's layout: the frame columns' centres, optionally the first opaque frame, and per row its name, top, bottom (just above the
+# frame numbers) and the title box to blank out (x0, x1, bottom). The atlas keeps the rows in order.
+LAYOUTS = {
+    'forest': {
+        'cols': [98, 240, 381, 524, 668, 813, 960, 1110],
+        'rows': [
+            ('slime', 112, 231, (0, 330, 120)),
+            ('mushroom', 268, 428, (0, 378, 322)),
+            ('bee', 460, 619, (0, 318, 518)),
+            ('leaf', 650, 802, (0, 320, 707)),
+            ('tree', 836, 996, (0, 318, 890)),
+            ('appear', 1110, 1220, (0, 0, 0)),
+        ],
+    },
+    'cave': {
+        # Frame 5 here is a see-through glowing body, so it's keyed soft like the sparkle frames.
+        'solid_from': 5,
+        'cols': [103, 239, 379, 521, 664, 812, 961, 1112],
+        'rows': [
+            ('slime', 116, 236, (0, 324, 132)),
+            ('bat', 310, 424, (0, 320, 330)),
+            ('bug', 503, 618, (0, 336, 523)),
+            ('mushroom', 696, 806, (0, 356, 716)),
+            ('wisp', 872, 1000, (0, 324, 901)),
+            ('appear', 1110, 1219, (0, 0, 0)),
+        ],
+    },
+}
+COLS = LAYOUTS[MAP]['cols']
+ROWS = LAYOUTS[MAP]['rows']
+# Frames from here on (0-based) are the monster itself, keyed opaque; earlier ones are sparkles and glowing
+# outlines, keyed soft.
+SOLID_FROM = LAYOUTS[MAP].get('solid_from', 4)
 
 
 def cut(y0, y1, x0, x1, label, soft):
