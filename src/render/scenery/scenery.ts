@@ -7,7 +7,7 @@ import { Rng } from '@/core/rng';
 import { MAPS } from '@/data/maps';
 import { SCENERY_STRIPS } from '@/data/scenery';
 import type { IslandSpec, MapTheme, Painted, Prop } from '@/types';
-import { paintCloud, paintGround, paintIsland, paintProp } from './paint';
+import { SHORE_LAND, paintCloud, paintGround, paintIsland, paintProp, shoreLand } from './paint';
 
 /** The three layers, back to front. */
 type LayerName = 'far' | 'mid' | 'near';
@@ -267,17 +267,18 @@ export class SkyScenery {
                 // Each meadow-wide lane of the world has its own contents; things near its edge reach over.
                 const laneX = lane * (w + gap);
                 if (laneX - w > ox + w || laneX + 2 * w < ox) continue;
-                this.drawCell(ctx, seed + lane * 7919, map, name, k, a, clock, w, h, laneX - ox, ww, ox);
+                this.drawCell(ctx, seed, lane, map, name, k, a, clock, w, h, laneX - ox, ww, ox);
             }
     }
 
     /**
-     * One cell of a layer in one lane of the world: its sprites, glows, waterfalls and bridges, `shift` across
-     * from this meadow's left edge (clouds drift and wrap around the whole world, `ww` wide, seen from `ox`).
+     * One cell of a layer in lane `lane` of world `world`: its sprites, glows, waterfalls and bridges, `shift`
+     * across from this meadow's left edge (clouds drift and wrap around the whole world, `ww` wide, seen from `ox`).
      */
     private drawCell(
         ctx: CanvasRenderingContext2D,
-        seed: number,
+        world: number,
+        lane: number,
         map: MapTheme,
         name: LayerName,
         k: number,
@@ -290,6 +291,10 @@ export class SkyScenery {
         ox: number,
     ): void {
         const L = LAYERS[name];
+        const seed = world + lane * 7919;
+        // On a shore map, things only stand where there's land (the ground is painted from the world's own seed).
+        const onLand = (x: number, y: number) =>
+            map.ground !== 'shore' || shoreLand(world, x + ox, h - y + a) >= SHORE_LAND + 0.01;
         {
             const items = this.cell(seed, map, name, k);
             const spots: ({ x: number; y: number; art: Painted } | null)[] = [];
@@ -307,6 +312,7 @@ export class SkyScenery {
                 const dx = Math.round(x - art.cx),
                     dy = Math.round(y - art.cy);
                 spots.push({ x: dx, y: dy, art });
+                if (it.kind === 'prop' && name === 'mid' && !onLand(x, y)) return;
                 if (dy > h || dy + art.canvas.height + Math.max(0, ...it.fallLen) < 0) return;
                 if (dx > w || dx + art.canvas.width < 0) return;
                 ctx.globalAlpha = it.alpha;

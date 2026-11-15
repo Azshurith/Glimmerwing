@@ -1,7 +1,7 @@
 // The maps: each one is a look for the scenery behind the meadows (see render/scenery/), seen from above at an
 // angle: either islands floating over the clouds (Forest) or solid ground seen through drifting haze, with big
-// things standing on it (Cave, Desert, Castle, Volcano); Beach's islets sit on open sea and Space's asteroids drift
-// among the stars. Each round's seed picks one (both meadows always share
+// things standing on it (Cave, Desert, Castle, Volcano, and Beach, whose sandy islands sit in the sea); Space's
+// asteroids drift among the stars. Each round's seed picks one (both meadows always share
 // it); `?map=<id>` in the page's address forces one. A new map is a new entry here.
 import type { MapTheme } from '@/types';
 
@@ -116,20 +116,21 @@ export const MAPS: MapTheme[] = [
         odds: { pond: 0.15, cottage: 0, path: 0.5, fence: 0, falls: 0.25 },
     },
     {
-        // Sandy islets with palms over a bright sea: the "sky" far below is open water.
+        // Sandy islands in a bright sea, seen from above: swells on the open water, a foam line and wet sand
+        // round each island, and palms, rocks and flowers only on the land.
         id: 'beach',
-        terrain: 'islands',
+        terrain: 'ground',
         name: 'Beach',
-        sky: ['#0f8ab8', '#3fd0d8'],
+        sky: ['#0a5a8a', '#1a8ab8'],
         haze: '#9ae6ee',
         cloud: ['#ffffff', '#e4f8fc', '#a8dcec'],
-        cloudAlpha: 0.85,
-        ground: 'sand',
+        cloudAlpha: 0.7,
+        ground: 'shore',
         top: ['#fff6cc', '#f6dc96', '#e2bc6e', '#b88a48'],
         cliffStyle: 'strata',
         cliff: ['#f2d49a', '#d8ae6c', '#b2864a', '#7e5a30'],
         drips: ['#1aa0c0', '#6ad8e4', '#e8fcff'],
-        water: ['#0e7cb0', '#2ec4d8', '#c4f6ff'],
+        water: ['#0a6ea8', '#22b8d0', '#a8f0f6'],
         ink: '#1c3a52',
         leaves: ['#24804a', '#48b85a', '#9ee27a'],
         trunk: '#a8783e',
@@ -138,10 +139,10 @@ export const MAPS: MapTheme[] = [
         cone: ['#ffd8b0', '#e8a070'],
         mote: '#ffffff',
         veil: [0.38, 0.1],
-        big: { palm: 2.6, rock: 0.4 },
-        small: { rock: 1, flowers: 0.8, bush: 0.8, palm: 0.5 },
-        mood: { tint: 'rgba(120,230,255,0.06)', rays: 0.1, flyers: 'birds', giants: ['palm'] },
-        odds: { pond: 0.25, cottage: 0.1, path: 0.2, fence: 0, falls: 0 },
+        big: { palm: 2.6, rock: 0.5 },
+        small: { rock: 1, flowers: 0.8, bush: 0.8, palm: 0.6 },
+        mood: { tint: 'rgba(120,230,255,0.05)', rays: 0.1, flyers: 'birds', giants: ['palm'] },
+        odds: { pond: 0, cottage: 0, path: 0, fence: 0, falls: 0 },
     },
     {
         // Black basalt cracked by glowing lava: rivers and pools of it, smoking cones and ember-lit crystals.
