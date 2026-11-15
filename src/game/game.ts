@@ -441,7 +441,7 @@ export class Game {
         if (['ArrowRight', 'KeyD', 'ArrowDown', 'KeyS'].some(k => pr.has(k))) this.mapsIndex = (this.mapsIndex + 1) % n;
         const tap = this.input.tap;
         if (tap) {
-            const hit = mapsMedallions(this.r.layout, this.r.viewH).findIndex(
+            const hit = mapsMedallions(this.r.layout, this.r.viewH, this.r.viewX).findIndex(
                 m => Math.hypot(tap.x - m.x, tap.y - m.y) <= m.r + 6,
             );
             if (hit >= 0) this.mapsIndex = hit;

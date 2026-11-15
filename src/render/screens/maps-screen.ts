@@ -19,8 +19,8 @@ const LAYOUT = {
     wide: {
         W: C.VIEW_W,
         info: { x: 14, y: 62, w: 306 },
-        demo: { x: 340, y: 43, w: 150 },
-        rowY: 278,
+        demo: { x: 336, y: 40, w: 158 },
+        rowY: 282,
         r: 14,
         tile: 58,
     },
@@ -38,19 +38,22 @@ const LAYOUT = {
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
 
 /** Where each map's medallion sits along the bottom, in a layout's design units. */
-function designMedallions(layout: Layout, dy = 0): { x: number; y: number; r: number }[] {
+function designMedallions(layout: Layout, dy = 0, bleed = 0): { x: number; y: number; r: number }[] {
     const L = LAYOUT[layout],
-        gap = L.r * 2 + (layout === 'tall' ? 5 : 10);
+        gap = L.r * 2 + (layout === 'tall' ? 5 : 10 + Math.min(14, bleed / 6));
     const x0 = L.W / 2 - ((MAPS.length - 1) * gap) / 2;
     return MAPS.map((_, i) => ({ x: x0 + i * gap, y: L.rowY + dy, r: L.r }));
 }
 
-/** The medallions in view units, for a layout and view height: the tap targets. */
-export function mapsMedallions(layout: Layout, h: number = C.TALL_H): { x: number; y: number; r: number }[] {
-    if (layout !== 'tall') return designMedallions('wide');
+/** The medallions in view units, for a layout, view height and widened-view bleed: the tap targets. */
+export function mapsMedallions(layout: Layout, h: number = C.TALL_H, bleed = 0): { x: number; y: number; r: number }[] {
+    if (layout !== 'tall') return designMedallions('wide', 0, bleed);
     const f = tallMenuFit(h);
     return designMedallions('tall', tallShift(f.h)).map(m => ({ x: f.x + m.x * f.s, y: m.y * f.s, r: m.r * f.s }));
 }
+
+/** Space between the monster tiles on a wide screen. */
+const TILE_GAP = 6;
 
 /** Each monster's part in a map's formations, in the order the screen shows them. */
 const ROLES: [string, (s: MonsterSheet) => MonsterKind][] = [
@@ -99,15 +102,20 @@ export class MapsScreen {
         // On a widened screen the demo keeps to the right edge and the details sit centred in the room left.
         const win = tall ? L.demo : { ...L.demo, x: L.demo.x + bleed };
         let info: { x: number; y: number; w: number } = L.info;
+        let tile: number = L.tile;
         if (!tall) {
+            // The details take all the room from the left edge to the demo; the monster tiles grow to fill it.
             const x = L.info.x - bleed,
-                room = win.x - 14 - x;
-            info = { ...L.info, x: x + Math.max(0, (room - L.info.w) / 2) };
+                room = win.x - 16 - x;
+            info = { ...L.info, x, w: room };
+            tile = Math.max(L.tile, Math.min(96, (room - 4 * TILE_GAP) / ROLES.length));
         }
-        this.info(map, v.index, locked, info, L.tile, tall, t);
+        this.info(map, v.index, locked, info, tile, tall, t);
         this.demo(map, win, v.caption, demo);
         ctx.restore();
-        designMedallions(layout, dy).forEach((m, i) => this.medallion(MAPS[i], v.locked[i], m, i === v.index, t));
+        designMedallions(layout, dy, bleed).forEach((m, i) =>
+            this.medallion(MAPS[i], v.locked[i], m, i === v.index, t),
+        );
         ctx.textAlign = 'center';
         ctx.font = `7px ${ARCADE}`;
         ctx.fillStyle = 'rgba(203,188,245,0.75)';
@@ -169,7 +177,7 @@ export class MapsScreen {
         ctx.fillStyle = '#cbbcf5';
         if (!tall) ctx.fillText('MONSTERS', cx, ty + 4);
         const top = ty + (tall ? 0 : 10);
-        const gap = tall ? 0 : 2;
+        const gap = tall ? 0 : TILE_GAP;
         const x0 = tall ? b.x + (b.w - ROLES.length * tile) / 2 : b.x;
         ROLES.forEach(([role, kindOf], i) => {
             const kind = kindOf(sheet);
