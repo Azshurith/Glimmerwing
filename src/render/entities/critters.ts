@@ -137,7 +137,7 @@ export function drawMonster(
     ctx.save();
     ctx.translate(x, y);
     const cell = s.cell;
-    ctx.drawImage(s.img, frame * cell, s.rows[look.kind] * cell, cell, cell, -D / 2, -D / 2 + bob, D, D);
+    ctx.drawImage(s.img, frame * cell, (s.rows[look.kind] ?? 0) * cell, cell, cell, -D / 2, -D / 2 + bob, D, D);
     if (k < 1) {
         ctx.globalAlpha = 0.85;
         const o = Math.min(7, Math.floor(k * 8));

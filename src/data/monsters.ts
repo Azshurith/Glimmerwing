@@ -1,3 +1,4 @@
+import caveSheet from '@/../assets/monsters/cave.png';
 import forestSheet from '@/../assets/monsters/forest.png';
 import { loadImage } from '@/core/images';
 import type { MonsterSheet } from '@/types';
@@ -23,8 +24,23 @@ const FOREST: MonsterSheet = {
     spinner: 'bee',
 };
 
+/**
+ * Cave (twilight): cave slimes and wisps drift in formations, crystal bugs are the shelled ones
+ * (their crystals take the shell's hits), bats corkscrew down, and the big ones are cave mushrooms.
+ */
+const CAVE: MonsterSheet = {
+    img: loadImage(caveSheet),
+    cell: 112,
+    rows: { slime: 0, bat: 1, bug: 2, mushroom: 3, wisp: 4 },
+    overlay: 5,
+    roster: ['slime', 'wisp'],
+    big: 'mushroom',
+    shelled: 'bug',
+    spinner: 'bat',
+};
+
 /** Monster sheets by map id. */
-const SHEETS: Record<string, MonsterSheet> = { forest: FOREST };
+const SHEETS: Record<string, MonsterSheet> = { forest: FOREST, cave: CAVE };
 
 /** The monster sheet for a map, or undefined if its critters stay puffs. */
 export function monstersFor(mapId: string): MonsterSheet | undefined {
