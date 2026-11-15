@@ -42,7 +42,9 @@ export type MonsterKind =
     | 'cactus'
     | 'scorpion'
     | 'fox'
-    | 'beetle';
+    | 'beetle'
+    | 'knight'
+    | 'book';
 
 /**
  * A map's monster sheet: one row of eight "appear" frames per monster (sparkle, flash,
