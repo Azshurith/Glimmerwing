@@ -893,9 +893,12 @@ export class Field {
             this.spray(a.x, a.y, 6, '#ffe27a');
             if ((a.reflects ?? (a.level >= 2 ? 1 : 0)) < C.FIREBALL_MAX_REFLECTS) {
                 // A fireball flashes and turns into a Reverse right where it broke (purple the first time,
-                // flashing every colour the second), then flies diagonally up to the top line, bounces and heads down at the rival,
+                // flashing every colour the second, or straight away for a Fever one), then flies diagonally up to the top line, bounces and heads down at the rival,
                 // on its way back to them (see flyBack). Broken once more after that, it's an Extra Attack.
                 const lvl = Math.min(C.MAX_STAR_LEVEL, Math.max(a.level, 2 + this.fairy.counterBoost));
+                // A Fever fireball skips purple: shot back, it goes straight to its last reflection (every colour),
+                // so breaking it again sends the Extra Attack.
+                const step = a.fever ? C.FIREBALL_MAX_REFLECTS : 1;
                 a.dead = false;
                 a.flight = 'back';
                 a.level = lvl;
@@ -916,7 +919,7 @@ export class Field {
                 a.k = 0;
                 // One more reflection: a set speed for how many times it's been shot back (SPEED_REVERSE more each
                 // time, whatever speed the Normal had), boosted by my Perfects and capped.
-                a.reflects = (a.reflects ?? 0) + 1;
+                a.reflects = Math.min(C.FIREBALL_MAX_REFLECTS, (a.reflects ?? 0) + step);
                 a.speed = Math.min(
                     C.FIREBALL_MAX_SPEED,
                     C.FIREBALL_FALL_SPEED * C.fireballSpeedMul(a.reflects, this.perfectBoost),
