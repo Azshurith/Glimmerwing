@@ -1,3 +1,4 @@
+import beachSheet from '@/../assets/monsters/beach.png';
 import castleSheet from '@/../assets/monsters/castle.png';
 import caveSheet from '@/../assets/monsters/cave.png';
 import desertSheet from '@/../assets/monsters/desert.png';
@@ -71,8 +72,29 @@ const CASTLE: MonsterSheet = {
     spinner: 'bat',
 };
 
+/**
+ * Beach: sea slimes and starfish drift in formations, pearl clams are the shelled ones (their shells take
+ * the hits), seagulls wheel down, and the big ones are beach crabs.
+ */
+const BEACH: MonsterSheet = {
+    img: loadImage(beachSheet),
+    cell: 112,
+    rows: { slime: 0, crab: 1, clam: 2, starfish: 3, gull: 4 },
+    overlay: 5,
+    roster: ['slime', 'starfish'],
+    big: 'crab',
+    shelled: 'clam',
+    spinner: 'gull',
+};
+
 /** Monster sheets by map id. */
-const SHEETS: Record<string, MonsterSheet> = { forest: FOREST, cave: CAVE, desert: DESERT, castle: CASTLE };
+const SHEETS: Record<string, MonsterSheet> = {
+    forest: FOREST,
+    cave: CAVE,
+    desert: DESERT,
+    castle: CASTLE,
+    beach: BEACH,
+};
 
 /** The monster sheet for a map, or undefined if its critters stay puffs. */
 export function monstersFor(mapId: string): MonsterSheet | undefined {
