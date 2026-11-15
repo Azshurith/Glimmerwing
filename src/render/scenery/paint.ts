@@ -832,6 +832,13 @@ function topRamp(m: MapTheme, c: Paint): number[] {
     return [mix(m.top[3], m.ink, 0.35), m.top[3], m.top[2], m.top[1], m.top[0], mix(m.top[0], '#ffffff', 0.35)].map(c);
 }
 
+/** On a shore map, how high the land stands at world (x, Y): sea below SHORE_LAND, islands above it. */
+export function shoreLand(seed: number, x: number, Y: number): number {
+    return fbm(x / 120, Y / 120, seed + 7) * 0.85 + fbm(x / 34, Y / 34, seed + 9) * 0.15;
+}
+/** The level of the shoreline: land above it, sea below. */
+export const SHORE_LAND = 0.6;
+
 /**
  * Paint a band of a ground map's terrain, `w` wide and `h` tall, whose bottom edge sits `wy` world units up.
  * The terrain is a height field lit from the upper left and shaded through a dithered ramp, so slopes catch the
@@ -849,12 +856,14 @@ export function paintGround(m: MapTheme, seed: number, wy: number, w: number, h:
     /** Terrain height at world (x, Y). */
     const height = (x: number, Y: number): number => {
         switch (m.ground) {
-            case 'sand': {
+            case 'sand':
+            case 'shore': {
                 // Dunes: long soft swells with a sharp crest where two slopes meet.
                 const n = fbm(x / 90, Y / 60, seed);
                 return 1 - Math.abs(n * 2 - 1) * 0.8 + fbm(x / 30, Y / 30, seed + 4) * 0.15;
             }
             case 'rock':
+            case 'lava':
                 // Lumpy stone: boulders and hollows.
                 return fbm(x / 28, Y / 24, seed) * 0.8 + fbm(x / 9, Y / 9, seed + 8) * 0.2;
             default:
@@ -888,9 +897,11 @@ export function paintGround(m: MapTheme, seed: number, wy: number, w: number, h:
             } else {
                 const hgt = height(x, Y);
                 // Light from the upper left: slopes facing it are lit, the others shaded.
-                const slope = (height(x - 1, Y + 1) - height(x + 1, Y - 1)) * (m.ground === 'sand' ? 26 : 14);
+                const slope =
+                    (height(x - 1, Y + 1) - height(x + 1, Y - 1)) *
+                    (m.ground === 'sand' || m.ground === 'shore' ? 26 : 14);
                 let v = 0.5 + slope + (hgt - 0.5) * 0.35;
-                if (m.ground === 'sand') v += Math.sin((Y + hgt * 60) * 0.6 + x * 0.05) * 0.04; // fine ripples
+                if (m.ground === 'sand' || m.ground === 'shore') v += Math.sin((Y + hgt * 60) * 0.6 + x * 0.05) * 0.04; // fine ripples
                 col = ramp(tones, v, x, Y);
                 if (m.ground === 'sand') {
                     // An oasis now and then: water ringed with damp sand.
@@ -898,6 +909,25 @@ export function paintGround(m: MapTheme, seed: number, wy: number, w: number, h:
                     if (oasis > 0.78)
                         col = oasis > 0.8 ? ramp([deep, water, light], (oasis - 0.8) * 9 + slope, x, Y) : tones[1];
                     else if (oasis > 0.765) col = tones[2];
+                } else if (m.ground === 'shore') {
+                    // Sandy islands in a bright sea: deep water banded by swells, a pale shallow rim, a line of
+                    // foam and wet sand round each island, dunes on top.
+                    const land = shoreLand(seed, x, Y) - SHORE_LAND;
+                    if (land < -0.06) {
+                        const swell = Math.sin(Y * 0.3 + fbm(x / 26, Y / 26, seed + 13) * 7) * 0.09;
+                        col = ramp([deep, water, light], 0.75 + land * 3 + swell, x, Y);
+                    } else if (land < -0.03) col = ramp([water, light], 0.55 + slope * 0.2, x, Y);
+                    else if (land < -0.016) col = tones[5];
+                    else if (land < 0.004) col = tones[2];
+                } else if (m.ground === 'lava') {
+                    // Basalt split by glowing lava: winding rivers and round pools, a dark crust at their edge,
+                    // and hairline cracks with an ember glow.
+                    const river = Math.abs(fbm(x / 70, Y / 110, seed + 61) - 0.5);
+                    const pool = fbm(x / 44, Y / 44, seed + 51);
+                    const molten = Math.max(0.022 - river, pool - 0.8);
+                    if (molten > 0) col = ramp([deep, water, light], 0.2 + molten * 18 + slope * 0.4, x, Y);
+                    else if (molten > -0.012) col = ink;
+                    else if (Math.abs(fbm(x / 16, Y / 16, seed + 3) - 0.5) < 0.012) col = deep;
                 } else if (m.ground === 'rock') {
                     // Dark chasms with a lit rim, and pools of glowing water.
                     const pit = fbm(x / 48, Y / 48, seed + 51);
