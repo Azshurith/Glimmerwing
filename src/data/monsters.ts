@@ -1,3 +1,4 @@
+import castleSheet from '@/../assets/monsters/castle.png';
 import caveSheet from '@/../assets/monsters/cave.png';
 import desertSheet from '@/../assets/monsters/desert.png';
 import forestSheet from '@/../assets/monsters/forest.png';
@@ -55,8 +56,23 @@ const DESERT: MonsterSheet = {
     spinner: 'scorpion',
 };
 
+/**
+ * Castle: crown slimes and will-o'-wisps drift in formations, castle knights are the shelled ones
+ * (their armour takes the shell's hits), bats corkscrew down, and the big ones are magic books.
+ */
+const CASTLE: MonsterSheet = {
+    img: loadImage(castleSheet),
+    cell: 112,
+    rows: { slime: 0, knight: 1, bat: 2, wisp: 3, book: 4 },
+    overlay: 5,
+    roster: ['slime', 'wisp'],
+    big: 'book',
+    shelled: 'knight',
+    spinner: 'bat',
+};
+
 /** Monster sheets by map id. */
-const SHEETS: Record<string, MonsterSheet> = { forest: FOREST, cave: CAVE, desert: DESERT };
+const SHEETS: Record<string, MonsterSheet> = { forest: FOREST, cave: CAVE, desert: DESERT, castle: CASTLE };
 
 /** The monster sheet for a map, or undefined if its critters stay puffs. */
 export function monstersFor(mapId: string): MonsterSheet | undefined {
