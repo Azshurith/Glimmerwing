@@ -7,7 +7,9 @@ import { Backdrop } from '@/render/backdrop';
 import { arcadeText } from '@/render/draw';
 import { ARCADE } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
-import { drawTopBar } from './top-bar';
+import { drawTopBar, TOP_BAR_H } from './top-bar';
+import { stageFor } from '@/data/stages';
+import { drawTrophy } from '@/render/icons';
 
 /** Draws map `map`'s live scenery into the box (x, y, w, h), in the screen's design units. */
 export type MapPreviewDraw = (map: MapTheme, x: number, y: number, w: number, h: number) => void;
@@ -51,6 +53,8 @@ export function mapCards(layout: Layout, h: number = C.TALL_H): { x: number; y: 
 /** The map select screen. */
 export class MapScreen {
     private backdrop: Backdrop;
+    /** The maps whose stages are open, which Random flicks through. */
+    private open: MapTheme[] = MAPS;
 
     constructor(private ctx: CanvasRenderingContext2D) {
         this.backdrop = new Backdrop(ctx);
@@ -78,28 +82,44 @@ export class MapScreen {
             this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H);
             ctx.restore();
         }
-        drawTopBar(ctx, 'CHOOSE A MAP', W, bleed, layout === 'tall', 16);
-        designCards(layout, dy).forEach((c, i) => this.card(c, i, i === v.index, t, preview));
+        const tall = layout === 'tall';
+        this.open = MAPS.filter((_, i) => !v.locked[i]);
+        drawTopBar(ctx, 'CHOOSE A STAGE', W, bleed, tall, 16);
+        // Your trophies, at the bar's right end.
+        const barH = tall ? TOP_BAR_H.tall : TOP_BAR_H.wide;
+        ctx.textAlign = 'right';
+        ctx.font = `${tall ? 10 : 9}px ${ARCADE}`;
+        ctx.fillStyle = '#ffe08a';
+        const tx = W + bleed - 10;
+        ctx.fillText(String(v.trophies), tx, barH / 2 + 4);
+        drawTrophy(ctx, tx - ctx.measureText(String(v.trophies)).width - 9, barH / 2, tall ? 12 : 10);
+        designCards(layout, dy).forEach((c, i) => this.card(c, i, i === v.index, i > 0 && v.locked[i - 1], t, preview));
         ctx.textAlign = 'center';
         ctx.font = `7px ${ARCADE}`;
         ctx.fillStyle = 'rgba(203,188,245,0.75)';
-        const hint = v.touch ? 'TAP A MAP  ·  ◀ BACK' : 'ARROWS CHOOSE  ·  ENTER OR Z PLAY  ·  ESC BACK';
+        const hint = v.touch
+            ? 'TAP A STAGE  ·  WIN VS CPU OR ONLINE FOR TROPHIES'
+            : 'ARROWS CHOOSE  ·  ENTER OR Z PLAY  ·  WIN VS CPU OR ONLINE FOR TROPHIES';
         ctx.fillText(hint, W / 2, layout === 'tall' ? H - 14 : H - 10, W - 16);
         ctx.restore();
     }
 
-    /** One card: the map's scenery scrolling inside, its name on a plate, gold-edged when chosen. */
+    /**
+     * One card: the map's scenery scrolling inside, its name on a plate, gold-edged when chosen; a locked stage
+     * is shaded over with a padlock and the trophies that open it.
+     */
     private card(
         c: { x: number; y: number; w: number; h: number },
         i: number,
         on: boolean,
+        locked: boolean,
         t: number,
         preview: MapPreviewDraw,
     ): void {
         const ctx = this.ctx;
         const random = i === 0;
-        // Random flicks through every map, a second on each.
-        const map = random ? MAPS[Math.floor(t / 1.1) % MAPS.length] : MAPS[i - 1];
+        // Random flicks through every open map, a second on each.
+        const map = random ? this.open[Math.floor(t / 1.1) % this.open.length] : MAPS[i - 1];
         const lift = on ? -3 : 0;
         const x = c.x,
             y = c.y + lift;
@@ -129,6 +149,18 @@ export class MapScreen {
                 ['#ffffff', '#ffe08a', '#ff9a2e'],
                 'center',
             );
+        } else if (locked) {
+            ctx.fillStyle = 'rgba(8,5,22,0.72)';
+            ctx.fillRect(x, y, c.w, c.h);
+            const cy = y + c.h * 0.42;
+            drawPadlock(ctx, x + c.w / 2, cy, Math.min(30, c.w * 0.3));
+            ctx.textAlign = 'center';
+            ctx.font = `9px ${ARCADE}`;
+            const need = String(stageFor(map.id).trophies);
+            const nw = ctx.measureText(need).width;
+            ctx.fillStyle = '#ffe08a';
+            ctx.fillText(need, x + c.w / 2 + 6, cy + 30);
+            drawTrophy(ctx, x + c.w / 2 - nw / 2 - 2, cy + 26, 10);
         } else if (!on) {
             ctx.fillStyle = 'rgba(12,8,32,0.35)';
             ctx.fillRect(x, y, c.w, c.h);
@@ -141,11 +173,15 @@ export class MapScreen {
         ctx.fillRect(x, y + c.h - 26, c.w, 26);
         arcadeText(
             ctx,
-            random ? 'RANDOM' : map.name.toUpperCase(),
+            random ? 'RANDOM' : locked ? 'LOCKED' : map.name.toUpperCase(),
             x + c.w / 2,
             y + c.h - 8,
             on ? 12 : 11,
-            on ? ['#fff7c2', '#ffd45c', '#ff9a2e'] : ['#ffffff', '#e4dcff', '#b9a8e8'],
+            locked
+                ? ['#8f86b0', '#6f6790', '#59517a']
+                : on
+                  ? ['#fff7c2', '#ffd45c', '#ff9a2e']
+                  : ['#ffffff', '#e4dcff', '#b9a8e8'],
             'center',
             c.w - 8,
         );
@@ -154,4 +190,33 @@ export class MapScreen {
         ctx.lineWidth = on ? 2 : 1;
         ctx.strokeRect(x, y, c.w, c.h);
     }
+}
+
+/** A padlock `s` units tall centred on (x, y), for a locked stage. */
+function drawPadlock(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+    const w = s * 0.78,
+        bh = s * 0.55;
+    ctx.save();
+    ctx.strokeStyle = '#c9c1e6';
+    ctx.lineWidth = s * 0.11;
+    ctx.beginPath();
+    ctx.arc(x, y - bh * 0.15, w * 0.32, Math.PI, 0);
+    ctx.lineTo(x + w * 0.32, y + bh * 0.1);
+    ctx.moveTo(x - w * 0.32, y - bh * 0.15);
+    ctx.lineTo(x - w * 0.32, y + bh * 0.1);
+    ctx.stroke();
+    const g = ctx.createLinearGradient(0, y, 0, y + bh);
+    g.addColorStop(0, '#ffe08a');
+    g.addColorStop(1, '#c98a2e');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - w / 2, y, w, bh);
+    ctx.strokeStyle = '#6a3f10';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - w / 2 + 0.5, y + 0.5, w - 1, bh - 1);
+    ctx.fillStyle = '#5a3410';
+    ctx.beginPath();
+    ctx.arc(x, y + bh * 0.42, s * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(x - s * 0.025, y + bh * 0.42, s * 0.05, bh * 0.3);
+    ctx.restore();
 }

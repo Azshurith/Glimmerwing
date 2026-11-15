@@ -24,6 +24,7 @@ import type {
 } from '@/types';
 import { curveAt, curveStep, enterAt, normalRoute, reverseCurve, shiftCurve } from './fireball-path';
 import { leaving, memberAt, rollFormation, startFormation } from './waves';
+import { stageFor } from '@/data/stages';
 
 /** Which bomb sound each bomb style plays (see Sound.play 'bomb'). */
 const BOMB_SOUND: Record<string, number> = { dash: 0, blast: 1, vortex: 2, fan: 3, beam: 4, hole: 5 };
@@ -630,10 +631,12 @@ export class Field {
         // clearer just meets them sooner. The moonseed rides the first formation after its time.
         const withMoonseed = this.time >= this.nextMoonseed;
         if (withMoonseed) this.nextMoonseed += C.MOONSEED_EVERY;
-        const pressure = Math.min(1, this.time / 90);
+        // The map's stage sets how its formations look and how fast the round gets hard.
+        const style = stageFor(this.mapId).waves;
+        const pressure = Math.min(1, style.start + this.time / style.ramp);
         this.waveId++;
         this.waveT = 0;
-        const spec = rollFormation(this.waveRng, pressure, this.lastShape);
+        const spec = rollFormation(this.waveRng, pressure, this.lastShape, style);
         this.lastShape = spec.shape;
         const g = startFormation(this.waveId, spec);
         this.forms.push(g);

@@ -1,6 +1,9 @@
 // The Profile screen: who's playing (a guest, until sign-in exists) and this browser's record and unlocks.
 import * as C from '@/core/config';
 import { FAIRIES } from '@/data/characters';
+import { mapById } from '@/data/maps';
+import { STAGES } from '@/data/stages';
+import { drawTrophy } from '@/render/icons';
 import type { Layout, ProfileView } from '@/types';
 import { Backdrop } from '@/render/backdrop';
 import { drawFairy } from '@/render/entities/fairy';
@@ -65,7 +68,10 @@ export class ProfileScreen {
             ['FEVERS', String(v.fevers)],
             ['FLAWLESS WINS', String(v.flawless)],
             ['FAIRIES', `${unlocked}/${FAIRIES.length}`],
+            ['TROPHIES', String(v.trophies)],
         ];
+        // The next stage on the trophy road, if any is still locked.
+        const nextStage = STAGES.find(st => st.trophies > v.bestTrophies);
         const tw = tall ? 112 : 118,
             th = 38,
             x0 = tall ? (W - 2 * tw - 8) / 2 : 236,
@@ -83,6 +89,14 @@ export class ProfileScreen {
             ctx.fillStyle = '#cbbcf5';
             ctx.fillText(label, x + 8, y + 12);
             arcadeText(ctx, value, x + 8, y + 32, 16, ['#ffffff', '#ffe08a', '#ff9a2e'], 'left');
+            if (label === 'TROPHIES') {
+                drawTrophy(ctx, x + tw - 12, y + 10, 9);
+                ctx.textAlign = 'right';
+                ctx.font = `6px ${ARCADE}`;
+                ctx.fillStyle = nextStage ? '#ffe27a' : '#cbbcf5';
+                const name = nextStage ? (mapById(nextStage.mapId)?.name ?? '').toUpperCase() : '';
+                ctx.fillText(nextStage ? `${name} AT ${nextStage.trophies}` : 'ALL STAGES', x + tw - 6, y + 31);
+            }
         });
 
         // The roster: unlocked fairies in colour, locked ones as a ? with how to get them.

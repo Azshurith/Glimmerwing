@@ -359,6 +359,9 @@ export const FIREBALL_BOUNCE_SPREAD = 0.25;
 export const fireballTransitSpeed = (reflects: number, boost: number) =>
     Math.min(FIREBALL_MAX_SPEED, FIREBALL_TRANSIT_SPEED * fireballSpeedMul(reflects, boost));
 export const ROUNDS_TO_WIN = 2;
+/** Trophies won for a VS CPU or Online match win, and lost for a defeat (never below 0). */
+export const TROPHY_WIN = 30;
+export const TROPHY_LOSS = 20;
 
 /** Online play. */
 export const NET_VERSION = '42'; // bump when the wire format changes; only matching versions are paired

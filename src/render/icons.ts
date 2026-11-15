@@ -30,3 +30,34 @@ export function drawCrescentIcon(ctx: CanvasRenderingContext2D, x: number, y: nu
     ctx.arc(x + 2.5, y - 1.5, 4.2, 0, Math.PI * 2);
     ctx.fill();
 }
+
+/** A small gold trophy cup centred on (x, y), about `s` units tall. */
+export function drawTrophy(ctx: CanvasRenderingContext2D, x: number, y: number, s = 9): void {
+    const k = s / 9;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(k, k);
+    ctx.fillStyle = '#ffd45c';
+    ctx.strokeStyle = '#7a4a10';
+    ctx.lineWidth = 0.8;
+    // Handles, then the cup, the stem and the foot.
+    ctx.beginPath();
+    ctx.arc(-3.6, -2, 1.8, Math.PI * 0.5, Math.PI * 1.5);
+    ctx.arc(3.6, -2, 1.8, Math.PI * 1.5, Math.PI * 0.5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-3.6, -4.5);
+    ctx.lineTo(3.6, -4.5);
+    ctx.quadraticCurveTo(3.4, 0.8, 0, 1.2);
+    ctx.quadraticCurveTo(-3.4, 0.8, -3.6, -4.5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillRect(-0.8, 1, 1.6, 2);
+    ctx.beginPath();
+    ctx.rect(-2.6, 3, 5.2, 1.6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillRect(-2.4, -3.8, 1, 2.6);
+    ctx.restore();
+}
