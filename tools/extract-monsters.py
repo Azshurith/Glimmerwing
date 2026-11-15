@@ -83,6 +83,17 @@ LAYOUTS = {
             ('appear', 1098, 1206, (0, 0, 0)),
         ],
     },
+    'space': {
+        'cols': [105, 240, 381, 523, 668, 814, 961, 1107],
+        'rows': [
+            ('slime', 118, 234, (0, 348, 135)),
+            ('robot', 310, 423, (0, 346, 327)),
+            ('cat', 498, 609, (0, 328, 519)),
+            ('octopus', 682, 795, (0, 350, 704)),
+            ('turtle', 870, 981, (0, 354, 892)),
+            ('appear', 1098, 1203, (0, 0, 0)),
+        ],
+    },
     'cave': {
         # Frame 5 here (as on the desert sheet) is a glowing body, so it's keyed soft like the sparkle frames.
         'solid_from': 5,

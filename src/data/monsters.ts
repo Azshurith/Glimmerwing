@@ -3,6 +3,7 @@ import castleSheet from '@/../assets/monsters/castle.png';
 import caveSheet from '@/../assets/monsters/cave.png';
 import desertSheet from '@/../assets/monsters/desert.png';
 import forestSheet from '@/../assets/monsters/forest.png';
+import spaceSheet from '@/../assets/monsters/space.png';
 import volcanoSheet from '@/../assets/monsters/volcano.png';
 import { loadImage } from '@/core/images';
 import type { MonsterSheet } from '@/types';
@@ -103,6 +104,21 @@ const VOLCANO: MonsterSheet = {
     spinner: 'bat',
 };
 
+/**
+ * Space: galaxy slimes and void octopuses drift in formations, meteor turtles are the shelled ones (their
+ * cratered shells take the hits), comet cats streak round, and the big ones are astro robots.
+ */
+const SPACE: MonsterSheet = {
+    img: loadImage(spaceSheet),
+    cell: 112,
+    rows: { slime: 0, robot: 1, cat: 2, octopus: 3, turtle: 4 },
+    overlay: 5,
+    roster: ['slime', 'octopus'],
+    big: 'robot',
+    shelled: 'turtle',
+    spinner: 'cat',
+};
+
 /** Monster sheets by map id. */
 const SHEETS: Record<string, MonsterSheet> = {
     forest: FOREST,
@@ -111,6 +127,7 @@ const SHEETS: Record<string, MonsterSheet> = {
     castle: CASTLE,
     beach: BEACH,
     volcano: VOLCANO,
+    space: SPACE,
 };
 
 /** The monster sheet for a map, or undefined if its critters stay puffs. */
