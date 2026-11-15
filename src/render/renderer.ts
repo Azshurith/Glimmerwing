@@ -261,18 +261,30 @@ export class Renderer {
             ctx.fill();
         }
 
+        // Plain shots: a dot in a faint halo, all in two fills (a canvas shadow on each was slow).
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
         for (const s of f.shots) {
+            if (s.charged) continue;
+            ctx.moveTo(s.x + 3.6, s.y);
+            ctx.arc(s.x, s.y, 3.6, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        for (const s of f.shots) {
+            if (s.charged) continue;
+            ctx.moveTo(s.x + 2, s.y);
+            ctx.arc(s.x, s.y, 2, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        for (const s of f.shots) {
+            if (!s.charged) continue;
             ctx.fillStyle = color;
             ctx.shadowColor = color;
-            if (s.charged) {
-                ctx.shadowBlur = 14;
-                drawChargeShot(ctx, s.x, s.y, s.vx, s.r ?? 10, s.style ?? 'orb', s.life, time);
-            } else {
-                ctx.shadowBlur = 4;
-                ctx.beginPath();
-                ctx.arc(s.x, s.y, 2, 0, Math.PI * 2);
-                ctx.fill();
-            }
+            ctx.shadowBlur = 14;
+            drawChargeShot(ctx, s.x, s.y, s.vx, s.r ?? 10, s.style ?? 'orb', s.life, time);
             ctx.shadowBlur = 0;
         }
 

@@ -21,6 +21,39 @@ export function fireLook(reflects: number, fever?: boolean): FireLook {
     return reflects >= 2 ? 'reverse' : reflects === 1 ? 'p2' : fever ? 'fever' : 'p1';
 }
 
+/** Glow sprites are painted at this many pixels per meadow unit; a soft glow needs no more. */
+const GLOW_RES = 3;
+/** A Reverse fireball's cycling glow is cached in hue steps this many degrees apart. */
+const GLOW_HUE_STEP = 15;
+/** Cached glow sprites by colour and size. */
+const glows = new Map<string, HTMLCanvasElement>();
+
+/**
+ * The soft glow behind a fireball of radius `r` in `color`, painted once and reused: it stands
+ * in for the canvas shadow the flames used to cast, reaching about as far out.
+ */
+function fireGlow(color: string, r: number, size: number): HTMLCanvasElement {
+    const key = `${color}|${r.toFixed(1)}`;
+    let c = glows.get(key);
+    if (c) return c;
+    const reach = r * 1.35 + 4 + size;
+    const px = Math.ceil(reach * 2 * GLOW_RES);
+    c = document.createElement('canvas');
+    c.width = c.height = px;
+    const g = c.getContext('2d')!;
+    const grad = g.createRadialGradient(px / 2, px / 2, 0, px / 2, px / 2, px / 2);
+    // An alpha falloff, then tinted: a gradient straight to transparent would darken on the way.
+    grad.addColorStop(0.45, 'rgba(255,255,255,0.7)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, px, px);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = color;
+    g.fillRect(0, 0, px, px);
+    glows.set(key, c);
+    return c;
+}
+
 /**
  * A fireball (TSS Normal or Reverse Attack): a glowing core with a little face, wrapped in flickering
  * flame tongues that stream back along its flight. `size` 1 to 4 scales it; `hurt` (0 to 1) is how much
@@ -41,8 +74,10 @@ export function drawFireball(
 ): void {
     const r = C.fireballRadius(size);
     let [outer, inner, core] = look === 'reverse' ? FIRE.p1 : FIRE[look];
+    let hue = -1;
     if (look === 'reverse') {
         const h = (t * 900 + spin * 60) % 360;
+        hue = h;
         outer = `hsl(${h}, 100%, 58%)`;
         inner = `hsl(${(h + 120) % 360}, 100%, 72%)`;
         core = '#ffffff';
@@ -54,12 +89,26 @@ export function drawFireball(
     const ang = sp > 30 ? Math.atan2(-vy, -vx) : -Math.PI / 2;
     ctx.save();
     ctx.translate(x, y);
-    ctx.shadowColor = outer;
-    ctx.shadowBlur = 8 + size * 2;
+    // The glow: one cached soft sprite, not a canvas shadow (blurring every flame tongue cost about
+    // a millisecond per fireball on a big screen, so a screenful of them dropped frames).
+    const glow = fireGlow(
+        hue >= 0 ? `hsl(${Math.round(hue / GLOW_HUE_STEP) * GLOW_HUE_STEP}, 100%, 58%)` : outer,
+        r,
+        size,
+    );
+    ctx.drawImage(
+        glow,
+        -glow.width / GLOW_RES / 2,
+        -glow.height / GLOW_RES / 2,
+        glow.width / GLOW_RES,
+        glow.height / GLOW_RES,
+    );
     const tongues = 5;
     for (let layer = 0; layer < 2; layer++) {
         ctx.fillStyle = layer ? inner : outer;
         const k = layer ? 0.62 : 1;
+        // Every tongue of a layer goes into one path and one fill.
+        ctx.beginPath();
         for (let i = 0; i < tongues; i++) {
             const spread = (i - (tongues - 1) / 2) * 0.32;
             const flick = 0.75 + 0.25 * Math.sin(t * 22 + i * 1.9 + spin * 3);
@@ -69,13 +118,12 @@ export function drawFireball(
                 tipy = Math.sin(a) * (r * 0.55 + len);
             const nx = -Math.sin(a) * r * 0.42 * k,
                 ny = Math.cos(a) * r * 0.42 * k;
-            ctx.beginPath();
             ctx.moveTo(nx, ny);
             ctx.quadraticCurveTo(tipx * 0.55 + nx * 0.6, tipy * 0.55 + ny * 0.6, tipx, tipy);
             ctx.quadraticCurveTo(tipx * 0.55 - nx * 0.6, tipy * 0.55 - ny * 0.6, -nx, -ny);
             ctx.closePath();
-            ctx.fill();
         }
+        ctx.fill();
     }
     // The ball itself.
     const pulse = 1 + Math.sin(t * 9 + spin) * 0.05;
@@ -83,7 +131,6 @@ export function drawFireball(
     ctx.beginPath();
     ctx.arc(0, 0, r * pulse, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
     const g = ctx.createRadialGradient(-r * 0.25, -r * 0.3, 0, 0, 0, r);
     g.addColorStop(0, core);
     g.addColorStop(0.55, inner);
@@ -144,13 +191,13 @@ export function drawFireFlash(ctx: CanvasRenderingContext2D, x: number, y: numbe
     const r = C.fireballRadius(size);
     ctx.save();
     ctx.globalAlpha = k;
+    const glow = fireGlow('#ffffff', r, size);
+    const gw = glow.width / GLOW_RES;
+    ctx.drawImage(glow, x - gw / 2, y - gw / 2, gw, gw);
     ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 14;
     ctx.beginPath();
     ctx.arc(x, y, r * (1 + (1 - k) * 0.8), 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2 * k + 0.5;
     ctx.beginPath();
