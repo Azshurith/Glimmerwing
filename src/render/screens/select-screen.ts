@@ -14,12 +14,12 @@ const PANEL_X = [8, C.VIEW_W - 8 - PANEL_W] as const;
 const ART_Y = 34,
     ART_H = 168,
     SLANT = 10;
-const MED_R = 21;
+const MED_R = 18;
 const MID_X = C.VIEW_W / 2;
-const MED_COLS = 3;
-const MED_DX = 50,
-    MED_Y0 = 104,
-    MED_DY = 50;
+const MED_COLS = 4;
+const MED_DX = 40,
+    MED_Y0 = 112,
+    MED_DY = 44;
 
 /** A side panel's size and place: the wide layout's, or the tall layout's narrower, compact one. */
 interface PanelGeom {
@@ -56,7 +56,7 @@ const CENTRE = {
     },
 } as const;
 /** The tall layout's roster: under the panels, a little bigger for fingers. */
-const TALL_MED = { y0: 372, dx: 64, dy: 58, r: 24 } as const;
+const TALL_MED = { y0: 372, dx: 58, dy: 58, r: 23 } as const;
 
 /** How far the tall select's content moves down to sit centred in a view `h` tall. */
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;

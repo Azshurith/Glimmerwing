@@ -42,5 +42,7 @@ export interface Fairy {
     sprite?: SpriteSet;
     /** Character-select art. Without one the select screen shows her in-game look. */
     portrait?: Portrait;
+    /** Her own words for what her shot and bomb do, where the style's usual description doesn't fit. */
+    skillText?: { shot?: string; bomb?: string };
     unlock: null | { hint: string; met: (p: Progress) => boolean };
 }

@@ -1,7 +1,8 @@
+import knightPortrait from '@/../assets/knight-portrait.jpg';
 import witchPortrait from '@/../assets/witch-portrait.jpg';
 import { loadImage } from '@/core/images';
 import type { Fairy } from '@/types';
-import { WITCH } from './sprite-sets';
+import { KNIGHT, WITCH } from './sprite-sets';
 
 export const FAIRIES: Fairy[] = [
     {
@@ -125,6 +126,32 @@ export const FAIRIES: Fairy[] = [
         chargeName: 'Dusk crescent',
         bomb: { name: 'Duskfall', color: '#d9c2ff', shape: 'moon', style: 'hole', time: 1, invuln: 2.2 },
         unlock: { hint: 'Beat the CPU without dropping a round', met: p => p.flawless >= 1 },
+    },
+    {
+        id: 'aster',
+        name: 'Aster',
+        blurb: 'A knight: faster, with harder bursts',
+        color: '#ffd23f',
+        accent: '#d8323c',
+        wing: 'pointed',
+        speed: 1.08,
+        burst: 1.12,
+        charge: 0.9,
+        hitbox: 1,
+        feverTime: 1,
+        counterBoost: 0,
+        guardian: { name: 'Starwarden', color: '#ffe27a', pattern: 'aimed', patterns: ['aimed', 'sweep', 'rapid'] },
+        extra: { name: 'Star blades', count: 3, flight: 'slant', look: 'glimmer' },
+        chargeStyle: 'needles',
+        chargeName: 'Star thrust',
+        bomb: { name: 'Starblade', color: '#fff0a8', shape: 'shard', style: 'beam', time: 0.8, invuln: 2.2 },
+        sprite: KNIGHT,
+        portrait: { img: loadImage(knightPortrait), panel: [190, 20, 425, 467], face: [395, 200, 105] },
+        skillText: {
+            shot: 'A fan of star-bright sword thrusts',
+            bomb: 'Sweeps a blade of light over everything above him',
+        },
+        unlock: { hint: 'Reach 600 trophies', met: p => p.bestTrophies >= 600 },
     },
 ];
 

@@ -1,12 +1,17 @@
-"""Usage: python extract-witch.py <sheet.png> <out_dir>
+"""Usage: python extract-witch.py <sheet.png> <out_dir> [name] [anchor]
 
-Cut the witch sprite sheet into frames: flood-fill background removal, bow-anchored, uniform cells."""
+Cut a fairy sprite sheet (the witch's template: the same rows and columns) into frames: flood-fill background
+removal, anchored on a coloured mark near the head, uniform cells. `name` (default witch) names the outputs,
+<out_dir>/<name>.png and .json; `anchor` is what the frames line up on: 'bow' (the witch's red bow, the
+default) or 'hair' (bright yellow hair, for the knight)."""
 import sys, json
 from PIL import Image
 import numpy as np
 from scipy import ndimage
 
 SRC, OUT_DIR = sys.argv[1], sys.argv[2]
+NAME = sys.argv[3] if len(sys.argv) > 3 else 'witch'
+ANCHOR = sys.argv[4] if len(sys.argv) > 4 else 'bow'
 im = np.array(Image.open(SRC).convert('RGB')).astype(np.int32)
 
 # name: (y0, y1, label x-centres, soft-alpha effects?)
@@ -65,7 +70,10 @@ def cut(y0, y1, x0, x1, soft):
 
 def bow_anchor(rgba):
     r, g, b, a = [rgba[..., i].astype(int) for i in range(4)]
-    red = (a > 200) & (r > 170) & (g < 90) & (b < 110)
+    if ANCHOR == 'hair':
+        red = (a > 200) & (r > 210) & (g > 160) & (b < 90)
+    else:
+        red = (a > 200) & (r > 170) & (g < 90) & (b < 110)
     ys, xs = np.nonzero(red[: rgba.shape[0] // 2])
     if len(xs) < 15: return None
     return float(xs.mean()), float(ys.mean())
@@ -126,8 +134,8 @@ for r, name in enumerate(order):
         cell = Image.new('RGBA', (CW, CH), (0, 0, 0, 0))
         cell.alpha_composite(img, (max(px,0), max(py,0)), (max(-px,0), max(-py,0)))
         sheet.alpha_composite(cell, (c * CW, r * CH))
-sheet.quantize(256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE).save(f'{OUT_DIR}/witch.png', optimize=True)
-json.dump(meta, open(f'{OUT_DIR}/witch.json', 'w'), indent=1)
+sheet.quantize(256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE).save(f'{OUT_DIR}/{NAME}.png', optimize=True)
+json.dump(meta, open(f'{OUT_DIR}/{NAME}.json', 'w'), indent=1)
 # debug preview on a mid-tone checker, 2x
 dbg = Image.new('RGBA', sheet.size, (60, 70, 110, 255))
 for y in range(0, sheet.size[1], 8):
@@ -140,4 +148,4 @@ for r in range(len(order)):
     for c in range(cols):
         dr.line([(c*CW+AX-3, r*CH+AY), (c*CW+AX+3, r*CH+AY)], fill=(0,255,0,255))
         dr.rectangle([c*CW, r*CH, c*CW+CW-1, r*CH+CH-1], outline=(255,255,255,60))
-dbg.save(f'{OUT_DIR}/witch_debug.png')
+dbg.save(f'{OUT_DIR}/{NAME}_debug.png')

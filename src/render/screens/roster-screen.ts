@@ -369,8 +369,8 @@ export class RosterScreen {
                   ['GUARDIAN', '???', ''],
               ]
             : [
-                  ['SHOT', fy.chargeName, SHOT_TEXT[fy.chargeStyle] ?? ''],
-                  ['BOMB', fy.bomb.name, BOMB_TEXT[fy.bomb.style] ?? ''],
+                  ['SHOT', fy.chargeName, fy.skillText?.shot ?? SHOT_TEXT[fy.chargeStyle] ?? ''],
+                  ['BOMB', fy.bomb.name, fy.skillText?.bomb ?? BOMB_TEXT[fy.bomb.style] ?? ''],
                   [
                       'EXTRA ATTACK',
                       fy.extra.name,
