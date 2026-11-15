@@ -3,6 +3,7 @@ import castleSheet from '@/../assets/monsters/castle.png';
 import caveSheet from '@/../assets/monsters/cave.png';
 import desertSheet from '@/../assets/monsters/desert.png';
 import forestSheet from '@/../assets/monsters/forest.png';
+import volcanoSheet from '@/../assets/monsters/volcano.png';
 import { loadImage } from '@/core/images';
 import type { MonsterSheet } from '@/types';
 
@@ -87,6 +88,21 @@ const BEACH: MonsterSheet = {
     spinner: 'gull',
 };
 
+/**
+ * Volcano: lava slimes and flame wisps drift in formations, lava crabs are the shelled ones (their rocky backs
+ * take the hits), fire bats wheel down, and the big ones are magma golems.
+ */
+const VOLCANO: MonsterSheet = {
+    img: loadImage(volcanoSheet),
+    cell: 112,
+    rows: { slime: 0, golem: 1, bat: 2, wisp: 3, crab: 4 },
+    overlay: 5,
+    roster: ['slime', 'wisp'],
+    big: 'golem',
+    shelled: 'crab',
+    spinner: 'bat',
+};
+
 /** Monster sheets by map id. */
 const SHEETS: Record<string, MonsterSheet> = {
     forest: FOREST,
@@ -94,6 +110,7 @@ const SHEETS: Record<string, MonsterSheet> = {
     desert: DESERT,
     castle: CASTLE,
     beach: BEACH,
+    volcano: VOLCANO,
 };
 
 /** The monster sheet for a map, or undefined if its critters stay puffs. */

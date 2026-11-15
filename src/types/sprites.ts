@@ -48,7 +48,8 @@ export type MonsterKind =
     | 'crab'
     | 'clam'
     | 'starfish'
-    | 'gull';
+    | 'gull'
+    | 'golem';
 
 /**
  * A map's monster sheet: one row of eight "appear" frames per monster (sparkle, flash,
