@@ -7,7 +7,7 @@ import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
 import { modeCards, modeColumns } from '@/render/screens/mode-screen';
 import { rosterMedallions, rosterPreviewButton } from '@/render/screens/roster-screen';
-import { MAP_CARDS, mapCards } from '@/render/screens/map-screen';
+import { MAP_CARDS, MAP_COLS, mapCards } from '@/render/screens/map-screen';
 import { MAPS, mapById, mapForSeed } from '@/data/maps';
 import { stageFor, stageOpen } from '@/data/stages';
 import { titleButtons } from '@/render/screens/title-screen';
@@ -595,10 +595,13 @@ export class Game {
         const tall = this.r.layout === 'tall';
         if (any(['ArrowLeft', 'KeyA'])) this.mapIndex = (this.mapIndex + n - 1) % n;
         if (any(['ArrowRight', 'KeyD'])) this.mapIndex = (this.mapIndex + 1) % n;
-        // On a phone the maps sit two by two under Random, so up and down jump a row.
+        // Up and down jump a row: rows of four on a wide screen; on a phone the maps sit two by two under Random.
         if (tall && any(['ArrowDown', 'KeyS']))
-            this.mapIndex = this.mapIndex === 0 ? 1 : Math.min(n - 1, this.mapIndex + 2);
-        if (tall && any(['ArrowUp', 'KeyW'])) this.mapIndex = this.mapIndex <= 2 ? 0 : this.mapIndex - 2;
+            this.mapIndex = this.mapIndex === 0 ? 1 : Math.min(n - 1, this.mapIndex + MAP_COLS.tall);
+        if (tall && any(['ArrowUp', 'KeyW']))
+            this.mapIndex = this.mapIndex <= MAP_COLS.tall ? 0 : this.mapIndex - MAP_COLS.tall;
+        if (!tall && any(['ArrowDown', 'KeyS'])) this.mapIndex = Math.min(n - 1, this.mapIndex + MAP_COLS.wide);
+        if (!tall && any(['ArrowUp', 'KeyW'])) this.mapIndex = Math.max(0, this.mapIndex - MAP_COLS.wide);
         if (this.mapIndex !== was) this.ui('tick');
         const tap = this.input.tap;
         if (tap) {
