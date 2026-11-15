@@ -20,21 +20,37 @@ export const MAP_CARDS = MAPS.length + 1;
 /** Extra room at the top of a tall view that's taller than the design, split above and below. */
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
 
-/** The cards, in design units: a row across a wide screen, two columns on a tall one. */
+/** Cards per row on a wide screen (Random first), and per row of maps on a tall one (under Random). */
+export const MAP_COLS = { wide: 4, tall: 2 } as const;
+
+/** The cards, in design units: rows of four on a wide screen; on a tall one Random on top, then two columns. */
 function designCards(layout: Layout, dy = 0): { x: number; y: number; w: number; h: number }[] {
     if (layout === 'wide') {
-        const w = 86,
-            gap = 8,
-            x0 = (C.VIEW_W - (MAP_CARDS * w + (MAP_CARDS - 1) * gap)) / 2;
-        return Array.from({ length: MAP_CARDS }, (_, i) => ({ x: x0 + i * (w + gap), y: 46, w, h: 228 }));
+        const cols = MAP_COLS.wide,
+            rows = Math.ceil(MAP_CARDS / cols);
+        const gap = 8,
+            w = 112,
+            h = Math.min(130, (C.VIEW_H - 46 - 24 - (rows - 1) * gap) / rows),
+            x0 = (C.VIEW_W - (cols * w + (cols - 1) * gap)) / 2;
+        return Array.from({ length: MAP_CARDS }, (_, i) => ({
+            x: x0 + (i % cols) * (w + gap),
+            y: 40 + Math.floor(i / cols) * (h + gap),
+            w,
+            h,
+        }));
     }
     // Tall: Random across the top, then the maps two by two.
     const w = 116,
         gap = 8,
         x0 = (C.TALL_W - (2 * w + gap)) / 2;
-    const cards = [{ x: x0, y: 50 + dy, w: 2 * w + gap, h: 92 }];
+    const rows = Math.ceil(MAPS.length / 2);
+    const top = 50 + dy,
+        rh = 60,
+        mapTop = top + rh + gap,
+        mh = Math.min(152, (C.TALL_H - 30 - (mapTop - dy) - (rows - 1) * gap) / rows);
+    const cards = [{ x: x0, y: top, w: 2 * w + gap, h: rh }];
     for (let i = 0; i < MAPS.length; i++)
-        cards.push({ x: x0 + (i % 2) * (w + gap), y: 150 + dy + Math.floor(i / 2) * 160, w, h: 152 });
+        cards.push({ x: x0 + (i % 2) * (w + gap), y: mapTop + Math.floor(i / 2) * (mh + gap), w, h: mh });
     return cards;
 }
 

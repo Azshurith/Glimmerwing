@@ -84,6 +84,66 @@ export const STAGES: Stage[] = [
             pace: 0.85,
         },
     },
+    {
+        // Tides: long lines and waves that sway in and out, lots of dew bubbles, a quick ramp.
+        mapId: 'beach',
+        trophies: 1000,
+        cpuReaction: 0.08,
+        waves: {
+            shapes: { wave: 2.4, line: 1.6, arc: 1.4, diagonal: 1.2 },
+            kinds: { spinner: 1.2, beetle: 1.3 },
+            moves: { sway: 1.8, bob: 1.5 },
+            exits: { sides: 1.6, left: 1.4, right: 1.4, dive: 1.4 },
+            start: 0.35,
+            ramp: 65,
+            hp: 0.25,
+            extra: 1,
+            morph: 1.4,
+            big: 1.3,
+            bubble: 2.2,
+            pace: 0.82,
+        },
+    },
+    {
+        // Eruption: dense grids, rings and V's that dive at you, tough and big critters, a fast, early ramp.
+        mapId: 'volcano',
+        trophies: 1500,
+        cpuReaction: 0.07,
+        waves: {
+            shapes: { grid: 2, ring: 1.8, v: 1.6, chevron: 1.4, line: 0.5 },
+            kinds: { beetle: 1.8, spinner: 1.5 },
+            moves: { creep: 1.6, march: 1.4, orbit: 1.4 },
+            exits: { dive: 2.4, scatter: 1.4 },
+            start: 0.45,
+            ramp: 55,
+            hp: 0.3,
+            extra: 2,
+            morph: 1.8,
+            big: 1.8,
+            bubble: 1.2,
+            pace: 0.78,
+        },
+    },
+    {
+        // Zero-g: everything orbits and figure-eights, re-forms all the time, toughest and fastest of all.
+        mapId: 'space',
+        trophies: 2200,
+        cpuReaction: 0.06,
+        waves: {
+            shapes: { ring: 2.4, arc: 1.6, grid: 1.6, chevron: 1.4, column: 1.2 },
+            kinds: { spinner: 2, beetle: 1.6 },
+            moves: { orbit: 2.6, figure8: 2.4, bob: 1.2 },
+            exits: { scatter: 2, dive: 1.8 },
+            start: 0.55,
+            ramp: 45,
+            hp: 0.4,
+            extra: 2,
+            morph: 2.6,
+            big: 1.6,
+            bubble: 1.5,
+            pace: 0.72,
+        },
+    },
 ];
 
 /** The stage for a map (the first stage for an unknown one, such as a preview meadow). */

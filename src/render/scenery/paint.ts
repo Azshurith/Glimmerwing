@@ -855,6 +855,7 @@ export function paintGround(m: MapTheme, seed: number, wy: number, w: number, h:
                 return 1 - Math.abs(n * 2 - 1) * 0.8 + fbm(x / 30, Y / 30, seed + 4) * 0.15;
             }
             case 'rock':
+            case 'lava':
                 // Lumpy stone: boulders and hollows.
                 return fbm(x / 28, Y / 24, seed) * 0.8 + fbm(x / 9, Y / 9, seed + 8) * 0.2;
             default:
@@ -898,6 +899,15 @@ export function paintGround(m: MapTheme, seed: number, wy: number, w: number, h:
                     if (oasis > 0.78)
                         col = oasis > 0.8 ? ramp([deep, water, light], (oasis - 0.8) * 9 + slope, x, Y) : tones[1];
                     else if (oasis > 0.765) col = tones[2];
+                } else if (m.ground === 'lava') {
+                    // Basalt split by glowing lava: winding rivers and round pools, a dark crust at their edge,
+                    // and hairline cracks with an ember glow.
+                    const river = Math.abs(fbm(x / 70, Y / 110, seed + 61) - 0.5);
+                    const pool = fbm(x / 44, Y / 44, seed + 51);
+                    const molten = Math.max(0.022 - river, pool - 0.8);
+                    if (molten > 0) col = ramp([deep, water, light], 0.2 + molten * 18 + slope * 0.4, x, Y);
+                    else if (molten > -0.012) col = ink;
+                    else if (Math.abs(fbm(x / 16, Y / 16, seed + 3) - 0.5) < 0.012) col = deep;
                 } else if (m.ground === 'rock') {
                     // Dark chasms with a lit rim, and pools of glowing water.
                     const pit = fbm(x / 48, Y / 48, seed + 51);

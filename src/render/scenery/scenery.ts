@@ -101,6 +101,19 @@ export class SkyScenery {
         return { x: r.next(), y: r.next(), s: r.range(0.5, 1.4), p: r.range(0, 6), v: r.range(0.4, 1) };
     });
 
+    /** Stars for a starry map: where each sits (as shares of the world), its size, twinkle phase and colour. */
+    private stars = Array.from({ length: 160 }, (_, i) => {
+        const r = new Rng(hash(11, i, 77));
+        const tint = r.next();
+        return {
+            x: r.next(),
+            y: r.next(),
+            s: r.next() < 0.12 ? 2 : 1,
+            p: r.range(0, 6),
+            c: tint < 0.15 ? '#ffd6a8' : tint < 0.3 ? '#a8c8ff' : '#ffffff',
+        };
+    });
+
     /** Start a frame: the paint budget refills, and long-unused sprites and cells are let go. */
     beginFrame(): void {
         this.frame++;
@@ -145,6 +158,7 @@ export class SkyScenery {
             g.addColorStop(1, map.sky[1]);
             ctx.fillStyle = g;
             ctx.fillRect(0, 0, w, h);
+            if (map.stars) this.drawStars(ctx, climb, clock, w, h);
             this.layer(ctx, seed, map, 'far', climb, clock, w, h);
         }
         if (map.terrain !== 'ground') {
@@ -344,6 +358,22 @@ export class SkyScenery {
         }
         c.used = this.frame;
         return c.art;
+    }
+
+    /** A field of stars, far behind everything: they slide by slowly across the whole world, twinkling. */
+    private drawStars(ctx: CanvasRenderingContext2D, climb: number, clock: number, w: number, h: number): void {
+        const { ox, ww } = this.view;
+        const a = climb * 0.08;
+        for (const st of this.stars) {
+            const x = st.x * ww - ox;
+            if (x < -2 || x > w + 2) continue;
+            const y = (((st.y * h * 1.3 + a) % (h * 1.3)) + h * 1.3) % (h * 1.3);
+            if (y > h) continue;
+            ctx.globalAlpha = 0.45 + 0.4 * Math.sin(clock * 1.7 + st.p);
+            ctx.fillStyle = st.c;
+            ctx.fillRect(Math.round(x), Math.round(y), st.s, st.s);
+        }
+        ctx.globalAlpha = 1;
     }
 
     /** Glowing motes drifting through the middle distance. */
