@@ -1,7 +1,26 @@
 import type { CritterKind } from './game';
 
 /** The shape a formation holds once it's in place. */
-export type FormationShape = 'line' | 'column' | 'diagonal' | 'v' | 'chevron' | 'arc' | 'ring' | 'grid' | 'wave';
+export type FormationShape =
+    | 'line'
+    | 'column'
+    | 'diagonal'
+    | 'v'
+    | 'chevron'
+    | 'arc'
+    | 'ring'
+    | 'grid'
+    | 'wave'
+    // A wide ring all round the fairy, reaching down to the bottom of the meadow.
+    | 'surround'
+    // Each map's own shapes, flown nowhere else (see WaveStyle.signature).
+    | 'flower'
+    | 'stalactite'
+    | 'pyramid'
+    | 'cross'
+    | 'spiral'
+    | 'eruption'
+    | 'star';
 
 /**
  * How a formation comes in from outside the meadow: dropping in from above, swooping in from a top
@@ -82,8 +101,12 @@ export interface Formation {
  * and fast the round gets. Every roll is still drawn in the same order, so both meadows still match.
  */
 export interface WaveStyle {
-    /** Multipliers on each shape's weight (1 if missing). */
+    /** Multipliers on each shared shape's weight (`rest` if missing). */
     shapes?: Partial<Record<FormationShape, number>>;
+    /** The multiplier on a shared shape the stage doesn't list (1 if missing): below 1 keeps to its own mix. */
+    rest?: number;
+    /** The stage's own shapes and their weights, flown on no other map; they're also what it re-forms into most. */
+    signature?: Partial<Record<FormationShape, number>>;
     /** Multipliers on each critter kind's weight. */
     kinds?: Partial<Record<'puff' | 'beetle' | 'spinner', number>>;
     /** Multipliers on each group movement's weight. */

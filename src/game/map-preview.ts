@@ -24,6 +24,14 @@ const SHAPE: Record<string, string> = {
     ring: 'Ring',
     grid: 'Grid',
     wave: 'Wave',
+    surround: 'Ring around you',
+    flower: 'Flower',
+    stalactite: 'Stalactite',
+    pyramid: 'Pyramid',
+    cross: 'Cross',
+    spiral: 'Seashell spiral',
+    eruption: 'Eruption',
+    star: 'Star',
 };
 const MOVE: Record<string, string> = {
     sway: 'sways',
