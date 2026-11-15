@@ -24,7 +24,8 @@ const fieldW = () => C.FIELD_W,
 
 /** Where formations may sit: clear below the HUD strip, and well above the fairy's usual ground. */
 const TOP = 42,
-    BOTTOM = fieldH() * 0.6,
+    /** The lowest a formation usually sits, and the lowest a deep one may (near the floor, round the fairy). */
+    bottomOf = (deep: boolean) => fieldH() * (deep ? 0.86 : 0.6),
     /** Off-screen distance members start from and leave to. */
     OFF = 26,
     /**
@@ -49,6 +50,14 @@ const SHAPE_MAX: Record<FormationShape, number> = {
     ring: 10,
     grid: 10,
     wave: 7,
+    surround: 12,
+    flower: 7,
+    stalactite: 9,
+    pyramid: 10,
+    cross: 9,
+    spiral: 9,
+    eruption: 9,
+    star: 10,
 };
 
 /** Slots for `n` members of a shape, centred on (0, 0), neighbours `s` apart. */
@@ -99,7 +108,140 @@ export function shapeSlots(shape: FormationShape, n: number, s: number): Vec[] {
             case 'wave':
                 out.push({ x: (i - c) * s, y: Math.sin(i * 1.15) * s * 0.4 });
                 break;
+            case 'surround': {
+                // Sized to the meadow, not the spacing: members sit well apart, as in TSS.
+                const r = surroundRadius();
+                const a = (Math.PI * 2 * i) / n - Math.PI / 2;
+                out.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+                break;
+            }
+            default:
+                return signatureSlots(shape, n, s);
         }
+    }
+    return out;
+}
+
+/** The radius of a ring round the fairy: as wide as the meadow allows, with room for the critters. */
+function surroundRadius(): number {
+    return Math.min(fieldW() * 0.4, fieldH() * 0.34);
+}
+
+/** Rows of a triangle, top row first: `widths` members per row, centred, neighbours `s` apart and staggered. */
+function triangleRows(widths: number[], n: number, s: number): Vec[] {
+    const out: Vec[] = [];
+    const h = s * 0.82;
+    widths.forEach((w, row) => {
+        for (let j = 0; j < w && out.length < n; j++) out.push({ x: (j - (w - 1) / 2) * s, y: row * h });
+    });
+    const mid = (Math.min(widths.length, Math.ceil(out.length / 2)) - 1) * h * 0.5;
+    return out.map(p => ({ x: p.x, y: p.y - mid }));
+}
+
+/**
+ * Member counts each map's own shape reads best at (a whole flower, a full star, a pyramid with a flat base):
+ * a rolled count snaps to the nearest one up to the shape's most.
+ */
+const SIGNATURE_COUNTS: Partial<Record<FormationShape, number[]>> = {
+    flower: [7],
+    stalactite: [6, 10],
+    pyramid: [6, 10],
+    cross: [5, 9],
+    eruption: [7, 9],
+    star: [10],
+};
+
+/** Slots for each map's own shapes, centred on (0, 0) as in `shapeSlots`. */
+function signatureSlots(shape: FormationShape, n: number, s: number): Vec[] {
+    const out: Vec[] = [];
+    switch (shape) {
+        case 'flower': {
+            // Forest: a heart in the middle and petals round it.
+            out.push({ x: 0, y: 0 });
+            const p = n - 1,
+                r = Math.max(s, (s * p) / (Math.PI * 2));
+            for (let i = 0; i < p; i++) {
+                const a = (Math.PI * 2 * i) / p - Math.PI / 2;
+                out.push({ x: Math.cos(a) * r, y: Math.sin(a) * r * 0.85 });
+            }
+            break;
+        }
+        case 'stalactite':
+            // Cave: an icicle hanging from the roof, widest at the top.
+            return triangleRows(n <= 6 ? [3, 2, 1] : [4, 3, 2, 1], n, s);
+        case 'pyramid':
+            // Desert: a pyramid standing on its base.
+            return triangleRows(n <= 6 ? [1, 2, 3] : [1, 2, 3, 4], n, s);
+        case 'cross': {
+            // Castle: a heraldic cross, arms out from the middle in turn.
+            out.push({ x: 0, y: 0 });
+            const dirs = [
+                [0, -1],
+                [1, 0],
+                [0, 1],
+                [-1, 0],
+            ];
+            for (let i = 1; i < n; i++) {
+                const [dx, dy] = dirs[(i - 1) % 4],
+                    k = Math.ceil(i / 4);
+                out.push({ x: dx * k * s, y: dy * k * s * 0.85 });
+            }
+            break;
+        }
+        case 'spiral': {
+            // Beach: a seashell's spiral, wound out from the middle: walk the curve and drop a member every step.
+            const at = (a: number): Vec => {
+                const r = s * 0.2 + (s * 1.6 * a) / (Math.PI * 2);
+                return { x: Math.cos(a) * r, y: Math.sin(a) * r * 0.8 };
+            };
+            let a = 0,
+                last = at(0),
+                run = 0;
+            out.push(last);
+            while (out.length < n && a < 40) {
+                a += 0.02;
+                const p = at(a);
+                run += Math.hypot(p.x - last.x, p.y - last.y);
+                last = p;
+                if (run >= s * 0.92) {
+                    out.push(p);
+                    run = 0;
+                }
+            }
+            const cx = out.reduce((t, p) => t + p.x, 0) / out.length,
+                cy = out.reduce((t, p) => t + p.y, 0) / out.length;
+            return out.map(p => ({ x: p.x - cx, y: p.y - cy }));
+        }
+        case 'eruption': {
+            // Volcano: a plume shooting up from the vent and falling away to both sides.
+            const all: Vec[] = [
+                { x: 0, y: s * 0.9 },
+                { x: 0, y: 0 },
+                { x: 0, y: -s * 0.9 },
+            ];
+            for (const p of [
+                { x: s * 0.85, y: -s * 1.45 },
+                { x: s * 1.75, y: -s * 1.05 },
+                { x: s * 2.3, y: -s * 0.3 },
+            ])
+                all.push(p, { x: -p.x, y: p.y });
+            const pts = all.slice(0, n);
+            const cy = pts.reduce((t, p) => t + p.y, 0) / pts.length;
+            return pts.map(p => ({ x: p.x, y: p.y - cy }));
+        }
+        case 'star': {
+            // Space: a five-pointed star, tip and notch in turn round it.
+            const ro = s * 1.5,
+                ri = ro * 0.5;
+            for (let i = 0; i < n; i++) {
+                const a = -Math.PI / 2 + (Math.PI * i) / 5,
+                    r = i % 2 ? ri : ro;
+                out.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+            }
+            break;
+        }
+        default:
+            for (let i = 0; i < n; i++) out.push({ x: (i - (n - 1) / 2) * s, y: 0 });
     }
     return out;
 }
@@ -160,6 +302,14 @@ const ENTRIES: Record<FormationShape, FormationEntry[]> = {
     ring: ['loop', 'swoopLeft', 'swoopRight', 'split'],
     grid: ['drop', 'split', 'sideLeft', 'sideRight'],
     wave: ['sideLeft', 'sideRight', 'swoopLeft', 'swoopRight', 'drop'],
+    surround: ['split', 'loop', 'swoopLeft', 'swoopRight'],
+    flower: ['split', 'loop', 'drop'],
+    stalactite: ['drop', 'drop', 'split'],
+    pyramid: ['sideLeft', 'sideRight', 'drop'],
+    cross: ['drop', 'split', 'loop'],
+    spiral: ['loop', 'swoopLeft', 'swoopRight'],
+    eruption: ['drop', 'split', 'loop'],
+    star: ['loop', 'split', 'swoopLeft', 'swoopRight'],
 };
 
 /** The plain mix, for a meadow with no stage (every multiplier 1, the usual pressure ramp). */
@@ -189,7 +339,11 @@ export function rollFormation(
             ['ring', 1 + pressure * 1.5],
             ['wave', 1.5],
         ] as [FormationShape, number][]
-    ).map(([s, wt]) => [s, wt * w(style.shapes, s) * (s === prev ? 0.15 : 1)]);
+    )
+        .map(([s, wt]): [FormationShape, number] => [s, wt * (style.shapes?.[s] ?? style.rest ?? 1)])
+        .concat([['surround', 1.2 + pressure * 2]], Object.entries(style.signature ?? {}) as [FormationShape, number][])
+        .map(([s, wt]): [FormationShape, number] => [s, wt * (s === prev ? 0.15 : 1)])
+        .filter(([, wt]) => wt > 0);
     const shape = pick(r, shapeRoll);
     const kind: CritterKind = pick(r, [
         ['puff', 6 * w(style.kinds, 'puff')],
@@ -199,12 +353,17 @@ export function rollFormation(
     const bigRoll = r.next(),
         bubbleRoll = r.next(),
         morphRoll = r.next(),
-        overlapRoll = r.next();
-    const big = kind === 'puff' && bigRoll < (0.08 + pressure * 0.1) * style.big;
+        overlapRoll = r.next(),
+        deepRoll = r.next();
+    const ring = shape === 'surround';
+    const big = !ring && kind === 'puff' && bigRoll < (0.08 + pressure * 0.1) * style.big;
     let count = r.int(5, 7) + Math.floor(pressure * 3) + style.extra;
     if (big) count = Math.ceil(count * 0.6);
     if (kind === 'beetle') count = Math.max(4, count - 1);
+    if (ring) count += 3;
     count = Math.min(SHAPE_MAX[shape], count);
+    const snaps = SIGNATURE_COUNTS[shape];
+    if (snaps) count = snaps.reduce((best, c) => (Math.abs(c - count) < Math.abs(best - count) ? c : best));
     const hpPressure = Math.max(0, Math.min(1, pressure + style.hp));
     const hps = Array.from({ length: 12 }, () => rollHp(r, hpPressure));
     let hp = hps.slice(0, count);
@@ -248,10 +407,19 @@ export function rollFormation(
                     ['creep', 1 + pressure],
                     ['orbit', shape === 'ring' ? 3 : 0.4],
                 ];
+    // A ring round the fairy wheels about her, or sways and bobs in place.
+    const moveTable: [FormationMove, number][] = ring
+        ? [
+              ['orbit', 3],
+              ['sway', 1],
+              ['bob', 1],
+          ]
+        : moves;
     const move = pick(
         r,
-        moves.map(([m, wt]) => [m, wt * w(style.moves, m)]),
+        moveTable.map(([m, wt]) => [m, wt * w(style.moves, m)]),
     );
+    // A stage re-forms into its own shapes most of all.
     const morphTo = pick<FormationShape>(r, [
         ['line', 1],
         ['v', 1],
@@ -259,9 +427,10 @@ export function rollFormation(
         ['arc', 1],
         ['ring', 1],
         ['grid', 1],
+        ...(Object.keys(style.signature ?? {}) as FormationShape[]).map((s): [FormationShape, number] => [s, 4]),
     ]);
     const morph =
-        morphRoll < (0.15 + pressure * 0.3) * style.morph && morphTo !== shape && count <= SHAPE_MAX[morphTo]
+        !ring && morphRoll < (0.15 + pressure * 0.3) * style.morph && morphTo !== shape && count <= SHAPE_MAX[morphTo]
             ? morphTo
             : null;
 
@@ -276,13 +445,23 @@ export function rollFormation(
     const left = m + (spin ? ext.rad : -ext.l),
         right = fieldW() - m - (spin ? ext.rad : ext.r),
         top = TOP + (spin ? ext.rad : -ext.u),
-        bottom = BOTTOM - (spin ? ext.rad : ext.d);
+        // Now and then a formation comes right down into the fairy's half, low as the floor.
+        deep = deepRoll < 0.18 + pressure * 0.22,
+        bottom = bottomOf(deep) - (spin ? ext.rad : ext.d);
     const cxRoll = r.next(),
         cyRoll = r.next();
-    const cx = right > left ? left + (right - left) * (0.25 + cxRoll * 0.5) : fieldW() / 2;
-    const cy = bottom > top ? top + (bottom - top) * (0.15 + cyRoll * 0.45) : (TOP + BOTTOM) / 2;
-    const reachX = Math.max(0, Math.min(cx - left, right - cx, 46));
-    const reachY = Math.max(0, Math.min(cy - top, bottom - cy, 26));
+    let cx = right > left ? left + (right - left) * (0.25 + cxRoll * 0.5) : fieldW() / 2;
+    let cy =
+        bottom > top
+            ? top + (bottom - top) * (deep ? 0.45 + cyRoll * 0.55 : 0.15 + cyRoll * 0.45)
+            : (TOP + bottomOf(false)) / 2;
+    if (ring) {
+        // Centred across the meadow with its bottom near the floor, so the fairy flies inside it.
+        cx = fieldW() / 2;
+        cy = fieldH() - 18 - m - ext.rad;
+    }
+    const reachX = ring ? 6 : Math.max(0, Math.min(cx - left, right - cx, 46));
+    const reachY = ring ? 4 : Math.max(0, Math.min(cy - top, bottom - cy, 26));
 
     const speedUp = (1 - pressure * 0.25) * style.pace;
     return {
@@ -432,12 +611,12 @@ function entryCurve(g: Formation, i: number, to: Vec): { from: Vec; via: Vec } {
             // In from the top-left corner, dipping below its place and rising into it.
             return {
                 from: { x: -OFF, y: fieldH() * 0.06 },
-                via: { x: fieldW() * 0.62, y: Math.min(BOTTOM + 30, to.y + fieldH() * 0.32) },
+                via: { x: fieldW() * 0.62, y: Math.min(bottomOf(false) + 30, to.y + fieldH() * 0.32) },
             };
         case 'swoopRight':
             return {
                 from: { x: fieldW() + OFF, y: fieldH() * 0.06 },
-                via: { x: fieldW() * 0.38, y: Math.min(BOTTOM + 30, to.y + fieldH() * 0.32) },
+                via: { x: fieldW() * 0.38, y: Math.min(bottomOf(false) + 30, to.y + fieldH() * 0.32) },
             };
         case 'sideLeft':
             return { from: { x: -OFF, y: to.y - 18 }, via: { x: to.x * 0.45, y: to.y - 44 } };
@@ -452,7 +631,7 @@ function entryCurve(g: Formation, i: number, to: Vec): { from: Vec; via: Vec } {
             const fromLeft = to.x > fieldW() / 2;
             return {
                 from: { x: fromLeft ? -OFF : fieldW() + OFF, y: -OFF },
-                via: { x: fieldW() - to.x, y: Math.min(BOTTOM + 40, to.y + fieldH() * 0.42) },
+                via: { x: fieldW() - to.x, y: Math.min(bottomOf(false) + 40, to.y + fieldH() * 0.42) },
             };
         }
     }
