@@ -896,9 +896,9 @@ export class Field {
                 // flashing every colour the second, or straight away for a Fever one), then flies diagonally up to the top line, bounces and heads down at the rival,
                 // on its way back to them (see flyBack). Broken once more after that, it's an Extra Attack.
                 const lvl = Math.min(C.MAX_STAR_LEVEL, Math.max(a.level, 2 + this.fairy.counterBoost));
-                // A Fever fireball skips purple: shot back, it goes straight to its last reflection (every colour),
-                // so breaking it again sends the Extra Attack.
-                const step = a.fever ? C.FIREBALL_MAX_REFLECTS : 1;
+                // Fever skips purple: a Fever fireball, or any fireball shot back while I'm in Fever, goes straight to
+                // its last reflection (every colour), so breaking it again sends the Extra Attack.
+                const step = a.fever || this.fever > 0 ? C.FIREBALL_MAX_REFLECTS : 1;
                 a.dead = false;
                 a.flight = 'back';
                 a.level = lvl;
