@@ -30,7 +30,19 @@ export interface Layer {
 }
 
 /** The kinds of monster across the maps' sheets; each sheet holds some of them, one row each. */
-export type MonsterKind = 'slime' | 'mushroom' | 'bee' | 'leaf' | 'tree' | 'bat' | 'bug' | 'wisp';
+export type MonsterKind =
+    | 'slime'
+    | 'mushroom'
+    | 'bee'
+    | 'leaf'
+    | 'tree'
+    | 'bat'
+    | 'bug'
+    | 'wisp'
+    | 'cactus'
+    | 'scorpion'
+    | 'fox'
+    | 'beetle';
 
 /**
  * A map's monster sheet: one row of eight "appear" frames per monster (sparkle, flash,

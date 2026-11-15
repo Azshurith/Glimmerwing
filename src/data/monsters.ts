@@ -1,4 +1,5 @@
 import caveSheet from '@/../assets/monsters/cave.png';
+import desertSheet from '@/../assets/monsters/desert.png';
 import forestSheet from '@/../assets/monsters/forest.png';
 import { loadImage } from '@/core/images';
 import type { MonsterSheet } from '@/types';
@@ -39,8 +40,23 @@ const CAVE: MonsterSheet = {
     spinner: 'bat',
 };
 
+/**
+ * Desert (day): sand slimes and sand foxes drift in formations, desert beetles are the shelled ones
+ * (their horned shells take the hits), scorpions corkscrew down, and the big ones are cactus buds.
+ */
+const DESERT: MonsterSheet = {
+    img: loadImage(desertSheet),
+    cell: 112,
+    rows: { slime: 0, cactus: 1, scorpion: 2, fox: 3, beetle: 4 },
+    overlay: 5,
+    roster: ['slime', 'fox'],
+    big: 'cactus',
+    shelled: 'beetle',
+    spinner: 'scorpion',
+};
+
 /** Monster sheets by map id. */
-const SHEETS: Record<string, MonsterSheet> = { forest: FOREST, cave: CAVE };
+const SHEETS: Record<string, MonsterSheet> = { forest: FOREST, cave: CAVE, desert: DESERT };
 
 /** The monster sheet for a map, or undefined if its critters stay puffs. */
 export function monstersFor(mapId: string): MonsterSheet | undefined {
