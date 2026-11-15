@@ -1,3 +1,4 @@
+import knightSheet from '@/../assets/knight.png';
 import witchSheet from '@/../assets/witch.png';
 import { loadImage } from '@/core/images';
 import type { SpriteSet } from '@/types';
@@ -6,7 +7,7 @@ import type { SpriteSet } from '@/types';
  * Sprite-sheet characters. A sheet is an atlas of equal cells, one animation per row;
  * every frame is placed so the same in-cell point (`body`) sits on the player's position.
  *
- * The witch atlas is cut from a reference sheet by tools/extract-witch.py.
+ * The atlases are cut from reference sheets by tools/extract-witch.py (the knight's with `knight hair`).
  */
 
 /** Blonde witch on a broom, flying away from the camera. Cells 112x124, bow at (56, 26). */
@@ -27,4 +28,18 @@ export const WITCH: SpriteSet = {
         remains: { row: 6, count: 4, fps: 3 },
         revive: { row: 7, count: 4, fps: 10 },
     },
+};
+
+/**
+ * A young knight with a red cape, flying away from the camera. Same sheet template, rows and cells as the witch,
+ * lined up on his hair instead of a bow.
+ */
+export const KNIGHT: SpriteSet = {
+    img: loadImage(knightSheet),
+    cw: 112,
+    ch: 124,
+    bodyX: 56,
+    bodyY: 64,
+    scale: 0.42,
+    anims: WITCH.anims,
 };
