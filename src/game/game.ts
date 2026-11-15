@@ -7,6 +7,7 @@ import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
 import { modeCards, modeColumns } from '@/render/screens/mode-screen';
 import { rosterMedallions, rosterPreviewButton } from '@/render/screens/roster-screen';
+import { mapsMedallions } from '@/render/screens/maps-screen';
 import { MAP_CARDS, MAP_COLS, mapCards } from '@/render/screens/map-screen';
 import { MAPS, mapById, mapForSeed } from '@/data/maps';
 import { stageFor, stageOpen } from '@/data/stages';
@@ -33,6 +34,7 @@ import { CpuPilot } from './ai';
 import { Field } from './field';
 import { curveAt, pathAt, pathLength, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
 import { SkillPreview } from './preview';
+import { MapPreview } from './map-preview';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 import { loadSettings, saveSettings } from './settings';
 
@@ -135,6 +137,9 @@ export class Game {
     private rosterIndex = 0;
     /** The Characters screen's live demo of the fairy in view. */
     private preview = new SkillPreview();
+    /** The Maps screen's map in view, and its live preview. */
+    private mapsIndex = 0;
+    private mapPreview = new MapPreview();
     /** On a phone, whether the demo's pop-up is open. */
     private demoOpen = false;
     /** Set by the page: open the How to play page. */
@@ -369,7 +374,7 @@ export class Game {
 
     /** True once a match is under way (not on the title, the menus, the Characters or Profile screens, or select). */
     private get inGame(): boolean {
-        return !['title', 'modes', 'roster', 'profile', 'settings', 'select', 'mapselect'].includes(this.phase);
+        return !['title', 'modes', 'roster', 'maps', 'profile', 'settings', 'select', 'mapselect'].includes(this.phase);
     }
 
     /** Leave the Settings screen (its page panel's Esc). */
@@ -379,7 +384,7 @@ export class Game {
 
     /** Back to the main menu, with the card for where you came from highlighted. */
     private backToMenu(): void {
-        const from = this.phase === 'roster' ? 1 : this.phase === 'profile' ? 2 : this.phase === 'settings' ? 3 : 0;
+        const from = { roster: 1, maps: 2, profile: 3, settings: 4 }[this.phase as string] ?? 0;
         this.phase = 'modes';
         this.menu = 'main';
         this.modeIndex = from;
@@ -427,6 +432,24 @@ export class Game {
         if (pr.has('Escape')) this.backToMenu();
     }
 
+    /** The Maps screen: left/right (or a tap on a medallion) browses the maps; Esc goes back. */
+    private stepMaps(pr: Set<string>): void {
+        const n = MAPS.length,
+            was = this.mapsIndex;
+        if (['ArrowLeft', 'KeyA', 'ArrowUp', 'KeyW'].some(k => pr.has(k)))
+            this.mapsIndex = (this.mapsIndex + n - 1) % n;
+        if (['ArrowRight', 'KeyD', 'ArrowDown', 'KeyS'].some(k => pr.has(k))) this.mapsIndex = (this.mapsIndex + 1) % n;
+        const tap = this.input.tap;
+        if (tap) {
+            const hit = mapsMedallions(this.r.layout, this.r.viewH).findIndex(
+                m => Math.hypot(tap.x - m.x, tap.y - m.y) <= m.r + 6,
+            );
+            if (hit >= 0) this.mapsIndex = hit;
+        }
+        if (this.mapsIndex !== was) this.ui('tick');
+        if (pr.has('Escape')) this.backToMenu();
+    }
+
     /**
      * The mode menu: arrows move round the grid of cards, any fire button or Start picks one, number keys pick by
      * position, a tap on a card picks it, and Esc goes back to the title. Greyed-out cards do nothing yet.
@@ -434,7 +457,7 @@ export class Game {
     private stepModes(pr: Set<string>): void {
         const cards = modeCards(this.menu, this.r.layout, this.r.viewH);
         const n = cards.length,
-            cols = modeColumns(this.r.layout);
+            cols = modeColumns(this.r.layout, this.menu);
         const was = this.modeIndex;
         if (['ArrowLeft', 'KeyA'].some(k => pr.has(k))) this.modeIndex = (this.modeIndex + n - 1) % n;
         if (['ArrowRight', 'KeyD'].some(k => pr.has(k))) this.modeIndex = (this.modeIndex + 1) % n;
@@ -470,6 +493,9 @@ export class Game {
                 break;
             case 'characters':
                 this.phase = 'roster';
+                break;
+            case 'maps':
+                this.phase = 'maps';
                 break;
             case 'profile':
                 this.phase = 'profile';
@@ -766,6 +792,12 @@ export class Game {
             const fy = FAIRIES[this.rosterIndex];
             this.preview.show(this.phase === 'roster' && this.isUnlocked(fy) ? fy : null);
             this.preview.update(dt);
+            return;
+        }
+        if (this.phase === 'maps') {
+            this.stepMaps(pr);
+            this.mapPreview.show(MAPS[this.mapsIndex].id);
+            this.mapPreview.update();
             return;
         }
         if (this.phase === 'profile') {
@@ -1139,6 +1171,19 @@ export class Game {
                 break;
             case 'settings':
                 r.settings(this.time);
+                break;
+            case 'maps':
+                r.maps(
+                    {
+                        index: this.mapsIndex,
+                        locked: MAPS.map((_, i) => !this.mapOpen(i)),
+                        trophies: this.progress.trophies,
+                        touch,
+                        caption: this.mapPreview.caption,
+                    },
+                    this.time,
+                    this.mapPreview.field,
+                );
                 break;
             case 'mapselect':
                 r.mapSelect(

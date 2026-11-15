@@ -183,7 +183,7 @@ function syncPage(): void {
     if (game.modeName !== shownMode || game.phaseName !== shownPhase) {
         shownMode = screenEl.dataset.mode = game.modeName;
         shownPhase = screenEl.dataset.phase = game.phaseName;
-        const back = ['select', 'mapselect', 'modes', 'roster', 'profile', 'settings'].includes(shownPhase);
+        const back = ['select', 'mapselect', 'modes', 'roster', 'maps', 'profile', 'settings'].includes(shownPhase);
         menuBtn.textContent = back ? '◀ BACK' : '❚❚';
         menuBtn.setAttribute('aria-label', back ? 'Back' : 'Pause');
         void keepAwake(shownPhase === 'playing' || shownPhase === 'countdown');
@@ -191,7 +191,9 @@ function syncPage(): void {
         if (shownPhase === 'settings') settings.open();
         else settings.hide();
         // The menus have their own calm loop; everything from the countdown on plays the round's.
-        const menus = ['title', 'modes', 'roster', 'profile', 'settings', 'select', 'mapselect'].includes(shownPhase);
+        const menus = ['title', 'modes', 'roster', 'maps', 'profile', 'settings', 'select', 'mapselect'].includes(
+            shownPhase,
+        );
         sound.playMusic(menus ? 'menu' : 'battle');
     }
 }

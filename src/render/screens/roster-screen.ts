@@ -108,9 +108,12 @@ export function rosterPreviewButton(h: number = C.TALL_H): { x: number; y: numbe
 /** Where each fairy's medallion sits along the bottom, in a layout's design units. */
 function designMedallions(layout: Layout, dy = 0): { x: number; y: number; r: number }[] {
     const L = LAYOUT[layout],
-        gap = L.r * 2 + 10;
-    const x0 = L.W / 2 - ((FAIRIES.length - 1) * gap) / 2;
-    return FAIRIES.map((_, i) => ({ x: x0 + i * gap, y: L.rowY + dy, r: L.r }));
+        n = FAIRIES.length;
+    // As many as fit across: on a phone the medallions shrink and close up once the roster gets long.
+    const gap = Math.min(L.r * 2 + 10, (L.W - 12) / n),
+        r = Math.min(L.r, gap / 2 - 2);
+    const x0 = L.W / 2 - ((n - 1) * gap) / 2;
+    return FAIRIES.map((_, i) => ({ x: x0 + i * gap, y: L.rowY + dy, r }));
 }
 
 /** The medallions in view units, for a layout and view height: the tap targets. */

@@ -17,6 +17,7 @@ export type Phase =
     | 'modes'
     | 'roster'
     | 'profile'
+    | 'maps'
     | 'settings'
     | 'select'
     | 'mapselect'

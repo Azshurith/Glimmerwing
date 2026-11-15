@@ -209,7 +209,7 @@ export class MapScreen {
 }
 
 /** A padlock `s` units tall centred on (x, y), for a locked stage. */
-function drawPadlock(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
+export function drawPadlock(ctx: CanvasRenderingContext2D, x: number, y: number, s: number): void {
     const w = s * 0.78,
         bh = s * 0.55;
     ctx.save();

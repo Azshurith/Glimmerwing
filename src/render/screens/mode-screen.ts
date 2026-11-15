@@ -1,4 +1,4 @@
-// The main menu (Play, Characters, Profile, Settings) and Play's choice of modes: a screen of cards.
+// The main menu (Play, Characters, Maps, Profile, Settings) and Play's choice of modes: a screen of cards.
 import * as C from '@/core/config';
 import { FAIRIES } from '@/data/characters';
 import type { Layout, ModeMenu, ModeView, TitleAction } from '@/types';
@@ -29,6 +29,7 @@ const MENUS: Record<ModeMenu, Omit<ModeCard, 'x' | 'y' | 'w' | 'h'>[]> = {
     main: [
         { action: 'play', label: 'PLAY', sub: 'Story, VS CPU, online or two players', color: '#ffd45c' },
         { action: 'characters', label: 'CHARACTERS', sub: 'Meet the fairies and their skills', color: '#ff9ac8' },
+        { action: 'maps', label: 'MAPS', sub: 'Stages, formations and monsters', color: '#8ff0a0' },
         { action: 'profile', label: 'PROFILE', sub: 'Your record and unlocks', color: '#8fd8ff' },
         { action: 'settings', label: 'SETTINGS', sub: 'Screen and play options', color: '#c9b8ff' },
     ],
@@ -42,23 +43,33 @@ const MENUS: Record<ModeMenu, Omit<ModeCard, 'x' | 'y' | 'w' | 'h'>[]> = {
 /** Each menu's heading. */
 const HEADINGS: Record<ModeMenu, string> = { main: 'MAIN MENU', play: 'PLAY' };
 
-/** How many cards to a row: two, so a menu's four cards make a square. */
-export const modeColumns = (_layout: Layout) => 2;
+/** How many cards to a row: two, so four cards make a square; the five-card main menu has three across a wide screen. */
+export const modeColumns = (layout: Layout, menu: ModeMenu = 'play') =>
+    layout === 'wide' && MENUS[menu].length > 4 ? 3 : 2;
 
-/** Card size and spacing for each layout, in its design units. */
+/** Card size and spacing for each layout, in its design units (a menu of more than four cards gets smaller ones). */
 const GRID = {
     wide: { w: 196, h: 112, gx: 14, gy: 14, y0: 44, W: C.VIEW_W },
     tall: { w: 118, h: 150, gx: 8, gy: 12, y0: 80, W: C.TALL_W },
 } as const;
+const GRID_FIVE = {
+    wide: { w: 150, h: 112, gx: 12, gy: 14, y0: 44, W: C.VIEW_W },
+    tall: { w: 118, h: 116, gx: 8, gy: 10, y0: 66, W: C.TALL_W },
+} as const;
 
 /** Where a menu's cards sit in a layout's design units (the tall layout as designed, before fitting). */
 function designCards(menu: ModeMenu, layout: Layout, dy = 0): ModeCard[] {
-    const g = GRID[layout],
-        cols = modeColumns(layout);
-    const x0 = (g.W - (cols * g.w + (cols - 1) * g.gx)) / 2;
+    const n = MENUS[menu].length;
+    const g = (n > 4 ? GRID_FIVE : GRID)[layout],
+        cols = modeColumns(layout, menu);
+    /** Left edge of row `row`: each row centred, so a short last row sits in the middle. */
+    const rowX = (row: number) => {
+        const inRow = Math.min(cols, n - row * cols);
+        return (g.W - (inRow * g.w + (inRow - 1) * g.gx)) / 2;
+    };
     return MENUS[menu].map((m, i) => ({
         ...m,
-        x: x0 + (i % cols) * (g.w + g.gx),
+        x: rowX(Math.floor(i / cols)) + (i % cols) * (g.w + g.gx),
         y: g.y0 + dy + Math.floor(i / cols) * (g.h + g.gy),
         w: g.w,
         h: g.h,
@@ -304,6 +315,45 @@ export class ModeScreen {
                     ctx.lineTo(r, ly);
                     ctx.stroke();
                 }
+                break;
+            }
+            case 'maps': {
+                // A folded map with a dotted route to a pin, bobbing.
+                ctx.beginPath();
+                ctx.moveTo(-18, -12);
+                ctx.lineTo(-6, -16);
+                ctx.lineTo(6, -12);
+                ctx.lineTo(18, -16);
+                ctx.lineTo(18, 12);
+                ctx.lineTo(6, 16);
+                ctx.lineTo(-6, 12);
+                ctx.lineTo(-18, 16);
+                ctx.closePath();
+                ctx.globalAlpha = 0.22;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.stroke();
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(-6, -16);
+                ctx.lineTo(-6, 12);
+                ctx.moveTo(6, -12);
+                ctx.lineTo(6, 16);
+                ctx.stroke();
+                ctx.setLineDash([2, 2]);
+                ctx.beginPath();
+                ctx.moveTo(-13, 9);
+                ctx.quadraticCurveTo(-2, 8, 0, -1);
+                ctx.quadraticCurveTo(3, -7, 10, -5);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                const py = -9 + Math.sin(t * 3) * (on ? 2 : 0.6);
+                ctx.lineWidth = 1.6;
+                ctx.beginPath();
+                ctx.arc(10, py - 4, 4, Math.PI * 0.85, Math.PI * 0.15);
+                ctx.lineTo(10, py + 4);
+                ctx.closePath();
+                ctx.stroke();
                 break;
             }
             case 'settings': {

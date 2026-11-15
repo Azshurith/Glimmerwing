@@ -74,4 +74,6 @@ export interface MonsterSheet {
     /** The shelled critter (its shell drawn as a bubble) and the corkscrewing one. */
     shelled: MonsterKind;
     spinner: MonsterKind;
+    /** Each monster's display name, for the Maps screen. */
+    names: Partial<Record<MonsterKind, string>>;
 }

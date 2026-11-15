@@ -11,6 +11,7 @@ import type {
     FieldSnapshot,
     Formation,
     FormationShape,
+    FormationSpec,
     Moth,
     Outgoing,
     Particle,
@@ -114,6 +115,11 @@ export class Field {
     rivalFairy = { x: C.FIELD_W / 2, y: C.FIELD_H - 40 };
     /** Formations in play, and the shape of the last one (so the same shape doesn't come twice running). */
     private forms: Formation[] = [];
+
+    /** The formation that came in last (still in the meadow), for the Maps screen's caption. */
+    get latestFormation(): FormationSpec | null {
+        return this.forms.length ? this.forms[this.forms.length - 1].spec : null;
+    }
     private lastShape: FormationShape | null = null;
     private surged = false;
     private chains = new Map<number, ChainInfo>();

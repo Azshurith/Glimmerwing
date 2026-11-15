@@ -27,6 +27,13 @@ const FOREST: MonsterSheet = {
     big: 'tree',
     shelled: 'mushroom',
     spinner: 'bee',
+    names: {
+        slime: 'Forest Slime',
+        leaf: 'Leaf Sprite',
+        mushroom: 'Mushroom Buddy',
+        bee: 'Forest Bee',
+        tree: 'Tree Spirit',
+    },
 };
 
 /**
@@ -42,6 +49,7 @@ const CAVE: MonsterSheet = {
     big: 'mushroom',
     shelled: 'bug',
     spinner: 'bat',
+    names: { slime: 'Cave Slime', wisp: 'Cave Wisp', bug: 'Crystal Bug', bat: 'Cave Bat', mushroom: 'Cave Mushroom' },
 };
 
 /**
@@ -57,6 +65,13 @@ const DESERT: MonsterSheet = {
     big: 'cactus',
     shelled: 'beetle',
     spinner: 'scorpion',
+    names: {
+        slime: 'Sand Slime',
+        fox: 'Sand Fox',
+        beetle: 'Desert Beetle',
+        scorpion: 'Scorpion',
+        cactus: 'Cactus Bud',
+    },
 };
 
 /**
@@ -72,6 +87,13 @@ const CASTLE: MonsterSheet = {
     big: 'book',
     shelled: 'knight',
     spinner: 'bat',
+    names: {
+        slime: 'Crown Slime',
+        wisp: "Will-o'-Wisp",
+        knight: 'Castle Knight',
+        bat: 'Castle Bat',
+        book: 'Magic Book',
+    },
 };
 
 /**
@@ -87,6 +109,7 @@ const BEACH: MonsterSheet = {
     big: 'crab',
     shelled: 'clam',
     spinner: 'gull',
+    names: { slime: 'Sea Slime', starfish: 'Starfish', clam: 'Pearl Clam', gull: 'Seagull', crab: 'Beach Crab' },
 };
 
 /**
@@ -102,6 +125,7 @@ const VOLCANO: MonsterSheet = {
     big: 'golem',
     shelled: 'crab',
     spinner: 'bat',
+    names: { slime: 'Lava Slime', wisp: 'Flame Wisp', crab: 'Lava Crab', bat: 'Fire Bat', golem: 'Magma Golem' },
 };
 
 /**
@@ -117,6 +141,13 @@ const SPACE: MonsterSheet = {
     big: 'robot',
     shelled: 'turtle',
     spinner: 'cat',
+    names: {
+        slime: 'Galaxy Slime',
+        octopus: 'Void Octopus',
+        turtle: 'Meteor Turtle',
+        cat: 'Comet Cat',
+        robot: 'Astro Robot',
+    },
 };
 
 /** Monster sheets by map id. */
