@@ -50,8 +50,11 @@ export class ProfileScreen {
 
         ctx.translate(0, dy);
         // Player card: an avatar (Pip's face for now), the name, and the sign-in status.
-        const cx = tall ? W / 2 : 120,
+        // On a widened landscape screen the player card keeps to the left edge and the record fills the rest.
+        const cx = tall ? W / 2 : 120 - bleed * 0.6,
             cy = tall ? 92 : 104;
+        const regionX = tall ? 0 : Math.max(236 - bleed, cx + 116),
+            regionW = tall ? W : W + bleed - 14 - regionX;
         this.avatar(cx, cy, tall ? 40 : 44, t);
         ctx.textAlign = 'center';
         arcadeText(ctx, 'GUEST', cx, cy + (tall ? 64 : 70), 18, ['#ffffff', '#fff0c8', '#ffd27a'], 'center');
@@ -72,13 +75,15 @@ export class ProfileScreen {
         ];
         // The next stage on the trophy road, if any is still locked.
         const nextStage = STAGES.find(st => st.trophies > v.bestTrophies);
-        const tw = tall ? 112 : 118,
-            th = 38,
-            x0 = tall ? (W - 2 * tw - 8) / 2 : 236,
+        // Two tiles to a row on a phone or a narrow screen; three once the record has room.
+        const cols = tall || regionW < 3 * 104 + 16 ? 2 : 3;
+        const tw = tall ? 112 : Math.min(190, (regionW - (cols - 1) * 8) / cols),
+            th = tall ? 38 : cols === 3 ? 44 : 38,
+            x0 = tall ? (W - 2 * tw - 8) / 2 : regionX,
             y0 = tall ? 206 : 46;
         tiles.forEach(([label, value], i) => {
-            const x = x0 + (i % 2) * (tw + 8),
-                y = y0 + Math.floor(i / 2) * (th + 8);
+            const x = x0 + (i % cols) * (tw + 8),
+                y = y0 + Math.floor(i / cols) * (th + 8);
             ctx.fillStyle = 'rgba(20,12,48,0.85)';
             ctx.fillRect(x, y, tw, th);
             ctx.strokeStyle = 'rgba(201,162,74,0.6)';
@@ -100,9 +105,13 @@ export class ProfileScreen {
         });
 
         // The roster: unlocked fairies in colour, locked ones as a ? with how to get them.
-        const ry = tall ? 392 : 212,
-            rx0 = tall ? 20 : 236,
-            rgap = tall ? 38 : 42;
+        const rows = Math.ceil(tiles.length / cols);
+        const ry = tall ? 392 : y0 + rows * (th + 8) + 40,
+            rx0 = tall ? 20 : regionX,
+            rowW = tall ? W - 40 : regionW;
+        // The whole roster fits the row: wider apart on a wide screen, closer and smaller once it's long.
+        const rgap = Math.min(tall ? 38 : 64, (rowW - 30) / Math.max(1, FAIRIES.length - 1)),
+            rr = Math.min(15, rgap / 2 - 2);
         ctx.textAlign = 'left';
         ctx.font = `7px ${ARCADE}`;
         ctx.fillStyle = '#cbbcf5';
@@ -110,13 +119,13 @@ export class ProfileScreen {
         FAIRIES.forEach((fy, i) => {
             const x = rx0 + 14 + i * rgap,
                 locked = v.locked[i];
-            const g = ctx.createRadialGradient(x, ry - 4, 2, x, ry, 15);
+            const g = ctx.createRadialGradient(x, ry - 4, 2, x, ry, rr);
             g.addColorStop(0, locked ? '#3a3360' : fy.color);
             g.addColorStop(1, locked ? '#141030' : shade(fy.color, 0.3));
             ctx.save();
             ctx.fillStyle = g;
             ctx.beginPath();
-            ctx.arc(x, ry, 15, 0, Math.PI * 2);
+            ctx.arc(x, ry, rr, 0, Math.PI * 2);
             ctx.fill();
             ctx.clip();
             if (locked) {
@@ -124,12 +133,12 @@ export class ProfileScreen {
                 ctx.fillStyle = 'rgba(255,226,122,0.85)';
                 ctx.textAlign = 'center';
                 ctx.fillText('?', x, ry + 4);
-            } else drawFairy(ctx, fy, x, ry + 2, 0.75, t);
+            } else drawFairy(ctx, fy, x, ry + 2, 0.75 * (rr / 15), t);
             ctx.restore();
             ctx.strokeStyle = locked ? '#5a4f7a' : '#a8894a';
             ctx.lineWidth = 1.2;
             ctx.beginPath();
-            ctx.arc(x, ry, 15, 0, Math.PI * 2);
+            ctx.arc(x, ry, rr, 0, Math.PI * 2);
             ctx.stroke();
         });
         const next = FAIRIES.find((_, i) => v.locked[i]);
@@ -140,7 +149,7 @@ export class ProfileScreen {
             next ? `Next: ${next.unlock?.hint ?? ''} to unlock ${next.name}` : 'Every fairy is unlocked!',
             rx0,
             ry + 30,
-            tall ? W - 40 : W - rx0 - 12,
+            tall ? W - 40 : regionW,
         );
         ctx.translate(0, -dy);
 
