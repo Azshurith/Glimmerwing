@@ -111,12 +111,15 @@ export class Renderer {
         this.hudLayer = new Hud(this.ctx);
     }
 
-    /** Match the canvas's pixel size to its size on screen. */
+    /** Resolution scale from AdaptiveResolution: below 1 the canvas draws fewer pixels to keep up. */
+    resolution = 1;
+
+    /** Match the canvas's pixel size to its size on screen (times `resolution`). */
     resize(): void {
         const rect = this.canvas.getBoundingClientRect();
         // Sharp on high-density screens, but capped so phones and 4K monitors don't fill
         // more pixels than they can redraw at 60fps.
-        const dpr = Math.min(window.devicePixelRatio || 1, 3, 2400 / Math.max(1, rect.width));
+        const dpr = Math.min(window.devicePixelRatio || 1, 3, 2400 / Math.max(1, rect.width)) * this.resolution;
         this.canvas.width = Math.max(1, Math.round(rect.width * dpr));
         this.canvas.height = Math.max(1, Math.round(rect.height * dpr));
     }
