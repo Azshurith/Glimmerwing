@@ -7,6 +7,7 @@ export const STAGES: Stage[] = [
     {
         // Gentle: lines, V's and arcs that float and sway, mostly one-shot critters, an unhurried round.
         mapId: 'forest',
+        blurb: "Gentle lines, V's and arcs that float and sway",
         trophies: 0,
         cpuReaction: 0.17,
         waves: {
@@ -27,6 +28,7 @@ export const STAGES: Stage[] = [
     {
         // Wheeling: rings and waves that orbit and loop, more bats, formations that scatter out.
         mapId: 'cave',
+        blurb: 'Rings and waves that orbit, loop and scatter',
         trophies: 100,
         cpuReaction: 0.14,
         waves: {
@@ -47,6 +49,7 @@ export const STAGES: Stage[] = [
     {
         // Sweeping: diagonals and waves that swoop across and creep down, shelled beetles, diving exits.
         mapId: 'desert',
+        blurb: 'Diagonals that swoop and creep, shelled beetles, diving exits',
         trophies: 300,
         cpuReaction: 0.115,
         waves: {
@@ -67,6 +70,7 @@ export const STAGES: Stage[] = [
     {
         // Fortress: grids and chevrons that re-form, armoured knights, big books, tough critters, a fast round.
         mapId: 'castle',
+        blurb: 'Grids and chevrons that re-form, armoured and tough',
         trophies: 600,
         cpuReaction: 0.09,
         waves: {
@@ -87,6 +91,7 @@ export const STAGES: Stage[] = [
     {
         // Tides: long lines and waves that sway in and out, lots of dew bubbles, a quick ramp.
         mapId: 'beach',
+        blurb: 'Long lines and waves on the tide, lots of bubbles',
         trophies: 1000,
         cpuReaction: 0.08,
         waves: {
@@ -107,6 +112,7 @@ export const STAGES: Stage[] = [
     {
         // Eruption: dense grids, rings and V's that dive at you, tough and big critters, a fast, early ramp.
         mapId: 'volcano',
+        blurb: 'Dense grids and rings that dive at you, early and fast',
         trophies: 1500,
         cpuReaction: 0.07,
         waves: {
@@ -127,6 +133,7 @@ export const STAGES: Stage[] = [
     {
         // Zero-g: everything orbits and figure-eights, re-forms all the time, toughest and fastest of all.
         mapId: 'space',
+        blurb: 'Everything orbits, loops and re-forms: the toughest of all',
         trophies: 2200,
         cpuReaction: 0.06,
         waves: {

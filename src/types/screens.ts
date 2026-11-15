@@ -84,12 +84,23 @@ export type TitleAction =
     | 'play'
     | 'characters'
     | 'profile'
+    | 'maps'
     | 'story'
     | 'cpu'
     | 'versus'
     | 'online'
     | 'settings'
     | 'guide';
+
+/** What the Maps screen shows: the map in view, which are locked, your trophies and the demo's caption. */
+export interface MapsView {
+    index: number;
+    locked: boolean[];
+    trophies: number;
+    touch: boolean;
+    /** What the live demo is showing: the formation now flying (see game/map-preview.ts). */
+    caption: string;
+}
 
 /** What the map select screen shows: the chosen card (0 is Random, then each map in order). */
 export interface MapSelectView {

@@ -108,6 +108,8 @@ export interface WaveStyle {
 /** A stage on the trophy road: a map, the trophies that open it, its formations and how sharp its CPU is. */
 export interface Stage {
     mapId: string;
+    /** A line about how its formations fly, for the Maps screen. */
+    blurb: string;
     /** Trophies needed to unlock it (the best ever reached counts, so it stays open). */
     trophies: number;
     /** The CPU's reaction time here, in seconds; lower is sharper. */

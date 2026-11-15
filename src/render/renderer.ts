@@ -2,6 +2,7 @@ import * as C from '@/core/config';
 import type { Field } from '@/game/field';
 import type {
     MapSelectView,
+    MapsView,
     MonsterSheet,
     Puff,
     BannerView,
@@ -42,6 +43,7 @@ import { ModeScreen } from './screens/mode-screen';
 import { ProfileScreen } from './screens/profile-screen';
 import { SettingsScreen } from './screens/settings-screen';
 import { RosterScreen } from './screens/roster-screen';
+import { MapsScreen } from './screens/maps-screen';
 import { drawCrescentIcon } from './icons';
 import { SelectScreen } from './screens/select-screen';
 import { TitleScreen } from './screens/title-screen';
@@ -58,6 +60,7 @@ export class Renderer {
     private titleScreen: TitleScreen;
     private modeScreen: ModeScreen;
     private rosterScreen: RosterScreen;
+    private mapsScreen: MapsScreen;
     private settingsScreen: SettingsScreen;
     private mapScreen: MapScreen;
     /** The map select cards' scenery, each drawn into its own canvas (see mapSelect). */
@@ -105,6 +108,7 @@ export class Renderer {
         this.titleScreen = new TitleScreen(this.ctx);
         this.modeScreen = new ModeScreen(this.ctx);
         this.rosterScreen = new RosterScreen(this.ctx);
+        this.mapsScreen = new MapsScreen(this.ctx);
         this.profileScreen = new ProfileScreen(this.ctx);
         this.settingsScreen = new SettingsScreen(this.ctx);
         this.mapScreen = new MapScreen(this.ctx);
@@ -473,6 +477,13 @@ export class Renderer {
         const tag = { label: 'DEMO', color: demo?.fairy.color ?? '#ffffff' };
         const draw = demo ? (x: number, y: number, s: number) => this.field(demo, x, 0, time, tag, y, s) : undefined;
         this.rosterScreen.draw(v, time, this.layout, this.viewH, this.viewX, draw);
+    }
+
+    /** The Maps screen, with its live demo meadow on the map in view (see maps-screen.ts). */
+    maps(v: MapsView, time: number, demo: Field | null = null): void {
+        const tag = { label: 'PREVIEW', color: '#8ff0a0' };
+        const draw = demo ? (x: number, y: number, s: number) => this.field(demo, x, 0, time, tag, y, s) : undefined;
+        this.mapsScreen.draw(v, time, this.layout, this.viewH, this.viewX, draw);
     }
 
     /** The Profile screen (see profile-screen.ts). */
