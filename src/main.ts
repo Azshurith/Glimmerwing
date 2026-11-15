@@ -4,6 +4,7 @@ import { Input } from './input/input';
 import { Lobby } from './net/lobby';
 import { Sound } from './audio/sound';
 import { Renderer } from './render/renderer';
+import { AdaptiveResolution } from './render/resolution';
 import { initSettingsPanel } from './page/settings-panel';
 import { topBarBottom } from './render/screens/top-bar';
 
@@ -228,12 +229,18 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 }
 
 // Fixed-step simulation, decoupled from display refresh rate.
+const resolution = new AdaptiveResolution();
 let last = performance.now();
 let acc = 0;
 /** One animation frame: run as many fixed simulation steps as time has passed, then draw. */
 function frame(now: number) {
     input.pollPads();
     acc += Math.min(0.25, (now - last) / 1000);
+    // Draw fewer pixels while frames run late, and full resolution again once they keep up.
+    if (resolution.frame((now - last) / 1000)) {
+        renderer.resolution = resolution.scale;
+        renderer.resize();
+    }
     last = now;
     while (acc >= C.STEP) {
         game.step(C.STEP);

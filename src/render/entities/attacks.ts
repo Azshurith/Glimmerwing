@@ -28,6 +28,31 @@ const GLOW_HUE_STEP = 15;
 /** Cached glow sprites by colour and size. */
 const glows = new Map<string, HTMLCanvasElement>();
 
+/** A new offscreen canvas of `w` by `h` pixels, and its context. */
+function offscreen(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(w);
+    c.height = Math.ceil(h);
+    return [c, c.getContext('2d')!];
+}
+
+/**
+ * Fills the centred disc of radius `reach` with a soft glow in `color`: an alpha falloff, then
+ * tinted (a gradient straight to transparent would darken on the way).
+ */
+function paintGlow(g: CanvasRenderingContext2D, cx: number, cy: number, reach: number, color: string): void {
+    g.save();
+    const grad = g.createRadialGradient(cx, cy, 0, cx, cy, reach);
+    grad.addColorStop(0.45, 'rgba(255,255,255,0.7)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(cx - reach, cy - reach, reach * 2, reach * 2);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = color;
+    g.fillRect(cx - reach, cy - reach, reach * 2, reach * 2);
+    g.restore();
+}
+
 /**
  * The soft glow behind a fireball of radius `r` in `color`, painted once and reused: it stands
  * in for the canvas shadow the flames used to cast, reaching about as far out.
@@ -36,22 +61,163 @@ function fireGlow(color: string, r: number, size: number): HTMLCanvasElement {
     const key = `${color}|${r.toFixed(1)}`;
     let c = glows.get(key);
     if (c) return c;
-    const reach = r * 1.35 + 4 + size;
-    const px = Math.ceil(reach * 2 * GLOW_RES);
-    c = document.createElement('canvas');
-    c.width = c.height = px;
-    const g = c.getContext('2d')!;
-    const grad = g.createRadialGradient(px / 2, px / 2, 0, px / 2, px / 2, px / 2);
-    // An alpha falloff, then tinted: a gradient straight to transparent would darken on the way.
-    grad.addColorStop(0.45, 'rgba(255,255,255,0.7)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, px, px);
-    g.globalCompositeOperation = 'source-in';
-    g.fillStyle = color;
-    g.fillRect(0, 0, px, px);
-    glows.set(key, c);
-    return c;
+    const px = (r * 1.35 + 4 + size) * GLOW_RES;
+    const [cv, g] = offscreen(px * 2, px * 2);
+    paintGlow(g, cv.width / 2, cv.height / 2, cv.width / 2, color);
+    glows.set(key, cv);
+    return cv;
+}
+
+/** Flame tongues around a fireball: five, flickering out of step. */
+const TONGUES = 5;
+
+/**
+ * A fireball's flame tongues at the origin, streaming toward angle `ang`: two layers (outer
+ * colour, then a shorter inner one), each one path and one fill. `stretch` (0 to 1) lengthens
+ * them with speed and `flick(i)` gives each tongue's flicker (0.5 to 1).
+ */
+function paintFlames(
+    ctx: CanvasRenderingContext2D,
+    r: number,
+    ang: number,
+    stretch: number,
+    flick: (i: number) => number,
+    outer: string,
+    inner: string,
+): void {
+    for (let layer = 0; layer < 2; layer++) {
+        ctx.fillStyle = layer ? inner : outer;
+        const k = layer ? 0.62 : 1;
+        ctx.beginPath();
+        for (let i = 0; i < TONGUES; i++) {
+            const spread = (i - (TONGUES - 1) / 2) * 0.32;
+            const len = r * (1.5 + stretch * 1.2) * flick(i) * k;
+            const a = ang + spread;
+            const tipx = Math.cos(a) * (r * 0.55 + len),
+                tipy = Math.sin(a) * (r * 0.55 + len);
+            const nx = -Math.sin(a) * r * 0.42 * k,
+                ny = Math.cos(a) * r * 0.42 * k;
+            ctx.moveTo(nx, ny);
+            ctx.quadraticCurveTo(tipx * 0.55 + nx * 0.6, tipy * 0.55 + ny * 0.6, tipx, tipy);
+            ctx.quadraticCurveTo(tipx * 0.55 - nx * 0.6, tipy * 0.55 - ny * 0.6, -nx, -ny);
+            ctx.closePath();
+        }
+        ctx.fill();
+    }
+}
+
+/**
+ * A fireball's ball at the origin: the flame-coloured disc, its shaded core (dimmer and smaller
+ * the more of it `hurt` says has been shot away) and its little face, as on the TSS fireballs.
+ */
+function paintBall(
+    ctx: CanvasRenderingContext2D,
+    r: number,
+    hurt: number,
+    outer: string,
+    inner: string,
+    core: string,
+    faceLine: number,
+): void {
+    ctx.fillStyle = outer;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    const g = ctx.createRadialGradient(-r * 0.25, -r * 0.3, 0, 0, 0, r);
+    g.addColorStop(0, core);
+    g.addColorStop(0.55, inner);
+    g.addColorStop(1, outer);
+    ctx.fillStyle = g;
+    ctx.globalAlpha = 1 - hurt * 0.35;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * (0.9 - hurt * 0.2), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(60,20,10,0.85)';
+    const ey = -r * 0.1,
+        ex = r * 0.3;
+    ctx.beginPath();
+    ctx.ellipse(-ex, ey, r * 0.1, r * 0.17, 0, 0, Math.PI * 2);
+    ctx.ellipse(ex, ey, r * 0.1, r * 0.17, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(60,20,10,0.75)';
+    ctx.lineWidth = faceLine;
+    ctx.beginPath();
+    ctx.arc(0, r * 0.22, r * 0.18, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+}
+
+/*
+ * Sprites. A fireball that isn't a Reverse is drawn from two cached images: its glow and flames,
+ * painted streaming straight up and turned to its flight, and its ball and face, upright. Both are
+ * painted for a fireball of radius 1 and scaled, so one set serves every size. The flicker is cut
+ * into FLICKER_FRAMES poses and the speed stretch into two; a fireball costs two image draws, where
+ * painting it live was a glow, four flame fills, two ball fills and the face, which a screenful in
+ * Fever couldn't afford.
+ */
+/** Sprite pixels per unit of fireball radius. */
+const SPRITE_PX = 36;
+/** Flicker poses painted, and the two speed stretches. */
+const FLICKER_FRAMES = 5;
+const STRETCHES = [0.15, 0.85];
+/** The flame sprite's extent in radii: either side, above the ball's centre and below it. */
+const FLAME_SIDE = 1.9,
+    FLAME_UP = 3.2,
+    FLAME_DOWN = 1.8;
+/** The ball sprite's half-width in radii, and how many steps of hurt are painted. */
+const BALL_HALF = 1.05;
+const HURT_STEPS = 4;
+/** Painted sprites by look, pose and stretch (flames) or look and hurt (balls). */
+const flameSprites = new Map<string, HTMLCanvasElement>();
+const ballSprites = new Map<string, HTMLCanvasElement>();
+
+/** The colours of a look: [outer, inner, core]; `flash` is a Fever fireball's other half of its flash. */
+function fireColours(look: Exclude<FireLook, 'reverse'>, flash: boolean): [string, string, string] {
+    const [outer, inner, core] = FIRE[look];
+    return look === 'fever' && flash ? [inner, '#ffffff', core] : [outer, inner, core];
+}
+
+/** The glow-and-flames sprite for a look, flicker pose and stretch, pointing up. */
+function flameSprite(
+    look: Exclude<FireLook, 'reverse'>,
+    flash: boolean,
+    pose: number,
+    stretch: number,
+): HTMLCanvasElement {
+    const key = `${look}${flash ? '*' : ''}|${pose}|${stretch}`;
+    let c = flameSprites.get(key);
+    if (c) return c;
+    const [outer, inner] = fireColours(look, flash);
+    const [cv, g] = offscreen(FLAME_SIDE * 2 * SPRITE_PX, (FLAME_UP + FLAME_DOWN) * SPRITE_PX);
+    const cx = FLAME_SIDE * SPRITE_PX,
+        cy = FLAME_UP * SPRITE_PX;
+    paintGlow(g, cx, cy, 1.75 * SPRITE_PX, outer);
+    g.translate(cx, cy);
+    const phase = (pose / FLICKER_FRAMES) * Math.PI * 2;
+    paintFlames(
+        g,
+        SPRITE_PX,
+        -Math.PI / 2,
+        STRETCHES[stretch],
+        i => 0.75 + 0.25 * Math.sin(phase + i * 1.9),
+        outer,
+        inner,
+    );
+    flameSprites.set(key, cv);
+    return cv;
+}
+
+/** The ball-and-face sprite for a look and step of hurt. */
+function ballSprite(look: Exclude<FireLook, 'reverse'>, flash: boolean, hurtStep: number): HTMLCanvasElement {
+    const key = `${look}${flash ? '*' : ''}|${hurtStep}`;
+    let c = ballSprites.get(key);
+    if (c) return c;
+    const [outer, inner, core] = fireColours(look, flash);
+    const [cv, g] = offscreen(BALL_HALF * 2 * SPRITE_PX, BALL_HALF * 2 * SPRITE_PX);
+    g.translate(cv.width / 2, cv.height / 2);
+    paintBall(g, SPRITE_PX, hurtStep / HURT_STEPS, outer, inner, core, SPRITE_PX * 0.1);
+    ballSprites.set(key, cv);
+    return cv;
 }
 
 /**
@@ -72,98 +238,63 @@ export function drawFireball(
     look: FireLook,
     hurt: number,
 ): void {
+    if (look === 'reverse') return drawReverseFireball(ctx, x, y, t, spin, vx, vy, size, hurt);
     const r = C.fireballRadius(size);
-    let [outer, inner, core] = look === 'reverse' ? FIRE.p1 : FIRE[look];
-    let hue = -1;
-    if (look === 'reverse') {
-        const h = (t * 900 + spin * 60) % 360;
-        hue = h;
-        outer = `hsl(${h}, 100%, 58%)`;
-        inner = `hsl(${(h + 120) % 360}, 100%, 72%)`;
-        core = '#ffffff';
-    } else if (look === 'fever' && Math.floor(t * 14) % 2 === 0) {
-        [outer, inner] = [inner, '#ffffff'];
-    }
+    const flash = look === 'fever' && Math.floor(t * 14) % 2 === 0;
     // Flames stream away from the direction of travel (straight up while it's barely moving).
+    const sp = Math.hypot(vx, vy);
+    const ang = sp > 30 ? Math.atan2(-vy, -vx) : -Math.PI / 2;
+    const cycle = (t * 22 + spin * 3) / (Math.PI * 2);
+    const pose = (((Math.floor(cycle * FLICKER_FRAMES) % FLICKER_FRAMES) + FLICKER_FRAMES) % FLICKER_FRAMES) | 0;
+    const flames = flameSprite(look, flash, pose, sp >= 100 ? 1 : 0);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ang + Math.PI / 2);
+    ctx.drawImage(flames, -FLAME_SIDE * r, -FLAME_UP * r, FLAME_SIDE * 2 * r, (FLAME_UP + FLAME_DOWN) * r);
+    ctx.restore();
+    const pulse = r * (1 + Math.sin(t * 9 + spin) * 0.05) * BALL_HALF;
+    const ball = ballSprite(look, flash, Math.round(Math.max(0, Math.min(1, hurt)) * HURT_STEPS));
+    ctx.drawImage(ball, x - pulse, y - pulse, pulse * 2, pulse * 2);
+}
+
+/**
+ * A Reverse fireball, painted live since its colours cycle without end: the cached glow for its
+ * hue step, its flames, its ball and face, and a flashing ring so it reads at a glance.
+ */
+function drawReverseFireball(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    t: number,
+    spin: number,
+    vx: number,
+    vy: number,
+    size: number,
+    hurt: number,
+): void {
+    const r = C.fireballRadius(size);
+    const h = (t * 900 + spin * 60) % 360;
+    const outer = `hsl(${h}, 100%, 58%)`;
+    const inner = `hsl(${(h + 120) % 360}, 100%, 72%)`;
     const sp = Math.hypot(vx, vy);
     const ang = sp > 30 ? Math.atan2(-vy, -vx) : -Math.PI / 2;
     ctx.save();
     ctx.translate(x, y);
-    // The glow: one cached soft sprite, not a canvas shadow (blurring every flame tongue cost about
-    // a millisecond per fireball on a big screen, so a screenful of them dropped frames).
-    const glow = fireGlow(
-        hue >= 0 ? `hsl(${Math.round(hue / GLOW_HUE_STEP) * GLOW_HUE_STEP}, 100%, 58%)` : outer,
-        r,
-        size,
-    );
-    ctx.drawImage(
-        glow,
-        -glow.width / GLOW_RES / 2,
-        -glow.height / GLOW_RES / 2,
-        glow.width / GLOW_RES,
-        glow.height / GLOW_RES,
-    );
-    const tongues = 5;
-    for (let layer = 0; layer < 2; layer++) {
-        ctx.fillStyle = layer ? inner : outer;
-        const k = layer ? 0.62 : 1;
-        // Every tongue of a layer goes into one path and one fill.
-        ctx.beginPath();
-        for (let i = 0; i < tongues; i++) {
-            const spread = (i - (tongues - 1) / 2) * 0.32;
-            const flick = 0.75 + 0.25 * Math.sin(t * 22 + i * 1.9 + spin * 3);
-            const len = r * (1.5 + Math.min(1, sp / 200) * 1.2) * flick * k;
-            const a = ang + spread;
-            const tipx = Math.cos(a) * (r * 0.55 + len),
-                tipy = Math.sin(a) * (r * 0.55 + len);
-            const nx = -Math.sin(a) * r * 0.42 * k,
-                ny = Math.cos(a) * r * 0.42 * k;
-            ctx.moveTo(nx, ny);
-            ctx.quadraticCurveTo(tipx * 0.55 + nx * 0.6, tipy * 0.55 + ny * 0.6, tipx, tipy);
-            ctx.quadraticCurveTo(tipx * 0.55 - nx * 0.6, tipy * 0.55 - ny * 0.6, -nx, -ny);
-            ctx.closePath();
-        }
-        ctx.fill();
-    }
-    // The ball itself.
-    const pulse = 1 + Math.sin(t * 9 + spin) * 0.05;
-    ctx.fillStyle = outer;
+    const glow = fireGlow(`hsl(${Math.round(h / GLOW_HUE_STEP) * GLOW_HUE_STEP}, 100%, 58%)`, r, size);
+    const gw = glow.width / GLOW_RES;
+    ctx.drawImage(glow, -gw / 2, -gw / 2, gw, gw);
+    const flick = (i: number) => 0.75 + 0.25 * Math.sin(t * 22 + i * 1.9 + spin * 3);
+    paintFlames(ctx, r, ang, Math.min(1, sp / 200), flick, outer, inner);
+    ctx.scale(1 + Math.sin(t * 9 + spin) * 0.05, 1 + Math.sin(t * 9 + spin) * 0.05);
+    paintBall(ctx, r, hurt, outer, inner, '#ffffff', Math.max(0.8, r * 0.09));
+    ctx.strokeStyle = Math.floor(t * 12) % 2 ? 'rgba(190,120,255,0.95)' : 'rgba(120,255,160,0.95)';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(0, 0, r * pulse, 0, Math.PI * 2);
-    ctx.fill();
-    const g = ctx.createRadialGradient(-r * 0.25, -r * 0.3, 0, 0, 0, r);
-    g.addColorStop(0, core);
-    g.addColorStop(0.55, inner);
-    g.addColorStop(1, outer);
-    ctx.fillStyle = g;
-    ctx.globalAlpha = 1 - hurt * 0.35;
-    ctx.beginPath();
-    ctx.arc(0, 0, r * (0.9 - hurt * 0.2) * pulse, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    // A little face, as on the TSS fireballs.
-    ctx.fillStyle = 'rgba(60,20,10,0.85)';
-    const ey = -r * 0.1,
-        ex = r * 0.3;
-    ctx.beginPath();
-    ctx.ellipse(-ex, ey, r * 0.1, r * 0.17, 0, 0, Math.PI * 2);
-    ctx.ellipse(ex, ey, r * 0.1, r * 0.17, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(60,20,10,0.75)';
-    ctx.lineWidth = Math.max(0.8, r * 0.09);
-    ctx.beginPath();
-    ctx.arc(0, r * 0.22, r * 0.18, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.arc(0, 0, r + 4, 0, Math.PI * 2);
     ctx.stroke();
-    if (look === 'reverse') {
-        // A flashing ring as well, so a Reverse reads at a glance.
-        ctx.strokeStyle = Math.floor(t * 12) % 2 ? 'rgba(190,120,255,0.95)' : 'rgba(120,255,160,0.95)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, 0, r + 4, 0, Math.PI * 2);
-        ctx.stroke();
-    }
     ctx.restore();
 }
+
 /**
  * A Reverse fireball's glowing trail: its recent positions (x, y pairs, oldest first) drawn as a tapering,
  * colour-cycling streak, so it bends with the path the Reverse is retracing.
