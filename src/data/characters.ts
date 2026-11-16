@@ -7,7 +7,7 @@ import { KNIGHT, WITCH } from './sprite-sets';
 export const FAIRIES: Fairy[] = [
     {
         id: 'pip',
-        name: 'Pip',
+        name: 'Stella',
         blurb: 'Even-tempered all-rounder',
         color: '#ffd86b',
         accent: '#f6a04d',
