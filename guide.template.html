@@ -248,13 +248,29 @@
             </section>
         </main>
         <script>
-            // Same storage key as src/game/progress.ts.
-            document.getElementById('reset')?.addEventListener('click', () => {
+            // Same storage keys as src/game/progress.ts and account.ts. The game server keeps the record that
+            // counts, so it's reset there too (POST /api/me/reset with this browser's account).
+            document.getElementById('reset')?.addEventListener('click', async () => {
                 if (!confirm('Reset unlocked fairies and stats?')) return;
+                let token = null;
                 try {
                     localStorage.removeItem('glimmerwing-progress-v1');
+                    localStorage.removeItem('glimmerwing-pending-results-v1');
+                    token = JSON.parse(localStorage.getItem('glimmerwing-account-v1') ?? 'null')?.token ?? null;
                 } catch {
                     /* storage unavailable */
+                }
+                if (token && location.protocol.startsWith('http')) {
+                    try {
+                        const r = await fetch(`${location.origin}/api/me/reset`, {
+                            method: 'POST',
+                            headers: { authorization: `Bearer ${token}` },
+                        });
+                        if (!r.ok) throw new Error(String(r.status));
+                    } catch {
+                        alert("Progress reset here, but the game server couldn't be reached: try again later.");
+                        return;
+                    }
                 }
                 alert('Progress reset.');
             });

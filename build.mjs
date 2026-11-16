@@ -22,6 +22,22 @@ const out = await build({
     define: { __GW_SERVER__: JSON.stringify(process.env.GW_SERVER ?? ''), __GW_SIM__: JSON.stringify(sim) },
 });
 const js = out.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
+
+// The server's check of finished games (src/server/verify.ts): the same simulation, bundled for Node. The game's
+// data loads pictures with new Image(), which Node hasn't got, so a stand-in is put in first; images and music
+// are left out.
+await build({
+    entryPoints: ['src/server/verify.ts'],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node18',
+    outfile: 'dist/verify.mjs',
+    loader: { '.png': 'empty', '.jpg': 'empty', '.mp3': 'empty' },
+    define: { __GW_SERVER__: '""', __GW_SIM__: JSON.stringify(sim) },
+    banner: { js: 'globalThis.Image ??= class { src = ""; complete = false; naturalWidth = 0; };' },
+    logLevel: 'warning',
+});
 mkdirSync('dist', { recursive: true });
 const html = readFileSync('index.template.html', 'utf8').replace('/*__BUNDLE__*/', () => js);
 writeFileSync('dist/index.html', html);

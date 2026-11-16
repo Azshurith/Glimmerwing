@@ -1,4 +1,4 @@
-import type { Progress, Settings } from './progress';
+import type { MatchOutcome, Progress, Settings } from './progress';
 
 /** A copy of something saved for a player, stamped with the browser's clock (ms) when it was saved. */
 export interface Saved<T> {
@@ -29,28 +29,6 @@ export interface MeResponse {
     endless: EndlessRank | null;
 }
 
-/** A finished match, as sent to the server for the player's history. */
-export interface MatchRecord {
-    mode: 'cpu' | 'online' | 'versus';
-    map: string;
-    fairy: string;
-    rivalFairy: string;
-    roundsWon: number;
-    roundsLost: number;
-    bestChain: number;
-    trophyDelta: number;
-    seconds: number;
-}
-
-/** A finished Endless run, as sent to the server. */
-export interface EndlessRecord {
-    seconds: number;
-    guardians: number;
-    fairy: string;
-    map: string;
-    bestChain: number;
-}
-
 /** Where a player's best Endless run stands among everyone's. */
 export interface EndlessRank {
     rank: number;
@@ -67,4 +45,18 @@ export interface LeaderEntry {
     fairy: string;
     map: string;
     at: string;
+}
+
+/** What the server made of a finished game it checked: the progress that counts now, and what the game earned. */
+export interface ResultResponse {
+    progress: Progress;
+    outcome: MatchOutcome;
+    trophyDelta: number;
+    /** Fairies unlocked (ids) and stages opened (map names). */
+    unlocked: string[];
+    newStages: string[];
+    endlessNew: boolean;
+    /** The replay's share code, and an Endless run's rank. */
+    code: string;
+    rank: EndlessRank | null;
 }

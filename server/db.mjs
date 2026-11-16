@@ -87,21 +87,20 @@ async function mariaStore(env) {
             const [r] = await rows('SELECT data, saved_at FROM progress WHERE player_id = ?', [id]);
             return r ? { data: JSON.parse(r.data), savedAt: Number(r.saved_at) } : null;
         },
-        async putProgress(id, data, savedAt) {
-            // Keep whichever copy is newer; saved_at is assigned last so the comparisons see the old value.
+        async setProgress(id, data) {
+            // The server's own decision, so it simply replaces what was there.
             await pool.query(
                 `INSERT INTO progress (player_id, data, trophies, best_trophies, wins, endless_best, saved_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?)
-                 ON DUPLICATE KEY UPDATE
-                    data = IF(VALUES(saved_at) >= saved_at, VALUES(data), data),
-                    trophies = IF(VALUES(saved_at) >= saved_at, VALUES(trophies), trophies),
-                    best_trophies = IF(VALUES(saved_at) >= saved_at, VALUES(best_trophies), best_trophies),
-                    wins = IF(VALUES(saved_at) >= saved_at, VALUES(wins), wins),
-                    endless_best = IF(VALUES(saved_at) >= saved_at, VALUES(endless_best), endless_best),
-                    saved_at = GREATEST(saved_at, VALUES(saved_at))`,
-                [id, JSON.stringify(data), data.trophies, data.bestTrophies, data.wins, data.endlessBest, savedAt],
+                 ON DUPLICATE KEY UPDATE data = VALUES(data), trophies = VALUES(trophies),
+                    best_trophies = VALUES(best_trophies), wins = VALUES(wins),
+                    endless_best = VALUES(endless_best), saved_at = VALUES(saved_at)`,
+                [id, JSON.stringify(data), data.trophies, data.bestTrophies, data.wins, data.endlessBest, Date.now()],
             );
-            return this.getProgress(id);
+        },
+        async hasReplay(id, recorded) {
+            const [r] = await rows('SELECT 1 AS x FROM replays WHERE player_id = ? AND recorded = ?', [id, recorded]);
+            return !!r;
         },
         async getSettings(id) {
             const [r] = await rows('SELECT data, saved_at FROM settings WHERE player_id = ?', [id]);
@@ -200,9 +199,9 @@ async function mariaStore(env) {
                 const code = replayCode();
                 try {
                     await pool.query(
-                        `INSERT INTO replays (code, player_id, mode, map, version, seconds, data)
-                         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                        [code, id, r.mode, r.map, r.version, r.seconds, JSON.stringify(r.data)],
+                        `INSERT INTO replays (code, player_id, mode, map, version, seconds, recorded, data)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [code, id, r.mode, r.map, r.version, r.seconds, r.recorded || null, JSON.stringify(r.data)],
                     );
                     return code;
                 } catch (e) {
@@ -298,7 +297,10 @@ function memoryStore() {
             players[id - 1].name = name;
         },
         getProgress: async id => structuredClone(progress.get(id) ?? null),
-        putProgress: async (id, data, savedAt) => keepNewer(progress, id, data, savedAt),
+        async setProgress(id, data) {
+            progress.set(id, { data: structuredClone(data), savedAt: Date.now() });
+        },
+        hasReplay: async (id, recorded) => replays.some(r => r.playerId === id && r.recorded === recorded),
         getSettings: async id => structuredClone(settings.get(id) ?? null),
         putSettings: async (id, data, savedAt) => keepNewer(settings, id, data, savedAt),
         async addMatch(id, m) {

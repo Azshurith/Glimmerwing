@@ -1,4 +1,6 @@
+import * as dm from '@/core/dmath';
 import * as C from '@/core/config';
+import { Rng } from '@/core/rng';
 import type { Controls } from '@/types';
 import type { Field } from './field';
 
@@ -19,7 +21,18 @@ export class CpuPilot {
     /** True while lining up a shot on a falling star, when we must stay exact. */
     private onStar = false;
 
-    constructor(private reaction = 0.12) {}
+    /**
+     * Its choices come from its own seeded numbers (the round's seed, by the game), so a round with the CPU in it
+     * plays out the same again: the server re-runs it to check a result.
+     */
+    private rng: Rng;
+
+    constructor(
+        private reaction = 0.12,
+        seed = 1,
+    ) {
+        this.rng = new Rng(seed);
+    }
 
     /** Hold fire long enough to reach `level` (the field caps it at the gauge level). */
     private charge(f: Field, level: number): void {
@@ -84,15 +97,13 @@ export class CpuPilot {
         // Re-pick a target a few times a second, not every frame, so it feels human.
         this.decideT -= dt;
         if (this.decideT <= 0) {
-            this.decideT = this.reaction + Math.random() * 0.1;
+            this.decideT = this.reaction + this.rng.next() * 0.1;
             const star = f.attacks.filter(a => a.kind === 'star' && a.flight !== 'back').sort((a, b) => b.y - a.y)[0];
             const seed = f.puffs.find(q => q.moonseed && q.y > 20);
             const pool = f.puffs.filter(q => !q.moonseed && q.x > -50);
             // With a moonseed on screen, pop the puff nearest it so the burst catches it.
             const puff = seed
-                ? pool.sort(
-                      (a, b) => Math.hypot(a.x - seed.x, a.y - seed.y) - Math.hypot(b.x - seed.x, b.y - seed.y),
-                  )[0]
+                ? pool.sort((a, b) => dm.hypot(a.x - seed.x, a.y - seed.y) - dm.hypot(b.x - seed.x, b.y - seed.y))[0]
                 : pool.sort((a, b) => b.y - a.y)[0];
             const target = star && star.y > 40 ? star : puff;
             // Stars are narrow, so line up exactly; for critters a small offset looks more natural.
@@ -103,10 +114,10 @@ export class CpuPilot {
             // the meadow is quiet, back at the bottom when it's busy.
             this.stanceT -= this.decideT;
             if (this.stanceT <= 0) {
-                this.stanceT = 0.7 + Math.random() * 1.1;
-                this.strafe = (Math.random() - 0.5) * 14;
+                this.stanceT = 0.7 + this.rng.next() * 1.1;
+                this.strafe = (this.rng.next() - 0.5) * 14;
                 const busy = threats.filter(th => th.y > C.FIELD_H * 0.4).length;
-                const lean = busy > 8 ? 1 : busy > 4 ? 0.5 + Math.random() * 0.5 : Math.random() * 0.8;
+                const lean = busy > 8 ? 1 : busy > 4 ? 0.5 + this.rng.next() * 0.5 : this.rng.next() * 0.8;
                 this.homeY = forward + (bottom - forward) * lean;
             }
             // Edge closer to a critter that's sinking low, so bursts land sooner.
@@ -117,21 +128,21 @@ export class CpuPilot {
 
             // Occasionally charge into a dense cluster.
             if (this.chargeMode <= 0 && puff) {
-                const near = f.puffs.filter(j => Math.hypot(j.x - puff.x, j.y - puff.y) < 50).length;
-                if (near >= 5 && Math.random() < 0.5)
-                    this.charge(f, f.gaugeLevel >= 3 ? 3 : f.gaugeLevel === 2 && Math.random() < 0.5 ? 2 : 1);
+                const near = f.puffs.filter(j => dm.hypot(j.x - puff.x, j.y - puff.y) < 50).length;
+                if (near >= 5 && this.rng.next() < 0.5)
+                    this.charge(f, f.gaugeLevel >= 3 ? 3 : f.gaugeLevel === 2 && this.rng.next() < 0.5 ? 2 : 1);
             }
             // Sitting on a full gauge: go for the guardian before long.
-            if (this.chargeMode <= 0 && f.gaugeLevel >= 3 && Math.random() < dt * 0.4) this.charge(f, 3);
+            if (this.chargeMode <= 0 && f.gaugeLevel >= 3 && this.rng.next() < dt * 0.4) this.charge(f, 3);
         }
 
-        const close = threats.filter(th => Math.hypot(th.x - p.x, th.y - p.y) < 40).length;
+        const close = threats.filter(th => dm.hypot(th.x - p.x, th.y - p.y) < 40).length;
         if (p.blooms > 0 && p.invuln <= 0 && (close >= 3 || (close >= 2 && p.hull <= 4))) out.bloom = true;
 
         // A gentle figure-of-eight weave around the chosen spot, so it never sits still.
         // (Held perfectly still on the line while shooting at a star, since stars are narrow.)
-        const weaveX = this.onStar ? this.aimX : this.aimX + Math.sin(this.t * 1.7) * 10;
-        const weaveY = this.onStar ? this.homeY : this.homeY + Math.sin(this.t * 3.4) * 16;
+        const weaveX = this.onStar ? this.aimX : this.aimX + dm.sin(this.t * 1.7) * 10;
+        const weaveY = this.onStar ? this.homeY : this.homeY + dm.sin(this.t * 3.4) * 16;
 
         // Sideways.
         if (dodge !== 0) {

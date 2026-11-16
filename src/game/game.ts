@@ -11,7 +11,7 @@ import { rosterMedallions, rosterPreviewButton } from '@/render/screens/roster-s
 import { mapsMedallions } from '@/render/screens/maps-screen';
 import { MAP_CARDS, MAP_COLS, mapCards } from '@/render/screens/map-screen';
 import { MAPS, mapById, mapForSeed } from '@/data/maps';
-import { stageFor, stageOpen } from '@/data/stages';
+import { stageOpen } from '@/data/stages';
 import { titleButtons } from '@/render/screens/title-screen';
 import { clock, replayPanelLayout } from '@/render/hud';
 import { PALETTE, PLAYER_COLORS } from '@/render/theme';
@@ -22,7 +22,9 @@ import type {
     FieldSnapshot,
     HudTag,
     Mode,
-    Outgoing,
+    RoundMode,
+    Transit,
+    MatchOutcome,
     PeerMsg,
     Phase,
     ReplayData,
@@ -39,50 +41,18 @@ import type {
     Sfx,
     SyncedSettings,
 } from '@/types';
-import { CpuPilot } from './ai';
-import { Field } from './field';
-import { curveAt, pathAt, pathLength, curveDir, curveLength, enterAt, shiftCurve } from './fireball-path';
+import type { Field } from './field';
+import { RoundSim, flightTime, riseSpeed, transitTime } from './match';
+import { curveAt, pathAt, curveDir, enterAt, shiftCurve } from './fireball-path';
 import { SkillPreview } from './preview';
 import { MapPreview } from './map-preview';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 import { loadSettings, saveSettings } from './settings';
 import { Account } from './account';
+import { applyOutcome } from './rewards';
 import { Recorder, ReplayPlayer, loadLocalReplay, quantize, saveLocalReplay } from './replay';
 import { REPLAY_ROWS, replayLinkBox, replayRowBoxes } from '@/render/screens/replays-screen';
-import { Rng } from '@/core/rng';
 
-/** Seconds from an attack leaving one meadow to arriving in the other: its `stagger`, then its flight. */
-const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
-
-/**
- * Seconds an attack is in flight between the meadows, once any `stagger` is over: a Reverse crossing the screen
- * takes as long as the stretch of its curve between the meadows needs at its speed; any other fireball flies its
- * route (normalRoute) to the rival's near wall at its transit speed; everything
- * else takes
- * TRANSIT_TIME, an Extra Attack less (SPEED_EXTRA).
- */
-const flightTime = (o: Outgoing) => {
-    if (o.kind === 'star' && o.curve) {
-        const k0 = o.k ?? 0;
-        const kIn = enterAt(shiftCurve(o.curve, o.side ?? 1), k0);
-        return Math.max(0.05, curveLength(o.curve, k0, kIn) / Math.max(40, o.speed ?? C.FIREBALL_FALL_SPEED));
-    }
-    if (o.kind === 'star') return pathLength(o.route ?? [{ x: o.fromX, y: o.fromY }]) / riseSpeed(o);
-    return C.TRANSIT_TIME / (o.kind === 'imp' ? C.SPEED_EXTRA : C.SPEED_NORMAL);
-};
-
-/** How fast a Normal fireball flies its route between the meadows (and then on into the rival's). */
-const riseSpeed = (o: Outgoing) =>
-    C.fireballTransitSpeed(o.reflects ?? (o.level >= 2 ? 1 : 0), o.boost ?? 1) *
-    (o.fever && o.level < 2 ? (o.pace ?? 1) : 1);
-
-/** `ghost` transits are only drawn: online, the real attack is delivered on the rival's screen. */
-interface Transit {
-    o: Outgoing;
-    from: 0 | 1;
-    t: number;
-    ghost?: boolean;
-}
 /** One player's cursor on the select screen, and whether they have locked in their pick. */
 interface Picker {
     index: number;
@@ -94,15 +64,6 @@ const wide = (): readonly [Placement, Placement] => [
     { x: 0, y: 0, s: 1 },
     { x: C.FIELD_W + C.GAP, y: 0, s: 1 },
 ];
-/**
- * Endless has no rival beside you, so its attacks come from above: a fireball drops in straight down from the top
- * of the meadow (over the fairy, a volley spread either side) instead of flying in from a side wall.
- */
-function fromAbove(o: Outgoing): Outgoing {
-    if (o.kind !== 'star' || o.level >= 2) return o;
-    const { enter: _e, route: _r, curve: _c, ...rest } = o;
-    return { ...rest, aim: o.aim ?? 0 };
-}
 
 /**
  * Where they sit in the tall layout: yours full width against the bottom edge, the rival's small at the top.
@@ -206,14 +167,31 @@ export class Game {
     /** The map this match plays on (empty online, where each round's seed picks it). */
     private matchMap = '';
     /** Endless: how long this run has lasted, guardians sent so far, when the next comes, and a new best. */
-    private endlessT = 0;
-    private endlessBosses = 0;
-    private endlessNextBoss = 0;
+    /** The round being played (or the last one): both meadows, the attacks between them, the CPU, Endless. */
+    private round = new RoundSim('cpu', 1, [FAIRIES[0], FAIRIES[1]], 0, MAPS[0].id, true);
+    /** The round's meadows and the attacks flying between them. */
+    private get fields(): [Field, Field] {
+        return this.round.fields;
+    }
+    private get transits(): Transit[] {
+        return this.round.transits;
+    }
+    private set transits(t: Transit[]) {
+        this.round.transits = t;
+    }
+    /** Endless: how long the run has lasted, the guardians sent and when the next comes. */
+    private get endlessT(): number {
+        return this.round.endlessT;
+    }
+    private get endlessBosses(): number {
+        return this.round.endlessBosses;
+    }
+    private get endlessNextBoss(): number {
+        return this.round.endlessNextBoss;
+    }
     private endlessNew = false;
     /** Where the run just ended ranks among every player's best (null until the server answers, or offline). */
     private endlessRank: EndlessRank | null = null;
-    /** When the match began (performance.now(), ms), for its length in the player's history. */
-    private matchStart = 0;
     /** The player's account on the game server: progress and settings are copied there, results reported. */
     readonly account = new Account();
     /** Records the match being played (VS CPU, 2 Players, Endless) so it can be watched again. */
@@ -243,21 +221,18 @@ export class Game {
     private replaysMessage = '';
     private replaysNote = '';
     private replaysNoteT = 0;
-    /** Endless: picks which of the hidden meadow's attacks get through, from the round's seed so a replay agrees. */
-    private endlessRng = new Rng(1);
     /** A map forced by the page's address (`?map=<id>`), for trying a map out. */
     private forcedMap =
         typeof location === 'undefined' ? null : mapById(new URLSearchParams(location.search).get('map'));
-    private fields: [Field, Field] = [new Field(1, FAIRIES[0]), new Field(1, FAIRIES[1])];
     private wins: [number, number] = [0, 0];
-    private transits: Transit[] = [];
-    private cpu = new CpuPilot();
     private roundWinner: 0 | 1 | -1 = -1;
     private paused = false;
     private progress: Progress = loadProgress();
     /** The player's settings (the page's Settings panel changes them through setSettings). */
     settings: Settings = loadSettings();
     private matchBestChain = 0;
+    /** Fevers the human player(s) have had this match. */
+    private matchFevers = 0;
     private newlyUnlocked: Fairy[] = [];
     /** Stages the last match's trophies opened, and how many trophies it won or lost. */
     private newStages: string[] = [];
@@ -390,11 +365,17 @@ export class Game {
         this.net?.peer({ k: 'sel', i: pk.index, done: pk.done, id: FAIRIES[pk.index].id });
     }
 
-    /** Wipe saved stats and unlocks and go back to the title screen. */
+    /** Wipe saved stats and unlocks (here and on the server) and go back to the title screen. */
     resetProgress(): void {
         this.progress = resetProgress();
-        this.account.saveProgress(this.progress);
+        void this.account.reset().then(p => p && this.adoptProgress(p));
         this.phase = 'title';
+    }
+
+    /** Take on progress the server decided (it counts; this browser's copy only shows it in the meantime). */
+    private adoptProgress(p: Progress): void {
+        this.progress = { ...this.progress, ...p };
+        saveProgress(this.progress);
     }
 
     /** True if the fairy needs no unlock or has been unlocked. */
@@ -422,12 +403,12 @@ export class Game {
         this.matchMap = this.online ? '' : this.mapIndex === 0 ? this.randomOpenMap() : MAPS[this.mapIndex - 1].id;
         this.wins = [0, 0];
         this.matchBestChain = 0;
+        this.matchFevers = 0;
         this.newlyUnlocked = [];
         this.newStages = [];
         this.trophyDelta = 0;
         this.endlessNew = false;
         this.endlessRank = null;
-        this.matchStart = performance.now();
         const m = this.mode;
         this.recorder =
             !this.replay && (m === 'cpu' || m === 'versus' || m === 'endless')
@@ -494,6 +475,7 @@ export class Game {
         this.matchMap = data.map;
         this.wins = [0, 0];
         this.matchBestChain = 0;
+        this.matchFevers = 0;
         this.newlyUnlocked = [];
         this.newStages = [];
         this.trophyDelta = 0;
@@ -850,7 +832,10 @@ export class Game {
         this.transits = [];
     }
 
-    /** The match just ended: keep its recording here, and save it to the server for the Replays screen. */
+    /**
+     * The match just ended: keep its recording here, and send it to the server, which plays it through again to
+     * count it (and keeps it for the Replays screen). What the server makes of it replaces what the game showed.
+     */
     private keepReplay(): void {
         const rec = this.recorder;
         if (!rec) return;
@@ -864,8 +849,10 @@ export class Game {
         this.lastReplay = data;
         this.lastReplayCode = null;
         saveLocalReplay(data);
-        void this.account.saveReplay(data).then(code => {
-            if (this.lastReplay === data) this.lastReplayCode = code;
+        void this.account.submit(data).then(r => {
+            if (!r || this.lastReplay !== data) return;
+            this.lastReplayCode = r.code;
+            if (r.rank) this.endlessRank = r.rank;
         });
     }
 
@@ -876,16 +863,15 @@ export class Game {
 
     /**
      * Meet the game server (called once by the page at start-up): make a guest account if this browser has none,
-     * take on any progress or settings saved there later than here, and from then on send changes up. The game
-     * plays on from this browser's saves the whole time; with no server it never hears back.
+     * take on the server's progress (it decides that) and settings if saved there later than here, and from then
+     * on send settings changes and finished games up. The game plays on from this browser's copies the whole time;
+     * with no server it never hears back.
      */
     async connectAccount(): Promise<void> {
         this.sound.onChange = () => this.account.saveSettings(this.synced());
-        const got = await this.account.start(this.progress, this.synced());
-        if (got.progress) {
-            this.progress = { ...this.progress, ...got.progress };
-            saveProgress(this.progress);
-        }
+        this.account.onProgress = p => this.adoptProgress(p);
+        const got = await this.account.start(this.synced());
+        if (got.progress) this.adoptProgress(got.progress);
         if (got.settings) {
             const s = got.settings.settings;
             this.settings = { ...this.settings, ...s, keys: sanitizeKeys(s.keys) };
@@ -944,22 +930,9 @@ export class Game {
         }
         const sideA = (seed & 1) === 0;
         const crowHere = this.online ? (this.net!.isHost ? sideA : !sideA) : sideA;
-        this.fields = [
-            new Field(seed, this.picks[0], roundIndex, crowHere),
-            new Field(seed, this.picks[1], roundIndex, !crowHere),
-        ];
-        // The second meadow's rival is to its left, so its countered fireballs arc off that way.
-        this.fields[1].rivalSide = -1;
         const map = this.replay ? this.replay.data.map : (this.forcedMap?.id ?? (this.matchMap || mapForSeed(seed).id));
-        for (const f of this.fields) f.mapId = map;
+        this.round = new RoundSim(this.mode as RoundMode, seed, this.picks, roundIndex, map, crowHere);
         this.recorder?.startRound(seed, { w: C.FIELD_W, h: C.FIELD_H, single: C.VIEW_W === C.FIELD_W });
-        this.endlessRng = new Rng(seed ^ 0x5bd1e995);
-        this.transits = [];
-        // The CPU is sharper further along the trophy road.
-        this.cpu = new CpuPilot(stageFor(map).cpuReaction);
-        this.endlessT = 0;
-        this.endlessBosses = 0;
-        this.endlessNextBoss = C.ENDLESS_FIRST_BOSS;
         this.phase = 'countdown';
         this.phaseT = 0;
     }
@@ -1463,8 +1436,12 @@ export class Game {
                     else this.start(this.mode);
                     return;
                 }
-                // Online, the host deals the next round and the guest follows.
-                if (!this.online || this.net!.isHost) this.newRound();
+                // Online, the host deals the next round and the guest follows. A new round starts untouched: its
+                // meadows first move with the countdown over (a replay, checked by the server, plays them so too).
+                if (!this.online || this.net!.isHost) {
+                    this.newRound();
+                    return;
+                }
             }
             this.fields[0].update(dt, IDLE);
             if (!this.online) this.fields[1].update(dt, IDLE);
@@ -1477,13 +1454,9 @@ export class Game {
         }
 
         // A moonseed break freezes both meadows for a beat.
-        const hs = Math.max(this.fields[0].hitstop, this.fields[1].hitstop);
-        if (hs > 0) {
-            for (const f of this.fields) f.hitstop = Math.max(0, f.hitstop - dt);
-            return;
-        }
-
-        this.shareFairies();
+        const round = this.round;
+        if (round.frozen(dt)) return;
+        round.share();
         let c0: Controls, c1: Controls;
         if (this.replay) {
             // Watching: the recording flies both meadows. One that runs out before its round ends is cut short.
@@ -1495,59 +1468,14 @@ export class Game {
         } else {
             // Touch targets are snapped to the recording's grid, so a replay gives the meadows exactly this.
             c0 = quantize(this.vsCpu ? this.input.solo(this.fields[0].player) : this.input.p1(this.fields[0].player));
-            c1 = quantize(this.vsCpu ? this.cpu.think(this.fields[1], dt) : this.input.p2(this.fields[1].player));
+            c1 = quantize(this.vsCpu ? round.cpuControls(dt) : this.input.p2(this.fields[1].player));
             this.recorder?.step(c0, c1);
         }
-        this.fields[0].update(dt, c0);
-        this.fields[1].update(dt, c1);
-        if (this.mode === 'endless') this.directEndless(dt);
-
-        this.fields.forEach((f, i) => {
-            for (const o of f.outbox) {
-                // Fireballs wear their sender's colour: orange for player 1, purple for player 2.
-                o.tint ??= i === 0 ? 'p1' : 'p2';
-                this.transits.push({ o, from: i as 0 | 1, t: 0 });
-            }
-            f.outbox = [];
-        });
-        for (const tr of this.transits) {
-            // A fireball flies on the tempo (and sudden death) between the meadows too, as it does in them.
-            tr.t += tr.o.kind === 'star' ? dt * this.fields[tr.from].attackPace : dt;
-            if (tr.t >= transitTime(tr.o))
-                this.fields[1 - tr.from].receive(this.mode === 'endless' ? fromAbove(tr.o) : tr.o);
-        }
-        this.transits = this.transits.filter(tr => tr.t < transitTime(tr.o));
-
-        const dead0 = !this.fields[0].alive,
-            dead1 = !this.fields[1].alive;
+        round.advance(dt, c0, c1);
+        const [dead0, dead1] = round.dead;
         if (this.mode === 'endless') {
             if (dead0) this.endEndless();
         } else if (dead0 || dead1) this.endRound(dead0, dead1);
-    }
-
-    /**
-     * Endless mode's director. The hidden meadow is flown by the CPU and can't be beaten (its hearts refill), so
-     * its chains keep raining attacks on you; your own attacks go nowhere. On top of that it sends guardians on a
-     * schedule that tightens as the run goes on, and the waves and tempo build as in any round.
-     */
-    private directEndless(dt: number): void {
-        this.endlessT += dt;
-        const ghost = this.fields[1];
-        ghost.player.hull = C.MAX_HULL;
-        // Nothing of yours reaches it: a run is about surviving, not knocking anyone out.
-        this.fields[0].outbox = [];
-        // A short grace at the start while you find your feet, then its attacks get through more and more often:
-        // a share at first, all of them a few minutes in. Its guardians always come.
-        const share =
-            this.endlessT < C.ENDLESS_GRACE
-                ? 0
-                : Math.min(1, C.ENDLESS_SHARE_START + (this.endlessT - C.ENDLESS_GRACE) / C.ENDLESS_SHARE_RAMP);
-        ghost.outbox = ghost.outbox.filter(o => o.kind === 'moth' || this.endlessRng.next() < share);
-        if (this.endlessT >= this.endlessNextBoss) {
-            ghost.summonGuardian();
-            this.endlessBosses++;
-            this.endlessNextBoss += Math.max(C.ENDLESS_BOSS_MIN, C.ENDLESS_BOSS_EVERY - this.endlessBosses * 3);
-        }
     }
 
     /** Your fairy went down in Endless: the run is over. Save a new best, then show the result. */
@@ -1559,28 +1487,18 @@ export class Game {
             this.transits = [];
             return;
         }
+        // Shown at once by the game's own reckoning; the server's, from the replay, replaces it when it answers.
+        const r = applyOutcome(this.progress, {
+            mode: 'endless',
+            wins: [0, 0],
+            bestChain: this.fields[0].bestChain,
+            fevers: this.fields[0].fevers,
+            endless: { seconds: this.endlessT, guardians: this.endlessBosses },
+        });
+        this.endlessNew = r.endlessNew;
+        this.newlyUnlocked = r.unlocked;
+        saveProgress(this.progress);
         this.keepReplay();
-        const p = this.progress;
-        this.endlessNew = this.endlessT > p.endlessBest;
-        p.endlessBest = Math.max(p.endlessBest, this.endlessT);
-        p.endlessBosses = Math.max(p.endlessBosses, this.endlessBosses);
-        p.bestChain = Math.max(p.bestChain, this.fields[0].bestChain);
-        p.fevers += this.fields[0].fevers;
-        saveProgress(p);
-        this.account.saveProgress(p);
-        const run = this.endlessT;
-        void this.account
-            .reportEndless({
-                seconds: Math.round(run * 100) / 100,
-                guardians: this.endlessBosses,
-                fairy: this.picks[0].id,
-                map: this.roundMap,
-                bestChain: this.fields[0].bestChain,
-            })
-            .then(rank => {
-                // Only if this run's result is still on screen.
-                if (this.mode === 'endless' && this.endlessT === run) this.endlessRank = rank;
-            });
         this.ui(this.endlessNew ? 'win' : 'lose');
         this.phase = 'matchOver';
         this.phaseT = 0;
@@ -1622,13 +1540,6 @@ export class Game {
         }
     }
 
-    /** Tell each meadow where the rival's fairy is, so a Reverse can lock on to her when it's broken. */
-    private shareFairies(): void {
-        const [a, b] = this.fields;
-        a.rivalFairy = { x: b.player.x, y: b.player.y };
-        b.rivalFairy = { x: a.player.x, y: a.player.y };
-    }
-
     private stepOnline(dt: number): void {
         const me = this.fields[0];
         // A moonseed break freezes only the meadow it broke in; the rival's keeps going on their screen.
@@ -1636,7 +1547,7 @@ export class Game {
             me.hitstop = Math.max(0, me.hitstop - dt);
             return;
         }
-        this.shareFairies();
+        this.round.share();
         me.update(dt, this.input.solo(me.player));
         for (const o of me.outbox) {
             // Player 1 is the host, on both screens.
@@ -1669,12 +1580,12 @@ export class Game {
         const humans = this.replay ? [] : this.mode === 'versus' ? this.fields : [this.fields[0]];
         for (const f of humans) {
             this.matchBestChain = Math.max(this.matchBestChain, f.bestChain);
-            this.progress.fevers += f.fevers;
+            this.matchFevers += f.fevers;
         }
         const over = this.wins[0] >= C.ROUNDS_TO_WIN || this.wins[1] >= C.ROUNDS_TO_WIN;
         if (over && !this.replay) {
-            this.keepReplay();
             this.recordMatch();
+            this.keepReplay();
         }
         this.phase = over ? 'matchOver' : 'roundOver';
         this.phaseT = 0;
@@ -1685,41 +1596,20 @@ export class Game {
 
     /** Save the finished match into progress and unlock any fairies it earned. */
     private recordMatch(): void {
-        const p = this.progress;
-        const humanWon = this.mode === 'versus' || this.wins[0] > this.wins[1];
-        if (humanWon) p.wins++;
-        if (this.mode === 'cpu' && this.wins[0] > this.wins[1] && this.wins[1] === 0) p.flawless++;
-        p.bestChain = Math.max(p.bestChain, this.matchBestChain);
-        // Trophies on the road: VS CPU and Online only (two players on one screen just play).
-        if (this.mode === 'cpu' || this.mode === 'online') {
-            const won = this.wins[0] > this.wins[1];
-            const before = p.trophies;
-            p.trophies = Math.max(0, p.trophies + (won ? C.TROPHY_WIN : -C.TROPHY_LOSS));
-            this.trophyDelta = p.trophies - before;
-            const was = p.bestTrophies;
-            p.bestTrophies = Math.max(p.bestTrophies, p.trophies);
-            for (const m of MAPS) if (stageFor(m.id).trophies > was && stageOpen(p, m.id)) this.newStages.push(m.name);
-        }
-        for (const f of FAIRIES) {
-            if (f.unlock && !p.unlocked.includes(f.id) && f.unlock.met(p)) {
-                p.unlocked.push(f.id);
-                this.newlyUnlocked.push(f);
-            }
-        }
-        saveProgress(p);
-        this.account.saveProgress(p);
-        if (this.mode === 'cpu' || this.mode === 'online' || this.mode === 'versus')
-            this.account.reportMatch({
-                mode: this.mode,
-                map: this.roundMap,
-                fairy: this.picks[0].id,
-                rivalFairy: this.picks[1].id,
-                roundsWon: this.wins[0],
-                roundsLost: this.wins[1],
-                bestChain: this.matchBestChain,
-                trophyDelta: this.trophyDelta,
-                seconds: Math.round((performance.now() - this.matchStart) / 100) / 10,
-            });
+        // Online matches are run by the players' browsers, so the server can't check them yet: they don't count
+        // toward progress until it runs them itself.
+        if (this.mode === 'online') return;
+        // Shown at once by the game's own reckoning; the server's, from the replay, replaces it when it answers.
+        const r = applyOutcome(this.progress, {
+            mode: this.mode as MatchOutcome['mode'],
+            wins: [this.wins[0], this.wins[1]],
+            bestChain: this.matchBestChain,
+            fevers: this.matchFevers,
+        });
+        this.trophyDelta = r.trophyDelta;
+        this.newlyUnlocked = r.unlocked;
+        this.newStages = r.newStages;
+        saveProgress(this.progress);
     }
 
     /** Draw the current screen. */
@@ -2129,8 +2019,7 @@ export class Game {
                 const title = solo ? (w === 0 ? 'You win!' : `${names[1]} wins`) : `${names[w]} wins!`;
                 // Under the result: trophies won or lost, and anything the match opened up.
                 const notes: string[] = [];
-                if (this.mode === 'cpu' || this.mode === 'online')
-                    notes.push(`${this.trophyDelta >= 0 ? '+' : ''}${this.trophyDelta} trophies`);
+                if (this.mode === 'cpu') notes.push(`${this.trophyDelta >= 0 ? '+' : ''}${this.trophyDelta} trophies`);
                 if (this.newStages.length) notes.push(`New stage: ${this.newStages.join(', ')}`);
                 if (this.newlyUnlocked.length)
                     notes.push(`New fairy: ${this.newlyUnlocked.map(f => f.name).join(', ')}`);

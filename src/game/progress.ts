@@ -1,18 +1,7 @@
 import type { Progress } from '@/types';
+import { freshProgress as fresh } from './rewards';
 
 const KEY = 'glimmerwing-progress-v1';
-/** Progress for a player who has never played. */
-const fresh = (): Progress => ({
-    wins: 0,
-    bestChain: 0,
-    fevers: 0,
-    flawless: 0,
-    unlocked: [],
-    trophies: 0,
-    bestTrophies: 0,
-    endlessBest: 0,
-    endlessBosses: 0,
-});
 
 /** Read saved progress, or start fresh if there is none or storage is unavailable. */
 export function loadProgress(): Progress {

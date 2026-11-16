@@ -75,7 +75,7 @@ class TapeWriter {
 }
 
 /** Plays a tape written by TapeWriter back one step at a time; idle once it runs out. */
-class TapeReader {
+export class TapeReader {
     private i = 0;
     private left = 0;
     private c: Controls = IDLE;

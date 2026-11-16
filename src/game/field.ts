@@ -1,3 +1,4 @@
+import * as dm from '@/core/dmath';
 import * as C from '@/core/config';
 import { Rng } from '@/core/rng';
 import { fairyById } from '@/data/characters';
@@ -480,7 +481,7 @@ export class Field {
         if (input.target) {
             const tx = input.target.x - p.x,
                 ty = input.target.y - p.y;
-            const d = Math.hypot(tx, ty);
+            const d = dm.hypot(tx, ty);
             if (d > 2) {
                 dx = tx / d;
                 dy = ty / d;
@@ -703,10 +704,10 @@ export class Field {
             } else if (j.kind === 'spinner') {
                 // Maple-seed spinners corkscrew down around their starting line.
                 j.y += j.vy * dt;
-                j.x = j.baseX + Math.sin(j.phase * 0.9) * 34;
+                j.x = j.baseX + dm.sin(j.phase * 0.9) * 34;
             } else {
-                j.x += (j.vx + Math.sin(j.phase) * 14) * dt;
-                j.y += j.vy * (0.75 + 0.25 * Math.sin(j.phase * 0.5)) * dt;
+                j.x += (j.vx + dm.sin(j.phase) * 14) * dt;
+                j.y += j.vy * (0.75 + 0.25 * dm.sin(j.phase * 0.5)) * dt;
             }
             if (j.kind !== 'spinner' && (j.x < 10 || j.x > C.FIELD_W - 10)) {
                 j.vx *= -1;
@@ -738,7 +739,7 @@ export class Field {
             const power = s.dmg ?? (s.charged ? 6 : 1);
 
             for (const j of this.puffs) {
-                if (j.dead || dist2(s.x, s.y, j.x, j.y) >= (C.PUFF_RADIUS * j.size + hitR) ** 2) continue;
+                if (j.dead || dist2(s.x, s.y, j.x, j.y) >= dm.sq(C.PUFF_RADIUS * j.size + hitR)) continue;
                 if (j.moonseed) {
                     s.dead = true;
                     this.spray(s.x, s.y, 3, '#cfe9ff');
@@ -772,7 +773,7 @@ export class Field {
             for (const a of this.attacks) {
                 if (a.flight === 'back') continue; // on its way back: shots pass by
                 const r = attackRadius(a);
-                if (!a.dead && dist2(s.x, s.y, a.x, a.y) < (r + hitR) ** 2) {
+                if (!a.dead && dist2(s.x, s.y, a.x, a.y) < dm.sq(r + hitR)) {
                     s.dead = true;
                     // Extra Attack critters can't be shot down: shots fly straight through them.
                     if (a.kind === 'imp') continue;
@@ -787,7 +788,7 @@ export class Field {
             if (s.dead) continue;
 
             for (const c of this.crows) {
-                if (c.hp > 0 && dist2(s.x, s.y, c.x, c.y) < (C.CROW_RADIUS + hitR + 2) ** 2) {
+                if (c.hp > 0 && dist2(s.x, s.y, c.x, c.y) < dm.sq(C.CROW_RADIUS + hitR + 2)) {
                     s.dead = true;
                     c.hp -= s.charged ? Math.max(1, Math.round((power * 2) / 3)) : 1;
                     this.spray(s.x, s.y, 2, '#ff9fb8');
@@ -957,7 +958,7 @@ export class Field {
             b.age += dt;
             const r = b.maxR * Math.min(1, b.age / (C.BURST_LIFE * 0.6));
             for (const j of this.puffs) {
-                if (!j.dead && dist2(b.x, b.y, j.x, j.y) < (r + C.PUFF_RADIUS * 0.6 * j.size) ** 2) {
+                if (!j.dead && dist2(b.x, b.y, j.x, j.y) < dm.sq(r + C.PUFF_RADIUS * 0.6 * j.size)) {
                     if (j.shell > 0) {
                         if (!b.hits.has(j)) {
                             b.hits.add(j);
@@ -976,7 +977,7 @@ export class Field {
                     a.kind === 'star' &&
                     a.flight !== 'back' &&
                     !b.hits.has(a) &&
-                    dist2(b.x, b.y, a.x, a.y) < ((r * C.BURST_ATTACK_RADIUS) / C.BURST_RADIUS) ** 2
+                    dist2(b.x, b.y, a.x, a.y) < dm.sq((r * C.BURST_ATTACK_RADIUS) / C.BURST_RADIUS)
                 ) {
                     b.hits.add(a);
                     this.hitAttack(a, 1, b.chainId);
@@ -1139,15 +1140,15 @@ export class Field {
             if (a.flight === 'homing' && a.seekT > 0) {
                 // Steer toward the fairy, but only so sharply, and give up after a while.
                 a.seekT -= dt;
-                const want = Math.atan2(this.player.y - a.y, this.player.x - a.x);
-                const cur = Math.atan2(a.vy, a.vx);
+                const want = dm.atan2(this.player.y - a.y, this.player.x - a.x);
+                const cur = dm.atan2(a.vy, a.vx);
                 let turn = want - cur;
                 while (turn > Math.PI) turn -= Math.PI * 2;
                 while (turn < -Math.PI) turn += Math.PI * 2;
                 const ang = cur + Math.max(-C.HOMING_TURN * dt, Math.min(C.HOMING_TURN * dt, turn));
                 const sp = C.IMP_SPEED * 0.95;
-                a.vx = Math.cos(ang) * sp;
-                a.vy = Math.sin(ang) * sp;
+                a.vx = dm.cos(ang) * sp;
+                a.vy = dm.sin(ang) * sp;
                 // Once it's level with the fairy it commits and keeps going.
                 if (a.y > this.player.y - 16) a.seekT = 0;
                 if (a.seekT <= 0 && a.vy < C.IMP_SPEED * 0.5) a.vy = C.IMP_SPEED * 0.8;
@@ -1156,7 +1157,7 @@ export class Field {
                 // Streak across with a little bob, then burst into a ring of sparks.
                 a.t = (a.t ?? 0) + dt;
                 a.x += a.vx * dt;
-                a.y += Math.cos(a.t * 8) * 18 * dt;
+                a.y += dm.cos(a.t * 8) * 18 * dt;
                 a.seekT -= dt;
                 if (a.seekT <= 0) {
                     a.dead = true;
@@ -1165,8 +1166,8 @@ export class Field {
                         this.bullets.push({
                             x: a.x,
                             y: a.y,
-                            vx: Math.cos(ang) * C.SPARK_SPEED,
-                            vy: Math.sin(ang) * C.SPARK_SPEED,
+                            vx: dm.cos(ang) * C.SPARK_SPEED,
+                            vy: dm.sin(ang) * C.SPARK_SPEED,
                             dead: false,
                         });
                     }
@@ -1188,10 +1189,10 @@ export class Field {
                 a.t = (a.t ?? 0) + dt;
                 if (a.seekT > 0) {
                     a.seekT -= dt;
-                    a.vx = Math.cos(a.t * 4.5) * 100;
-                    a.vy = C.IMP_SPEED * (0.55 + 0.3 * Math.max(0, Math.sin(a.t * 9)));
+                    a.vx = dm.cos(a.t * 4.5) * 100;
+                    a.vy = C.IMP_SPEED * (0.55 + 0.3 * Math.max(0, dm.sin(a.t * 9)));
                     if (a.seekT <= 0) {
-                        const d = Math.hypot(this.player.x - a.x, this.player.y - a.y) || 1;
+                        const d = dm.hypot(this.player.x - a.x, this.player.y - a.y) || 1;
                         a.vx = ((this.player.x - a.x) / d) * C.BAT_DIVE;
                         a.vy = ((this.player.y - a.y) / d) * C.BAT_DIVE;
                     }
@@ -1312,8 +1313,8 @@ export class Field {
             cy = 80;
         if (L.stage === 'enter') {
             // Rocket in to the top of the circle (a rush goes straight to its attack spot).
-            const tx = L.rush ? this.player.x : cx + Math.cos(L.angle) * C.GUARDIAN_CIRCLE;
-            const ty = L.rush ? 62 : cy + Math.sin(L.angle) * C.GUARDIAN_CIRCLE * 0.45;
+            const tx = L.rush ? this.player.x : cx + dm.cos(L.angle) * C.GUARDIAN_CIRCLE;
+            const ty = L.rush ? 62 : cy + dm.sin(L.angle) * C.GUARDIAN_CIRCLE * 0.45;
             const k = Math.min(1, dt * 9);
             L.x += (tx - L.x) * k;
             L.y += (ty - L.y) * k;
@@ -1331,8 +1332,8 @@ export class Field {
         } else if (L.stage === 'wander') {
             // Float in a loop, clockwise or anticlockwise at random.
             L.angle += L.dir * C.GUARDIAN_SPIN * dt;
-            const tx = cx + Math.cos(L.angle) * C.GUARDIAN_CIRCLE,
-                ty = cy + Math.sin(L.angle) * C.GUARDIAN_CIRCLE * 0.45;
+            const tx = cx + dm.cos(L.angle) * C.GUARDIAN_CIRCLE,
+                ty = cy + dm.sin(L.angle) * C.GUARDIAN_CIRCLE * 0.45;
             const k = Math.min(1, dt * 5);
             L.x += (tx - L.x) * k;
             L.y += (ty - L.y) * k;
@@ -1398,7 +1399,7 @@ export class Field {
             }
         } else {
             // Drift down and off a side. Shots nudge it (see damageMoth).
-            L.vx *= Math.pow(0.97, dt * 60);
+            L.vx *= dm.pow(0.97, dt * 60);
             L.vx += Math.sign(L.vx || 1) * 20 * dt;
             L.x += L.vx * dt;
             L.y += (25 + L.stageT * 22) * dt;
@@ -1430,20 +1431,20 @@ export class Field {
                     R = 30 + 260 * k;
                 if (dist2(cx, cy, px, py) > R * R) return false;
                 const turned = k * Math.PI * 2.4;
-                const a = (Math.atan2(py - cy, px - cx) + Math.PI * 4) % ((Math.PI * 2) / 3);
+                const a = (dm.atan2(py - cy, px - cx) + Math.PI * 4) % ((Math.PI * 2) / 3);
                 return a < turned || turned >= (Math.PI * 2) / 3;
             }
             case 'fan': {
                 // A cone straight ahead of her, 65 degrees either side of up.
                 const R = 40 + 360 * k;
                 if (dist2(ox, oy, px, py) > R * R) return false;
-                const a = Math.atan2(py - oy, px - ox) + Math.PI / 2;
+                const a = dm.atan2(py - oy, px - ox) + Math.PI / 2;
                 return Math.abs(a) < 1.13 || dist2(ox, oy, px, py) < 30 * 30;
             }
             case 'beam': {
                 // A lance swinging from pointing left, up over her, to pointing right.
                 const beam = -Math.PI + k * Math.PI;
-                const a = Math.atan2(py - oy, px - ox);
+                const a = dm.atan2(py - oy, px - ox);
                 return (a <= beam + 0.06 && a >= -Math.PI) || dist2(ox, oy, px, py) < 24 * 24;
             }
             case 'hole': {
@@ -1475,7 +1476,7 @@ export class Field {
             const cx = C.FIELD_W / 2,
                 cy = C.HOLE_Y;
             const pull = (o: { x: number; y: number }) => {
-                const d = Math.hypot(cx - o.x, cy - o.y) || 1;
+                const d = dm.hypot(cx - o.x, cy - o.y) || 1;
                 const step = Math.min(d, C.HOLE_PULL * dt);
                 o.x += ((cx - o.x) / d) * step;
                 o.y += ((cy - o.y) / d) * step;
@@ -1571,11 +1572,11 @@ export class Field {
             this.bullets.push({
                 x: L.x,
                 y: L.y + 8,
-                vx: Math.cos(ang) * speed,
-                vy: Math.sin(ang) * speed,
+                vx: dm.cos(ang) * speed,
+                vy: dm.sin(ang) * speed,
                 dead: false,
             });
-        const aim = Math.atan2(this.player.y - L.y, this.player.x - L.x);
+        const aim = dm.atan2(this.player.y - L.y, this.player.x - L.x);
         switch (L.pattern) {
             case 'aimed': // three-way aimed fan
                 L.fireT = 1.3;
@@ -1602,7 +1603,7 @@ export class Field {
             case 'sweep': // a five-way fan that sweeps side to side
                 L.fireT = 0.9;
                 {
-                    const centre = Math.PI / 2 + Math.sin(L.t * 1.4) * 0.7;
+                    const centre = Math.PI / 2 + dm.sin(L.t * 1.4) * 0.7;
                     for (let i = -2; i <= 2; i++) shoot(centre + i * 0.2, 100);
                 }
                 break;
@@ -1705,14 +1706,14 @@ export class Field {
                 continue;
             }
             if (c.state === 'circle') {
-                const tx = C.FIELD_W / 2 + Math.cos(c.t * 1.3 + c.seed) * 80;
-                const ty = 50 + Math.sin(c.t * 2.1 + c.seed) * 20;
+                const tx = C.FIELD_W / 2 + dm.cos(c.t * 1.3 + c.seed) * 80;
+                const ty = 50 + dm.sin(c.t * 2.1 + c.seed) * 20;
                 c.x += (tx - c.x) * Math.min(1, dt * 3);
                 c.y += (ty - c.y) * Math.min(1, dt * 3);
                 if (c.t > 3.2) {
                     c.state = 'dive';
                     c.t = 0;
-                    const d = Math.hypot(p.x - c.x, p.y - c.y) || 1;
+                    const d = dm.hypot(p.x - c.x, p.y - c.y) || 1;
                     const sp = c.speed;
                     c.vx = ((p.x - c.x) / d) * sp;
                     c.vy = ((p.y - c.y) / d) * sp;
@@ -1750,7 +1751,7 @@ export class Field {
         const p = this.player;
         if (!this.alive || p.invuln > 0 || this.settled) return;
         const pr = C.PLAYER_RADIUS * this.fairy.hitbox;
-        const hit = (x: number, y: number, r: number) => dist2(p.x, p.y, x, y) < (r + pr) ** 2;
+        const hit = (x: number, y: number, r: number) => dist2(p.x, p.y, x, y) < dm.sq(r + pr);
         // Attacks from the rival (and guardians and their shots) hit hard; critters just stun.
         let struck = false;
         for (const a of this.attacks) {
@@ -1821,8 +1822,8 @@ export class Field {
             this.particles.push({
                 x,
                 y,
-                vx: Math.cos(a) * s,
-                vy: Math.sin(a) * s,
+                vx: dm.cos(a) * s,
+                vy: dm.sin(a) * s,
                 life,
                 max: life,
                 size: this.fxRng.range(1, 2.5),

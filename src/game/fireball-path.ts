@@ -3,6 +3,7 @@
 // the rival's fairy was when it broke, carrying on past there the same way. It's two straight legs meeting at
 // the bounce, in the sender's meadow units, with the rival's meadow lying `side` meadows over (FIELD_W + GAP to
 // the right, or to the left), as the two meadows sit side by side on screen.
+import * as dm from '@/core/dmath';
 import * as C from '@/core/config';
 import type { Curve, NormalRoute, Point } from '@/types';
 
@@ -78,7 +79,7 @@ export function normalRoute(x: number, y: number, side: number, tx: number, ty: 
     const bx = bounceX(x, y, fx, ty, side);
     const dx = fx - bx,
         dy = ty - top;
-    const len = Math.hypot(dx, dy) || 1;
+    const len = dm.hypot(dx, dy) || 1;
     // Where the way down crosses the rival's near wall.
     const ey = top + (dy * (wall - bx)) / (dx || side);
     return {
@@ -94,8 +95,7 @@ export function normalRoute(x: number, y: number, side: number, tx: number, ty: 
 /** How long a polyline is. */
 export function pathLength(points: Point[]): number {
     let d = 0;
-    for (let i = 1; i < points.length; i++)
-        d += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    for (let i = 1; i < points.length; i++) d += dm.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
     return d;
 }
 
@@ -104,7 +104,7 @@ export function pathAt(points: Point[], d: number): { x: number; y: number; dx: 
     for (let i = 1; i < points.length; i++) {
         const a = points[i - 1],
             b = points[i];
-        const seg = Math.hypot(b.x - a.x, b.y - a.y);
+        const seg = dm.hypot(b.x - a.x, b.y - a.y);
         if (d <= seg || i === points.length - 1) {
             const k = seg ? Math.min(1, d / seg) : 1;
             return {
@@ -162,7 +162,7 @@ export function curveDir(c: Curve, k: number): { x: number; y: number } {
 export function curveStep(c: Curve, k: number, dist: number, limit = 1): number {
     const n = corners(c).length - 1;
     const d = curveDir(c, k);
-    const next = k + dist / Math.max(1, Math.hypot(d.x, d.y));
+    const next = k + dist / Math.max(1, dm.hypot(d.x, d.y));
     const i = Math.floor(k * n);
     const corner = (i + 1) / n;
     return Math.min(limit, i < n - 1 && next > corner ? corner + 1e-6 : next);
@@ -195,7 +195,7 @@ export function curveLength(c: Curve, k0: number, k1: number): number {
     let p = curveAt(c, k0);
     for (let i = 1; i <= 12; i++) {
         const q = curveAt(c, k0 + ((k1 - k0) * i) / 12);
-        len += Math.hypot(q.x - p.x, q.y - p.y);
+        len += dm.hypot(q.x - p.x, q.y - p.y);
         p = q;
     }
     return len;

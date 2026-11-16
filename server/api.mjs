@@ -4,14 +4,16 @@
 //   POST /api/guest                {name?}                 -> {id, name, token}
 //   GET  /api/me                          -> {id, name, progress, settings, endless}  ({data, savedAt} | null; rank | null)
 //   PUT  /api/me                   {name}                  -> {id, name}
-//   PUT  /api/me/progress          {data, savedAt}         -> {data, savedAt}   (the newer of the two copies)
-//   PUT  /api/me/settings          {data, savedAt}         -> {data, savedAt}
-//   POST /api/matches              {mode, map, fairy, …}   -> {ok}
+//   PUT  /api/me/settings          {data, savedAt}         -> {data, savedAt}   (the newer of the two copies)
+//   POST /api/results              {replay}                -> {progress, trophyDelta, unlocked, …, code, rank}
+//   POST /api/me/reset                                     -> {progress}
 //   GET  /api/me/matches?limit=                            -> [match]
-//   POST /api/endless              {seconds, guardians, …} -> {rank, players, best}
 //   GET  /api/leaderboard/endless?limit=                   -> [entry]
-//   POST /api/replays              {mode, map, version, seconds, data} -> {code}
 //   GET  /api/replays/<code>                               -> replay
+//
+// The server decides progress: a browser can't send its own. A finished game is sent as its replay, which the
+// server plays through again (verifier.mjs, the game's own simulation) to work out what it earned; only then
+// does it count toward trophies, unlocks, the Endless best and the leaderboard.
 //   GET  /api/me/replays?limit=                            -> [replay summary]
 //   GET  /api/health                                       -> {ok, db}
 
@@ -21,7 +23,8 @@ const MAX_BODY = 64 * 1024;
 const MAX_REPLAY = 4 * 1024 * 1024;
 const MAX_SETTINGS = 16 * 1024;
 const GUESTS_PER_HOUR = 30;
-const MODES = new Set(['cpu', 'online', 'versus', 'endless']);
+/** Finished games a player can send in an hour (each is played through again). */
+const RESULTS_PER_HOUR = 240;
 const PROGRESS_NUMBERS = [
     'wins',
     'bestChain',
@@ -53,13 +56,6 @@ function num(v, lo, hi, fallback = 0) {
 /** A whole number clamped to [lo, hi]. */
 const int = (v, lo, hi, fallback = 0) => Math.round(num(v, lo, hi, fallback));
 
-/** A game id (fairy, map): lower-case letters, digits and dashes, or a 400. */
-function gameId(v, what) {
-    const s = String(v ?? '');
-    if (!/^[a-z0-9-]{1,16}$/.test(s)) throw new HttpError(400, `Bad ${what}`);
-    return s;
-}
-
 /** A display name: printable, trimmed, 1 to 24 characters. */
 function playerName(v) {
     const s = String(v ?? '')
@@ -73,14 +69,11 @@ function playerName(v) {
 /** A name for a new guest. */
 const guestName = () => `Guest-${randomBytes(2).toString('hex').toUpperCase()}`;
 
-/** Progress as the game saves it, with only the fields it has, each made sane. */
-function progressData(v) {
-    if (!v || typeof v !== 'object') throw new HttpError(400, 'Bad progress');
+/** Progress for a player who has never played (as game/rewards.ts freshProgress). */
+function freshProgress() {
     const out = {};
-    for (const k of PROGRESS_NUMBERS) out[k] = num(v[k], 0, 1e9);
-    out.unlocked = Array.isArray(v.unlocked)
-        ? [...new Set(v.unlocked.filter(x => typeof x === 'string' && /^[a-z0-9-]{1,16}$/.test(x)))].slice(0, 64)
-        : [];
+    for (const k of PROGRESS_NUMBERS) out[k] = 0;
+    out.unlocked = [];
     return out;
 }
 
@@ -124,10 +117,91 @@ function reply(res, status, body) {
 }
 
 /** Build the /api handler around a store (or null when there is no database). */
-export function createApi(store) {
+export function createApi(store, verifier = null) {
     /** Guests made per address in the current hour. */
     const made = new Map();
     let hour = 0;
+    /** Games sent per player in the current hour. */
+    const sent = new Map();
+    /** Each player's results are counted one at a time, so two at once can't both add to the same progress. */
+    const queues = new Map();
+
+    /** Run `job` after any other result of this player's still being counted. */
+    function inTurn(id, job) {
+        const before = queues.get(id) ?? Promise.resolve();
+        const run = before.then(job, job);
+        const tail = run.catch(() => {});
+        queues.set(id, tail);
+        void tail.then(() => {
+            if (queues.get(id) === tail) queues.delete(id);
+        });
+        return run;
+    }
+
+    /** Check a finished game and count it: the progress it makes, the replay, and the history or leaderboard. */
+    async function countResult(p, replay) {
+        if (!replay || typeof replay !== 'object' || !Array.isArray(replay.rounds))
+            throw new HttpError(400, 'Bad replay');
+        if (!verifier) throw new HttpError(503, 'The server cannot check games yet (build the game)');
+        const h = Math.floor(Date.now() / 3.6e6);
+        const key = `${h}:${p.id}`;
+        const n = (sent.get(key) ?? 0) + 1;
+        sent.set(key, n);
+        if (sent.size > 10000) sent.clear();
+        if (n > RESULTS_PER_HOUR) throw new HttpError(429, 'Too many games sent; try later');
+        const recorded = int(replay.at, 0, 8.64e15);
+        if (recorded && (await store.hasReplay(p.id, recorded))) throw new HttpError(409, 'Already counted');
+        const saved = await store.getProgress(p.id);
+        const v = await verifier.verify(replay, saved?.data ?? null);
+        if (!v.ok) {
+            const e = new HttpError(422, v.error);
+            e.stale = !!v.stale;
+            throw e;
+        }
+        await store.setProgress(p.id, v.progress);
+        const code = await store.addReplay(p.id, {
+            mode: v.outcome.mode,
+            map: v.map,
+            version: String(replay.sim ?? '').slice(0, 16),
+            seconds: v.seconds,
+            recorded,
+            data: replay,
+        });
+        let rank = null;
+        if (v.outcome.mode === 'endless') {
+            rank = await store.addEndless(p.id, {
+                seconds: v.outcome.endless.seconds,
+                guardians: v.outcome.endless.guardians,
+                fairy: v.fairies[0],
+                map: v.map,
+                bestChain: v.outcome.bestChain,
+            });
+        } else {
+            const [won, lost] = v.outcome.wins;
+            await store.addMatch(p.id, {
+                mode: v.outcome.mode,
+                map: v.map,
+                fairy: v.fairies[0],
+                rivalFairy: v.fairies[1],
+                roundsWon: won,
+                roundsLost: lost,
+                won: won > lost,
+                bestChain: v.outcome.bestChain,
+                trophyDelta: v.trophyDelta,
+                seconds: v.seconds,
+            });
+        }
+        return {
+            progress: v.progress,
+            outcome: v.outcome,
+            trophyDelta: v.trophyDelta,
+            unlocked: v.unlocked,
+            newStages: v.newStages,
+            endlessNew: v.endlessNew,
+            code,
+            rank,
+        };
+    }
 
     /** The player the request's token belongs to, or a 401. */
     async function me(req) {
@@ -196,61 +270,28 @@ export function createApi(store) {
                 return [200, { id: p.id, name }];
             }
         }
-        if (M === 'PUT' && path === '/api/me/progress') {
-            const b = await readJson(req);
-            return [200, await store.putProgress(p.id, progressData(b.data), savedAt(b.savedAt))];
+        if (M === 'POST' && path === '/api/results') {
+            const b = await readJson(req, MAX_REPLAY);
+            return [201, await inTurn(p.id, () => countResult(p, b.replay))];
         }
+        if (M === 'POST' && path === '/api/me/reset') {
+            const progress = freshProgress();
+            await inTurn(p.id, () => store.setProgress(p.id, progress));
+            return [200, { progress }];
+        }
+        // The old ways of sending progress and results: the server works them out itself now.
+        if (
+            (M === 'PUT' && path === '/api/me/progress') ||
+            (M === 'POST' && ['/api/matches', '/api/endless', '/api/replays'].includes(path))
+        )
+            throw new HttpError(410, 'Send finished games to /api/results; the server works out progress');
         if (M === 'PUT' && path === '/api/me/settings') {
             const b = await readJson(req, MAX_SETTINGS);
             if (!b.data || typeof b.data !== 'object') throw new HttpError(400, 'Bad settings');
             return [200, await store.putSettings(p.id, b.data, savedAt(b.savedAt))];
         }
-        if (M === 'POST' && path === '/api/matches') {
-            const b = await readJson(req);
-            const mode = String(b.mode);
-            if (!MODES.has(mode) || mode === 'endless') throw new HttpError(400, 'Bad mode');
-            const roundsWon = int(b.roundsWon, 0, 99),
-                roundsLost = int(b.roundsLost, 0, 99);
-            await store.addMatch(p.id, {
-                mode,
-                map: gameId(b.map, 'map'),
-                fairy: gameId(b.fairy, 'fairy'),
-                rivalFairy: gameId(b.rivalFairy, 'rival fairy'),
-                roundsWon,
-                roundsLost,
-                won: roundsWon > roundsLost,
-                bestChain: int(b.bestChain, 0, 1e6),
-                trophyDelta: int(b.trophyDelta, -1e4, 1e4),
-                seconds: num(b.seconds, 0, 1e6),
-            });
-            return [201, { ok: true }];
-        }
         if (M === 'GET' && path === '/api/me/matches') {
             return [200, await store.recentMatches(p.id, limitOf(url, 20, 200))];
-        }
-        if (M === 'POST' && path === '/api/endless') {
-            const b = await readJson(req);
-            const run = {
-                seconds: num(b.seconds, 0, 1e6),
-                guardians: int(b.guardians, 0, 1e4),
-                fairy: gameId(b.fairy, 'fairy'),
-                map: gameId(b.map, 'map'),
-                bestChain: int(b.bestChain, 0, 1e6),
-            };
-            return [201, await store.addEndless(p.id, run)];
-        }
-        if (M === 'POST' && path === '/api/replays') {
-            const b = await readJson(req, MAX_REPLAY);
-            if (!MODES.has(String(b.mode))) throw new HttpError(400, 'Bad mode');
-            if (!b.data || typeof b.data !== 'object') throw new HttpError(400, 'Bad replay');
-            const code = await store.addReplay(p.id, {
-                mode: String(b.mode),
-                map: gameId(b.map, 'map'),
-                version: String(b.version ?? '').slice(0, 16),
-                seconds: num(b.seconds, 0, 1e6),
-                data: b.data,
-            });
-            return [201, { code }];
         }
         if (M === 'GET' && path === '/api/me/replays') {
             return [200, await store.listReplays(p.id, limitOf(url, 20, 200))];
@@ -274,7 +315,7 @@ export function createApi(store) {
             const [status, body] = await route(req, url);
             reply(res, status, body);
         } catch (e) {
-            if (e instanceof HttpError) reply(res, e.status, { error: e.message });
+            if (e instanceof HttpError) reply(res, e.status, { error: e.message, ...(e.stale ? { stale: true } : {}) });
             else {
                 console.error('API error:', e);
                 reply(res, 500, { error: 'Server error' });

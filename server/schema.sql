@@ -90,3 +90,7 @@ CREATE TABLE IF NOT EXISTS replays (
     KEY replays_player (player_id, created_at),
     CONSTRAINT replays_player FOREIGN KEY (player_id) REFERENCES players (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- When the replay was recorded (by the browser's clock), so the same game is never counted twice.
+ALTER TABLE replays ADD COLUMN IF NOT EXISTS recorded BIGINT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS replays_recorded ON replays (player_id, recorded);
