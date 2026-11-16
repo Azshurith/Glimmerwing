@@ -50,7 +50,7 @@ const SHAPE_MAX: Record<FormationShape, number> = {
     ring: 10,
     grid: 10,
     wave: 7,
-    surround: 12,
+    surround: 28,
     flower: 7,
     stalactite: 9,
     pyramid: 10,
@@ -406,13 +406,17 @@ export function rollFormation(
     let count = r.int(5, 7) + Math.floor(pressure * 3) + style.extra;
     if (big) count = Math.ceil(count * 0.6);
     if (kind === 'beetle') count = Math.max(4, count - 1);
-    if (ring) count += 3;
+    // A ring round the fairy is a full circle of critters, each in reach of the next, so one pop runs right round it.
+    if (ring) count = Math.ceil((Math.PI * 2 * surroundRadius()) / formationSpacing(1, false, kind === 'beetle'));
     count = Math.min(SHAPE_MAX[shape], count);
     const snaps = SIGNATURE_COUNTS[shape];
     if (snaps) count = snaps.reduce((best, c) => (Math.abs(c - count) < Math.abs(best - count) ? c : best));
     const hpPressure = Math.max(0, Math.min(1, pressure + style.hp));
     const hps = Array.from({ length: 12 }, () => rollHp(r, hpPressure));
-    let hp = hps.slice(0, count);
+    // Past the first twelve, members take their toughness from the start of the list again.
+    let hp = Array.from({ length: count }, (_, i) => hps[i % hps.length]);
+    // The ring's critters are all one-pop, so a single hit sets off the whole circle.
+    if (ring) hp = hp.map(() => 1);
     if (kind === 'spinner') hp = hp.map(() => 1);
     if (kind === 'beetle') hp = hp.map(h => Math.min(h, 2));
     if (big) hp = hp.map(h => Math.min(5, h + 1));
@@ -532,7 +536,8 @@ export function rollFormation(
         cx,
         cy,
         // A low formation's members fly in further apart, so the stream down into the fairy's half has gaps too.
-        stagger: (big ? 0.32 : 0.25) * (deep ? 1.4 : 1) * speedUp,
+        // A ring's many members stream in close behind one another so it closes up in good time.
+        stagger: (ring ? 0.1 : (big ? 0.32 : 0.25) * (deep ? 1.4 : 1)) * speedUp,
         exitStagger: exit === 'scatter' ? 0.03 : 0.1,
         // Unhurried flights in, so the formation can be watched forming up.
         enterTime: (big ? 2.8 : 2.4) * speedUp,
