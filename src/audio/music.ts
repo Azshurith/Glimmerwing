@@ -2,7 +2,7 @@
 // TSS's arcade era (bells, electric piano, slap bass, brass): a gentle one for the menus and a bouncy one for
 // rounds, played by a small step sequencer that schedules notes a little ahead of time.
 import type { MusicTrack } from '@/types';
-import { MAP_MUSIC } from '@/data/music';
+import { MAP_MUSIC, MENU_MUSIC } from '@/data/music';
 import { PATCHES, fmNote, hz, type PatchName } from './synth';
 
 /** One voice of a loop: a note, a chord (several notes) or rest on each step. */
@@ -207,8 +207,9 @@ export class Music {
         this.bus.gain.setValueAtTime(0.0001, ctx.currentTime);
         this.bus.gain.exponentialRampToValueAtTime(1, ctx.currentTime + 0.6);
         this.bus.connect(this.out);
-        if (track.startsWith('map:')) {
-            const url = MAP_MUSIC[track.slice(4)];
+        // A recorded track where there is one: the menus' own, or a map's.
+        const url = track === 'menu' ? MENU_MUSIC : track.startsWith('map:') ? MAP_MUSIC[track.slice(4)] : undefined;
+        if (url || track.startsWith('map:')) {
             if (url) this.playFile(url, track, this.bus);
             return;
         }
