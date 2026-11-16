@@ -13,6 +13,7 @@ import { MAP_CARDS, MAP_COLS, mapCards } from '@/render/screens/map-screen';
 import { MAPS, mapById, mapForSeed } from '@/data/maps';
 import { fairyAvailable, loadCatalog, mapAvailable, setCatalog } from '@/data/availability';
 import { useServerArt } from '@/data/server-art';
+import { VOICES } from '@/data/voices';
 import { stageOpen } from '@/data/stages';
 import { titleButtons } from '@/render/screens/title-screen';
 import { clock, replayPanelLayout } from '@/render/hud';
@@ -21,6 +22,7 @@ import type {
     Controls,
     EndlessRank,
     Fairy,
+    VoiceEvent,
     HudTag,
     Mode,
     RoundMode,
@@ -136,6 +138,8 @@ const COLS = SELECT_COLS;
 const SELECT_TIME = 30;
 /** Beat on the READY! stamps before the match starts. */
 const READY_HOLD = 0.9;
+/** The least time between two of a fairy's hit lines (ms), so a flurry of hits isn't a flurry of yelps. */
+const HIT_LINE_GAP = 2500;
 
 /**
  * Owns the whole game: the screens, match and round flow, both meadows, the CPU pilot and the online session. Fields
@@ -243,6 +247,11 @@ export class Game {
     /** Fevers the human player(s) have had this match. */
     private matchFevers = 0;
     private newlyUnlocked: Fairy[] = [];
+    /** Voices: whether each side has said her going-down line this round, when she last said a hit line, and the
+     * line each fairy said last for each moment (so the same one doesn't come twice running). */
+    private voiceDown: [boolean, boolean] = [false, false];
+    private hitLineAt: [number, number] = [0, 0];
+    private lastLine = new Map<string, string>();
     /** Stages the last match's trophies opened, and how many trophies it won or lost. */
     private newStages: string[] = [];
     private trophyDelta = 0;
@@ -300,9 +309,57 @@ export class Game {
                         ? 0.45
                         : 1
                   : 1;
-            if (vol > 0) for (const e of f.sfx) this.sound.play(e.k, e.p, pan, vol);
+            if (vol > 0) {
+                for (const e of f.sfx) this.sound.play(e.k, e.p, pan, vol);
+                this.voicesFor(f, i as 0 | 1, pan, vol);
+            }
             f.sfx = [];
         });
+    }
+
+    /**
+     * What a meadow's fairy says this step, from its sounds: a line for a level-2 charge shot, a level-3 one (her
+     * guardian), Fever, a hit (not more often than HIT_LINE_GAP) or going down (cutting off whatever she's saying).
+     */
+    private voicesFor(f: Field, side: 0 | 1, pan: number, vol: number): void {
+        let ev: VoiceEvent | null = null;
+        for (const e of f.sfx) {
+            if (e.k === 'release' && (e.p ?? 0) >= 3) ev = 'summon';
+            else if (e.k === 'release' && e.p === 2) ev ??= 'charge';
+            else if (e.k === 'fever') ev = ev === 'summon' ? ev : 'fever';
+            else if (e.k === 'hurt' || e.k === 'stun') ev ??= 'hit';
+        }
+        const down = !f.alive || f.sfx.some(e => e.k === 'death');
+        if (down && !this.voiceDown[side]) {
+            this.voiceDown[side] = true;
+            this.voice(side, f.fairy, 'death', pan, vol, true);
+            return;
+        }
+        if (!ev || down) return;
+        if (ev === 'hit') {
+            const now = performance.now();
+            if (now - this.hitLineAt[side] < HIT_LINE_GAP) return;
+            this.hitLineAt[side] = now;
+        }
+        this.voice(side, f.fairy, ev, pan, vol);
+    }
+
+    /** Say one of `fairy`'s lines for `ev` (a different one from last time, where she has more than one). */
+    private voice(side: 0 | 1, fairy: Fairy, ev: VoiceEvent, pan = 0, vol = 1, interrupt = false): void {
+        const lines = VOICES[fairy.id]?.[ev];
+        if (!lines?.length || this.seeking) return;
+        const key = `${fairy.id}:${ev}`;
+        const last = this.lastLine.get(key);
+        const pool = lines.length > 1 ? lines.filter(l => l !== last) : lines;
+        const line = pool[Math.floor(Math.random() * pool.length)];
+        this.lastLine.set(key, line);
+        this.sound.speak(line, `side${side}`, pan, vol, interrupt);
+    }
+
+    /** Get a fairy's lines ready, so the first of each comes at once. */
+    private readyVoice(fairy: Fairy): void {
+        const v = VOICES[fairy.id];
+        if (v) this.sound.preloadVoice(Object.values(v).flat());
     }
 
     /** Play an interface sound (centred, full volume). */
@@ -938,6 +995,7 @@ export class Game {
 
     /** Set up both meadows for a new round from one shared seed, so their waves match. */
     private newRound(seed = (Math.random() * 2 ** 31) | 0): void {
+        this.voiceDown = [false, false];
         const roundIndex = this.wins[0] + this.wins[1];
         // A replay deals its own rounds, at the meadow size they were played at.
         let recorded: ReplayRound | null = null;
@@ -1167,6 +1225,7 @@ export class Game {
                 pk.done = true;
                 this.picks[i] = FAIRIES[pk.index];
                 this.ui('ok');
+                this.pickedLine(i as 0 | 1);
             }
         });
         // Tap a medallion to pick it: for player one, then (two players on one device) player two.
@@ -1182,6 +1241,7 @@ export class Game {
                     pk.done = true;
                     this.picks[who] = FAIRIES[hit];
                     this.ui('ok');
+                    this.pickedLine(who);
                 }
             }
         }
@@ -1217,6 +1277,13 @@ export class Game {
                 if (this.mapIndex > 0 && !this.mapOpen(this.mapIndex - 1)) this.mapIndex = 0;
             }
         } else this.readyAt = -1;
+    }
+
+    /** A player picked their fairy: she says so (from her side, two players on one screen), and readies her lines. */
+    private pickedLine(i: 0 | 1): void {
+        const fairy = this.picks[i];
+        this.readyVoice(fairy);
+        this.voice(i, fairy, 'pick', this.mode === 'versus' ? (i === 0 ? -0.35 : 0.35) : 0);
     }
 
     /** The map select screen: arrows choose a card, Enter/Z/Space (or a tap) plays it, Esc goes back to the fairies. */

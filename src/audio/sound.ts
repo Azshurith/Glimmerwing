@@ -20,6 +20,11 @@ export class Sound {
     /** Effects and music each go through their own gain, so each has its own volume. */
     private sfxBus: GainNode | null = null;
     private musicBus: GainNode | null = null;
+    /** The fairies' voices go through a bus of their own too. */
+    private voiceBus: GainNode | null = null;
+    /** Each voice clip once decoded, by url; and the line each speaker is saying now. */
+    private clips = new Map<string, Promise<AudioBuffer | null>>();
+    private speaking = new Map<string, AudioBufferSourceNode>();
     /** Sends into the room reverb, one for the effects and one for the music, each at its own volume. */
     private sfxRoom: GainNode | null = null;
     private musicRoom: GainNode | null = null;
@@ -33,6 +38,8 @@ export class Sound {
     volume = 0.7;
     /** Music volume, 0 to 1. */
     musicVolume = 0.5;
+    /** Voice volume, 0 to 1. */
+    voiceVolume = 0.8;
     /** Called whenever mute or a volume changes (the account sends them on to the server). */
     onChange: (() => void) | null = null;
 
@@ -42,10 +49,12 @@ export class Sound {
                 muted?: unknown;
                 volume?: unknown;
                 music?: unknown;
+                voice?: unknown;
             };
             if (typeof s.muted === 'boolean') this.muted = s.muted;
             if (typeof s.volume === 'number') this.volume = s.volume;
             if (typeof s.music === 'number') this.musicVolume = s.music;
+            if (typeof s.voice === 'number') this.voiceVolume = s.voice;
         } catch {
             /* storage unavailable: defaults */
         }
@@ -69,6 +78,8 @@ export class Sound {
             this.sfxBus.connect(this.master);
             this.musicBus = this.ctx.createGain();
             this.musicBus.connect(this.master);
+            this.voiceBus = this.ctx.createGain();
+            this.voiceBus.connect(this.master);
             // A small room both share, each sending into it at its own volume.
             const reverb = makeReverb(this.ctx);
             const roomOut = this.ctx.createGain();
@@ -111,6 +122,73 @@ export class Sound {
         this.save();
     }
 
+    /** Set the voice volume (0 to 1) and remember it. */
+    setVoiceVolume(v: number): void {
+        this.voiceVolume = Math.max(0, Math.min(1, v));
+        this.applyVolume();
+        this.save();
+    }
+
+    /** A voice clip's decoded audio (decoding it the first time), or null if it can't be had yet. */
+    private clip(url: string): Promise<AudioBuffer | null> {
+        let c = this.clips.get(url);
+        if (!c && this.ctx) {
+            const ctx = this.ctx;
+            c = fetch(url)
+                .then(r => r.arrayBuffer())
+                .then(data => ctx.decodeAudioData(data))
+                .catch(() => null);
+            this.clips.set(url, c);
+        }
+        return c ?? Promise.resolve(null);
+    }
+
+    /** Decode voice clips ahead, so the first time each is said it comes at once. */
+    preloadVoice(urls: readonly string[]): void {
+        for (const u of urls) void this.clip(u);
+    }
+
+    /**
+     * Say a voice line for `speaker` (one line at a time each: while one is being said another is dropped, unless
+     * `interrupt` cuts it off). Panned and scaled like the speaker's other sounds.
+     */
+    speak(url: string, speaker: string, pan = 0, vol = 1, interrupt = false): void {
+        if (!this.ctx || !this.voiceBus || this.muted) return;
+        if (this.speaking.has(speaker) && !interrupt) return;
+        const ctx = this.ctx,
+            bus = this.voiceBus;
+        void this.clip(url).then(buf => {
+            if (!buf) return;
+            const was = this.speaking.get(speaker);
+            if (was && !interrupt) return;
+            if (was) {
+                was.onended = null;
+                was.stop();
+            }
+            const src = ctx.createBufferSource();
+            src.buffer = buf;
+            const g = ctx.createGain();
+            g.gain.value = vol;
+            let tail: AudioNode = src.connect(g);
+            if (pan && ctx.createStereoPanner) {
+                const p = ctx.createStereoPanner();
+                p.pan.value = pan;
+                tail = tail.connect(p);
+            }
+            tail.connect(bus);
+            src.onended = () => {
+                if (this.speaking.get(speaker) === src) this.speaking.delete(speaker);
+            };
+            this.speaking.set(speaker, src);
+            src.start();
+        });
+    }
+
+    /** Whether `speaker` is saying a line now. */
+    isSpeaking(speaker: string): boolean {
+        return this.speaking.has(speaker);
+    }
+
     /** Play a music loop (null for silence); it starts once audio is unlocked. */
     playMusic(track: MusicTrack | null): void {
         this.track = track;
@@ -127,11 +205,12 @@ export class Sound {
         this.musicBus?.gain.setTargetAtTime(this.musicVolume ** 2 * 1.6, t, 0.02);
         this.sfxRoom?.gain.setTargetAtTime(this.volume ** 2 * 1.2, t, 0.02);
         this.musicRoom?.gain.setTargetAtTime(this.musicVolume ** 2 * 1.6, t, 0.02);
+        this.voiceBus?.gain.setTargetAtTime(this.voiceVolume ** 2 * 1.5, t, 0.02);
     }
 
-    /** Mute and both volumes, to save with the player's settings. */
+    /** Mute and the volumes, to save with the player's settings. */
     prefs(): AudioPrefs {
-        return { muted: this.muted, volume: this.volume, music: this.musicVolume };
+        return { muted: this.muted, volume: this.volume, music: this.musicVolume, voice: this.voiceVolume };
     }
 
     /** Take on saved mute and volumes (from the player's account), and remember them here. */
@@ -139,6 +218,7 @@ export class Sound {
         if (typeof p.muted === 'boolean') this.muted = p.muted;
         if (typeof p.volume === 'number') this.volume = Math.max(0, Math.min(1, p.volume));
         if (typeof p.music === 'number') this.musicVolume = Math.max(0, Math.min(1, p.music));
+        if (typeof p.voice === 'number') this.voiceVolume = Math.max(0, Math.min(1, p.voice));
         this.applyVolume();
         this.save(false);
     }
@@ -149,7 +229,12 @@ export class Sound {
         try {
             localStorage.setItem(
                 STORE,
-                JSON.stringify({ muted: this.muted, volume: this.volume, music: this.musicVolume }),
+                JSON.stringify({
+                    muted: this.muted,
+                    volume: this.volume,
+                    music: this.musicVolume,
+                    voice: this.voiceVolume,
+                }),
             );
         } catch {
             /* ignore */

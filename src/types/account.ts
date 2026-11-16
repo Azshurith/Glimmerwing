@@ -11,6 +11,8 @@ export interface AudioPrefs {
     muted: boolean;
     volume: number;
     music: number;
+    /** The fairies' voices (missing in settings saved before they spoke). */
+    voice?: number;
 }
 
 /** Everything a player sets in Settings that follows their account: the game's settings and the sound's. */

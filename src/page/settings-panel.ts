@@ -1,6 +1,7 @@
-// The Settings panel (#settings in index.template.html): Audio (music and effects volume, sound on/off),
+// The Settings panel (#settings in index.template.html): Audio (music, effects and voice volume, sound on/off),
 // Display (fullscreen, hiding the rival's meadow) and Controls (the keyboard keys, rebindable per scheme).
 import type { Sound } from '@/audio/sound';
+import { VOICES } from '@/data/voices';
 import type { Game } from '@/game/game';
 import type { Input } from '@/input/input';
 import { KEY_ACTIONS, KEYS_PER_ACTION, RESERVED_KEYS, defaultKeys, keyLabel } from '@/input/keys';
@@ -32,6 +33,8 @@ export function initSettingsPanel(d: SettingsPanelDeps): { open: () => void; hid
         musicVal = $<HTMLOutputElement>('set-music-val'),
         sfx = $<HTMLInputElement>('set-sfx'),
         sfxVal = $<HTMLOutputElement>('set-sfx-val'),
+        voice = $<HTMLInputElement>('set-voice'),
+        voiceVal = $<HTMLOutputElement>('set-voice-val'),
         soundBox = $<HTMLInputElement>('set-sound'),
         fullBox = $<HTMLInputElement>('set-full'),
         fullRow = $<HTMLElement>('set-full-row'),
@@ -75,6 +78,16 @@ export function initSettingsPanel(d: SettingsPanelDeps): { open: () => void; hid
             lastBlip = now;
             d.sound.play('pop', 5);
         }
+    });
+    voice?.addEventListener('input', () => {
+        d.sound.unlock();
+        d.sound.setVoiceVolume(Number(voice.value) / 100);
+        showVol(voice, voiceVal);
+    });
+    // Let go of the slider: a line at the new level.
+    voice?.addEventListener('change', () => {
+        const lines = VOICES.pip?.pick ?? [];
+        if (lines.length) d.sound.speak(lines[Math.floor(Math.random() * lines.length)], 'settings', 0, 1, true);
     });
     soundBox?.addEventListener('change', () => {
         d.sound.unlock();
@@ -202,8 +215,10 @@ export function initSettingsPanel(d: SettingsPanelDeps): { open: () => void; hid
             if (!el) return;
             if (music) music.value = String(Math.round(d.sound.musicVolume * 100));
             if (sfx) sfx.value = String(Math.round(d.sound.volume * 100));
+            if (voice) voice.value = String(Math.round(d.sound.voiceVolume * 100));
             showVol(music, musicVal);
             showVol(sfx, sfxVal);
+            showVol(voice, voiceVal);
             if (soundBox) soundBox.checked = !d.sound.muted;
             if (fullBox) fullBox.checked = d.fullscreen.isOn();
             if (hideRival) hideRival.checked = d.game.settings.hideRival;
