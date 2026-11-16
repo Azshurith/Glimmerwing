@@ -60,8 +60,39 @@ const SHAPE_MAX: Record<FormationShape, number> = {
     star: 10,
 };
 
-/** Slots for `n` members of a shape, centred on (0, 0), neighbours `s` apart. */
+/**
+ * Slots for `n` members of a shape, centred on (0, 0), no two closer than `s`: where a layout bunches members up
+ * (the ends of a flattened ring or arc, the inner turn of a spiral) they're nudged apart until they're `s` apart,
+ * so the fairy can always slip between any two, while the rest keep their places.
+ */
 export function shapeSlots(shape: FormationShape, n: number, s: number): Vec[] {
+    const pts = layoutSlots(shape, n, s);
+    if (shape === 'surround') return pts;
+    for (let pass = 0; pass < 40; pass++) {
+        let moved = false;
+        for (let a = 0; a < pts.length; a++)
+            for (let b = a + 1; b < pts.length; b++) {
+                const dx = pts[b].x - pts[a].x,
+                    dy = pts[b].y - pts[a].y,
+                    d = Math.hypot(dx, dy);
+                if (d >= s * 0.999) continue;
+                // Coincident members part sideways.
+                const ux = d > 1e-6 ? dx / d : 1,
+                    uy = d > 1e-6 ? dy / d : 0,
+                    push = (s - d) / 2;
+                pts[a] = { x: pts[a].x - ux * push, y: pts[a].y - uy * push };
+                pts[b] = { x: pts[b].x + ux * push, y: pts[b].y + uy * push };
+                moved = true;
+            }
+        if (!moved) break;
+    }
+    const cx = pts.reduce((t, p) => t + p.x, 0) / pts.length,
+        cy = pts.reduce((t, p) => t + p.y, 0) / pts.length;
+    return pts.map(p => ({ x: p.x - cx, y: p.y - cy }));
+}
+
+/** The plain layout of a shape, centred on (0, 0), with neighbours about `s` apart. */
+function layoutSlots(shape: FormationShape, n: number, s: number): Vec[] {
     const c = (n - 1) / 2;
     const out: Vec[] = [];
     for (let i = 0; i < n; i++) {
@@ -106,7 +137,7 @@ export function shapeSlots(shape: FormationShape, n: number, s: number): Vec[] {
                 break;
             }
             case 'wave':
-                out.push({ x: (i - c) * s, y: Math.sin(i * 1.15) * s * 0.4 });
+                out.push({ x: (i - c) * s, y: Math.sin(i * 1.15) * s * 0.3 });
                 break;
             case 'surround': {
                 // Sized to the meadow, not the spacing: members sit well apart, as in TSS.
@@ -120,6 +151,21 @@ export function shapeSlots(shape: FormationShape, n: number, s: number): Vec[] {
         }
     }
     return out;
+}
+
+/**
+ * How far apart a formation's neighbours sit. Up in the meadow they're just inside burst range, so one pop can
+ * carry through the whole formation (TSS), yet with a sliver of room for the fairy to slip between them; low in
+ * her half they leave her a clear doorway between any two, so she never has to fly into one.
+ */
+function formationSpacing(size: number, deep: boolean, beetle: boolean): number {
+    const body = 2 * C.PUFF_RADIUS * 0.8 * size, // what touching a critter takes (Field.checkPlayerHits)
+        fairy = 2 * C.PLAYER_RADIUS * 1.1; // the widest fairy's hitbox
+    const reach = C.BURST_RADIUS + C.PUFF_RADIUS * 0.6 * size; // how far one pop reaches (Field's bursts)
+    // Beetles march a touch further apart, unless that would take them out of one another's reach.
+    if (deep) return (body + fairy + 10) * (beetle ? 1.05 : 1);
+    const s = body + fairy + 3;
+    return Math.min(s * (beetle ? 1.05 : 1), Math.max(s, reach - 0.5));
 }
 
 /** The radius of a ring round the fairy: as wide as the meadow allows, with room for the critters. */
@@ -434,19 +480,26 @@ export function rollFormation(
             ? morphTo
             : null;
 
-    // Neighbours sit just inside burst range, so one pop can carry through the whole formation (TSS).
-    const spacing = (big ? 40 : C.BURST_RADIUS + 1) * (kind === 'beetle' ? 1.05 : 1);
-    const slots = shapeSlots(shape, count, spacing);
-    const ext = extent(morph ? [slots, shapeSlots(morph, count, spacing)] : [slots]);
+    // Now and then a formation comes right down into the fairy's half, low as the floor.
+    const deep = !ring && deepRoll < 0.18 + pressure * 0.22;
     const size = big ? 1.5 : 1;
     const m = C.PUFF_RADIUS * size + 6;
+    const spacing = formationSpacing(size, deep, kind === 'beetle');
+    // A shape too wide for the meadow at that spacing drops members until it fits.
+    const fits = (n: number) => {
+        const e = extent(
+            morph ? [shapeSlots(shape, n, spacing), shapeSlots(morph, n, spacing)] : [shapeSlots(shape, n, spacing)],
+        );
+        return (move === 'orbit' ? e.rad * 2 : e.r - e.l) <= fieldW() - 2 * m;
+    };
+    while (count > 3 && !ring && !SIGNATURE_COUNTS[shape] && !fits(count)) count--;
+    const slots = shapeSlots(shape, count, spacing);
+    const ext = extent(morph ? [slots, shapeSlots(morph, count, spacing)] : [slots]);
     // Keep the whole shape (and anything it morphs into, or turns through) inside the meadow.
     const spin = move === 'orbit';
     const left = m + (spin ? ext.rad : -ext.l),
         right = fieldW() - m - (spin ? ext.rad : ext.r),
         top = TOP + (spin ? ext.rad : -ext.u),
-        // Now and then a formation comes right down into the fairy's half, low as the floor.
-        deep = deepRoll < 0.18 + pressure * 0.22,
         bottom = bottomOf(deep) - (spin ? ext.rad : ext.d);
     const cxRoll = r.next(),
         cyRoll = r.next();
@@ -456,9 +509,9 @@ export function rollFormation(
             ? top + (bottom - top) * (deep ? 0.45 + cyRoll * 0.55 : 0.15 + cyRoll * 0.45)
             : (TOP + bottomOf(false)) / 2;
     if (ring) {
-        // Centred across the meadow with its bottom near the floor, so the fairy flies inside it.
+        // Centred across the meadow with its lowest members under the fairy's usual line, so she flies inside it.
         cx = fieldW() / 2;
-        cy = fieldH() - 18 - m - ext.rad;
+        cy = fieldH() - 10 - ext.rad;
     }
     const reachX = ring ? 6 : Math.max(0, Math.min(cx - left, right - cx, 46));
     const reachY = ring ? 4 : Math.max(0, Math.min(cy - top, bottom - cy, 26));
@@ -478,7 +531,8 @@ export function rollFormation(
         spacing,
         cx,
         cy,
-        stagger: (big ? 0.32 : 0.25) * speedUp,
+        // A low formation's members fly in further apart, so the stream down into the fairy's half has gaps too.
+        stagger: (big ? 0.32 : 0.25) * (deep ? 1.4 : 1) * speedUp,
         exitStagger: exit === 'scatter' ? 0.03 : 0.1,
         // Unhurried flights in, so the formation can be watched forming up.
         enterTime: (big ? 2.8 : 2.4) * speedUp,
