@@ -50,7 +50,7 @@ export class ProfileScreen {
         drawTopBar(ctx, 'PROFILE', W, bleed, tall, 16);
 
         ctx.translate(0, dy);
-        // Player card: an avatar (Pip's face for now), the name, and the sign-in status.
+        // Player card: an avatar (Stella's face for now), the name, and the sign-in status.
         // On a widened landscape screen the player card keeps to the left edge and the record fills the rest.
         // In landscape the card is a framed panel right against the left edge, the same 14 in as the record's right edge.
         const card = { x: 14 - bleed, y: 46, w: 196, h: 228 };
@@ -228,7 +228,7 @@ export class ProfileScreen {
         ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     }
 
-    /** A round avatar: Pip's portrait face if it's loaded, else her in-game look. */
+    /** A round avatar: Stella's portrait face if it's loaded, else her in-game look. */
     private avatar(x: number, y: number, r: number, t: number): void {
         const ctx = this.ctx;
         const fy = FAIRIES[0];

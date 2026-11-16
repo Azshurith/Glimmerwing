@@ -96,7 +96,7 @@ export interface ReplayRow {
     /** The mode, on a coloured tag: VS CPU, 2 PLAYERS or ENDLESS. */
     tag: string;
     color: string;
-    /** Who flew (e.g. "Pip vs Clove"), and the map, result and length. */
+    /** Who flew (e.g. "Stella vs Clove"), and the map, result and length. */
     title: string;
     detail: string;
     /** When it was played. */

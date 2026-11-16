@@ -13,6 +13,7 @@ import { CatalogAndTimestamps1763251200001 } from './migrations/1763251200001-ca
 import { IntegerIdsAndPlayerTables1763251200002 } from './migrations/1763251200002-integer-ids-and-player-tables';
 import { ModeSwitch1763251200003 } from './migrations/1763251200003-mode-switch';
 import { Art1763251200004 } from './migrations/1763251200004-art';
+import { RenameStella1763251200005 } from './migrations/1763251200005-rename-stella';
 
 /** Every table's entity. */
 export const ENTITIES = [
@@ -49,6 +50,7 @@ export function dataSource(env: NodeJS.ProcessEnv = process.env): DataSource {
             IntegerIdsAndPlayerTables1763251200002,
             ModeSwitch1763251200003,
             Art1763251200004,
+            RenameStella1763251200005,
         ],
         migrationsTableName: 'migrations',
         synchronize: false,

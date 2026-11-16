@@ -584,7 +584,7 @@ export class Game {
         this.highlights.push({ at, kind, side });
     }
 
-    /** A short label for a highlight, e.g. "FEVER · PIP". */
+    /** A short label for a highlight, e.g. "FEVER · STELLA". */
     private highlightLabel(h: ReplayHighlight): string {
         const what = {
             chain: 'BIG CHAIN',
