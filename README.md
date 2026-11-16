@@ -33,10 +33,10 @@ keeps its own copy too, so the game still plays offline or from a file (the serv
 they meet; for settings the copy saved last wins). Without a database (`npm run dev`) the API answers 503 and saves stay in the browser.
 
 The server is Express and TypeORM (TypeScript in `server/src/`). The tables are made by its migrations, run at
-start-up; every table ends with `created_at`, `updated_at` and `deleted_at` (soft deletes). The `characters` and
-`maps` tables list the game's fairies and maps: set `is_enabled` to 0 (in phpMyAdmin, say) to switch one off, and
-within a few seconds it shows as unavailable in the game and the server stops accepting games with it.
-`types_modes` lists the modes. All three are numbered by the database, with the game's own id (`pip`, `forest`)
+start-up; every table ends with `created_at`, `updated_at` and `deleted_at` (soft deletes). The `characters`,
+`maps` and `types_modes` tables list the game's fairies, maps and modes: set `is_enabled` to 0 (in phpMyAdmin,
+say) to switch one off. Within 15 seconds the server stops accepting games with it, and the game shows it as
+unavailable from the next time it opens Play (or is reloaded). All three are numbered by the database, with the game's own id (`pip`, `forest`)
 as `code`. A player's tables are `players_progress`, `players_settings`, `players_matches`, `players_runs`
 (Endless) and `players_replays`; they point at the catalog by foreign key (`mode_id`, `map_id`, `fairy_id`,
 `rival_fairy_id`).

@@ -50,6 +50,7 @@ export function verifyReplay(
     const d: ReplayData = data;
     // Online matches are run, and counted, by the server itself.
     if (d.mode === 'online') return fail('Online matches are counted by the server');
+    if (off.disabledModes?.includes(d.mode)) return fail('That mode is switched off');
     if (d.format !== REPLAY_FORMAT || d.sim !== SIM_VERSION)
         return fail('Recorded on another version of the game', true);
     const p: Progress = structuredClone(progress ?? freshProgress());

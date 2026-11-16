@@ -1087,6 +1087,8 @@ export class Game {
             case 'play':
                 this.menu = 'play';
                 this.modeIndex = 1;
+                // Ask again what's switched off, so a mode, fairy or map just switched on or off shows as such.
+                void this.account.catalog().then(c => c && setCatalog(c));
                 break;
             case 'characters':
                 this.phase = 'roster';

@@ -35,7 +35,7 @@ export class GameMap extends Timestamped {
     isEnabled!: boolean;
 }
 
-/** A game mode (cpu, versus, endless, online): what matches and replays name in their mode column. */
+/** A game mode (cpu, versus, endless, online). One that's disabled (or deleted) can't be played or counted. */
 @Entity('types_modes')
 export class ModeType extends Timestamped {
     @PrimaryGeneratedColumn({ type: 'int', unsigned: true })
@@ -47,4 +47,7 @@ export class ModeType extends Timestamped {
 
     @Column({ type: 'varchar', length: 32 })
     name!: string;
+
+    @Column({ name: 'is_enabled', type: 'boolean', default: true })
+    isEnabled!: boolean;
 }

@@ -244,6 +244,10 @@ export class Relay {
             case 'quick':
             case 'host':
             case 'join':
+                if (!this.deps.catalog.modeOn('online')) {
+                    this.send(c, { t: 'error', msg: 'Online play is switched off right now' });
+                    return;
+                }
                 // Know who's playing first, so the match can count for them.
                 void this.identify(c, m.token).then(() => this.matchmake(c, m));
                 return;
