@@ -9,6 +9,7 @@ import desertTrack from '@/../assets/music/desert.mp3';
 import forestTrack from '@/../assets/music/forest.mp3';
 import menuTrack from '@/../assets/music/menu.mp3';
 import selectTrack from '@/../assets/music/select.mp3';
+import volcanoTrack from '@/../assets/music/volcano.mp3';
 
 /** The menus' music ("Chant Royal"), played in place of the synthesised menu loop. */
 export const MENU_MUSIC: string | undefined = menuTrack;
@@ -22,6 +23,7 @@ export const MAP_MUSIC: Partial<Record<string, string>> = {
     desert: desertTrack,
     castle: castleTrack,
     beach: beachTrack,
+    volcano: volcanoTrack,
 };
 
 /** The music a round on `mapId` plays: its own track if it has one, otherwise the battle loop. */
