@@ -21,7 +21,7 @@ const LAYERS: Record<LayerName, { speed: number; cellH: number }> = {
 const ORDER: LayerName[] = ['far', 'mid', 'near'];
 
 /** How fast the near layer climbs, in meadow units a second. */
-const CLIMB = 16;
+const CLIMB = 40;
 /** How far past the top and bottom of the view cells are worked out (and their sprites painted ahead of time). */
 const AHEAD = 320;
 const BEHIND = 60;
