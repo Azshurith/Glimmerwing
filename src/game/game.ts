@@ -124,6 +124,26 @@ function tallPlacement(h: number): { at: readonly [Placement, Placement]; band: 
     };
 }
 const IDLE: Controls = { left: false, right: false, up: false, down: false, fire: false };
+/** Where the browser remembers whether the replay's controls were minimised. */
+const MINI_KEY = 'glimmerwing-replay-mini';
+
+/** A yes/no kept in localStorage (false where there's none or storage is unavailable). */
+function readFlag(key: string): boolean {
+    try {
+        return localStorage.getItem(key) === '1';
+    } catch {
+        return false;
+    }
+}
+
+/** Keep a yes/no in localStorage (skipped where storage is unavailable). */
+function writeFlag(key: string, on: boolean): void {
+    try {
+        localStorage.setItem(key, on ? '1' : '0');
+    } catch {
+        /* ignore */
+    }
+}
 /** No keys pressed: what a step reads while a replay runs ahead. */
 const NO_KEYS: Set<string> = new Set();
 
@@ -203,6 +223,8 @@ export class Game {
     private scanning = false;
     /** While the timeline's knob is being dragged: where it is (0 to 1). */
     private scrub: number | null = null;
+    /** The replay's controls minimised to a small tab (remembered in this browser). */
+    private replayMini = readFlag(MINI_KEY);
     /** The last match's recording, and its code on the server once saved there (null until then, or offline). */
     lastReplay: ReplayData | null = null;
     lastReplayCode: string | null = null;
@@ -569,7 +591,19 @@ export class Game {
         const L = replayPanelLayout(this.r.viewW - 2 * this.r.viewX, this.r.viewH, rp.data.rounds.length);
         const at = (x: number) => Math.max(0, Math.min(1, (x - L.bar.x) / L.bar.w));
         const tap = this.input.tap;
-        if (tap) {
+        // H, the panel's minimise button or the minimised tab shrink it to the tab and back.
+        // (Their tap targets reach a little past them, so a finger finds them easily.)
+        const target = this.replayMini ? L.tab : L.hide;
+        const reach = { x: target.x - 6, y: target.y - 6, w: target.w + 12, h: target.h + 12 };
+        const toggle = pr.has('KeyH') || (!!tap && inBox(tap, reach));
+        if (toggle) {
+            pr.delete('Pointer');
+            this.replayMini = !this.replayMini;
+            writeFlag(MINI_KEY, this.replayMini);
+            this.scrub = null;
+            this.ui('tick');
+        }
+        if (tap && !toggle && !this.replayMini) {
             const chip = L.chips.findIndex(c => inBox(tap, c));
             if (chip >= 0) {
                 pr.delete('Pointer');
@@ -588,9 +622,9 @@ export class Game {
                 return false;
             }
             const h = this.highlightNear(this.scrub);
-            const target = h ? Math.max(0, h.at - 90) : this.scrub * rp.length;
+            const to = h ? Math.max(0, h.at - 90) : this.scrub * rp.length;
             this.scrub = null;
-            this.seekReplay(target);
+            this.seekReplay(to);
             return true;
         }
         const pos = rp.played;
@@ -2110,7 +2144,8 @@ export class Game {
                     label: near ? this.highlightLabel(near) : '',
                     hint: touch
                         ? 'DRAG TO SEEK  ·  TAP FOR SPEED'
-                        : 'SPACE SPEED · ←→ 5S · [ ] HIGHLIGHTS · 1-9 ROUND · P PAUSE · ESC LEAVE',
+                        : 'SPACE SPEED · ←→ 5S · [ ] HIGHLIGHTS · 1-9 ROUND · H HIDE · P PAUSE · ESC LEAVE',
+                    mini: this.replayMini,
                 },
                 this.time,
             );

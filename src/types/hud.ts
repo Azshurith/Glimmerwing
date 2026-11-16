@@ -62,4 +62,6 @@ export interface ReplayPanelView {
     scrub: number | null;
     label: string;
     hint: string;
+    /** Minimised: only a small tab and a thin progress line show. */
+    mini: boolean;
 }
