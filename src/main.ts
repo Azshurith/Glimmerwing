@@ -60,6 +60,7 @@ function fit(): void {
                 : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
         const fill = ((C.VIEW_H * availW) / Math.max(1, availH) - C.GAP) / 2;
         renderer.fieldWidthToFill = renderer.portrait ? C.FIELD_W_BASE : Math.floor(fill);
+        renderer.viewWidthToFill = Math.floor((C.VIEW_H * availW) / Math.max(1, availH));
         // The menus widen to the same shape, up to WIDE_W_MAX.
         renderer.menuW = renderer.portrait
             ? C.VIEW_W

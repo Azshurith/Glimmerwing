@@ -91,6 +91,8 @@ export class Renderer {
     inMenu = false;
 
     /** Width of the view in view units, for the current layout. */
+    /** How wide a lone meadow must be to fill a landscape screen edge to edge (Endless), set by the page. */
+    viewWidthToFill = C.VIEW_W;
     get viewW(): number {
         return this.layout === 'tall' ? C.TALL_W : this.inMenu ? Math.max(C.VIEW_W, this.menuW) : C.VIEW_W;
     }
@@ -453,10 +455,10 @@ export class Renderer {
         this.hudLayer.console(v, time);
     }
 
-    /** Endless mode's side panels (wide layout) or slim top bar (tall layout). */
+    /** Endless mode's readout: see-through cards at the lone meadow's sides (wide layout) or a slim top bar (tall). */
     endless(v: EndlessView, time: number): void {
         if (this.layout === 'tall') this.hudLayer.endlessBar(v, time, C.TALL_W, C.TALL_SOLO_BAR);
-        else this.hudLayer.endlessPanels(v, time);
+        else this.hudLayer.endlessSides(v, time, C.FIELD_W);
     }
 
     /** The slim top bar standing in for the rival's meadow and console when it's hidden (tall layout only). */

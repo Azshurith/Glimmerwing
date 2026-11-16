@@ -29,10 +29,13 @@ export const VIEW_H = FIELD_H_BASE;
 export const WIDE_W_MAX = 900;
 
 /** Set the meadows' width for the coming round (and the side-by-side view's width with it). */
-export function setFieldWidth(w: number): void {
-    FIELD_W = Math.round(Math.max(FIELD_W_BASE, Math.min(FIELD_W_MAX, w)));
-    VIEW_W = FIELD_W * 2 + GAP;
+export function setFieldWidth(w: number, single = false): void {
+    FIELD_W = Math.round(Math.max(FIELD_W_BASE, Math.min(single ? SINGLE_W_MAX : FIELD_W_MAX, w)));
+    // A solo round (Endless) shows one meadow, so the view is just that meadow.
+    VIEW_W = single ? FIELD_W : FIELD_W * 2 + GAP;
 }
+/** The widest a lone meadow gets, filling a landscape screen edge to edge (Endless). */
+export const SINGLE_W_MAX = 760;
 
 /**
  * The tall view, used while playing on a portrait screen (one player on the device):

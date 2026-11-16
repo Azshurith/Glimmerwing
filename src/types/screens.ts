@@ -31,6 +31,8 @@ export interface SelectView {
     /** Whole seconds left to choose, or null for no timer. */
     timer: number | null;
     hints: string[];
+    /** A solo run (Endless): no rival's panel, and the emblem names the mode with this line under it. */
+    solo?: { title: string; line: string };
 }
 
 /** Everything the title screen needs to draw a frame. */

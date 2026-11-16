@@ -194,17 +194,18 @@ export class SkyScenery {
             const top = Math.round(h - ((k + 1) * cellH - a));
             const visible = top < h && top + cellH > 0;
             const ox = this.view.ox;
-            const key = `${map.id}|${seed}|ground|${k}|${ox}`;
+            // Bands are painted GROUND_W wide, or wider for a lone meadow filling a wide screen (Endless).
+            const gw = Math.max(GROUND_W, Math.ceil(w));
+            const key = `${map.id}|${seed}|ground|${k}|${ox}|${gw}`;
             let c = this.art.get(key);
             if (!c && (visible || this.painted < this.budget)) {
                 this.painted++;
-                c = { art: plain(paintGround(map, seed, k * cellH, GROUND_W, cellH, ox)), used: 0 };
+                c = { art: plain(paintGround(map, seed, k * cellH, gw, cellH, ox)), used: 0 };
                 this.art.set(key, c);
             }
             if (!c?.art) continue;
             c.used = this.frame;
-            if (visible)
-                ctx.drawImage(c.art.canvas, 0, 0, Math.min(w, GROUND_W), cellH, 0, top, Math.min(w, GROUND_W), cellH);
+            if (visible) ctx.drawImage(c.art.canvas, 0, 0, Math.min(w, gw), cellH, 0, top, Math.min(w, gw), cellH);
         }
         // The shadows of clouds high above, sliding over the ground a little faster than it scrolls.
         const { ox, lanes } = this.view;

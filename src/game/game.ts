@@ -83,6 +83,16 @@ const wide = (): readonly [Placement, Placement] => [
     { x: C.FIELD_W + C.GAP, y: 0, s: 1 },
 ];
 /**
+ * Endless has no rival beside you, so its attacks come from above: a fireball drops in straight down from the top
+ * of the meadow (over the fairy, a volley spread either side) instead of flying in from a side wall.
+ */
+function fromAbove(o: Outgoing): Outgoing {
+    if (o.kind !== 'star' || o.level >= 2) return o;
+    const { enter: _e, route: _r, curve: _c, ...rest } = o;
+    return { ...rest, aim: o.aim ?? 0 };
+}
+
+/**
  * Where they sit in the tall layout: yours full width against the bottom edge, the rival's small at the top.
  * The band left above your meadow holds the rival's meadow and the console, designed TALL_TOP high: on a
  * shorter screen the band shrinks to fit, on a longer one it stays centred in the spare height.
@@ -373,8 +383,9 @@ export class Game {
         // ours on both screens, so "side A" means the host's meadow.
         // On a wide landscape screen a local match plays in wider meadows, so the view fills the screen; online
         // both players must share one width, so it stays the usual one there.
-        // Endless shows one meadow, centred between its panels, at the usual width.
-        C.setFieldWidth(this.online || this.mode === 'endless' ? C.FIELD_W_BASE : this.r.fieldWidthToFill);
+        // Endless shows one meadow: on a landscape screen it's the whole width (on a phone, the solo tall layout).
+        if (this.mode === 'endless' && !this.r.portrait) C.setFieldWidth(this.r.viewWidthToFill, true);
+        else C.setFieldWidth(this.online || this.mode === 'endless' ? C.FIELD_W_BASE : this.r.fieldWidthToFill);
         // With the rival's meadow hidden on an upright phone, the meadows grow to reach the top of the screen
         // (both, so the round stays fair), leaving a slim bar for the round and the rival's hearts.
         C.setFieldHeight(this.soloView ? (this.r.tallH - C.TALL_SOLO_BAR) / C.TALL_OWN_S : C.FIELD_H_BASE);
@@ -915,7 +926,8 @@ export class Game {
         for (const tr of this.transits) {
             // A fireball flies on the tempo (and sudden death) between the meadows too, as it does in them.
             tr.t += tr.o.kind === 'star' ? dt * this.fields[tr.from].attackPace : dt;
-            if (tr.t >= transitTime(tr.o)) this.fields[1 - tr.from].receive(tr.o);
+            if (tr.t >= transitTime(tr.o))
+                this.fields[1 - tr.from].receive(this.mode === 'endless' ? fromAbove(tr.o) : tr.o);
         }
         this.transits = this.transits.filter(tr => tr.t < transitTime(tr.o));
 
@@ -1112,7 +1124,7 @@ export class Game {
         const offscreen: Placement = { x: 0, y: -10000, s: tall ? tall.at[0].s : 1 };
         const at: readonly [Placement, Placement] = !tall
             ? endless
-                ? [{ x: (C.VIEW_W - C.FIELD_W) / 2, y: 0, s: 1 }, offscreen]
+                ? [{ x: 0, y: 0, s: 1 }, offscreen]
                 : wide()
             : soloTall
               ? [tall.at[0], offscreen]
@@ -1367,7 +1379,17 @@ export class Game {
                       ? ['1P  WASD + G     2P  ARROWS + ENTER', 'ESC  BACK']
                       : ['PRESS Z OR ENTER TO CHOOSE', 'ARROWS MOVE  ·  ESC BACK'];
                 const timer = this.online ? null : Math.ceil(SELECT_TIME - this.selectT);
-                r.select({ cards, sides, cursors, heading, timer, hints }, this.time);
+                const soloRun =
+                    this.mode === 'endless'
+                        ? {
+                              title: 'ENDLESS',
+                              line:
+                                  this.progress.endlessBest > 0
+                                      ? `BEST ${clock(this.progress.endlessBest)}`
+                                      : 'SURVIVE ALONE',
+                          }
+                        : undefined;
+                r.select({ cards, sides, cursors, heading, timer, hints, solo: soloRun }, this.time);
                 break;
             }
             case 'countdown': {
