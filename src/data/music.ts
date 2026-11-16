@@ -3,6 +3,7 @@
 // Tracks are inlined as data URLs by esbuild (see build.mjs), so the game stays a single page. The originals are
 // kept under assets/source/music/; the copies here are trimmed to loop and re-encoded smaller (112 kb/s).
 import caveTrack from '@/../assets/music/cave.mp3';
+import desertTrack from '@/../assets/music/desert.mp3';
 import forestTrack from '@/../assets/music/forest.mp3';
 import menuTrack from '@/../assets/music/menu.mp3';
 import selectTrack from '@/../assets/music/select.mp3';
@@ -16,6 +17,7 @@ export const SELECT_MUSIC: string | undefined = selectTrack;
 export const MAP_MUSIC: Partial<Record<string, string>> = {
     forest: forestTrack,
     cave: caveTrack,
+    desert: desertTrack,
 };
 
 /** The music a round on `mapId` plays: its own track if it has one, otherwise the battle loop. */
