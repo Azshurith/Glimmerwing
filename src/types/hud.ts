@@ -61,7 +61,6 @@ export interface ReplayPanelView {
     /** While the knob is being dragged: where it is (0 to 1), and a label for the highlight it's on, if any. */
     scrub: number | null;
     label: string;
-    hint: string;
     /** Minimised: only a small tab and a thin progress line show. */
     mini: boolean;
 }

@@ -109,16 +109,25 @@ function fromAbove(o: Outgoing): Outgoing {
  * The band left above your meadow holds the rival's meadow and the console, designed TALL_TOP high: on a
  * shorter screen the band shrinks to fit, on a longer one it stays centred in the spare height.
  */
-function tallPlacement(h: number): { at: readonly [Placement, Placement]; band: Placement } {
-    const s = C.TALL_OWN_S;
-    const ownY = h - C.FIELD_H * s;
+function tallPlacement(h: number, fit = false, solo = false): { at: readonly [Placement, Placement]; band: Placement } {
+    // A replay's meadow may be wider (recorded on a wide screen) or taller (recorded on a longer phone) than
+    // this screen's: `fit` scales it down to fit under the band (or the solo bar) and centres it.
+    const s = fit
+        ? Math.min(C.TALL_W / C.FIELD_W, (h - (solo ? C.TALL_SOLO_BAR : C.TALL_TOP_MIN)) / C.FIELD_H)
+        : C.TALL_OWN_S;
+    const ownX = fit ? (C.TALL_W - C.FIELD_W * s) / 2 : 0;
+    // A lone meadow scaled down to fit the width (an Endless run recorded on a wide screen) sits in the middle of
+    // the space under the bar, not against the bottom edge.
+    const ownY = fit && solo ? C.TALL_SOLO_BAR + (h - C.TALL_SOLO_BAR - C.FIELD_H * s) / 2 : h - C.FIELD_H * s;
     const k = Math.min(1, ownY / C.TALL_TOP);
     const band = { x: (C.TALL_W * (1 - k)) / 2, y: Math.max(0, (ownY - C.TALL_TOP * k) / 2), s: k };
     const R = C.TALL_RIVAL;
+    // The rival's meadow keeps its usual width in the band, however wide its meadow is.
+    const rs = R.s * k * (fit ? C.FIELD_W_BASE / C.FIELD_W : 1);
     return {
         at: [
-            { x: 0, y: ownY, s },
-            { x: band.x + R.x * k, y: band.y + R.y * k, s: R.s * k },
+            { x: ownX, y: ownY, s },
+            { x: band.x + R.x * k, y: band.y + R.y * k, s: rs },
         ],
         band,
     };
@@ -581,9 +590,11 @@ export class Game {
     }
 
     /**
-     * The replay's controls, read each step while watching: dragging on the timeline moves its knob and lets go
-     * to seek there (landing just before a highlight it's on); a round chip jumps to that round; ← → skip five
-     * seconds; [ and ] jump to the previous or next highlight; 1–9 to a round; Space or a tap steps the speed.
+     * The replay's controls, read each step while watching, each a button on the panel (so a touchscreen can do
+     * everything) and a key: pause (P), back and forward five seconds (← →), the previous and next highlight
+     * ([ ]), the speed through 1×, 2× and 4× (Space). Dragging on the timeline moves its knob and lets go to seek
+     * there (landing just before a highlight it's on); a round chip (or 1–9) jumps to that round; the ⌄ button
+     * (or H) minimises the panel.
      * Returns true if it seeked, so the step that read it stops there.
      */
     private replayControls(pr: Set<string>): boolean {
@@ -603,7 +614,29 @@ export class Game {
             this.scrub = null;
             this.ui('tick');
         }
+        // The buttons: each does what a key does (see below), so a touchscreen can do it all.
+        let button: string | null = null;
         if (tap && !toggle && !this.replayMini) {
+            const b = L.buttons.find(b => inBox(tap, { x: b.x - 2, y: b.y - 4, w: b.w + 4, h: b.h + 8 }));
+            if (b) {
+                pr.delete('Pointer');
+                button = b.action;
+                this.ui('tick');
+            }
+        }
+        if (button === 'pause' || pr.has('KeyP')) {
+            if (this.phase === 'playing' || this.phase === 'countdown') this.paused = !this.paused;
+            pr.delete('KeyP');
+            return true;
+        }
+        if (button === 'speed' || ['Space', 'Enter', 'KeyZ', 'KeyF'].some(k => pr.has(k))) {
+            if (this.phase === 'playing' || this.phase === 'countdown') {
+                this.replaySpeed = this.replaySpeed >= 4 ? 1 : this.replaySpeed * 2;
+                if (!button) this.ui('tick');
+                return true;
+            }
+        }
+        if (tap && !toggle && !button && !this.replayMini) {
             const chip = L.chips.findIndex(c => inBox(tap, c));
             if (chip >= 0) {
                 pr.delete('Pointer');
@@ -628,12 +661,12 @@ export class Game {
             return true;
         }
         const pos = rp.played;
-        if (pr.has('ArrowLeft') || pr.has('ArrowRight')) {
-            this.seekReplay(pos + (pr.has('ArrowLeft') ? -300 : 300));
+        if (pr.has('ArrowLeft') || pr.has('ArrowRight') || button === 'back' || button === 'forward') {
+            this.seekReplay(pos + (pr.has('ArrowLeft') || button === 'back' ? -300 : 300));
             return true;
         }
-        if (pr.has('BracketLeft') || pr.has('BracketRight')) {
-            const next = pr.has('BracketRight');
+        if (pr.has('BracketLeft') || pr.has('BracketRight') || button === 'prev' || button === 'next') {
+            const next = pr.has('BracketRight') || button === 'next';
             // From a little way back, so jumping twice to the same highlight moves on.
             const list = this.highlights.map(h => Math.max(0, h.at - 90));
             const t = next ? list.find(t => t > pos + 30) : [...list].reverse().find(t => t < pos - 30);
@@ -1315,19 +1348,13 @@ export class Game {
             this.pollNet(dt);
             if (!this.net) return;
         }
-        // Watching a replay: Esc leaves it; the timeline, rounds and highlights seek; fire, Space or a tap
-        // elsewhere steps the speed through 1×, 2× and 4×.
+        // Watching a replay: Esc leaves it; the panel's buttons and timeline, or their keys, do the rest.
         if (this.replay && this.inGame && !this.seeking) {
             if (pr.has('Escape')) {
                 this.exitReplay();
                 return;
             }
             if (this.replayControls(pr)) return;
-            const tap = ['Space', 'Enter', 'KeyZ', 'KeyF', 'Pointer'].some(k => pr.has(k));
-            if (tap && (this.phase === 'playing' || this.phase === 'countdown')) {
-                this.replaySpeed = this.replaySpeed >= 4 ? 1 : this.replaySpeed * 2;
-                this.ui('tick');
-            }
         }
         if ((pr.has('Escape') || pr.has('KeyP')) && this.phase === 'playing' && this.mode !== 'online')
             this.paused = !this.paused;
@@ -1710,20 +1737,24 @@ export class Game {
         // A round in wider meadows stays side by side even if the screen turns upright mid-round.
         // A round in taller meadows (rival hidden) stays tall even if the screen turns sideways.
         const soloTall = inRound && C.FIELD_H !== C.FIELD_H_BASE;
+        // A replay on an upright screen always takes the tall layout, its meadows scaled to fit whatever size
+        // they were recorded at.
+        const watching = inRound && this.replay !== null;
         r.layout =
-            soloTall || (r.portrait && !(inRound && this.mode === 'versus') && C.FIELD_W === C.FIELD_W_BASE)
+            soloTall ||
+            (r.portrait && (watching || (!(inRound && this.mode === 'versus') && C.FIELD_W === C.FIELD_W_BASE)))
                 ? 'tall'
                 : 'wide';
-        const tall = r.layout === 'tall' ? tallPlacement(r.viewH) : null;
         // Endless side by side: one meadow in the middle, between its panels.
         const endless = inRound && this.mode === 'endless';
+        const tall = r.layout === 'tall' ? tallPlacement(r.viewH, watching, soloTall || endless) : null;
         // With the rival's meadow hidden it's placed far off screen, so nothing of it (or flying to it) shows.
         const offscreen: Placement = { x: 0, y: -10000, s: tall ? tall.at[0].s : 1 };
         const at: readonly [Placement, Placement] = !tall
             ? endless
                 ? [{ x: 0, y: 0, s: 1 }, offscreen]
                 : wide()
-            : soloTall
+            : soloTall || endless
               ? [tall.at[0], offscreen]
               : tall.at;
         if (tall) r.tallBand = tall.band;
@@ -2142,9 +2173,6 @@ export class Game {
                     highlights: this.highlights.map(h => ({ x: h.at / len, kind: h.kind, side: h.side })),
                     scrub: this.scrub,
                     label: near ? this.highlightLabel(near) : '',
-                    hint: touch
-                        ? 'DRAG TO SEEK  ·  TAP FOR SPEED'
-                        : 'SPACE SPEED · ←→ 5S · [ ] HIGHLIGHTS · 1-9 ROUND · H HIDE · P PAUSE · ESC LEAVE',
                     mini: this.replayMini,
                 },
                 this.time,
