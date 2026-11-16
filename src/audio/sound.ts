@@ -1,5 +1,6 @@
 import type { MusicTrack, Sfx } from '@/types';
 import { Music } from './music';
+import { PATCHES, fmNote, makeReverb, type PatchName } from './synth';
 
 /**
  * Sound effects, synthesised on the fly with Web Audio: no audio files, so the
@@ -19,6 +20,9 @@ export class Sound {
     /** Effects and music each go through their own gain, so each has its own volume. */
     private sfxBus: GainNode | null = null;
     private musicBus: GainNode | null = null;
+    /** Sends into the room reverb, one for the effects and one for the music, each at its own volume. */
+    private sfxRoom: GainNode | null = null;
+    private musicRoom: GainNode | null = null;
     private noiseBuf: AudioBuffer | null = null;
     private last = new Map<string, number>();
     private music: Music | null = null;
@@ -63,12 +67,21 @@ export class Sound {
             this.sfxBus.connect(this.master);
             this.musicBus = this.ctx.createGain();
             this.musicBus.connect(this.master);
+            // A small room both share, each sending into it at its own volume.
+            const reverb = makeReverb(this.ctx);
+            const roomOut = this.ctx.createGain();
+            roomOut.gain.value = 0.6;
+            reverb.connect(roomOut).connect(this.master);
+            this.sfxRoom = this.ctx.createGain();
+            this.sfxRoom.connect(reverb);
+            this.musicRoom = this.ctx.createGain();
+            this.musicRoom.connect(reverb);
             this.applyVolume();
             const len = this.ctx.sampleRate;
             this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
             const d = this.noiseBuf.getChannelData(0);
             for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-            this.music = new Music(this.ctx, this.musicBus, this.noiseBuf);
+            this.music = new Music(this.ctx, this.musicBus, this.noiseBuf, this.musicRoom);
             this.music.play(this.track);
         }
         if (this.ctx.state === 'suspended') void this.ctx.resume();
@@ -110,6 +123,8 @@ export class Sound {
         // Squared, so the sliders feel even: half way sounds about half as loud.
         this.sfxBus?.gain.setTargetAtTime(this.volume ** 2 * 1.2, t, 0.02);
         this.musicBus?.gain.setTargetAtTime(this.musicVolume ** 2 * 1.6, t, 0.02);
+        this.sfxRoom?.gain.setTargetAtTime(this.volume ** 2 * 1.2, t, 0.02);
+        this.musicRoom?.gain.setTargetAtTime(this.musicVolume ** 2 * 1.6, t, 0.02);
     }
 
     /** Remember mute and both volumes in localStorage for the next visit. */
@@ -134,17 +149,48 @@ export class Sound {
 
     // ---- building blocks -------------------------------------------------------
 
-    /** A gain node for one sound, panned left/right and routed into the master output. */
-    private out(pan: number, vol: number): GainNode {
+    /** A gain node for one sound, panned left/right, routed into the effects bus and `wet` of it into the room. */
+    private out(pan: number, vol: number, wet = 0): GainNode {
         const ctx = this.ctx!;
         const g = ctx.createGain();
         g.gain.value = vol;
+        let tail: AudioNode = g;
         if (pan && ctx.createStereoPanner) {
             const p = ctx.createStereoPanner();
             p.pan.value = pan;
-            g.connect(p).connect(this.sfxBus!);
-        } else g.connect(this.sfxBus!);
+            tail = g.connect(p);
+        }
+        tail.connect(this.sfxBus!);
+        if (wet > 0 && this.sfxRoom) {
+            const send = ctx.createGain();
+            send.gain.value = wet;
+            tail.connect(send).connect(this.sfxRoom);
+        }
         return g;
+    }
+
+    /** An FM note on one of the synth's patches (see synth.ts), panned and ringing `wet` into the room. */
+    private fm(
+        patch: PatchName,
+        freq: number,
+        dur: number,
+        opts: { vol?: number; to?: number; at?: number; pan?: number; wet?: number } = {},
+    ): void {
+        const ctx = this.ctx!;
+        const dest = this.out(opts.pan ?? 0, 1, opts.wet ?? 0.25);
+        fmNote(ctx, dest, PATCHES[patch], freq, ctx.currentTime + (opts.at ?? 0), dur, opts.vol ?? 0.2, opts.to);
+    }
+
+    /** A run of FM notes one after another, `step` seconds apart. */
+    private fmArp(
+        patch: PatchName,
+        notes: number[],
+        step: number,
+        opts: { vol?: number; dur?: number; pan?: number; wet?: number } = {},
+    ): void {
+        notes.forEach((n, i) =>
+            this.fm(patch, n, opts.dur ?? 0.2, { vol: opts.vol, at: i * step, pan: opts.pan, wet: opts.wet }),
+        );
     }
 
     /** A pitched blip with a quick attack and exponential decay, optionally sliding. */
@@ -201,22 +247,6 @@ export class Sound {
         src.connect(f).connect(g);
         src.start(t, Math.random() * 0.5);
         src.stop(t + dur + 0.02);
-    }
-
-    /** Play a run of notes one after another, `step` seconds apart. */
-    private arp(
-        notes: number[],
-        step: number,
-        opts: { type?: OscillatorType; vol?: number; dur?: number; pan?: number } = {},
-    ): void {
-        notes.forEach((n, i) =>
-            this.tone(n, opts.dur ?? 0.16, {
-                type: opts.type ?? 'triangle',
-                vol: opts.vol ?? 0.22,
-                at: i * step,
-                pan: opts.pan,
-            }),
-        );
     }
 
     /**
@@ -317,114 +347,162 @@ export class Sound {
         const note = (semi: number) => 440 * Math.pow(2, semi / 12);
         switch (name) {
             case 'shot':
-                if (this.throttle('shot' + pan, 0.05)) return;
-                this.tone(1400, 0.05, { type: 'square', vol: v(0.035), to: 900, pan });
+                // A soft, quick plink: it plays all the time, so it stays small and dry.
+                if (this.throttle('shot' + pan, 0.06)) return;
+                this.fm('glock', note(26), 0.05, { vol: v(0.035), to: note(21), pan, wet: 0 });
                 break;
             case 'pop': {
-                // Pops climb a major scale as a chain grows.
+                // Each pop is a sparkling bell a step up a major scale as the chain grows, over a little crackle;
+                // long chains add the fifth above and ring out.
                 if (this.throttle('pop' + pan, 0.03)) return;
                 const scale = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24];
-                const f = note(3 + scale[Math.min(scale.length - 1, Math.max(0, p - 1))]);
-                this.tone(f * 1.5, 0.11, { type: 'sine', vol: v(0.22), to: f, pan });
-                this.noise(0.05, { vol: v(0.06), freq: 4000, q: 2, pan });
+                const k = Math.min(scale.length - 1, Math.max(0, p - 1));
+                const f = note(15 + scale[k]);
+                this.fm('bell', f, 0.32, { vol: v(0.13), pan, wet: 0.35 });
+                this.noise(0.07, { vol: v(0.09), freq: 3500, to: 9000, q: 1, type: 'highpass', pan });
+                this.tone(f / 4, 0.07, { type: 'triangle', vol: v(0.08), to: f / 8, pan });
+                if (p >= 6) this.fm('glock', f * 1.5, 0.25, { vol: v(0.05), at: 0.03, pan, wet: 0.45 });
                 break;
             }
             case 'send':
-                this.arp([note(15), note(19), note(22), note(27)].slice(0, 2 + Math.min(2, Math.floor(p / 3))), 0.045, {
-                    vol: v(0.16),
-                    type: 'sine',
-                    pan,
-                });
+                // A chain's attack takes off: an upward whoosh with a quick rising arpeggio, longer for bigger ones.
+                this.noise(0.35, { vol: v(0.16), freq: 500, to: 4000, q: 1.2, pan, hold: true });
+                this.fmArp(
+                    'pluck',
+                    [note(15), note(19), note(22), note(27), note(31)].slice(0, 2 + Math.min(3, Math.floor(p / 3))),
+                    0.04,
+                    {
+                        vol: v(0.12),
+                        dur: 0.18,
+                        pan,
+                        wet: 0.3,
+                    },
+                );
                 break;
             case 'charge':
-                // One rising chime per charge level reached.
-                this.tone(note(7 + p * 5), 0.25, { type: 'triangle', vol: v(0.18), to: note(12 + p * 5), pan });
+                // A shimmering chime rising with each charge level reached.
+                this.fm('bell', note(7 + p * 5), 0.4, { vol: v(0.12), to: note(12 + p * 5), pan, wet: 0.4 });
+                this.fm('glock', note(19 + p * 5), 0.3, { vol: v(0.05), at: 0.05, pan, wet: 0.4 });
                 break;
             case 'release':
-                this.noise(0.25, { vol: v(0.2), freq: 600, to: 3000, q: 1.5, pan });
-                this.tone(note(-5 + p * 4), 0.2, { type: 'sawtooth', vol: v(0.08), to: note(7 + p * 4), pan });
+                // Letting a charge go: a bright brass blast and a rush of air.
+                this.noise(0.3, { vol: v(0.2), freq: 600, to: 5000, q: 1.2, pan });
+                this.fm('brass', note(-5 + p * 4), 0.22, { vol: v(0.1), to: note(5 + p * 4), pan, wet: 0.2 });
                 break;
             case 'extra':
-                this.arp([note(10), note(14), note(17)], 0.06, { type: 'square', vol: v(0.07), pan });
+                // An Extra Attack is sent: a quick heroic brass call.
+                this.fmArp('brass', [note(2), note(9), note(14)], 0.07, { vol: v(0.09), dur: 0.2, pan, wet: 0.3 });
                 break;
             case 'boss':
-                this.arp([note(-12), note(-5), note(0), note(7)], 0.09, {
-                    type: 'sawtooth',
+                // A guardian is summoned: low brass rising in fourths over a swelling rumble.
+                this.fmArp('brass', [note(-17), note(-12), note(-7), note(-2)], 0.11, {
+                    vol: v(0.11),
+                    dur: 0.35,
+                    pan,
+                    wet: 0.35,
+                });
+                this.noise(0.7, { vol: v(0.14), freq: 200, to: 2000, pan, hold: true });
+                break;
+            case 'reverse':
+                // A fireball shot back: a bright upward zing.
+                this.fm('glock', note(19), 0.14, { vol: v(0.08), to: note(26), pan, wet: 0.3 });
+                this.noise(0.08, { vol: v(0.08), freq: 6000, q: 3, pan });
+                break;
+            case 'hurt':
+                // A hit: a crunchy impact and a falling FM groan.
+                this.noise(0.3, { vol: v(0.38), freq: 2500, to: 150, type: 'lowpass', pan });
+                this.fm('bass', 260, 0.35, { vol: v(0.16), to: 70, pan, wet: 0.1 });
+                break;
+            case 'stun':
+                // Seeing stars: little birds twittering round her head.
+                for (let i = 0; i < 6; i++)
+                    this.tone(note(31 + (i % 2) * 4), 0.06, {
+                        type: 'sine',
+                        vol: v(0.07),
+                        to: note(35 + (i % 2) * 4),
+                        at: i * 0.08,
+                        pan: pan + Math.sin(i * 1.7) * 0.3,
+                    });
+                this.tone(330, 0.45, { type: 'triangle', vol: v(0.1), to: 160, pan });
+                break;
+            case 'heal':
+                this.fmArp('bell', [note(12), note(16), note(19), note(24)], 0.06, {
                     vol: v(0.09),
                     dur: 0.3,
                     pan,
+                    wet: 0.45,
                 });
-                this.noise(0.6, { vol: v(0.12), freq: 300, to: 1800, pan });
-                break;
-            case 'reverse':
-                this.tone(note(19), 0.12, { type: 'square', vol: v(0.07), to: note(24), pan });
-                break;
-            case 'hurt':
-                this.noise(0.35, { vol: v(0.35), freq: 900, to: 120, type: 'lowpass', pan });
-                this.tone(220, 0.35, { type: 'sawtooth', vol: v(0.12), to: 70, pan });
-                break;
-            case 'stun':
-                this.tone(330, 0.5, { type: 'triangle', vol: v(0.16), to: 150, pan });
-                this.tone(345, 0.5, { type: 'triangle', vol: v(0.1), to: 140, pan });
-                break;
-            case 'heal':
-                this.arp([note(12), note(16), note(19)], 0.07, { type: 'sine', vol: v(0.12), pan });
                 break;
             case 'bomb':
                 this.bomb(p, pan, vol);
                 break;
             case 'fever':
-                this.arp([note(0), note(4), note(7), note(12), note(16), note(19), note(24)], 0.05, {
-                    vol: v(0.16),
+                // Fever: a brass fanfare with a glittering run on top.
+                this.fmArp('brass', [note(0), note(4), note(7), note(12)], 0.08, {
+                    vol: v(0.1),
+                    dur: 0.25,
                     pan,
+                    wet: 0.3,
+                });
+                this.fmArp('glock', [note(24), note(28), note(31), note(36), note(40), note(43)], 0.045, {
+                    vol: v(0.05),
+                    dur: 0.2,
+                    pan,
+                    wet: 0.5,
                 });
                 break;
             case 'shatter':
+                // Ice or glass breaking: a cluster of bells and a bright crash.
                 for (let i = 0; i < 5; i++)
-                    this.tone(note(24 + i * 3), 0.25, { type: 'sine', vol: v(0.07), at: i * 0.02, pan });
-                this.noise(0.3, { vol: v(0.15), freq: 6000, q: 4, pan });
+                    this.fm('glock', note(24 + i * 3), 0.3, { vol: v(0.05), at: i * 0.02, pan, wet: 0.5 });
+                this.noise(0.3, { vol: v(0.16), freq: 6000, q: 3, pan });
                 break;
             case 'bossIn':
-                this.tone(note(-17), 0.4, { type: 'sawtooth', vol: v(0.1), to: note(-12), pan });
-                this.tone(note(-17), 0.4, { type: 'sawtooth', vol: v(0.1), to: note(-12), at: 0.45, pan });
+                // A warning siren: two brass blasts.
+                this.fm('brass', note(-17), 0.35, { vol: v(0.11), to: note(-12), pan, wet: 0.25 });
+                this.fm('brass', note(-17), 0.35, { vol: v(0.11), to: note(-12), at: 0.45, pan, wet: 0.25 });
                 break;
             case 'banish':
-                this.noise(0.8, { vol: v(0.35), freq: 1500, to: 60, type: 'lowpass', pan });
-                this.arp([note(12), note(7), note(4), note(0)], 0.06, { type: 'triangle', vol: v(0.12), pan });
+                // A guardian banished: a big boom and bells falling away.
+                this.noise(0.8, { vol: v(0.38), freq: 1800, to: 60, type: 'lowpass', pan });
+                this.tone(110, 0.6, { type: 'sine', vol: v(0.2), to: 35, pan });
+                this.fmArp('bell', [note(24), note(19), note(16), note(12), note(7)], 0.06, {
+                    vol: v(0.08),
+                    dur: 0.35,
+                    pan,
+                    wet: 0.5,
+                });
                 break;
             case 'reel':
-                this.tone(note(5), 0.18, { type: 'square', vol: v(0.07), to: note(-2), pan });
+                this.fm('pluck', note(5), 0.16, { vol: v(0.08), to: note(-2), pan });
                 break;
             case 'clash':
                 this.noise(0.5, { vol: v(0.35), freq: 3000, to: 200, pan });
-                this.tone(880, 0.4, { type: 'square', vol: v(0.08), to: 110 });
+                this.fm('brass', 880, 0.4, { vol: v(0.08), to: 110, wet: 0.3 });
                 break;
             case 'crow':
                 this.tone(note(-7), 0.7, { type: 'sawtooth', vol: v(0.08), to: note(-19), pan });
                 this.tone(note(-6), 0.7, { type: 'sawtooth', vol: v(0.06), to: note(-18), pan });
                 break;
             case 'death':
-                this.tone(note(-10), 1.0, { type: 'sawtooth', vol: v(0.2), to: 30, pan });
+                this.fm('brass', note(-10), 1.0, { vol: v(0.15), to: 30, pan, wet: 0.3 });
                 this.noise(1.0, { vol: v(0.3), freq: 400, to: 40, type: 'lowpass', pan });
                 break;
             case 'tick':
-                this.tone(1200, 0.04, { type: 'square', vol: v(0.04) });
+                this.fm('glock', note(27), 0.05, { vol: v(0.05), wet: 0 });
                 break;
             case 'ok':
-                this.arp([note(7), note(14)], 0.06, { type: 'square', vol: v(0.06) });
+                this.fmArp('glock', [note(19), note(26)], 0.06, { vol: v(0.07), dur: 0.12, wet: 0.2 });
                 break;
             case 'start':
-                this.arp([note(0), note(7), note(12)], 0.1, { type: 'triangle', vol: v(0.18), dur: 0.2 });
+                this.fmArp('brass', [note(0), note(7), note(12)], 0.1, { vol: v(0.12), dur: 0.22, wet: 0.3 });
                 break;
             case 'win':
-                this.arp([note(0), note(4), note(7), note(12), note(7), note(12), note(16)], 0.09, {
-                    type: 'triangle',
-                    vol: v(0.2),
-                    dur: 0.22,
-                });
+                this.fmArp('brass', [note(0), note(4), note(7), note(12)], 0.1, { vol: v(0.11), dur: 0.25, wet: 0.3 });
+                this.fmArp('bell', [note(16), note(19), note(24), note(28)], 0.1, { vol: v(0.08), dur: 0.5, wet: 0.5 });
                 break;
             case 'lose':
-                this.arp([note(7), note(3), note(0), note(-5)], 0.16, { type: 'triangle', vol: v(0.18), dur: 0.3 });
+                this.fmArp('ep', [note(7), note(3), note(0), note(-5)], 0.18, { vol: v(0.14), dur: 0.4, wet: 0.35 });
                 break;
         }
     }
