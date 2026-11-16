@@ -1,8 +1,9 @@
-// Glimmerwing online relay. Zero dependencies: plain Node (18+).
+// Glimmerwing server: plain Node (18+); the database driver (mysql2) is loaded only when a database is set.
 //
 //   node server/server.mjs            # listens on PORT or 8787
 //
-// It serves dist/index.html at "/" and runs a WebSocket relay at "/ws".
+// It serves dist/index.html at "/", the game's API at "/api" (see api.mjs; saves go to the database set up in
+// db.mjs) and runs a WebSocket relay at "/ws".
 // The server never simulates anything: each player's browser runs its own
 // meadow and the server only pairs players and forwards their messages.
 //
@@ -19,6 +20,8 @@ import { createHash } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createApi } from './api.mjs';
+import { openStore } from './db.mjs';
 
 const PORT = Number(process.env.PORT) || 8787;
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -35,8 +38,15 @@ const rooms = new Map();
 
 // ---- HTTP ------------------------------------------------------------------
 
+const store = await openStore();
+const handleApi = createApi(store);
+
 const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
+    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+        void handleApi(req, res, url);
+        return;
+    }
     if (url.pathname === '/health') {
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ ok: true, players: clients.size, waiting: queue.size, rooms: rooms.size }));
@@ -294,4 +304,16 @@ setInterval(() => {
         }
 }, 20000);
 
-server.listen(PORT, () => console.log(`Glimmerwing server on http://localhost:${PORT}  (WebSocket at /ws)`));
+server.listen(PORT, () =>
+    console.log(
+        `Glimmerwing server on http://localhost:${PORT}  (WebSocket at /ws, API at /api, ` +
+            `${store ? `saves in ${store.kind}` : 'no database: saves stay in the browser'})`,
+    ),
+);
+
+// Close the database cleanly when docker stops the container.
+for (const sig of ['SIGINT', 'SIGTERM'])
+    process.on(sig, () => {
+        server.close();
+        Promise.resolve(store?.close()).finally(() => process.exit(0));
+    });

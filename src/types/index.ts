@@ -5,6 +5,7 @@
  *
  * Types used by a single module stay private to that module.
  */
+export type * from './account';
 export type * from './audio';
 export type * from './characters';
 export type * from './flow';

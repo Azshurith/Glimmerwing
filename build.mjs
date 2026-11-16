@@ -63,10 +63,10 @@ self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 // Pages: network first (so updates arrive), each page's own cached copy when offline.
-// Fonts and everything else: cache first, filled as they're fetched.
+// Fonts and everything else: cache first, filled as they're fetched. The relay and the API always go to the server.
 self.addEventListener('fetch', e => {
   const req = e.request;
-  if (req.method !== 'GET' || req.url.includes('/ws')) return;
+  if (req.method !== 'GET' || req.url.includes('/ws') || new URL(req.url).pathname.startsWith('/api/')) return;
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res; })
       .catch(() => caches.match(req, { ignoreSearch: true }).then(hit => hit || caches.match('index.html'))));

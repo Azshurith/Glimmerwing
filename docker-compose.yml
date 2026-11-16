@@ -1,0 +1,84 @@
+services:
+    node:
+        container_name: ${PROJECT_NAME}-node
+        image: ${PROJECT_NAME}-node:${PROJECT_NAME}-${PROJECT_VERSION}
+        build:
+            context: ${NODE_DOCKERFILE}
+            dockerfile: Dockerfile
+        ports:
+            - '${NODE_PORT}:${NODE_PORT}'
+        environment:
+            PORT: ${NODE_PORT}
+            GW_SERVER: ${GW_SERVER}
+            DB_HOST: ${MARIADB_HOST}
+            DB_PORT: 3306
+            DB_DATABASE: ${MARIADB_DATABASE}
+            DB_USERNAME: ${MARIADB_USERNAME}
+            DB_PASSWORD: ${MARIADB_PASSWORD}
+        volumes:
+            - ${NODE_DIRECTORY}:${NODE_WORK_DIRECTORY}
+            # The container's own packages, so they never mix with the ones installed on the host.
+            - node_modules:${NODE_WORK_DIRECTORY}/node_modules
+        working_dir: ${NODE_WORK_DIRECTORY}
+        command: sh -c "npm install && npm run dev"
+        networks:
+            - glimmerwing
+        depends_on:
+            mariadb:
+                condition: service_healthy
+        restart: unless-stopped
+
+    mariadb:
+        container_name: ${PROJECT_NAME}-mariadb
+        image: ${PROJECT_NAME}-mariadb:${PROJECT_NAME}-${PROJECT_VERSION}
+        build:
+            context: ${MARIADB_DOCKERFILE}
+            dockerfile: Dockerfile
+        ports:
+            - '${MARIADB_PORT}:3306'
+        environment:
+            MYSQL_DATABASE: ${MARIADB_DATABASE}
+            MYSQL_USER: ${MARIADB_USERNAME}
+            MYSQL_PASSWORD: ${MARIADB_PASSWORD}
+            MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+        healthcheck:
+            test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+            interval: 5s
+            timeout: 5s
+            retries: 20
+            start_period: 10s
+        networks:
+            - glimmerwing
+        volumes:
+            - database:/var/lib/mysql
+        restart: unless-stopped
+
+    phpmyadmin:
+        container_name: ${PROJECT_NAME}-phpmyadmin
+        image: ${PROJECT_NAME}-phpmyadmin:${PROJECT_NAME}-${PROJECT_VERSION}
+        build:
+            context: ${PHPMYADMIN_DOCKERFILE}
+            dockerfile: Dockerfile
+        ports:
+            - '${PHPMYADMIN_PORT}:${PHPMYADMIN_PORT_MAP}'
+        environment:
+            PMA_HOST: ${PHPMYADMIN_PMA_HOST}
+            PMA_USER: ${MARIADB_USERNAME}
+            PMA_PASSWORD: ${MARIADB_PASSWORD}
+        networks:
+            - glimmerwing
+        depends_on:
+            - mariadb
+
+networks:
+    glimmerwing:
+        name: ${PROJECT_NAME}-network
+        driver: bridge
+
+volumes:
+    database:
+        name: ${PROJECT_NAME}-database
+        driver: local
+    node_modules:
+        name: ${PROJECT_NAME}-node-modules
+        driver: local
