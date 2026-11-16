@@ -1,6 +1,6 @@
 // Fairies' voices: a few spoken lines for each moment, played by Game.voice through Sound.speak. The moments are
 // picked on fairy select, a level-2 charge shot, a level-3 one that summons her guardian, Fever, taking a hit,
-// going down, winning the match, and shooting a volley of fireballs back. Clips are inlined as data URLs like the
+// going down, winning a round, and shooting a volley of fireballs back. Clips are inlined as data URLs like the
 // music; a fairy without a voice, or a moment without lines, stays silent.
 //
 // Stella's lines were cut from one recording (assets/source/voices/stella-hana.mp3, in the order below):

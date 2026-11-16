@@ -34,7 +34,7 @@ export type MusicTrack = 'menu' | 'select' | 'battle' | `map:${string}`;
 
 /**
  * A moment a fairy speaks at: picked, a level-2 or level-3 (guardian) charge shot, Fever, hit, knocked out, the
- * match won, and a volley of fireballs shot back.
+ * round won, and a volley of fireballs shot back.
  */
 export type VoiceEvent = 'pick' | 'charge' | 'summon' | 'fever' | 'hit' | 'death' | 'win' | 'reverse';
 
