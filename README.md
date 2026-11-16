@@ -14,7 +14,7 @@ whatever you chain in your meadow lands in your rival's.
     make project_setup   # copies .env.sample to .env: change the passwords in it
     make project_start   # docker compose up -d
 
-- http://localhost:8787 is the game (the `node` container builds it and runs `server/server.mjs`).
+- http://localhost:8787 is the game (the `node` container builds it and runs the server, `dist/server.cjs`).
 - http://localhost:9091 is phpMyAdmin, on the MariaDB the game saves to (host port 3307).
 
 `make help` lists the rest (logs, rebuild, a MariaDB prompt, a dump). The layout follows the usual one:
@@ -30,8 +30,16 @@ finished while it can't be reached wait in the browser and count once sent and c
 Each browser gets a guest account the first time it reaches the server. Progress, settings (keys, display,
 sound), every match, every Endless run (the leaderboard) and saved replays go to the database; the browser
 keeps its own copy too, so the game still plays offline or from a file (the server's progress replaces it when
-they meet; for settings the copy saved last wins). Without a database (`npm run dev`) the API answers 503 and saves stay in the browser;
-`DB=memory npm run server` tries the API with an in-memory store instead.
+they meet; for settings the copy saved last wins). Without a database (`npm run dev`) the API answers 503 and saves stay in the browser.
+
+The server is Express and TypeORM (TypeScript in `server/src/`). The tables are made by its migrations, run at
+start-up; every table ends with `created_at`, `updated_at` and `deleted_at` (soft deletes). The `characters` and
+`maps` tables list the game's fairies and maps: set `is_enabled` to 0 (in phpMyAdmin, say) to switch one off, and
+within a few seconds it shows as unavailable in the game and the server stops accepting games with it.
+`types_modes` lists the modes. All three are numbered by the database, with the game's own id (`pip`, `forest`)
+as `code`. A player's tables are `players_progress`, `players_settings`, `players_matches`, `players_runs`
+(Endless) and `players_replays`; they point at the catalog by foreign key (`mode_id`, `map_id`, `fairy_id`,
+`rival_fairy_id`).
 
 ## Develop
 
@@ -62,7 +70,8 @@ type-aware `typescript-eslint` rules, Prettier for formatting, and an
       input/             keyboard, gamepad and touch
       audio/             synthesized sound effects
       net/               online relay client and lobby
-    server/              Node relay + static server for online play
+    server/src/          the server (Express, TypeORM migrations and entities, the
+                         online relay), bundled to dist/server.cjs
     assets/              sprite atlas, portrait, app icons (source art in assets/source)
     tools/               asset scripts (frame extraction for the sprite sheet)
 
@@ -91,7 +100,7 @@ or touch.
   service worker (`sw.js`) next to `index.html`, so served over https (or
   localhost) the game can be added to a home screen or installed as a
   desktop app, and opens offline. Upload the whole `dist/` folder when you
-  host it somewhere other than `server/server.mjs`.
+  host it somewhere other than the game's own server.
 
 ## Play online
 
@@ -105,8 +114,8 @@ computer's IP instead of localhost) and pick **Play online**:
 - **Create friend room** gives a four-letter code; your friend types it in and
   presses Join, or opens the link `?room=CODE`.
 
-To put it on the internet, run `node server/server.mjs` on any host that runs
-Node 18+ and allows WebSockets (Render, Fly.io, Railway, a VPS). It reads
+To put it on the internet, run `npm run server` (after `npm install` and
+`npm run build`) on any host that runs Node 20+ and allows WebSockets (Render, Fly.io, Railway, a VPS). It reads
 `PORT` from the environment and serves the built game itself, so one deploy
 is the whole thing. If you host the page somewhere else (itch.io, GitHub
 Pages), bake the relay address in when you build:

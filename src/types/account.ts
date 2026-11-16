@@ -29,6 +29,12 @@ export interface MeResponse {
     endless: EndlessRank | null;
 }
 
+/** What the server has switched off (GET /api/catalog): fairies and maps that can't be picked. */
+export interface CatalogResponse {
+    disabledCharacters: string[];
+    disabledMaps: string[];
+}
+
 /** Where a player's best Endless run stands among everyone's. */
 export interface EndlessRank {
     rank: number;

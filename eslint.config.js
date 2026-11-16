@@ -11,9 +11,9 @@ export default tseslint.config(
 
     js.configs.recommended,
 
-    // The game (browser, TypeScript, checked against the type information).
+    // The game (browser) and its server (Node), TypeScript, checked against the type information.
     {
-        files: ['src/**/*.ts'],
+        files: ['src/**/*.ts', 'server/**/*.ts'],
         extends: [...tseslint.configs.recommendedTypeChecked, ...tseslint.configs.stylisticTypeChecked],
         languageOptions: {
             globals: globals.browser,
@@ -38,7 +38,7 @@ export default tseslint.config(
     // says what it is for.
     // TypeScript carries the types, so docblocks hold prose only (no {type} annotations).
     {
-        files: ['src/**/*.ts'],
+        files: ['src/**/*.ts', 'server/**/*.ts'],
         plugins: { jsdoc },
         rules: {
             'jsdoc/require-jsdoc': [
@@ -91,7 +91,13 @@ export default tseslint.config(
         },
     },
 
-    // Build script, relay server and this config (Node).
+    // The server runs on Node.
+    {
+        files: ['server/**/*.ts'],
+        languageOptions: { globals: globals.node },
+    },
+
+    // Build script and this config (Node).
     {
         files: ['**/*.{js,mjs,cjs}'],
         languageOptions: { globals: globals.node },

@@ -11,6 +11,7 @@ import { rosterMedallions, rosterPreviewButton } from '@/render/screens/roster-s
 import { mapsMedallions } from '@/render/screens/maps-screen';
 import { MAP_CARDS, MAP_COLS, mapCards } from '@/render/screens/map-screen';
 import { MAPS, mapById, mapForSeed } from '@/data/maps';
+import { fairyAvailable, loadCatalog, mapAvailable, setCatalog } from '@/data/availability';
 import { stageOpen } from '@/data/stages';
 import { titleButtons } from '@/render/screens/title-screen';
 import { clock, replayPanelLayout } from '@/render/hud';
@@ -406,9 +407,9 @@ export class Game {
         saveProgress(this.progress);
     }
 
-    /** True if the fairy needs no unlock or has been unlocked. */
+    /** True if the fairy needs no unlock or has been unlocked, and the server hasn't switched her off. */
     isUnlocked(f: Fairy): boolean {
-        return !f.unlock || this.progress.unlocked.includes(f.id);
+        return (!f.unlock || this.progress.unlocked.includes(f.id)) && fairyAvailable(f.id);
     }
 
     /** The select screen's fairy medallions, with their hit areas for touch. */
@@ -424,7 +425,9 @@ export class Game {
         if (this.vsCpu) {
             // The CPU flies a random fairy from the whole roster, locked ones included,
             // so you can see what you're working toward.
-            const others = FAIRIES.filter(f => f !== this.picks[0]);
+            // (none the server has switched off, unless that leaves no one).
+            const on = FAIRIES.filter(f => f !== this.picks[0] && fairyAvailable(f.id));
+            const others = on.length ? on : FAIRIES.filter(f => f !== this.picks[0]);
             this.picks[1] = others[Math.floor(Math.random() * others.length)];
         }
         // Random picks a map for the whole match; online, each round's seed picks one instead (both sides agree).
@@ -445,9 +448,9 @@ export class Game {
         this.newRound(seed);
     }
 
-    /** Whether map `i` (in MAPS order) is open on the trophy road. */
+    /** Whether map `i` (in MAPS order) is open on the trophy road and not switched off by the server. */
     private mapOpen(i: number): boolean {
-        return stageOpen(this.progress, MAPS[i].id);
+        return stageOpen(this.progress, MAPS[i].id) && mapAvailable(MAPS[i].id);
     }
 
     /** Random's pick: any map whose stage is open. */
@@ -899,6 +902,9 @@ export class Game {
     async connectAccount(): Promise<void> {
         this.sound.onChange = () => this.account.saveSettings(this.synced());
         this.account.onProgress = p => this.adoptProgress(p);
+        // What's switched off: as last heard at once, then the server's word.
+        loadCatalog();
+        void this.account.catalog().then(c => c && setCatalog(c));
         const got = await this.account.start(this.synced());
         if (got.progress) this.adoptProgress(got.progress);
         if (got.settings) {

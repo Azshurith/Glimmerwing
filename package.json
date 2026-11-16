@@ -5,19 +5,22 @@
     "scripts": {
         "dev": "npm run build && npm run server",
         "build": "npm run typecheck && node build.mjs",
-        "server": "node server/server.mjs",
+        "server": "node dist/server.cjs",
         "typecheck": "tsc -p .",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
-        "check": "npm run typecheck && npm run lint && npm run format:check"
+        "check": "npm run typecheck && npm run typecheck:server && npm run lint && npm run format:check",
+        "typecheck:server": "tsc -p server"
     },
     "keywords": [],
     "author": "",
     "license": "ISC",
     "devDependencies": {
         "@eslint/js": "^9.39.5",
+        "@types/express": "^5.0.3",
+        "@types/node": "^22.10.0",
         "esbuild": "^0.21.5",
         "eslint": "^9.39.5",
         "eslint-config-prettier": "^9.1.2",
@@ -30,9 +33,12 @@
     "type": "module",
     "private": true,
     "engines": {
-        "node": ">=18"
+        "node": ">=20"
     },
     "dependencies": {
-        "mysql2": "^3.11.0"
+        "express": "^5.1.0",
+        "mysql2": "^3.11.0",
+        "reflect-metadata": "^0.2.2",
+        "typeorm": "^0.3.27"
     }
 }

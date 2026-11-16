@@ -1,4 +1,5 @@
 import * as C from '@/core/config';
+import { fairyAvailable } from '@/data/availability';
 import { FAIRIES } from '@/data/characters';
 import type { Layout, SelectSide, SelectView } from '@/types';
 import { Backdrop } from '@/render/backdrop';
@@ -245,7 +246,8 @@ export class SelectScreen {
         ctx.lineWidth = 1.2;
         plate(ctx);
         ctx.stroke();
-        const name = s.cpu ? '? ? ?' : s.locked ? 'LOCKED' : fy.name.toUpperCase();
+        const off = !fairyAvailable(fy.id);
+        const name = s.cpu ? '? ? ?' : s.locked ? (off ? 'UNAVAILABLE' : 'LOCKED') : fy.name.toUpperCase();
         arcadeText(
             ctx,
             name,
@@ -262,7 +264,8 @@ export class SelectScreen {
         const tx = mirror ? x + pw - 4 : x + 4;
         ctx.font = `italic 600 ${9 * cz}px ${FONT}`;
         ctx.fillStyle = s.locked ? '#ffe27a' : 'rgba(246,240,255,0.8)';
-        ctx.fillText(s.cpu ? 'Chooses at random' : s.locked ? (s.fairy.unlock?.hint ?? '') : fy.blurb, tx, y, pw - 8);
+        const hint = off ? 'Not available right now' : (s.fairy.unlock?.hint ?? '');
+        ctx.fillText(s.cpu ? 'Chooses at random' : s.locked ? hint : fy.blurb, tx, y, pw - 8);
         y += 8;
         const stats: [string, number][] = [
             ['SPEED', rate(fy.speed, 1.2)],

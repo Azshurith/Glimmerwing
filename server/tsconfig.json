@@ -1,0 +1,17 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "target": "ES2022",
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
+        "types": ["node"],
+        // TypeORM's entities are decorated classes. esbuild doesn't emit decorator metadata, so every column
+        // names its type; and fields are plain assignments, as in the game's own build.
+        "experimentalDecorators": true,
+        "useDefineForClassFields": false,
+        "paths": {
+            "@/*": ["../src/*"],
+            "@server/*": ["./src/*"]
+        }
+    },
+    "include": ["src", "../src/types"]
+}
