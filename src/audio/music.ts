@@ -2,6 +2,7 @@
 // TSS's arcade era (bells, electric piano, slap bass, brass): a gentle one for the menus and a bouncy one for
 // rounds, played by a small step sequencer that schedules notes a little ahead of time.
 import type { MusicTrack } from '@/types';
+import { MAP_MUSIC } from '@/data/music';
 import { PATCHES, fmNote, hz, type PatchName } from './synth';
 
 /** One voice of a loop: a note, a chord (several notes) or rest on each step. */
@@ -160,7 +161,7 @@ const BATTLE: Loop = {
     ],
 };
 
-const LOOPS: Record<MusicTrack, Loop> = { menu: MENU, battle: BATTLE };
+const LOOPS: Record<'menu' | 'battle', Loop> = { menu: MENU, battle: BATTLE };
 
 /** How far ahead notes are scheduled, and how often the scheduler wakes, in seconds. */
 const AHEAD = 0.15;
@@ -175,6 +176,8 @@ export class Music {
     private timer: number | null = null;
     /** The gain each loop plays through, so switching can fade the old one out. */
     private bus: GainNode | null = null;
+    /** Recorded tracks once decoded, by url, so a map's music only decodes the first time. */
+    private decoded = new Map<string, Promise<AudioBuffer>>();
 
     constructor(
         private ctx: AudioContext,
@@ -198,16 +201,56 @@ export class Music {
         }
         if (this.timer !== null) clearInterval(this.timer);
         this.timer = null;
-        this.loop = track ? LOOPS[track] : null;
-        if (!this.loop) return;
+        this.loop = null;
+        if (!track) return;
         this.bus = ctx.createGain();
         this.bus.gain.setValueAtTime(0.0001, ctx.currentTime);
         this.bus.gain.exponentialRampToValueAtTime(1, ctx.currentTime + 0.6);
         this.bus.connect(this.out);
+        if (track.startsWith('map:')) {
+            const url = MAP_MUSIC[track.slice(4)];
+            if (url) this.playFile(url, track, this.bus);
+            return;
+        }
+        this.loop = LOOPS[track as 'menu' | 'battle'];
         this.step = 0;
         this.next = ctx.currentTime + 0.1;
         this.timer = window.setInterval(() => this.schedule(), TICK_MS);
         this.schedule();
+    }
+
+    /** Decode a recorded track (once) and loop it into `bus`, unless the music has moved on meanwhile. */
+    private playFile(url: string, track: MusicTrack, bus: GainNode): void {
+        const ctx = this.ctx;
+        let buf = this.decoded.get(url);
+        if (!buf) {
+            buf = fetch(url)
+                .then(r => r.arrayBuffer())
+                .then(data => ctx.decodeAudioData(data));
+            this.decoded.set(url, buf);
+        }
+        buf.then(
+            b => {
+                if (this.track !== track || this.bus !== bus) return;
+                const src = ctx.createBufferSource();
+                src.buffer = b;
+                src.loop = true;
+                // Recorded tracks are mastered loud: bring them down to sit with the effects like the synth loops.
+                const level = ctx.createGain();
+                level.gain.value = 0.35;
+                src.connect(level).connect(bus);
+                src.start();
+                // Stop it once the bus is faded out and let go.
+                const stop = () => {
+                    if (this.bus !== bus) {
+                        src.stop();
+                        clearInterval(watch);
+                    }
+                };
+                const watch = window.setInterval(stop, 500);
+            },
+            (e: unknown) => console.warn('music: could not decode', url, e),
+        );
     }
 
     /** Schedule every step that starts within the look-ahead window. */

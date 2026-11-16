@@ -3,6 +3,7 @@ import { Game } from './game/game';
 import { Input } from './input/input';
 import { Lobby } from './net/lobby';
 import { Sound } from './audio/sound';
+import { roundMusic } from './data/music';
 import { Renderer } from './render/renderer';
 import { AdaptiveResolution } from './render/resolution';
 import { initSettingsPanel } from './page/settings-panel';
@@ -194,7 +195,7 @@ function syncPage(): void {
         const menus = ['title', 'modes', 'roster', 'maps', 'profile', 'settings', 'select', 'mapselect'].includes(
             shownPhase,
         );
-        sound.playMusic(menus ? 'menu' : 'battle');
+        sound.playMusic(menus ? 'menu' : roundMusic(game.roundMap));
     }
 }
 

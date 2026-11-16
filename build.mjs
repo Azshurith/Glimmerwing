@@ -8,7 +8,7 @@ const out = await build({
     format: 'iife',
     target: 'es2020',
     write: false,
-    loader: { '.png': 'dataurl', '.jpg': 'dataurl' },
+    loader: { '.png': 'dataurl', '.jpg': 'dataurl', '.mp3': 'dataurl' },
     // GW_SERVER=wss://your-host/ws npm run build  bakes in where the online relay lives.
     define: { __GW_SERVER__: JSON.stringify(process.env.GW_SERVER ?? '') },
 });
