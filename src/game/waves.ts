@@ -143,7 +143,8 @@ function layoutSlots(shape: FormationShape, n: number, s: number): Vec[] {
             }
             case 'snake': {
                 // Rows back and forth, each joined to the next by a member out at the turn, like a coiled train.
-                const k = s > 34 ? 5 : 6,
+                // As many to a row as the meadow holds, with room for the turn.
+                const k = Math.max(3, Math.min(6, Math.floor((fieldW() - 30) / s - 1.1) + 1)),
                     lap = k + 1,
                     row = Math.floor(i / lap),
                     j = i % lap,
@@ -176,18 +177,22 @@ function layoutSlots(shape: FormationShape, n: number, s: number): Vec[] {
 }
 
 /**
- * How far apart a formation's neighbours sit. Up in the meadow they're just inside burst range, so one pop can
- * carry through the whole formation (TSS), yet with a sliver of room for the fairy to slip between them; low in
- * her half they leave her a clear doorway between any two, so she never has to fly into one.
+ * How far apart a formation's neighbours sit: far enough that the gap you can see between two critters' art is
+ * the widest fairy's hitbox with room to spare, so she can plainly fly through, yet up in the meadow still inside
+ * one pop's reach so a chain carries through the whole formation (TSS); low in her half the doorway is wider.
  */
-function formationSpacing(size: number, deep: boolean, beetle: boolean): number {
-    const body = 2 * C.PUFF_RADIUS * 0.8 * size, // what touching a critter takes (Field.checkPlayerHits)
+export function formationSpacing(size: number, deep: boolean, beetle: boolean): number {
+    const look = C.CRITTER_LOOK_W * size, // the critter as drawn
         fairy = 2 * C.PLAYER_RADIUS * 1.1; // the widest fairy's hitbox
-    const reach = C.BURST_RADIUS + C.PUFF_RADIUS * 0.6 * size; // how far one pop reaches (Field's bursts)
+    // How far one pop reaches (Field's bursts), for the fairy with the smallest pops, so every fairy can chain it.
+    const reach = C.BURST_RADIUS * C.MIN_FAIRY_BURST + C.PUFF_RADIUS * 0.6 * size;
     // Beetles march a touch further apart, unless that would take them out of one another's reach.
-    if (deep) return (body + fairy + 10) * (beetle ? 1.05 : 1);
-    const s = body + fairy + 3;
-    return Math.min(s * (beetle ? 1.05 : 1), Math.max(s, reach - 0.5));
+    if (deep) return (look + fairy + 14) * (beetle ? 1.05 : 1);
+    // A big critter's pop doesn't reach the next (as before): its gap is kept clear instead.
+    if (size > 1) return look + fairy + 6;
+    // A few shapes (a wave, a flower's petals, a snake's turns) put some neighbours a little past the spacing.
+    const s = Math.min(look + fairy + 8, reach / 1.08);
+    return Math.min(s * (beetle ? 1.05 : 1), Math.max(s, reach / 1.08));
 }
 
 /** The radius of a ring round the fairy: as wide as the meadow allows, with room for the critters. */
@@ -513,7 +518,7 @@ export function rollFormation(
         ['grid', 1],
         ...(Object.keys(style.signature ?? {}) as FormationShape[]).map((s): [FormationShape, number] => [s, 4]),
     ]);
-    const morph =
+    let morph =
         !ring && morphRoll < (0.15 + pressure * 0.3) * style.morph && morphTo !== shape && count <= SHAPE_MAX[morphTo]
             ? morphTo
             : null;
@@ -524,13 +529,15 @@ export function rollFormation(
     const m = C.PUFF_RADIUS * size + 6;
     const spacing = formationSpacing(size, deep, kind === 'beetle');
     // A shape too wide for the meadow at that spacing drops members until it fits.
-    const fits = (n: number) => {
+    const fits = (n: number, to: FormationShape | null) => {
         const e = extent(
-            morph ? [shapeSlots(shape, n, spacing), shapeSlots(morph, n, spacing)] : [shapeSlots(shape, n, spacing)],
+            to ? [shapeSlots(shape, n, spacing), shapeSlots(to, n, spacing)] : [shapeSlots(shape, n, spacing)],
         );
         return (move === 'orbit' ? e.rad * 2 : e.r - e.l) <= fieldW() - 2 * m;
     };
-    while (count > 3 && !ring && !SIGNATURE_COUNTS[shape] && !fits(count)) count--;
+    // A shape that keeps its count (a map's own shape) skips a re-form it couldn't fit; the rest drop members.
+    if (morph && SIGNATURE_COUNTS[shape] && !fits(count, morph)) morph = null;
+    while (count > 3 && !ring && !SIGNATURE_COUNTS[shape] && !fits(count, morph)) count--;
     const slots = shapeSlots(shape, count, spacing);
     const ext = extent(morph ? [slots, shapeSlots(morph, count, spacing)] : [slots]);
     // Keep the whole shape (and anything it morphs into, or turns through) inside the meadow.
