@@ -14,7 +14,7 @@ import volcanoTrack from '@/../assets/music/volcano.mp3';
 
 /** The menus' music ("Chant Royal"), played in place of the synthesised menu loop. */
 export const MENU_MUSIC: string | undefined = menuTrack;
-/** The fairy and map select screens' music ("Nimble Violin Adventure"); without it they'd keep the menus' music. */
+/** The fairy and map select screens' music ("Royal Tournament"); without it they'd keep the menus' music. */
 export const SELECT_MUSIC: string | undefined = selectTrack;
 
 /** Each map's own round music, by map id. */
