@@ -96,10 +96,9 @@ export const ANNOUNCER = {
     ready: [announceReady1, announceReady2, announceReady3],
     fight: [announceFight1, announceFight2, announceFight3],
     /**
-     * When each take's Ready comes in the countdown (s): just as its round call ("Round 1", "Round 2", "Final
-     * round") finishes speaking, so the call is never cut off. The countdown's banners change at the same moments.
+     * When Ready comes in the countdown (s): a beat after the longest round call ("Final round") finishes speaking
+     * at 1.53 s. Fight! comes as play starts, at C.COUNTDOWN_TIME. The countdown's banners change at the same
+     * moments.
      */
-    readyAt: [1.34, 1.43, 1.52],
-    /** Endless has no round call: its Ready comes after the Endless banner. */
-    endlessReadyAt: 1,
+    readyAt: 1.9,
 };

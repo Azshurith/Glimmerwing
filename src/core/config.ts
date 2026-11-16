@@ -390,5 +390,7 @@ export const TROPHY_WIN = 30;
 export const TROPHY_LOSS = 20;
 
 /** Online play. */
-export const NET_VERSION = '43'; // bump when the wire format changes; only matching versions are paired
+/** How long each round's countdown lasts before play starts (s): the announcer's call, Ready, then Fight!. */
+export const COUNTDOWN_TIME = 3;
+export const NET_VERSION = '44'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
