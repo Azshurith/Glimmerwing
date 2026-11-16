@@ -9,7 +9,6 @@ import type {
     Controls,
     Crow,
     Fairy,
-    FieldSnapshot,
     Formation,
     FormationShape,
     FormationSpec,
@@ -1858,93 +1857,6 @@ export class Field {
         this.puffs = this.puffs.filter(j => !j.dead);
         this.attacks = this.attacks.filter(a => !a.dead);
         this.bullets = this.bullets.filter(b => !b.dead);
-        this.particles = this.particles.filter(p => p.life > 0);
-        this.popups = this.popups.filter(p => p.age < 1.1);
-    }
-
-    // ---- online: snapshots of this meadow for the rival's screen -----------------
-
-    /** Everything the renderer needs to draw this meadow, as plain data. */
-    snapshot(): FieldSnapshot {
-        const strip = <T extends object>(o: T, ...drop: string[]) => {
-            const c = { ...o } as Record<string, unknown>;
-            for (const k of drop) delete c[k];
-            return c;
-        };
-        return {
-            t: this.time,
-            ri: this.roundIndex,
-            ns: this.nextMoonseed,
-            cw: this.crowsWoken,
-            g: this.gauge,
-            fv: this.fever,
-            sh: this.shake,
-            bl: this.bloom,
-            ba: this.bloomAt,
-            bc: this.bestChain,
-            p: this.player,
-            s: this.shots,
-            pf: this.puffs.map(j => strip(j, 'form', 'baseX')),
-            bu: this.bursts.map(b => strip(b, 'hits', 'chainId')),
-            at: this.attacks.map(a => strip(a, 'tail')),
-            bt: this.bullets,
-            m: this.moth,
-            cr: this.crows,
-            pu: this.popups,
-        };
-    }
-
-    /** Mirror a snapshot sent by the rival. New pollen bursts get a spray of particles. */
-    applySnapshot(s: FieldSnapshot): void {
-        this.time = s.t;
-        this.roundIndex = s.ri;
-        this.nextMoonseed = s.ns;
-        this.crowsWoken = s.cw;
-        this.gauge = s.g;
-        this.fever = s.fv;
-        this.shake = s.sh;
-        this.bloom = s.bl;
-        this.bloomAt = s.ba;
-        this.bestChain = s.bc;
-        this.player = s.p as Player;
-        this.shots = s.s as Shot[];
-        this.puffs = s.pf as unknown as Puff[];
-        this.bursts = (s.bu as unknown as Burst[]).map(b => ({ ...b, chainId: 0, hits: new Set<object>() }));
-        this.attacks = s.at as Attack[];
-        this.bullets = s.bt as Bullet[];
-        this.moth = s.m as Moth | null;
-        this.crows = s.cr as Crow[];
-        this.popups = s.pu as Popup[];
-        // A burst that's new since the last snapshot gets the same spray it had at home.
-        for (const b of this.bursts) if (b.age <= C.SNAP_EVERY * C.STEP + 1e-3) this.spray(b.x, b.y, 8, '#ffe9a8');
-    }
-
-    /** Between snapshots, keep the mirror moving so it doesn't stutter. */
-    drift(dt: number): void {
-        this.time += dt;
-        const tempo = this.tempo,
-            world = dt * tempo,
-            own = dt * (1 + (tempo - 1) * 0.5);
-        this.shake = Math.max(0, this.shake - dt * 30);
-        for (const s of this.shots) {
-            s.y -= C.SHOT_SPEED * (s.sp ?? (s.charged ? 0.75 : 1)) * own;
-            s.x += s.vx * own;
-        }
-        for (const a of this.attacks) {
-            a.x += a.vx * world;
-            a.y += a.vy * world;
-        }
-        for (const b of this.bullets) {
-            b.x += b.vx * world;
-            b.y += b.vy * world;
-        }
-        for (const c of this.crows) {
-            c.x += c.vx * world;
-            c.y += c.vy * world;
-        }
-        for (const b of this.bursts) b.age += dt;
-        this.bursts = this.bursts.filter(b => b.age < C.BURST_LIFE);
-        this.updateFx(dt);
         this.particles = this.particles.filter(p => p.life > 0);
         this.popups = this.popups.filter(p => p.age < 1.1);
     }

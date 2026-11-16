@@ -1,5 +1,5 @@
-/** The local modes a replay can be recorded in (online matches only simulate one meadow here). */
-export type ReplayMode = 'cpu' | 'versus' | 'endless';
+/** The modes a replay can be recorded in (online ones by the server, which runs online matches). */
+export type ReplayMode = 'cpu' | 'versus' | 'endless' | 'online';
 
 /** One round of a replay: its seed and both meadows' controls, step by step (see game/replay.ts for the tape). */
 export interface ReplayRound {

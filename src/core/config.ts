@@ -390,7 +390,5 @@ export const TROPHY_WIN = 30;
 export const TROPHY_LOSS = 20;
 
 /** Online play. */
-export const NET_VERSION = '42'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '43'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
-export const SNAP_EVERY = 3; // send a meadow snapshot every 3 steps (20 a second)
-export const END_GRACE = 0.25; // host waits this long for a near-simultaneous knockout

@@ -92,6 +92,11 @@ export class Account {
         return this.stored?.id ?? null;
     }
 
+    /** The account's token, sent when going online so the server counts the match for this player. */
+    get token(): string | null {
+        return this.stored?.token ?? null;
+    }
+
     /** Whether there's a server to save to at all. */
     get hasServer(): boolean {
         return this.base !== null;
