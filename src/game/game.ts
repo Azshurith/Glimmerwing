@@ -12,6 +12,7 @@ import { mapsMedallions } from '@/render/screens/maps-screen';
 import { MAP_CARDS, MAP_COLS, mapCards } from '@/render/screens/map-screen';
 import { MAPS, mapById, mapForSeed } from '@/data/maps';
 import { fairyAvailable, loadCatalog, mapAvailable, setCatalog } from '@/data/availability';
+import { useServerArt } from '@/data/server-art';
 import { stageOpen } from '@/data/stages';
 import { titleButtons } from '@/render/screens/title-screen';
 import { clock, replayPanelLayout } from '@/render/hud';
@@ -405,6 +406,15 @@ export class Game {
     private adoptProgress(p: Progress): void {
         this.progress = { ...this.progress, ...p };
         saveProgress(this.progress);
+    }
+
+    /** Ask the server what's switched off and what art it keeps, and take both on. */
+    private refreshCatalog(): void {
+        void this.account.catalog().then(c => {
+            if (!c) return;
+            setCatalog(c);
+            useServerArt(c.art, this.account.apiBase);
+        });
     }
 
     /** True if the fairy needs no unlock or has been unlocked, and the server hasn't switched her off. */
@@ -902,9 +912,10 @@ export class Game {
     async connectAccount(): Promise<void> {
         this.sound.onChange = () => this.account.saveSettings(this.synced());
         this.account.onProgress = p => this.adoptProgress(p);
-        // What's switched off: as last heard at once, then the server's word.
-        loadCatalog();
-        void this.account.catalog().then(c => c && setCatalog(c));
+        // What's switched off and the art the server keeps: as last heard at once, then the server's word.
+        const kept = loadCatalog();
+        if (kept) useServerArt(kept.art, this.account.apiBase);
+        this.refreshCatalog();
         const got = await this.account.start(this.synced());
         if (got.progress) this.adoptProgress(got.progress);
         if (got.settings) {
@@ -1087,8 +1098,8 @@ export class Game {
             case 'play':
                 this.menu = 'play';
                 this.modeIndex = 1;
-                // Ask again what's switched off, so a mode, fairy or map just switched on or off shows as such.
-                void this.account.catalog().then(c => c && setCatalog(c));
+                // Ask again, so a mode, fairy or map just switched on or off (or new art) shows as such.
+                this.refreshCatalog();
                 break;
             case 'characters':
                 this.phase = 'roster';

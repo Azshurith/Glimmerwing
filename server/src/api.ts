@@ -2,7 +2,9 @@
 // sends back as "Authorization: Bearer <token>"; the database keeps only the token's SHA-256.
 //
 //   GET  /api/health                                       -> {ok, db}
-//   GET  /api/catalog                                      -> {disabledCharacters, disabledMaps}
+//   GET  /api/catalog                     -> {disabledCharacters, disabledMaps, disabledModes, art}
+//   GET  /api/art/characters/<code>.png                    -> a fairy's spritesheet (?v= its art version)
+//   GET  /api/art/monsters/<code>.png                      -> a map's monster sheet
 //   POST /api/guest                {name?}                 -> {id, name, token}
 //   GET  /api/leaderboard/endless?limit=                   -> [entry]
 //   GET  /api/replays/<code>                               -> replay
@@ -186,7 +188,18 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
         res.json({ ok: true, db: store?.kind ?? null });
     });
     api.get('/catalog', (_req, res) => {
-        res.json(catalog.off());
+        res.json(catalog.response());
+    });
+    // The pictures: their URLs carry the art's version, so a browser keeps each for good.
+    api.get('/art/:kind/:file', async (req, res) => {
+        const m = /^([a-z0-9_-]{1,16})\.png$/.exec(String(req.params.file));
+        const kind = String(req.params.kind);
+        if (!m || (kind !== 'characters' && kind !== 'monsters')) throw new HttpError(404, 'No such picture');
+        const s = db();
+        const png = kind === 'characters' ? await s.characterSheet(m[1]) : await s.monsterSheet(m[1]);
+        if (!png) throw new HttpError(404, 'No such picture');
+        res.set({ 'content-type': 'image/png', 'cache-control': 'public, max-age=31536000, immutable' });
+        res.send(png);
     });
     api.post('/guest', small, async (req, res) => {
         const s = db();
