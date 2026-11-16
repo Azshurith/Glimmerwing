@@ -35,6 +35,52 @@ export interface CatalogResponse {
     disabledMaps: string[];
     /** Mode codes ('cpu', 'versus', 'endless', 'online'); a server from before modes could be switched off has none. */
     disabledModes?: string[];
+    /** The art the database holds, by fairy and map code (a server from before art was kept has none). */
+    art?: CatalogArt;
+}
+
+/**
+ * The art kept in the database: each fairy's spritesheet and each map's monster sheet. The pictures themselves
+ * are at /api/art/characters/<code>.png and /api/art/monsters/<code>.png, `?v=` the version given here.
+ */
+export interface CatalogArt {
+    characters: Record<string, CharacterArt>;
+    maps: Record<string, MapArt>;
+}
+
+/** A fairy's spritesheet: its version (when its row last changed, ms) and how its cells are laid out. */
+export interface CharacterArt {
+    v: number;
+    atlas: SpriteAtlas;
+}
+
+/** A spritesheet's layout: everything of a SpriteSet but the picture. */
+export interface SpriteAtlas {
+    cw: number;
+    ch: number;
+    bodyX: number;
+    bodyY: number;
+    scale: number;
+    anims: Record<string, { row: number; count: number; fps: number }>;
+}
+
+/** A map's monster sheet: its version, its cell size and overlay row, and the monsters on it. */
+export interface MapArt {
+    v: number;
+    cell: number;
+    overlay: number;
+    monsters: MonsterArt[];
+}
+
+/** What a monster plays in a formation: a plain critter, the big one, the shelled one or the corkscrewing one. */
+export type MonsterRole = 'plain' | 'big' | 'shelled' | 'spinner';
+
+/** One monster on a map's sheet: its kind (code), name, role and row. */
+export interface MonsterArt {
+    code: string;
+    name: string;
+    role: MonsterRole;
+    row: number;
 }
 
 /** Where a player's best Endless run stands among everyone's. */

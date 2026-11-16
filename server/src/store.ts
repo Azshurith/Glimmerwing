@@ -374,6 +374,24 @@ export class Store {
         }));
     }
 
+    /** A fairy's spritesheet (PNG bytes) by her code, or null when she has none. */
+    async characterSheet(code: string): Promise<Buffer | null> {
+        const [r] = await this.rows<{ sheet: Buffer | null }>(
+            'SELECT sprite_sheet AS sheet FROM characters WHERE code = ? AND sprite_sheet IS NOT NULL',
+            [code],
+        );
+        return r?.sheet ?? null;
+    }
+
+    /** A map's monster sheet (PNG bytes) by its code, or null when it has none. */
+    async monsterSheet(code: string): Promise<Buffer | null> {
+        const [r] = await this.rows<{ sheet: Buffer | null }>(
+            'SELECT monster_sheet AS sheet FROM maps WHERE code = ? AND monster_sheet IS NOT NULL',
+            [code],
+        );
+        return r?.sheet ?? null;
+    }
+
     /** Close the connection. */
     close(): Promise<void> {
         return this.db.destroy();
