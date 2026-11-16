@@ -47,9 +47,10 @@ const SHAPE_MAX: Record<FormationShape, number> = {
     v: 7,
     chevron: 7,
     arc: 8,
-    ring: 10,
-    grid: 10,
+    ring: 18,
+    grid: 18,
     wave: 7,
+    snake: 18,
     surround: 28,
     flower: 7,
     stalactite: 9,
@@ -129,11 +130,32 @@ function layoutSlots(shape: FormationShape, n: number, s: number): Vec[] {
                 break;
             }
             case 'grid': {
-                // Two staggered rows.
-                const cols = Math.ceil(n / 2),
-                    row = i % 2,
-                    col = Math.floor(i / 2);
-                out.push({ x: (col - (cols - 1) / 2) * s + (row ? s * 0.5 : 0) - s * 0.25, y: (row - 0.5) * s * 0.85 });
+                // Staggered rows: two, or three for a swarm.
+                const rows = n > 10 ? 3 : 2,
+                    cols = Math.ceil(n / rows),
+                    row = i % rows,
+                    col = Math.floor(i / rows);
+                out.push({
+                    x: (col - (cols - 1) / 2) * s + (row % 2 ? s * 0.5 : 0) - s * 0.25,
+                    y: (row - (rows - 1) / 2) * s * 0.85,
+                });
+                break;
+            }
+            case 'snake': {
+                // Rows back and forth, each joined to the next by a member out at the turn, like a coiled train.
+                const k = s > 34 ? 5 : 6,
+                    lap = k + 1,
+                    row = Math.floor(i / lap),
+                    j = i % lap,
+                    dir = row % 2 ? -1 : 1,
+                    half = ((k - 1) / 2) * s;
+                const rows = Math.ceil(n / lap);
+                const y0 = -((rows - 1) * s * 1.7) / 2;
+                out.push(
+                    j < k
+                        ? { x: dir * ((j - (k - 1) / 2) * s), y: y0 + row * s * 1.7 }
+                        : { x: dir * (half + s * 0.55), y: y0 + row * s * 1.7 + s * 0.85 },
+                );
                 break;
             }
             case 'wave':
@@ -348,6 +370,7 @@ const ENTRIES: Record<FormationShape, FormationEntry[]> = {
     ring: ['loop', 'swoopLeft', 'swoopRight', 'split'],
     grid: ['drop', 'split', 'sideLeft', 'sideRight'],
     wave: ['sideLeft', 'sideRight', 'swoopLeft', 'swoopRight', 'drop'],
+    snake: ['swoopLeft', 'swoopRight', 'sideLeft', 'sideRight'],
     surround: ['split', 'loop', 'swoopLeft', 'swoopRight'],
     flower: ['split', 'loop', 'drop'],
     stalactite: ['drop', 'drop', 'split'],
@@ -390,7 +413,17 @@ export function rollFormation(
         .concat([['surround', 1.2 + pressure * 2]], Object.entries(style.signature ?? {}) as [FormationShape, number][])
         .map(([s, wt]): [FormationShape, number] => [s, wt * (s === prev ? 0.15 : 1)])
         .filter(([, wt]) => wt > 0);
-    const shape = pick(r, shapeRoll);
+    // Now and then a swarm: a big flock of one-pop critters (a long coiled train, a deep grid, a wide ring) that a
+    // single pop can set off end to end, as in TSS.
+    const swarmRoll = r.next();
+    const swarm = swarmRoll < (0.12 + pressure * 0.2) * (style.swarm ?? 1);
+    const shape: FormationShape = swarm
+        ? pick<FormationShape>(r, [
+              ['snake', prev === 'snake' ? 0.5 : 3],
+              ['grid', prev === 'grid' ? 0.5 : 3],
+              ['ring', prev === 'ring' ? 0.5 : 2],
+          ])
+        : pick(r, shapeRoll);
     const kind: CritterKind = pick(r, [
         ['puff', 6 * w(style.kinds, 'puff')],
         ['spinner', (1 + pressure * 2) * w(style.kinds, 'spinner')],
@@ -402,10 +435,11 @@ export function rollFormation(
         overlapRoll = r.next(),
         deepRoll = r.next();
     const ring = shape === 'surround';
-    const big = !ring && kind === 'puff' && bigRoll < (0.08 + pressure * 0.1) * style.big;
+    const big = !ring && !swarm && kind === 'puff' && bigRoll < (0.08 + pressure * 0.1) * style.big;
     let count = r.int(5, 7) + Math.floor(pressure * 3) + style.extra;
     if (big) count = Math.ceil(count * 0.6);
     if (kind === 'beetle') count = Math.max(4, count - 1);
+    if (swarm) count = r.int(12, 14) + Math.floor(pressure * 5) + style.extra;
     // A ring round the fairy is a full circle of critters, each in reach of the next, so one pop runs right round it.
     if (ring) count = Math.ceil((Math.PI * 2 * surroundRadius()) / formationSpacing(1, false, kind === 'beetle'));
     count = Math.min(SHAPE_MAX[shape], count);
@@ -416,7 +450,7 @@ export function rollFormation(
     // Past the first twelve, members take their toughness from the start of the list again.
     let hp = Array.from({ length: count }, (_, i) => hps[i % hps.length]);
     // The ring's critters are all one-pop, so a single hit sets off the whole circle.
-    if (ring) hp = hp.map(() => 1);
+    if (ring || swarm) hp = hp.map(() => 1);
     if (kind === 'spinner') hp = hp.map(() => 1);
     if (kind === 'beetle') hp = hp.map(h => Math.min(h, 2));
     if (big) hp = hp.map(h => Math.min(5, h + 1));
@@ -537,7 +571,7 @@ export function rollFormation(
         cy,
         // A low formation's members fly in further apart, so the stream down into the fairy's half has gaps too.
         // A ring's many members stream in close behind one another so it closes up in good time.
-        stagger: (ring ? 0.1 : (big ? 0.32 : 0.25) * (deep ? 1.4 : 1)) * speedUp,
+        stagger: (ring ? 0.1 : swarm ? 0.14 : (big ? 0.32 : 0.25) * (deep ? 1.4 : 1)) * speedUp,
         exitStagger: exit === 'scatter' ? 0.03 : 0.1,
         // Unhurried flights in, so the formation can be watched forming up.
         enterTime: (big ? 2.8 : 2.4) * speedUp,
