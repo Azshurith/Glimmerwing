@@ -273,6 +273,11 @@ export class Account {
         return r.data;
     }
 
+    /** Where the server's API is (e.g. http://host/api), or null with none. */
+    get apiBase(): string | null {
+        return this.base;
+    }
+
     /** What the server has switched off (fairies and maps), or null when it can't be reached. */
     async catalog(): Promise<CatalogResponse | null> {
         if (!this.base) return null;

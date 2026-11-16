@@ -11,6 +11,8 @@ export interface Anim {
 /** A sprite sheet and how to place and animate it. */
 export interface SpriteSet {
     img: HTMLImageElement;
+    /** The bundled sheet's file under assets/ (the server puts it in the characters table from there). */
+    file?: string;
     /** Cell size in sheet pixels. */
     cw: number;
     ch: number;

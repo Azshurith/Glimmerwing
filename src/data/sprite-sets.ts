@@ -13,6 +13,7 @@ import type { SpriteSet } from '@/types';
 /** Blonde witch on a broom, flying away from the camera. Cells 112x124, bow at (56, 26). */
 export const WITCH: SpriteSet = {
     img: loadImage(witchSheet),
+    file: 'witch.png',
     cw: 112,
     ch: 124,
     bodyX: 56,
@@ -36,6 +37,7 @@ export const WITCH: SpriteSet = {
  */
 export const KNIGHT: SpriteSet = {
     img: loadImage(knightSheet),
+    file: 'knight.png',
     cw: 112,
     ch: 124,
     bodyX: 56,

@@ -14,7 +14,7 @@ export function fromJson(v: unknown): unknown {
 
 /** A JSON document kept in a LONGTEXT column: written as text, read back as the value. */
 export const asJson: ValueTransformer = {
-    to: (v: unknown) => (v === undefined ? undefined : JSON.stringify(v)),
+    to: (v: unknown) => (v == null ? v : JSON.stringify(v)),
     from: fromJson,
 };
 
