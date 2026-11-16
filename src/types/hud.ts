@@ -5,6 +5,18 @@ export interface HudTag {
 }
 
 /** The console between the meadows. */
+/** What Endless mode's panels show: the run so far, the best run, and the guardians. */
+export interface EndlessView {
+    /** Seconds survived this run, and the best run ever. */
+    time: number;
+    best: number;
+    /** Guardians sent so far, and seconds until the next. */
+    bosses: number;
+    nextBoss: number;
+    /** The tempo multiplier (1 at the start, up to TEMPO_MAX). */
+    tempo: number;
+}
+
 export interface ConsoleView {
     /** Round being played, from 1. */
     round: number;

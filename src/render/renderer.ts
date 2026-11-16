@@ -7,6 +7,7 @@ import type {
     Puff,
     BannerView,
     ConsoleView,
+    EndlessView,
     HudTag,
     ModeView,
     ProfileView,
@@ -450,6 +451,12 @@ export class Renderer {
             return;
         }
         this.hudLayer.console(v, time);
+    }
+
+    /** Endless mode's side panels (wide layout) or slim top bar (tall layout). */
+    endless(v: EndlessView, time: number): void {
+        if (this.layout === 'tall') this.hudLayer.endlessBar(v, time, C.TALL_W, C.TALL_SOLO_BAR);
+        else this.hudLayer.endlessPanels(v, time);
     }
 
     /** The slim top bar standing in for the rival's meadow and console when it's hidden (tall layout only). */

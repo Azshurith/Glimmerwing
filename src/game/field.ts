@@ -1533,6 +1533,11 @@ export class Field {
         L.fireT = 0.35;
     }
 
+    /** Endless mode's director: send a guardian at the player now, as if this hidden meadow had charged one. */
+    summonGuardian(): void {
+        this.sendGuardian('Endless');
+    }
+
     /**
      * Send a guardian to the rival, unless a rival guardian just arrived here, in which case the two clash and cancel.
      */

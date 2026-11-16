@@ -9,6 +9,9 @@ export interface Progress {
     trophies: number;
     /** The most trophies ever held; stages open by this, so a losing run never locks one again. */
     bestTrophies: number;
+    /** Endless mode: the longest run survived (seconds) and its most guardians weathered. */
+    endlessBest: number;
+    endlessBosses: number;
 }
 
 /** The player's settings, saved in this browser. */
