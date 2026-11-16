@@ -163,6 +163,10 @@ const BATTLE: Loop = {
 
 const LOOPS: Record<'menu' | 'battle', Loop> = { menu: MENU, battle: BATTLE };
 
+/** How long music fades out when another piece takes over, and when it stops altogether (seconds). */
+const FADE_SWITCH = 0.6;
+const FADE_STOP = 2.5;
+
 /** How far ahead notes are scheduled, and how often the scheduler wakes, in seconds. */
 const AHEAD = 0.15;
 const TICK_MS = 40;
@@ -192,11 +196,15 @@ export class Music {
         if (track === this.track) return;
         this.track = track;
         const ctx = this.ctx;
-        // Fade the old loop out and let it go.
+        // Fade the old music out and let it go: slowly when the music stops altogether (back to the quiet title),
+        // quickly when another piece takes over.
         if (this.bus) {
             const old = this.bus;
-            old.gain.setTargetAtTime(0, ctx.currentTime, 0.15);
-            setTimeout(() => old.disconnect(), 1200);
+            const fade = track ? FADE_SWITCH : FADE_STOP;
+            old.gain.cancelScheduledValues(ctx.currentTime);
+            old.gain.setValueAtTime(old.gain.value, ctx.currentTime);
+            old.gain.linearRampToValueAtTime(0, ctx.currentTime + fade);
+            setTimeout(() => old.disconnect(), fade * 1000 + 200);
             this.bus = null;
         }
         if (this.timer !== null) clearInterval(this.timer);
@@ -262,14 +270,12 @@ export class Music {
                 level.gain.value = 0.35;
                 src.connect(level).connect(bus);
                 src.start();
-                // Stop it once the bus is faded out and let go.
-                const stop = () => {
-                    if (this.bus !== bus) {
-                        src.stop();
-                        clearInterval(watch);
-                    }
-                };
-                const watch = window.setInterval(stop, 500);
+                // Once the music moves on, let the fade finish, then stop it.
+                const watch = window.setInterval(() => {
+                    if (this.bus === bus) return;
+                    clearInterval(watch);
+                    src.stop(ctx.currentTime + FADE_STOP + 0.1);
+                }, 250);
             },
             (e: unknown) => console.warn('music: could not decode', url, e),
         );
