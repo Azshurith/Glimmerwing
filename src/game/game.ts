@@ -982,7 +982,7 @@ export class Game {
      * position, a tap on a card picks it, and Esc goes back to the title. Greyed-out cards do nothing yet.
      */
     private stepModes(pr: Set<string>): void {
-        const cards = modeCards(this.menu, this.r.layout, this.r.viewH);
+        const cards = modeCards(this.menu, this.r.layout, this.r.viewH, this.r.viewX);
         const n = cards.length,
             cols = modeColumns(this.r.layout, this.menu);
         const was = this.modeIndex;

@@ -61,13 +61,24 @@ const PACKED = {
     tall: { w: 236, h: 62, gap: 8, y0: 60, W: C.TALL_W },
 } as const;
 
-/** Where a menu's cards sit in a layout's design units (the tall layout as designed, before fitting). */
-function designCards(menu: ModeMenu, layout: Layout, dy = 0): ModeCard[] {
+/** The widest a card gets on a wide landscape screen, and how far in from its edges the row keeps. */
+const WIDE_CARD_MAX = 128;
+const WIDE_MARGIN = 14;
+
+/**
+ * Where a menu's cards sit in a layout's design units (the tall layout as designed, before fitting). On a
+ * widened landscape view (`bleed` past each side of the usual one) the row spreads out across the whole width,
+ * the cards growing up to WIDE_CARD_MAX.
+ */
+function designCards(menu: ModeMenu, layout: Layout, dy = 0, bleed = 0): ModeCard[] {
     const n = MENUS[menu].length,
         g = n > 5 ? PACKED[layout] : GRID[layout];
     if (layout === 'wide') {
-        const x0 = (g.W - (n * g.w + (n - 1) * g.gap)) / 2;
-        return MENUS[menu].map((m, i) => ({ ...m, x: x0 + i * (g.w + g.gap), y: g.y0, w: g.w, h: g.h }));
+        const span = g.W + 2 * bleed - 2 * WIDE_MARGIN;
+        const gap = g.gap + Math.min(6, bleed / 20);
+        const w = Math.max(g.w, Math.min(WIDE_CARD_MAX, (span - (n - 1) * gap) / n));
+        const x0 = (g.W - (n * w + (n - 1) * gap)) / 2;
+        return MENUS[menu].map((m, i) => ({ ...m, x: x0 + i * (w + gap), y: g.y0, w, h: g.h }));
     }
     const x0 = (g.W - g.w) / 2;
     return MENUS[menu].map((m, i) => ({ ...m, x: x0, y: g.y0 + dy + i * (g.h + g.gap), w: g.w, h: g.h }));
@@ -77,8 +88,8 @@ function designCards(menu: ModeMenu, layout: Layout, dy = 0): ModeCard[] {
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
 
 /** A menu's cards for a layout and view height, in view units: also the tap targets. */
-export function modeCards(menu: ModeMenu, layout: Layout, h: number = C.TALL_H): ModeCard[] {
-    if (layout !== 'tall') return designCards(menu, 'wide');
+export function modeCards(menu: ModeMenu, layout: Layout, h: number = C.TALL_H, bleed = 0): ModeCard[] {
+    if (layout !== 'tall') return designCards(menu, 'wide', 0, bleed);
     const f = tallMenuFit(h);
     return designCards(menu, 'tall', tallShift(f.h)).map(c => ({
         ...c,
@@ -120,7 +131,9 @@ export class ModeScreen {
             ctx.restore();
         }
         drawTopBar(this.ctx, HEADINGS[v.menu], W, bleed, layout === 'tall', 16);
-        designCards(v.menu, layout, dy).forEach((c, i) => this.card(c, i === v.index, t));
+        designCards(v.menu, layout, dy, layout === 'tall' ? 0 : bleed).forEach((c, i) =>
+            this.card(c, i === v.index, t),
+        );
         // Hint line along the bottom.
         ctx.textAlign = 'center';
         ctx.font = `7px ${ARCADE}`;
