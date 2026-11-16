@@ -24,6 +24,7 @@ const SHAPE: Record<string, string> = {
     ring: 'Ring',
     grid: 'Grid',
     wave: 'Wave',
+    snake: 'Snake',
     surround: 'Ring around you',
     flower: 'Flower',
     stalactite: 'Stalactite',

@@ -11,6 +11,8 @@ export type FormationShape =
     | 'ring'
     | 'grid'
     | 'wave'
+    // A long train of critters coiled back and forth across the meadow (flown by swarms).
+    | 'snake'
     // A wide ring all round the fairy, reaching down to the bottom of the meadow.
     | 'surround'
     // Each map's own shapes, flown nowhere else (see WaveStyle.signature).
@@ -126,6 +128,8 @@ export interface WaveStyle {
     bubble: number;
     /** Scales the flights in, the holds and the flights out: below 1 is a busier stage. */
     pace: number;
+    /** A multiplier on the chance of a swarm, a big flock of one-pop critters (1 if missing). */
+    swarm?: number;
 }
 
 /** A stage on the trophy road: a map, the trophies that open it, its formations and how sharp its CPU is. */
