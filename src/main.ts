@@ -15,6 +15,8 @@ const input = new Input(canvas);
 const sound = new Sound();
 const game = new Game(input, renderer, sound);
 input.setBindings(game.settings.keys);
+// Meet the game server: a guest account, and progress and settings kept in its database.
+void game.connectAccount();
 input.viewSize = () => ({ w: renderer.viewW, h: renderer.viewH, ox: renderer.viewX });
 // Browsers only start audio after a gesture.
 for (const ev of ['keydown', 'pointerdown', 'touchstart'] as const)

@@ -1,3 +1,4 @@
+import type { EndlessRank, LeaderEntry } from './account';
 import type { Fairy } from './characters';
 
 /** A roster medallion's place on screen; also the tap target. */
@@ -79,6 +80,15 @@ export interface ProfileView {
     bestTrophies: number;
     /** The longest Endless run, in seconds. */
     endlessBest: number;
+    /** The player's name (a guest's, until sign-in exists). */
+    name: string;
+    /** Whether saves are reaching the game server (else they stay in this browser). */
+    synced: boolean;
+    /** Where the player's best Endless run ranks among everyone's, if known. */
+    rank: EndlessRank | null;
+    /** The best Endless runs of all, best first, and which of them is the player's (by account id). */
+    leaders: LeaderEntry[];
+    me: number | null;
 }
 
 /** What a title-screen choice or a mode-menu card does when it's picked. */

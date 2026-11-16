@@ -9,6 +9,23 @@ whatever you chain in your meadow lands in your rival's.
     npm run build      # typechecks, then bundles to dist/index.html
     open dist/index.html
 
+## Run it in Docker (with the database)
+
+    make project_setup   # copies .env.sample to .env: change the passwords in it
+    make project_start   # docker compose up -d
+
+- http://localhost:8787 is the game (the `node` container builds it and runs `server/server.mjs`).
+- http://localhost:9091 is phpMyAdmin, on the MariaDB the game saves to (host port 3307).
+
+`make help` lists the rest (logs, rebuild, a MariaDB prompt, a dump). The layout follows the usual one:
+`.docker/<Service>/Dockerfile`, `.env` for ports and passwords, `docker-compose.yml`.
+
+Each browser gets a guest account the first time it reaches the server. Progress, settings (keys, display,
+sound), every match, every Endless run (the leaderboard) and saved replays go to the database; the browser
+keeps its own copy too, so the game still plays offline or from a file, and whichever copy was saved last wins
+when they meet. Without a database (`npm run dev`) the API answers 503 and saves stay in the browser;
+`DB=memory npm run server` tries the API with an in-memory store instead.
+
 ## Develop
 
     npm run check      # typecheck + lint + formatting check (run before committing)

@@ -1,4 +1,4 @@
-import type { MusicTrack, Sfx } from '@/types';
+import type { AudioPrefs, MusicTrack, Sfx } from '@/types';
 import { Music } from './music';
 import { PATCHES, fmNote, makeReverb, type PatchName } from './synth';
 
@@ -33,6 +33,8 @@ export class Sound {
     volume = 0.7;
     /** Music volume, 0 to 1. */
     musicVolume = 0.5;
+    /** Called whenever mute or a volume changes (the account sends them on to the server). */
+    onChange: (() => void) | null = null;
 
     constructor() {
         try {
@@ -127,8 +129,23 @@ export class Sound {
         this.musicRoom?.gain.setTargetAtTime(this.musicVolume ** 2 * 1.6, t, 0.02);
     }
 
-    /** Remember mute and both volumes in localStorage for the next visit. */
-    private save(): void {
+    /** Mute and both volumes, to save with the player's settings. */
+    prefs(): AudioPrefs {
+        return { muted: this.muted, volume: this.volume, music: this.musicVolume };
+    }
+
+    /** Take on saved mute and volumes (from the player's account), and remember them here. */
+    applyPrefs(p: Partial<AudioPrefs>): void {
+        if (typeof p.muted === 'boolean') this.muted = p.muted;
+        if (typeof p.volume === 'number') this.volume = Math.max(0, Math.min(1, p.volume));
+        if (typeof p.music === 'number') this.musicVolume = Math.max(0, Math.min(1, p.music));
+        this.applyVolume();
+        this.save(false);
+    }
+
+    /** Remember mute and both volumes in localStorage for the next visit (and tell `onChange` unless `tell` is off). */
+    private save(tell = true): void {
+        if (tell) this.onChange?.();
         try {
             localStorage.setItem(
                 STORE,

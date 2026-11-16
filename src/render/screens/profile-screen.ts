@@ -1,4 +1,4 @@
-// The Profile screen: who's playing (a guest, until sign-in exists) and this browser's record and unlocks.
+// The Profile screen: who's playing (a guest, until sign-in exists), their record and unlocks, and the Endless top three.
 import * as C from '@/core/config';
 import { FAIRIES } from '@/data/characters';
 import { mapById } from '@/data/maps';
@@ -61,11 +61,20 @@ export class ProfileScreen {
         if (!tall) this.panel(card.x, card.y, card.w, card.h);
         this.avatar(cx, cy, tall ? 40 : 44, t);
         ctx.textAlign = 'center';
-        arcadeText(ctx, 'GUEST', cx, cy + (tall ? 64 : 70), 18, ['#ffffff', '#fff0c8', '#ffd27a'], 'center');
+        const name = v.name.toUpperCase();
+        // A long guest name gets smaller so it stays inside the card.
+        const nameSize = Math.min(18, Math.floor(172 / Math.max(1, name.length)));
+        arcadeText(ctx, name, cx, cy + (tall ? 64 : 70), nameSize, ['#ffffff', '#fff0c8', '#ffd27a'], 'center');
         ctx.font = `italic 600 9px ${FONT}`;
         ctx.fillStyle = 'rgba(203,188,245,0.85)';
-        ctx.fillText('Progress is saved in this browser', cx, cy + (tall ? 80 : 86));
+        ctx.fillText(
+            v.synced ? 'Progress is saved on the game server' : 'Progress is saved in this browser',
+            cx,
+            cy + (tall ? 80 : 86),
+        );
         ctx.fillText('Sign in with Google: coming soon', cx, cy + (tall ? 92 : 98));
+        // In landscape the card also holds the Endless leaderboard's top three.
+        if (!tall) this.leaders(v, card.x + 12, cy + 118, card.w - 24);
 
         // Record, as tiles.
         const unlocked = v.locked.filter(l => !l).length;
@@ -99,6 +108,12 @@ export class ProfileScreen {
             ctx.fillStyle = '#cbbcf5';
             ctx.fillText(label, x + 8, y + 12);
             arcadeText(ctx, value, x + 8, y + 32, 16, ['#ffffff', '#ffe08a', '#ff9a2e'], 'left');
+            if (label === 'ENDLESS BEST' && v.rank) {
+                ctx.textAlign = 'right';
+                ctx.font = `6px ${ARCADE}`;
+                ctx.fillStyle = '#ffe27a';
+                ctx.fillText(`#${v.rank.rank} OF ${v.rank.players}`, x + tw - 6, y + 31);
+            }
             if (label === 'TROPHIES') {
                 drawTrophy(ctx, x + tw - 12, y + 10, 9);
                 ctx.textAlign = 'right';
@@ -163,6 +178,41 @@ export class ProfileScreen {
         ctx.fillStyle = 'rgba(203,188,245,0.75)';
         ctx.fillText(v.touch ? '◀ BACK' : 'ESC BACK', W / 2, tall ? H - 14 : H - 10);
         ctx.restore();
+    }
+
+    /** The Endless leaderboard's top three, in a column `w` wide from (x, y); the player's own line in gold. */
+    private leaders(v: ProfileView, x: number, y: number, w: number): void {
+        const ctx = this.ctx;
+        ctx.textAlign = 'left';
+        ctx.font = `6.5px ${ARCADE}`;
+        ctx.fillStyle = '#cbbcf5';
+        ctx.fillText('ENDLESS TOP 3', x, y);
+        ctx.strokeStyle = 'rgba(201,162,74,0.45)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y + 4.5);
+        ctx.lineTo(x + w, y + 4.5);
+        ctx.stroke();
+        const top = v.leaders.slice(0, 3);
+        if (!top.length) {
+            ctx.font = `italic 600 9px ${FONT}`;
+            ctx.fillStyle = 'rgba(203,188,245,0.7)';
+            ctx.fillText(v.synced ? 'No runs yet: set the first!' : 'Shown when the server is reached', x, y + 18);
+            return;
+        }
+        top.forEach((e, i) => {
+            const ly = y + 17 + i * 13,
+                mine = e.playerId === v.me;
+            ctx.font = `7px ${ARCADE}`;
+            ctx.fillStyle = mine ? '#ffe27a' : i === 0 ? '#ffd27a' : '#e8e0ff';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${i + 1}`, x, ly);
+            ctx.font = `600 9px ${FONT}`;
+            ctx.fillText(e.name, x + 12, ly, w - 60);
+            ctx.textAlign = 'right';
+            ctx.font = `7px ${ARCADE}`;
+            ctx.fillText(clock(e.seconds), x + w, ly);
+        });
     }
 
     /** The player card's frame in landscape: a dark panel with a gold edge, like the record's tiles. */

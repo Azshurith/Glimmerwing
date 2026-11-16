@@ -2,6 +2,7 @@ import type { Sound } from '@/audio/sound';
 import * as C from '@/core/config';
 import { FAIRIES, fairyById } from '@/data/characters';
 import type { Input } from '@/input/input';
+import { sanitizeKeys } from '@/input/keys';
 import type { Net } from '@/net/net';
 import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
@@ -16,6 +17,7 @@ import { clock } from '@/render/hud';
 import { PALETTE, PLAYER_COLORS } from '@/render/theme';
 import type {
     Controls,
+    EndlessRank,
     Fairy,
     FieldSnapshot,
     HudTag,
@@ -30,6 +32,7 @@ import type {
     SelectCard,
     SelectSide,
     Sfx,
+    SyncedSettings,
 } from '@/types';
 import { CpuPilot } from './ai';
 import { Field } from './field';
@@ -38,6 +41,7 @@ import { SkillPreview } from './preview';
 import { MapPreview } from './map-preview';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 import { loadSettings, saveSettings } from './settings';
+import { Account } from './account';
 
 /** Seconds from an attack leaving one meadow to arriving in the other: its `stagger`, then its flight. */
 const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
@@ -167,6 +171,12 @@ export class Game {
     private endlessBosses = 0;
     private endlessNextBoss = 0;
     private endlessNew = false;
+    /** Where the run just ended ranks among every player's best (null until the server answers, or offline). */
+    private endlessRank: EndlessRank | null = null;
+    /** When the match began (performance.now(), ms), for its length in the player's history. */
+    private matchStart = 0;
+    /** The player's account on the game server: progress and settings are copied there, results reported. */
+    readonly account = new Account();
     /** A map forced by the page's address (`?map=<id>`), for trying a map out. */
     private forcedMap =
         typeof location === 'undefined' ? null : mapById(new URLSearchParams(location.search).get('map'));
@@ -306,6 +316,7 @@ export class Game {
     /** Wipe saved stats and unlocks and go back to the title screen. */
     resetProgress(): void {
         this.progress = resetProgress();
+        this.account.saveProgress(this.progress);
         this.phase = 'title';
     }
 
@@ -338,6 +349,8 @@ export class Game {
         this.newStages = [];
         this.trophyDelta = 0;
         this.endlessNew = false;
+        this.endlessRank = null;
+        this.matchStart = performance.now();
         this.newRound(seed);
     }
 
@@ -356,6 +369,33 @@ export class Game {
     setSettings(next: Partial<Settings>): void {
         this.settings = { ...this.settings, ...next };
         saveSettings(this.settings);
+        this.account.saveSettings(this.synced());
+    }
+
+    /** The settings that follow the player's account: the game's own and the sound's. */
+    private synced(): SyncedSettings {
+        return { settings: this.settings, audio: this.sound.prefs() };
+    }
+
+    /**
+     * Meet the game server (called once by the page at start-up): make a guest account if this browser has none,
+     * take on any progress or settings saved there later than here, and from then on send changes up. The game
+     * plays on from this browser's saves the whole time; with no server it never hears back.
+     */
+    async connectAccount(): Promise<void> {
+        this.sound.onChange = () => this.account.saveSettings(this.synced());
+        const got = await this.account.start(this.progress, this.synced());
+        if (got.progress) {
+            this.progress = { ...this.progress, ...got.progress };
+            saveProgress(this.progress);
+        }
+        if (got.settings) {
+            const s = got.settings.settings;
+            this.settings = { ...this.settings, ...s, keys: sanitizeKeys(s.keys) };
+            saveSettings(this.settings);
+            this.input.setBindings(this.settings.keys);
+            this.sound.applyPrefs(got.settings.audio ?? {});
+        }
     }
 
     /**
@@ -536,6 +576,7 @@ export class Game {
                 break;
             case 'profile':
                 this.phase = 'profile';
+                void this.account.refreshLeaders();
                 break;
             case 'online':
                 this.onWantOnline?.();
@@ -973,6 +1014,20 @@ export class Game {
         p.bestChain = Math.max(p.bestChain, this.fields[0].bestChain);
         p.fevers += this.fields[0].fevers;
         saveProgress(p);
+        this.account.saveProgress(p);
+        const run = this.endlessT;
+        void this.account
+            .reportEndless({
+                seconds: Math.round(run * 100) / 100,
+                guardians: this.endlessBosses,
+                fairy: this.picks[0].id,
+                map: this.roundMap,
+                bestChain: this.fields[0].bestChain,
+            })
+            .then(rank => {
+                // Only if this run's result is still on screen.
+                if (this.mode === 'endless' && this.endlessT === run) this.endlessRank = rank;
+            });
         this.ui(this.endlessNew ? 'win' : 'lose');
         this.phase = 'matchOver';
         this.phaseT = 0;
@@ -1096,6 +1151,19 @@ export class Game {
             }
         }
         saveProgress(p);
+        this.account.saveProgress(p);
+        if (this.mode === 'cpu' || this.mode === 'online' || this.mode === 'versus')
+            this.account.reportMatch({
+                mode: this.mode,
+                map: this.roundMap,
+                fairy: this.picks[0].id,
+                rivalFairy: this.picks[1].id,
+                roundsWon: this.wins[0],
+                roundsLost: this.wins[1],
+                bestChain: this.matchBestChain,
+                trophyDelta: this.trophyDelta,
+                seconds: Math.round((performance.now() - this.matchStart) / 100) / 10,
+            });
     }
 
     /** Draw the current screen. */
@@ -1306,6 +1374,11 @@ export class Game {
                         trophies: this.progress.trophies,
                         bestTrophies: this.progress.bestTrophies,
                         endlessBest: this.progress.endlessBest,
+                        name: this.account.name,
+                        synced: this.account.online,
+                        rank: this.account.rank,
+                        leaders: this.account.leaders,
+                        me: this.account.id,
                     },
                     this.time,
                 );
@@ -1436,10 +1509,13 @@ export class Game {
             case 'matchOver': {
                 if (this.mode === 'endless') {
                     const g = this.endlessBosses;
+                    // Where the player's best stands among everyone's, once the server has answered.
+                    const rk = this.endlessRank;
+                    const rank = rk ? `  ·  Rank ${rk.rank} of ${rk.players}` : '';
                     r.banner({
                         title: this.endlessNew ? 'New record!' : 'Run over',
                         sub: touch ? 'Tap to fly again' : 'Press Space or tap to fly again',
-                        extra: `Survived ${clock(this.endlessT)}  ·  ${g} guardian${g === 1 ? '' : 's'}  ·  Best ${clock(this.progress.endlessBest)}`,
+                        extra: `Survived ${clock(this.endlessT)}  ·  ${g} guardian${g === 1 ? '' : 's'}  ·  Best ${clock(this.progress.endlessBest)}${rank}`,
                         age: this.phaseT,
                         dim: 0.6,
                         size: 34,
