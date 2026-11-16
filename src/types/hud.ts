@@ -1,3 +1,5 @@
+import type { HighlightKind } from './replay';
+
 /** The player badge on a meadow's HUD: 1P, 2P, YOU, CPU or RIVAL, in that player's colour. */
 export interface HudTag {
     label: string;
@@ -42,4 +44,22 @@ export interface BannerView {
     size?: number;
     /** Blink the subtitle, for "press to continue" prompts. */
     blinkSub?: boolean;
+}
+
+/** The controls along the bottom while a replay plays: its speed, timeline, rounds and highlights. */
+export interface ReplayPanelView {
+    speed: number;
+    paused: boolean;
+    /** Where the playback is, and the whole length, in seconds. */
+    pos: number;
+    len: number;
+    /** Where each round starts on the timeline (0 to 1), the first included, and which round is playing. */
+    rounds: number[];
+    round: number;
+    /** The highlights, each where it falls on the timeline (0 to 1). */
+    highlights: { x: number; kind: HighlightKind; side: 0 | 1 }[];
+    /** While the knob is being dragged: where it is (0 to 1), and a label for the highlight it's on, if any. */
+    scrub: number | null;
+    label: string;
+    hint: string;
 }

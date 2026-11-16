@@ -45,3 +45,15 @@ export interface ReplaySummary {
     /** When it was recorded, by the recording browser's clock (ReplayData.at). */
     recorded: number | null;
 }
+
+/** What a highlight on the replay's timeline marks. */
+export type HighlightKind = 'chain' | 'fever' | 'extra' | 'guardian' | 'bomb' | 'ko';
+
+/** A moment worth jumping to: a big chain, a Fever, an Extra Attack, a guardian, a bomb or a knockout. */
+export interface ReplayHighlight {
+    /** Where on the timeline, in playing steps. */
+    at: number;
+    kind: HighlightKind;
+    /** Whose meadow it happened in. */
+    side: 0 | 1;
+}

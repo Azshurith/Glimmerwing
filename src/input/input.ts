@@ -96,6 +96,12 @@ export class Input {
     touchActive = matchMedia?.('(pointer: coarse)').matches ?? false;
     /** Where the most recent tap landed this frame, in view coordinates. */
     tap: { x: number; y: number } | null = null;
+
+    /** Where the first finger (or the mouse, while its button is down) is now, in view coordinates; null if none. */
+    get pointer(): { x: number; y: number } | null {
+        const f = this.fingers[0];
+        return f ? { x: f.x, y: f.y } : null;
+    }
     /** The current view size in view units; the page points this at the renderer's layout. */
     viewSize: () => { w: number; h: number; ox?: number } = () => ({ w: C.VIEW_W, h: C.VIEW_H });
 

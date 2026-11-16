@@ -859,7 +859,8 @@ export class Field {
     private perfect(x: number, y: number): void {
         this.perfects++;
         this.popup(x, y - 16, 'Perfect!');
-        this.snd('extra');
+        // The Extra Attack's call, marked 1 so a replay's highlights can tell a Perfect from an Extra Attack.
+        this.snd('extra', 1);
     }
 
     /** How much my Perfects speed up the fireballs I send. */
