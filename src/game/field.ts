@@ -975,7 +975,7 @@ export class Field {
                     a.kind === 'star' &&
                     a.flight !== 'back' &&
                     !b.hits.has(a) &&
-                    dist2(b.x, b.y, a.x, a.y) < r * r
+                    dist2(b.x, b.y, a.x, a.y) < ((r * C.BURST_ATTACK_RADIUS) / C.BURST_RADIUS) ** 2
                 ) {
                     b.hits.add(a);
                     this.hitAttack(a, 1, b.chainId);
@@ -986,8 +986,8 @@ export class Field {
                 L &&
                 !L.dead &&
                 b.age < dt * 1.5 &&
-                Math.abs(b.x - L.x) < 40 + b.maxR &&
-                Math.abs(b.y - L.y) < 20 + b.maxR
+                Math.abs(b.x - L.x) < 40 + (b.maxR * C.BURST_ATTACK_RADIUS) / C.BURST_RADIUS &&
+                Math.abs(b.y - L.y) < 20 + (b.maxR * C.BURST_ATTACK_RADIUS) / C.BURST_RADIUS
             ) {
                 this.damageMoth(2, b.x, b.y);
             }

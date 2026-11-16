@@ -65,8 +65,8 @@ function drawDewBubble(ctx: CanvasRenderingContext2D, R: number): void {
 
 /** Distance in from the top line or a side wall over which a monster plays its appear frames. */
 const APPEAR_SPAN = 30;
-/** A monster's cell is drawn this many puff radii across (the body fills about half of it). */
-const MONSTER_CELL = 3.9;
+/** A monster's cell is drawn this many puff radii across: its art fills about 72% of the cell, CRITTER_LOOK_W wide. */
+const MONSTER_CELL = C.CRITTER_LOOK_W / (C.PUFF_RADIUS * 0.72);
 
 /** A critter as drawn on a map with a monster sheet: which monster, and how far it has appeared. */
 export interface MonsterLook {

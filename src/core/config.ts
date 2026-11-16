@@ -102,8 +102,18 @@ export const HOLD_BEFORE_CHARGE = 0.2;
 export const CHARGE_TIME = 0.85;
 
 export const PUFF_RADIUS = 9;
-export const BURST_RADIUS = 27;
-export const CHARGED_BURST_RADIUS = 54;
+/** How wide a regular critter looks on a map with a monster sheet (its art, not its touch, which is smaller). */
+export const CRITTER_LOOK_W = 21;
+/**
+ * How far a pop reaches. TSS's chain explosions are big (a third of the meadow across), so a formation can sit
+ * loose enough for the fairy to fly between its critters and still go up in one chain.
+ */
+export const BURST_RADIUS = 46;
+export const CHARGED_BURST_RADIUS = 74;
+/** The smallest `Fairy.burst` in the roster: formations are spaced so even her pops carry a chain (keep in step). */
+export const MIN_FAIRY_BURST = 0.85;
+/** How far a pop reaches against fireballs and bosses: the old, smaller pop, so they're no easier to break. */
+export const BURST_ATTACK_RADIUS = 27;
 export const BURST_LIFE = 0.38;
 
 export const STAR_RADIUS = 7;
