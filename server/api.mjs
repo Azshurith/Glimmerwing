@@ -116,6 +116,12 @@ function reply(res, status, body) {
     res.end(JSON.stringify(body));
 }
 
+/** The player a token belongs to (a WebSocket sends it to be known), or null. */
+export async function playerForToken(store, token) {
+    if (!/^[A-Za-z0-9_-]{20,128}$/.test(String(token ?? ''))) return null;
+    return store.playerByToken(hashToken(token));
+}
+
 /** Build the /api handler around a store (or null when there is no database). */
 export function createApi(store, verifier = null) {
     /** Guests made per address in the current hour. */
@@ -300,7 +306,7 @@ export function createApi(store, verifier = null) {
     }
 
     /** Answer a request under /api. */
-    return async function handleApi(req, res, url) {
+    async function handleApi(req, res, url) {
         if (req.method === 'OPTIONS') {
             res.writeHead(204, {
                 'access-control-allow-origin': '*',
@@ -321,5 +327,8 @@ export function createApi(store, verifier = null) {
                 reply(res, 500, { error: 'Server error' });
             }
         }
-    };
+    }
+    // Online matches count their results through the same one-at-a-time line as everything else.
+    handleApi.inTurn = inTurn;
+    return handleApi;
 }

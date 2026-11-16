@@ -119,15 +119,10 @@ are never paired.
 
 ### How the netcode works
 
-Each browser simulates only its own meadow, at full rate, with no input
-delay. Twenty times a second it sends a snapshot of that meadow, and the
-rival's screen draws it (moving things are extrapolated between snapshots).
-Attacks travel as messages: the sender sees the star fly off, and it lands
-on the rival's side after the usual flight time, shortened by half the ping.
-The host (the player who made the room, or was first in the queue) deals
-each round's wave seed and settles who won when a fairy goes down, waiting
-a quarter second for a simultaneous knockout. A browser tab in the
-background stops simulating, so your meadow freezes for your rival while
-you're away. The server has no game logic; it only pairs players and
-forwards messages.
+The server runs every online match. Each browser sends only its player's controls; the server steps the round
+60 times a second with each player's latest controls and sends both players the controls it used. The round is
+fully decided by its seed and those controls (and plays out the same in every browser), so each browser plays
+the very same round from them and shows exactly what the server decided, a network round trip behind. The
+server deals the rounds, decides knockouts and the result, and counts the match for both players (their
+trophies, unlocks and history, and a replay). A player who leaves forfeits.
 

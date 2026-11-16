@@ -1,5 +1,5 @@
 import * as C from '@/core/config';
-import type { NetEvent, PeerMsg } from '@/types';
+import type { NetEvent } from '@/types';
 
 declare const __GW_SERVER__: string;
 
@@ -20,16 +20,20 @@ export function serverUrl(): string {
 }
 
 /**
- * WebSocket client for the online relay: queueing, rooms, and messages to the rival. Events are queued and read with
- * `poll()`.
+ * WebSocket client for online play: queueing and rooms, then the match the server runs (this player's picks and
+ * controls go up; the rival's cursor, the rounds, their steps and the result come down). Events are queued and
+ * read with `poll()`.
  */
 export class Net {
     private ws: WebSocket | null = null;
     private queue: NetEvent[] = [];
     /** Round-trip time in seconds, smoothed. */
     rtt = 0.1;
-    isHost = false;
+    /** This player's seat in the match: 0 made the room or queued first (their meadow is on the left). */
+    seat: 0 | 1 = 0;
     connected = false;
+    /** The account token sent with a request to play, so the server counts the match for this player. */
+    token: string | null = null;
     private pingT = 0;
 
     /** Open a connection to the relay; resolves once it is open. */
@@ -66,18 +70,12 @@ export class Net {
                 } catch {
                     return;
                 }
-                if (m.t === 'matched') this.isHost = m.host;
-                if (m.t === 'msg') {
-                    // Answer pings straight away so the reading isn't held up by the frame loop.
-                    if (m.d.k === 'ping') {
-                        this.peer({ k: 'pong', t: m.d.t });
-                        return;
-                    }
-                    if (m.d.k === 'pong') {
-                        const sample = (performance.now() - m.d.t) / 1000;
-                        this.rtt = this.rtt * 0.7 + sample * 0.3;
-                        return;
-                    }
+                if (m.t === 'matched') this.seat = m.seat;
+                // The ping's answer, read straight away so the frame loop doesn't hold it up.
+                if (m.t === 'pong') {
+                    const sample = (performance.now() - m.at) / 1000;
+                    this.rtt = this.rtt * 0.7 + sample * 0.3;
+                    return;
                 }
                 this.queue.push(m);
             };
@@ -91,23 +89,27 @@ export class Net {
 
     /** Join the queue to be paired with the next player who does the same. */
     quick(): void {
-        this.raw({ t: 'quick', v: C.NET_VERSION });
+        this.raw({ t: 'quick', v: C.NET_VERSION, token: this.token });
     }
     /** Create a friend room; the server answers with its code. */
     host(): void {
-        this.raw({ t: 'host', v: C.NET_VERSION });
+        this.raw({ t: 'host', v: C.NET_VERSION, token: this.token });
     }
     /** Join a friend's room by its code. */
     join(code: string): void {
-        this.raw({ t: 'join', v: C.NET_VERSION, code });
+        this.raw({ t: 'join', v: C.NET_VERSION, code, token: this.token });
     }
     /** Leave the queue or room. */
     leave(): void {
         this.raw({ t: 'leave' });
     }
-    /** Send a message to the rival through the relay. */
-    peer(d: PeerMsg): void {
-        this.raw({ t: 'msg', d });
+    /** This player's cursor on fairy select, and their pick once made (the server passes it to the rival). */
+    select(i: number, done: boolean, id: string): void {
+        this.raw({ t: 'sel', i, done, id });
+    }
+    /** This player's controls now, packed (they hold on the server until the next ones). */
+    input(c: number[]): void {
+        this.raw({ t: 'in', c });
     }
 
     /** Put events back at the front of the queue (the lobby hands leftovers to the game). */
@@ -120,7 +122,7 @@ export class Net {
         this.pingT -= dt;
         if (this.pingT <= 0) {
             this.pingT = 1.5;
-            this.peer({ k: 'ping', t: performance.now() });
+            this.raw({ t: 'ping', at: performance.now() });
         }
         const q = this.queue;
         this.queue = [];

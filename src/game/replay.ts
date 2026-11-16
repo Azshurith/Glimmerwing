@@ -33,10 +33,34 @@ export function quantize(c: Controls): Controls {
 }
 
 /**
+ * One step's controls, packed as on a tape: `[mask]`, or `[mask | TARGET, x, y]` with the touch target in
+ * sixteenths. Online, this is how a player's controls travel to the server and back out to both players.
+ */
+export function packControls(c: Controls): number[] {
+    let mask = 0;
+    for (const k of Object.keys(BITS) as (keyof typeof BITS)[]) if (c[k]) mask |= BITS[k];
+    return c.target ? [mask | TARGET, Math.round(c.target.x * GRID), Math.round(c.target.y * GRID)] : [mask];
+}
+
+/** Controls unpacked from `packControls` (anything malformed reads as no buttons held). */
+export function unpackControls(a: unknown): Controls {
+    const c: Controls = { left: false, right: false, up: false, down: false, fire: false };
+    if (!Array.isArray(a) || typeof a[0] !== 'number') return c;
+    const mask = a[0] | 0;
+    for (const k of Object.keys(BITS) as (keyof typeof BITS)[]) c[k] = (mask & BITS[k]) !== 0;
+    if (mask & TARGET) {
+        const x = Number(a[1]),
+            y = Number(a[2]);
+        if (Number.isFinite(x) && Number.isFinite(y)) c.target = { x: Math.round(x) / GRID, y: Math.round(y) / GRID };
+    }
+    return c;
+}
+
+/**
  * One meadow's controls, step by step, as a flat list of numbers: runs of `count, mask` (and the touch target's
  * x and y in sixteenths when the mask has TARGET), each run being that many steps with the same controls.
  */
-class TapeWriter {
+export class TapeWriter {
     private out: number[] = [];
     private key = '';
     private run: number[] = [];
@@ -46,9 +70,7 @@ class TapeWriter {
 
     /** Add one step's controls. */
     push(c: Controls): void {
-        let mask = 0;
-        for (const k of Object.keys(BITS) as (keyof typeof BITS)[]) if (c[k]) mask |= BITS[k];
-        const run = c.target ? [mask | TARGET, Math.round(c.target.x * GRID), Math.round(c.target.y * GRID)] : [mask];
+        const run = packControls(c);
         const key = run.join(',');
         if (key === this.key) this.count++;
         else {
@@ -218,7 +240,7 @@ export function isReplay(v: unknown): v is ReplayData {
     return (
         !!d &&
         d.format === REPLAY_FORMAT &&
-        (d.mode === 'cpu' || d.mode === 'versus' || d.mode === 'endless') &&
+        (d.mode === 'cpu' || d.mode === 'versus' || d.mode === 'endless' || d.mode === 'online') &&
         Array.isArray(d.rounds) &&
         Array.isArray(d.fairies)
     );

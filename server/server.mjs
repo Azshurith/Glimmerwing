@@ -3,24 +3,31 @@
 //   node server/server.mjs            # listens on PORT or 8787
 //
 // It serves dist/index.html at "/", the game's API at "/api" (see api.mjs; saves go to the database set up in
-// db.mjs) and runs a WebSocket relay at "/ws".
-// The server never simulates anything: each player's browser runs its own
-// meadow and the server only pairs players and forwards their messages.
+// db.mjs) and online matches over a WebSocket at "/ws".
 //
-// Client -> server            Server -> client
-//   {t:'quick', v}              {t:'queued'}
-//   {t:'host', v}               {t:'hosted', code}
-//   {t:'join', v, code}         {t:'matched', host, code}
-//   {t:'leave'}                 {t:'error', msg}
-//   {t:'msg', d}  (relayed)     {t:'msg', d}
-//                               {t:'peerLeft'}
+// The server runs every online match itself (src/server/online.ts, bundled as dist/online.mjs): it pairs two
+// players, steps their rounds 60 times a second from the controls each browser sends, and sends both the
+// controls it used, so their browsers play the very same rounds; it decides the knockouts and the result, and
+// counts the match for both players.
+//
+// Client -> server                  Server -> client
+//   {t:'quick', v, token?}            {t:'queued'}
+//   {t:'host', v, token?}             {t:'hosted', code}
+//   {t:'join', v, code, token?}       {t:'matched', seat, code}       seat 0 made the room / queued first
+//   {t:'leave'}                       {t:'error', msg}
+//   {t:'sel', i, done, id}            {t:'sel', i, done, id}          the rival's cursor on fairy select
+//   {t:'in', c}  (packed controls)    {t:'round', n, seed, map, fairies, wins}
+//   {t:'ping', at}                    {t:'f', n, k, fr}               steps k… of round n: [c0, c1] or null
+//                                     {t:'end', n, steps, winner, wins}
+//                                     {t:'result', wins, progress, trophyDelta, unlocked, newStages, code}
+//                                     {t:'pong', at} {t:'peerLeft'}
 
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createApi } from './api.mjs';
+import { createApi, playerForToken } from './api.mjs';
 import { openStore } from './db.mjs';
 import { createVerifier } from './verifier.mjs';
 
@@ -42,6 +49,12 @@ const rooms = new Map();
 const store = await openStore();
 const verifier = store ? createVerifier() : null;
 const handleApi = createApi(store, verifier);
+/** The online match engine (the game's own simulation), once the game has been built. */
+const ONLINE = join(ROOT, 'dist', 'online.mjs');
+const { OnlineMatch } = existsSync(ONLINE) ? await import(new URL(`file://${ONLINE}`).href) : { OnlineMatch: null };
+if (!OnlineMatch) console.warn('No dist/online.mjs: build the game to play online.');
+/** Matches being played. */
+const matches = new Set();
 
 const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
@@ -209,31 +222,110 @@ function unlist(c) {
     for (const [code, r] of rooms) if (r.host === c) rooms.delete(code);
 }
 
+/** What an online match needs from the server: the players' records, and counting a finished match. */
+const hooks = {
+    async loadProgress(id) {
+        return (await store?.getProgress(id))?.data ?? null;
+    },
+    async saveResult(id, r) {
+        if (!store) return null;
+        return handleApi.inTurn(id, async () => {
+            await store.setProgress(id, r.progress);
+            const [won, lost] = r.outcome.wins;
+            await store.addMatch(id, {
+                mode: 'online',
+                map: r.map,
+                fairy: r.fairies[0],
+                rivalFairy: r.fairies[1],
+                roundsWon: won,
+                roundsLost: lost,
+                won: won > lost,
+                bestChain: r.outcome.bestChain,
+                trophyDelta: r.trophyDelta,
+                seconds: r.seconds,
+            });
+            return store.addReplay(id, {
+                mode: 'online',
+                map: r.map,
+                version: r.replay.sim,
+                seconds: r.seconds,
+                recorded: r.replay.at,
+                data: r.replay,
+            });
+        });
+    },
+};
+
+/** Two players found each other: start a match the server runs. */
 function pair(a, b, code = '') {
     unlist(a);
     unlist(b);
+    if (!OnlineMatch) {
+        for (const c of [a, b]) send(c, { t: 'error', msg: 'Online play is not ready on this server' });
+        return;
+    }
     a.peer = b;
     b.peer = a;
-    send(a, { t: 'matched', host: true, code });
-    send(b, { t: 'matched', host: false, code });
+    const seat = c => ({ send: msg => send(c, msg), player: c.player });
+    const match = new OnlineMatch([seat(a), seat(b)], hooks);
+    matches.add(match);
+    a.match = b.match = match;
+    a.seat = 0;
+    b.seat = 1;
+    send(a, { t: 'matched', seat: 0, code, rival: b.player?.name ?? null });
+    send(b, { t: 'matched', seat: 1, code, rival: a.player?.name ?? null });
 }
 
+/** Leave the queue, a room or a match (the rival is told; a match in play is forfeited). */
 function leave(c) {
     unlist(c);
-    const p = c.peer;
-    if (p) {
-        p.peer = null;
-        send(p, { t: 'peerLeft' });
+    const m = c.match;
+    if (m) {
+        m.leave(c.seat);
+        matches.delete(m);
+        if (c.peer) {
+            c.peer.peer = null;
+            c.peer.match = null;
+        }
     }
+    c.match = null;
     c.peer = null;
+}
+
+/** Who a connection belongs to, from the account token it sent (none for a guest the server doesn't know). */
+async function identify(c, token) {
+    if (!store || typeof token !== 'string' || c.player !== undefined) return;
+    c.player = (await playerForToken(store, token)) ?? null;
 }
 
 function handle(c, m) {
     if (!m || typeof m !== 'object') return;
     switch (m.t) {
-        case 'msg':
-            if (c.peer) send(c.peer, { t: 'msg', d: m.d });
+        case 'in':
+            c.match?.input(c.seat, m.c);
             return;
+        case 'sel':
+            c.match?.select(c.seat, Number(m.i) | 0, !!m.done, String(m.id ?? ''));
+            return;
+        case 'ping':
+            send(c, { t: 'pong', at: m.at });
+            return;
+        case 'quick':
+        case 'host':
+        case 'join':
+            // Know who's playing first, so the match can count for them.
+            void identify(c, m.token).then(() => matchmake(c, m));
+            return;
+        case 'leave':
+            leave(c);
+            return;
+    }
+}
+
+/** Queue, open a room or join one. */
+function matchmake(c, m) {
+    if (c.closed) return;
+    switch (m.t) {
         case 'quick': {
             leave(c);
             const v = String(m.v ?? '');
@@ -274,9 +366,6 @@ function handle(c, m) {
             pair(r.host, c, code);
             return;
         }
-        case 'leave':
-            leave(c);
-            return;
     }
 }
 
@@ -305,6 +394,23 @@ setInterval(() => {
             rooms.delete(code);
         }
 }, 20000);
+
+// Step every match 60 times a second, on the clock: missed steps are caught up (a few at most).
+const STEP_MS = 1000 / 60;
+let last = performance.now(),
+    behind = 0;
+setInterval(() => {
+    const now = performance.now();
+    behind = Math.min(behind + (now - last), STEP_MS * 6);
+    last = now;
+    while (behind >= STEP_MS) {
+        behind -= STEP_MS;
+        for (const m of matches) {
+            if (m.closed) matches.delete(m);
+            else m.tick();
+        }
+    }
+}, 4);
 
 server.listen(PORT, () =>
     console.log(

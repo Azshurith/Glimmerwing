@@ -19,13 +19,12 @@ import type {
     Controls,
     EndlessRank,
     Fairy,
-    FieldSnapshot,
     HudTag,
     Mode,
     RoundMode,
     Transit,
     MatchOutcome,
-    PeerMsg,
+    NetEvent,
     Phase,
     ReplayData,
     ReplayHighlight,
@@ -42,7 +41,7 @@ import type {
     SyncedSettings,
 } from '@/types';
 import type { Field } from './field';
-import { RoundSim, flightTime, riseSpeed, transitTime } from './match';
+import { RoundSim, flightTime, riseSpeed } from './match';
 import { curveAt, pathAt, curveDir, enterAt, shiftCurve } from './fireball-path';
 import { SkillPreview } from './preview';
 import { MapPreview } from './map-preview';
@@ -50,7 +49,15 @@ import { loadProgress, resetProgress, saveProgress } from './progress';
 import { loadSettings, saveSettings } from './settings';
 import { Account } from './account';
 import { applyOutcome } from './rewards';
-import { Recorder, ReplayPlayer, loadLocalReplay, quantize, saveLocalReplay } from './replay';
+import {
+    Recorder,
+    ReplayPlayer,
+    loadLocalReplay,
+    packControls,
+    quantize,
+    saveLocalReplay,
+    unpackControls,
+} from './replay';
 import { REPLAY_ROWS, replayLinkBox, replayRowBoxes } from '@/render/screens/replays-screen';
 
 /** One player's cursor on the select screen, and whether they have locked in their pick. */
@@ -240,16 +247,23 @@ export class Game {
     time = 0;
 
     // ---- online ----
-    // Online, field 0 is always this player's meadow and field 1 mirrors the rival's.
-    // Each browser runs only its own meadow and streams snapshots of it; attacks
-    // and knockouts travel as messages. The host picks round seeds and calls results.
+    // The server runs online matches: this browser sends its player's controls, and plays each round from the
+    // steps the server sends (both players' controls as it used them), so it's the server's round, step for step.
+    // The meadows keep the server's order: seat 0 (who made the room or queued first) is field 0, on the left.
     private net: Net | null = null;
-    /** Counts rounds this session so stale messages from an earlier round are ignored. */
+    /** This player's seat online (0 offline): which meadow is theirs. */
+    private me: 0 | 1 = 0;
+    /** The round the server is on, its steps waiting to be played here, and how many have been played. */
     private roundNo = 0;
-    private snapT = 0;
-    private sentDead = false;
-    private remoteDead = false;
-    private endT = -1;
+    private frames: (number[][] | null)[] = [];
+    private roundSteps = 0;
+    /** The server's word that the round ended (after how many steps, who won, the wins so far). */
+    private roundEnd: { steps: number; winner: number; wins: [number, number] } | null = null;
+    /** The controls last sent to the server, and steps since, so they're sent when they change (or now and then). */
+    private sentControls = '';
+    private sentAgo = 0;
+    /** The rival has left; shown once the result is. */
+    private rivalLeft = false;
     private notice = '';
     /** Set by the page: open the online lobby. */
     onWantOnline?: () => void;
@@ -272,8 +286,18 @@ export class Game {
         }
         this.fields.forEach((f, i) => {
             const pan = this.online ? 0 : i === 0 ? -0.35 : 0.35;
-            // Endless's hidden meadow makes no sound at all.
-            const vol = i === 1 ? (this.mode === 'endless' ? 0 : this.mode === 'cpu' ? 0.45 : 1) : 1;
+            // Endless's hidden meadow makes no sound at all; the CPU's and an online rival's are quieter.
+            const vol = this.online
+                ? i === this.me
+                    ? 1
+                    : 0.45
+                : i === 1
+                  ? this.mode === 'endless'
+                      ? 0
+                      : this.mode === 'cpu'
+                        ? 0.45
+                        : 1
+                  : 1;
             if (vol > 0) for (const e of f.sfx) this.sound.play(e.k, e.p, pan, vol);
             f.sfx = [];
         });
@@ -307,7 +331,9 @@ export class Game {
     /** Called by the lobby once the server has paired us with a rival. */
     startOnline(net: Net): void {
         this.net = net;
+        this.me = net.seat;
         this.roundNo = 0;
+        this.rivalLeft = false;
         this.notice = '';
         this.pickers[1] = { index: 1, done: false };
         this.start('online');
@@ -352,6 +378,8 @@ export class Game {
             this.net.close();
         }
         this.net = null;
+        this.me = 0;
+        this.rivalLeft = false;
         this.notice = notice;
         this.mode = 'cpu';
         this.phase = 'modes';
@@ -362,7 +390,7 @@ export class Game {
     /** Tell the online rival where this player's cursor is and whether they have picked. */
     private sendSelection(): void {
         const pk = this.pickers[0];
-        this.net?.peer({ k: 'sel', i: pk.index, done: pk.done, id: FAIRIES[pk.index].id });
+        this.net?.select(pk.index, pk.done, FAIRIES[pk.index].id);
     }
 
     /** Wipe saved stats and unlocks (here and on the server) and go back to the title screen. */
@@ -470,7 +498,8 @@ export class Game {
         this.replayRound = 0;
         this.replaySpeed = 1;
         this.replayCut = false;
-        this.mode = data.mode;
+        // An online match plays back like two players on one screen: both meadows from the recording.
+        this.mode = data.mode === 'online' ? 'versus' : data.mode;
         this.picks = [fairyById(data.fairies[0]) ?? FAIRIES[0], fairyById(data.fairies[1]) ?? FAIRIES[1]];
         this.matchMap = data.map;
         this.wins = [0, 0];
@@ -905,16 +934,12 @@ export class Game {
             recorded = this.replay.data.rounds[this.replayRound - 1];
         }
         if (this.online) {
-            // The host deals each round; the guest follows when the 'round' message lands.
-            if (this.net!.isHost) this.net!.peer({ k: 'round', seed, wins: [this.wins[1], this.wins[0]] });
-            this.roundNo++;
-            this.snapT = 0;
-            this.sentDead = false;
-            this.remoteDead = false;
-            this.endT = -1;
+            // The server dealt this round; its steps arrive from now on.
+            this.frames = [];
+            this.roundSteps = 0;
+            this.roundEnd = null;
         }
-        // The seed also decides which meadow the Hollow Crow wakes in. Online, field 0 is
-        // ours on both screens, so "side A" means the host's meadow.
+        // The seed also decides which meadow the Hollow Crow wakes in.
         // On a wide landscape screen a local match plays in wider meadows, so the view fills the screen; online
         // both players must share one width, so it stays the usual one there.
         // Endless shows one meadow: on a landscape screen it's the whole width (on a phone, the solo tall layout).
@@ -928,8 +953,7 @@ export class Game {
             // (both, so the round stays fair), leaving a slim bar for the round and the rival's hearts.
             C.setFieldHeight(this.soloView ? (this.r.tallH - C.TALL_SOLO_BAR) / C.TALL_OWN_S : C.FIELD_H_BASE);
         }
-        const sideA = (seed & 1) === 0;
-        const crowHere = this.online ? (this.net!.isHost ? sideA : !sideA) : sideA;
+        const crowHere = (seed & 1) === 0;
         const map = this.replay ? this.replay.data.map : (this.forcedMap?.id ?? (this.matchMap || mapForSeed(seed).id));
         this.round = new RoundSim(this.mode as RoundMode, seed, this.picks, roundIndex, map, crowHere);
         this.recorder?.startRound(seed, { w: C.FIELD_W, h: C.FIELD_H, single: C.VIEW_W === C.FIELD_W });
@@ -1166,14 +1190,12 @@ export class Game {
         if (this.pickers[0].done && this.pickers[1].done) {
             // Hold on the READY! stamps a moment, then go.
             if (this.readyAt < 0) this.readyAt = this.selectT;
-            // Online, only the host starts the match; the guest waits for the first round.
-            // Then the map: chosen on its own screen in a local match; online, the round seeds pick it.
-            if (this.selectT - this.readyAt >= READY_HOLD) {
-                if (!this.online) {
-                    this.phase = 'mapselect';
-                    // A card for a stage that's still locked can't stay chosen.
-                    if (this.mapIndex > 0 && !this.mapOpen(this.mapIndex - 1)) this.mapIndex = 0;
-                } else if (this.net!.isHost) this.beginMatch();
+            // Then the map: chosen on its own screen in a local match; online, the server starts the match and its
+            // round seeds pick the map.
+            if (this.selectT - this.readyAt >= READY_HOLD && !this.online) {
+                this.phase = 'mapselect';
+                // A card for a stage that's still locked can't stay chosen.
+                if (this.mapIndex > 0 && !this.mapOpen(this.mapIndex - 1)) this.mapIndex = 0;
             }
         } else this.readyAt = -1;
     }
@@ -1225,88 +1247,127 @@ export class Game {
         this.beginMatch();
     }
 
-    // ---- online messages ------------------------------------------------------
+    // ---- online ---------------------------------------------------------------
 
-    /** Handle everything the server and the rival sent since the last step. */
+    /** Handle everything the server sent since the last step. */
     private pollNet(dt: number): void {
         const net = this.net;
         if (!net) return;
         for (const ev of net.poll(dt)) {
-            if (ev.t === 'peerLeft') {
-                this.disconnect('Your rival left the meadow');
-                return;
+            switch (ev.t) {
+                case 'peerLeft':
+                    // A match the rival walked out of is over: its result shows first.
+                    if (this.phase === 'matchOver' || this.inGame) this.rivalLeft = true;
+                    else {
+                        this.disconnect('Your rival left the meadow');
+                        return;
+                    }
+                    break;
+                case 'closed':
+                    this.disconnect('Lost the connection to the server');
+                    return;
+                case 'error':
+                    this.disconnect(ev.msg);
+                    return;
+                case 'sel':
+                    // The rival's cursor and pick (their picker is always our second).
+                    this.pickers[1] = { index: ev.i, done: ev.done };
+                    break;
+                case 'round':
+                    this.onlineRound(ev.n, ev.seed, ev.map, ev.fairies, ev.wins);
+                    break;
+                case 'f':
+                    if (ev.n === this.roundNo) this.frames.push(...ev.fr);
+                    break;
+                case 'end':
+                    if (ev.n === this.roundNo) this.roundEnd = { steps: ev.steps, winner: ev.winner, wins: ev.wins };
+                    break;
+                case 'result':
+                    this.onlineResult(ev);
+                    break;
             }
-            if (ev.t === 'closed') {
-                this.disconnect('Lost the connection to the server');
-                return;
-            }
-            if (ev.t === 'msg') this.onPeer(ev.d);
         }
     }
 
-    /** Act on one message from the online rival: picks, round seeds, snapshots, attacks and results. */
-    private onPeer(m: PeerMsg): void {
-        const live = this.inGame;
-        switch (m.k) {
-            case 'sel':
-                this.pickers[1] = { index: m.i, done: m.done };
-                if (m.done) this.picks[1] = fairyById(m.id);
-                break;
-            case 'round':
-                if (this.net!.isHost) break;
-                // Wins arrive from the host's point of view, already swapped to ours.
-                if (this.phase === 'select') {
-                    this.pickers[0].done = true;
-                    this.beginMatch(m.seed);
-                } else {
-                    this.wins = m.wins;
-                    this.newRound(m.seed);
-                }
-                break;
-            case 'snap':
-                if (live && m.r === this.roundNo) this.fields[1].applySnapshot(m.s as FieldSnapshot);
-                break;
-            case 'atk':
-                if (this.phase === 'playing' && m.r === this.roundNo) {
-                    // The attack already spent half the round trip getting here; start it that far along.
-                    const head = Math.min(this.net!.rtt / 2, transitTime(m.o) * 0.6);
-                    this.transits.push({ o: m.o, from: 1, t: head });
-                }
-                break;
-            case 'dead':
-                if (m.r === this.roundNo) this.remoteDead = true;
-                break;
-            case 'end':
-                if (!this.net!.isHost && this.phase === 'playing') this.endRound(m.guestDead, m.hostDead);
-                break;
+    /** The server dealt a round: the match's first (from fairy select) or the next. */
+    private onlineRound(n: number, seed: number, map: string, fairies: [string, string], wins: [number, number]): void {
+        this.roundNo = n;
+        this.matchMap = map;
+        if (!this.inGame || this.phase === 'matchOver') {
+            // A new match: both picks, in the server's seat order.
+            this.picks = [fairyById(fairies[0]) ?? FAIRIES[0], fairyById(fairies[1]) ?? FAIRIES[1]];
+            this.beginMatch(seed);
+            return;
+        }
+        this.wins = [wins[0], wins[1]];
+        this.newRound(seed);
+    }
+
+    /**
+     * What the server made of the match, for this player: their progress (it counts), the trophies, unlocks and
+     * stages it earned, and the replay it kept. A rival who left forfeits; then the match ends here too.
+     */
+    private onlineResult(r: Extract<NetEvent, { t: 'result' }>): void {
+        if (r.progress) this.adoptProgress(r.progress);
+        this.trophyDelta = r.trophyDelta;
+        this.newlyUnlocked = r.unlocked.map(id => fairyById(id)).filter((f): f is Fairy => !!f);
+        this.newStages = r.newStages.map(id => mapById(id)?.name ?? id);
+        this.lastReplayCode = r.code;
+        if (this.phase !== 'matchOver') {
+            for (const f of this.fields) f.settled = true;
+            this.wins = [r.wins[0], r.wins[1]];
+            this.phase = 'matchOver';
+            this.phaseT = 0;
+            this.transits = [];
+            this.ui(this.wins[this.me] > this.wins[1 - this.me] ? 'win' : 'lose');
+        }
+        this.pickers[1].done = false;
+    }
+
+    /**
+     * Send this player's controls to the server when they change (and now and then anyway): it plays every step
+     * with each player's latest.
+     */
+    private sendControls(): void {
+        const c = quantize(this.input.solo(this.fields[this.me].player));
+        const packed = packControls(c);
+        const key = packed.join(',');
+        if (key !== this.sentControls || ++this.sentAgo >= 30) {
+            this.net!.input(packed);
+            this.sentControls = key;
+            this.sentAgo = 0;
         }
     }
 
-    /** Online upkeep every step once a round exists: mirror the rival, stream our meadow. */
-    private tickOnline(dt: number): void {
-        this.fields[1].drift(dt);
-        if (++this.snapT >= C.SNAP_EVERY) {
-            this.snapT = 0;
-            this.net!.peer({ k: 'snap', r: this.roundNo, s: this.fields[0].snapshot() });
-        }
-    }
-
-    /** Online round end: report our own knockout; the host settles the result. */
-    private checkOnlineEnd(dt: number): void {
-        const net = this.net!;
-        const localDead = !this.fields[0].alive;
-        if (localDead && !this.sentDead) {
-            this.sentDead = true;
-            net.peer({ k: 'dead', r: this.roundNo });
-        }
-        if (!net.isHost) return;
-        if ((localDead || this.remoteDead) && this.endT < 0) this.endT = C.END_GRACE;
-        if (this.endT >= 0) {
-            this.endT -= dt;
-            if (this.endT <= 0) {
-                net.peer({ k: 'end', hostDead: localDead, guestDead: this.remoteDead });
-                this.endRound(localDead, this.remoteDead);
+    /**
+     * One step's time online: play the server's steps that have arrived (one a step, more to catch up when they've
+     * piled up, none while waiting for them), then the round ends where the server says it did.
+     */
+    private stepOnline(dt: number): void {
+        this.sendControls();
+        const n = this.frames.length;
+        const take = n === 0 ? 0 : n <= 3 ? 1 : n <= 8 ? 2 : n - 3;
+        const round = this.round;
+        for (let i = 0; i < take; i++) {
+            const fr = this.frames.shift()!;
+            if (!round.frozen(dt)) {
+                round.share();
+                round.advance(dt, unpackControls(fr?.[0]), unpackControls(fr?.[1]));
             }
+            this.roundSteps++;
+        }
+        const end = this.roundEnd;
+        if (end && this.roundSteps >= end.steps) {
+            this.roundEnd = null;
+            for (const f of this.fields) f.settled = true;
+            this.roundWinner = end.winner < 0 ? -1 : (end.winner as 0 | 1);
+            this.wins = [end.wins[0], end.wins[1]];
+            this.ui(this.roundWinner === this.me ? 'win' : 'lose');
+            const over = this.wins[0] >= C.ROUNDS_TO_WIN || this.wins[1] >= C.ROUNDS_TO_WIN;
+            this.phase = over ? 'matchOver' : 'roundOver';
+            this.phaseT = 0;
+            this.transits = [];
+            if (over) this.pickers[1].done = false;
         }
     }
 
@@ -1413,14 +1474,13 @@ export class Game {
         if (this.paused) return;
         this.phaseT += dt;
 
-        if (this.online) {
-            if (this.phase !== 'playing' && pr.has('Escape')) {
-                this.disconnect();
-                return;
-            }
-            this.tickOnline(dt);
+        if (this.online && this.phase !== 'playing' && pr.has('Escape')) {
+            this.disconnect();
+            return;
         }
         if (this.phase === 'countdown') {
+            // Online, the server already has this player's controls when the round begins.
+            if (this.online) this.sendControls();
             if (this.phaseT > 2) {
                 this.phase = 'playing';
                 this.phaseT = 0;
@@ -1433,12 +1493,13 @@ export class Game {
             if (go || (this.phase === 'roundOver' && this.phaseT > 3.5)) {
                 if (this.phase === 'matchOver') {
                     if (this.replay) this.exitReplay();
+                    else if (this.online && this.rivalLeft) this.disconnect('Your rival left the meadow');
                     else this.start(this.mode);
                     return;
                 }
-                // Online, the host deals the next round and the guest follows. A new round starts untouched: its
-                // meadows first move with the countdown over (a replay, checked by the server, plays them so too).
-                if (!this.online || this.net!.isHost) {
+                // Online, the server deals the next round. A new round starts untouched: its meadows first move with
+                // the countdown over (a replay, checked by the server, plays them so too).
+                if (!this.online) {
                     this.newRound();
                     return;
                 }
@@ -1505,7 +1566,6 @@ export class Game {
         this.transits = [];
     }
 
-    /** One playing step online: only our meadow is simulated here. */
     /**
      * Debug overlay (`?debug=paths`): every fireball's path from where it is to where it leaves, drawn across
      * the screen, so its route can be checked against the play area.
@@ -1540,31 +1600,6 @@ export class Game {
         }
     }
 
-    private stepOnline(dt: number): void {
-        const me = this.fields[0];
-        // A moonseed break freezes only the meadow it broke in; the rival's keeps going on their screen.
-        if (me.hitstop > 0) {
-            me.hitstop = Math.max(0, me.hitstop - dt);
-            return;
-        }
-        this.round.share();
-        me.update(dt, this.input.solo(me.player));
-        for (const o of me.outbox) {
-            // Player 1 is the host, on both screens.
-            o.tint ??= this.net!.isHost ? 'p1' : 'p2';
-            this.transits.push({ o, from: 0, t: 0, ghost: true });
-            this.net!.peer({ k: 'atk', r: this.roundNo, o });
-        }
-        me.outbox = [];
-        for (const tr of this.transits) {
-            // Both meadows share the tempo and sudden death, so mine stands in for my rival's.
-            tr.t += tr.o.kind === 'star' ? dt * me.attackPace : dt;
-            if (tr.t >= transitTime(tr.o) && !tr.ghost) me.receive(tr.o);
-        }
-        this.transits = this.transits.filter(tr => tr.t < transitTime(tr.o));
-        this.checkOnlineEnd(dt);
-    }
-
     /** A fairy went down: settle the round, award it, and move on to the next round or the end of the match. */
     private endRound(dead0: boolean, dead1: boolean): void {
         // The round is decided: the meadows keep drifting behind the banner, but no more hits land.
@@ -1596,8 +1631,7 @@ export class Game {
 
     /** Save the finished match into progress and unlock any fairies it earned. */
     private recordMatch(): void {
-        // Online matches are run by the players' browsers, so the server can't check them yet: they don't count
-        // toward progress until it runs them itself.
+        // Online matches are run and counted by the server, which sends what they earned (onlineResult).
         if (this.mode === 'online') return;
         // Shown at once by the game's own reckoning; the server's, from the replay, replaces it when it answers.
         const r = applyOutcome(this.progress, {
@@ -1646,16 +1680,23 @@ export class Game {
                 : wide()
             : soloTall || endless
               ? [tall.at[0], offscreen]
-              : tall.at;
+              : // Online in the second seat, your meadow is the second: it takes the big place at the bottom.
+                this.me === 1
+                ? [tall.at[1], tall.at[0]]
+                : tall.at;
         if (tall) r.tallBand = tall.band;
         r.begin();
         const solo = this.mode !== 'versus';
-        const tags: [HudTag, HudTag] = [
-            { label: solo ? 'YOU' : '1P', color: PLAYER_COLORS.p1 },
-            this.vsCpu
-                ? { label: 'CPU', color: PLAYER_COLORS.cpu }
-                : { label: this.mode === 'online' ? 'RIVAL' : '2P', color: PLAYER_COLORS.p2 },
-        ];
+        // Online the meadows keep the server's seat order (and colours); YOU is whichever is this player's.
+        const tags: [HudTag, HudTag] = this.online
+            ? [
+                  { label: this.me === 0 ? 'YOU' : 'RIVAL', color: PLAYER_COLORS.p1 },
+                  { label: this.me === 1 ? 'YOU' : 'RIVAL', color: PLAYER_COLORS.p2 },
+              ]
+            : [
+                  { label: solo ? 'YOU' : '1P', color: PLAYER_COLORS.p1 },
+                  this.vsCpu ? { label: 'CPU', color: PLAYER_COLORS.cpu } : { label: '2P', color: PLAYER_COLORS.p2 },
+              ];
         r.field(this.fields[0], at[0].x, this.wins[0], this.time, tags[0], at[0].y, at[0].s);
         if (!soloTall && !endless) r.field(this.fields[1], at[1].x, this.wins[1], this.time, tags[1], at[1].y, at[1].s);
         // Between rounds the console still shows the round just played.
@@ -1754,10 +1795,14 @@ export class Game {
 
         if (this.debugPaths && r.layout === 'wide') this.drawFireballPaths(at);
 
+        const you = this.me,
+            them = (1 - this.me) as 0 | 1;
         const names = this.vsCpu
             ? ['You', `CPU ${this.picks[1].name}`]
             : this.mode === 'online'
-              ? ['You', `Rival ${this.picks[1].name}`]
+              ? you === 0
+                  ? ['You', `Rival ${this.picks[1].name}`]
+                  : [`Rival ${this.picks[0].name}`, 'You']
               : [this.picks[0].name, this.picks[1].name];
         switch (this.phase) {
             case 'title':
@@ -1962,14 +2007,14 @@ export class Game {
             }
             case 'roundOver': {
                 const w = this.roundWinner;
-                const title = w < 0 ? 'Draw' : solo && w === 0 ? 'You take the round' : `${names[w]} takes the round`;
+                const title = w < 0 ? 'Draw' : solo && w === you ? 'You take the round' : `${names[w]} takes the round`;
                 r.banner({
                     title,
                     sub: 'Next round starting',
                     age: this.phaseT,
                     dim: 0.5,
                     size: 24,
-                    tone: solo && w === 1 ? 'pink' : 'gold',
+                    tone: solo && w === them ? 'pink' : 'gold',
                 });
                 break;
             }
@@ -2016,10 +2061,12 @@ export class Game {
                     break;
                 }
                 const w = this.wins[0] > this.wins[1] ? 0 : 1;
-                const title = solo ? (w === 0 ? 'You win!' : `${names[1]} wins`) : `${names[w]} wins!`;
+                const title = solo ? (w === you ? 'You win!' : `${names[w]} wins`) : `${names[w]} wins!`;
                 // Under the result: trophies won or lost, and anything the match opened up.
                 const notes: string[] = [];
-                if (this.mode === 'cpu') notes.push(`${this.trophyDelta >= 0 ? '+' : ''}${this.trophyDelta} trophies`);
+                if (this.rivalLeft) notes.push('Your rival left');
+                if (this.mode === 'cpu' || this.mode === 'online')
+                    notes.push(`${this.trophyDelta >= 0 ? '+' : ''}${this.trophyDelta} trophies`);
                 if (this.newStages.length) notes.push(`New stage: ${this.newStages.join(', ')}`);
                 if (this.newlyUnlocked.length)
                     notes.push(`New fairy: ${this.newlyUnlocked.map(f => f.name).join(', ')}`);
@@ -2032,7 +2079,7 @@ export class Game {
                     age: this.phaseT,
                     dim: 0.6,
                     size: 34,
-                    tone: solo && w === 1 ? 'pink' : 'gold',
+                    tone: solo && w === them ? 'pink' : 'gold',
                     blinkSub: true,
                 });
                 break;

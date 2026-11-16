@@ -92,6 +92,7 @@ export class Lobby {
         if (!this.net?.connected) {
             this.net?.close();
             this.net = new Net();
+            this.net.token = this.game.account.token;
             this.say('Connecting…');
             try {
                 await this.net.connect();

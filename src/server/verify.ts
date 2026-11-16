@@ -43,6 +43,8 @@ const fail = (error: string, stale = false): Verdict => ({ ok: false, error, sta
 export function verifyReplay(data: unknown, progress: Progress | null): Verdict {
     if (!isReplay(data)) return fail('Not a replay');
     const d: ReplayData = data;
+    // Online matches are run, and counted, by the server itself.
+    if (d.mode === 'online') return fail('Online matches are counted by the server');
     if (d.format !== REPLAY_FORMAT || d.sim !== SIM_VERSION)
         return fail('Recorded on another version of the game', true);
     const p: Progress = structuredClone(progress ?? freshProgress());
