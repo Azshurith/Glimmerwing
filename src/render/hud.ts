@@ -585,6 +585,54 @@ export class Hud {
     }
 
     /**
+     * The replay's controls minimised: a small tab at the bottom with a play mark, REPLAY, the speed and the time
+     * (a tap or H brings the panel back), and a thin line along the bottom edge showing how far it's played.
+     */
+    private replayMini(v: ReplayPanelView, tab: Box, time: number): void {
+        const ctx = this.ctx;
+        const W = this.viewW,
+            H = this.viewH;
+        ctx.save();
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(0, H - 2, W, 2);
+        ctx.fillStyle = '#ffd45c';
+        ctx.fillRect(0, H - 2, W * Math.min(1, v.len > 0 ? v.pos / v.len : 0), 2);
+        ctx.globalAlpha = 0.9;
+        ctx.fillStyle = 'rgba(14,8,36,0.85)';
+        slanted(tab.x, tab.y, tab.w, tab.h, 3)(ctx);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(201,162,74,0.75)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.globalAlpha = v.paused ? 1 : 0.65 + 0.35 * Math.sin(time * 4);
+        ctx.fillStyle = '#ff6b8a';
+        const mx = tab.x + 7,
+            my = tab.y + tab.h / 2;
+        ctx.beginPath();
+        ctx.moveTo(mx, my - 3.5);
+        ctx.lineTo(mx + 5, my);
+        ctx.lineTo(mx, my + 3.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.font = `6px ${ARCADE}`;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#ffe27a';
+        const label = `${v.speed > 1 ? `${v.speed}× ` : ''}${clock(v.pos)}`;
+        ctx.fillText(label, mx + 9, my + 2.5, tab.w - 26);
+        // A chevron pointing up: the panel opens again.
+        ctx.strokeStyle = '#e8e0ff';
+        ctx.lineWidth = 1.3;
+        const cx = tab.x + tab.w - 9;
+        ctx.beginPath();
+        ctx.moveTo(cx - 3.5, my + 1.5);
+        ctx.lineTo(cx, my - 2);
+        ctx.lineTo(cx + 3.5, my + 1.5);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /**
      * The replay's controls along the bottom of the view: a dark plate with REPLAY and the speed, a round picker
      * and the time on its top line, and the timeline under them, with ticks where rounds begin, a marker for
      * each highlight and a knob that can be dragged; a hint line under it all.
@@ -593,6 +641,10 @@ export class Hud {
         const ctx = this.ctx;
         const L = replayPanelLayout(this.viewW, this.viewH, v.rounds.length);
         const { panel: P, bar: B } = L;
+        if (v.mini) {
+            this.replayMini(v, L.tab, time);
+            return;
+        }
         ctx.save();
         ctx.fillStyle = 'rgba(14,8,36,0.82)';
         slanted(P.x, P.y, P.w, P.h, 5)(ctx);
@@ -637,9 +689,21 @@ export class Hud {
         // The time, or while dragging the time under the knob.
         const shown = v.scrub !== null ? v.scrub * v.len : v.pos;
         ctx.textAlign = 'right';
-        ctx.font = `7px ${ARCADE}`;
+        ctx.font = `6.5px ${ARCADE}`;
         ctx.fillStyle = v.scrub !== null ? '#ffe27a' : '#e8e0ff';
-        ctx.fillText(`${clock(shown)} / ${clock(v.len)}`, P.x + P.w - 10, ty);
+        ctx.fillText(`${clock(shown)} / ${clock(v.len)}`, L.hide.x - 5, ty);
+        // The minimise button: a bar under a chevron pointing down.
+        const hb = L.hide;
+        ctx.strokeStyle = 'rgba(201,162,74,0.8)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(hb.x + 0.5, hb.y + 0.5, hb.w - 1, hb.h - 1);
+        ctx.strokeStyle = '#e8e0ff';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(hb.x + 4, hb.y + 4);
+        ctx.lineTo(hb.x + hb.w / 2, hb.y + hb.h - 4.5);
+        ctx.lineTo(hb.x + hb.w - 4, hb.y + 4);
+        ctx.stroke();
         // The timeline: the track, the part played, round ticks and highlights.
         const k = Math.min(1, v.len > 0 ? v.pos / v.len : 0);
         ctx.fillStyle = 'rgba(255,255,255,0.14)';
@@ -682,13 +746,75 @@ export class Hud {
             ctx.fillStyle = '#ffe27a';
             ctx.fillText(v.label, lx, P.y - 6);
         }
-        if (v.hint) {
-            ctx.font = `5.5px ${ARCADE}`;
-            ctx.textAlign = 'center';
-            ctx.fillStyle = 'rgba(203,188,245,0.85)';
-            ctx.fillText(v.hint, P.x + P.w / 2, P.y + P.h - 3.5, P.w - 16);
-        }
+        for (const b of L.buttons) this.replayButton(b, v);
         ctx.restore();
+    }
+
+    /** One of the replay panel's buttons: a small framed key with its picture (or the speed, on the last). */
+    private replayButton(b: Box & { action: ReplayButton }, v: ReplayPanelView): void {
+        const ctx = this.ctx;
+        const main = b.action === 'pause';
+        ctx.fillStyle = main ? 'rgba(255,212,92,0.95)' : 'rgba(60,40,110,0.95)';
+        slanted(b.x, b.y, b.w, b.h, 3)(ctx);
+        ctx.fill();
+        ctx.strokeStyle = main ? '#fff3c9' : 'rgba(201,162,74,0.7)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        const ink = main ? '#140a26' : '#f2ecff';
+        ctx.fillStyle = ink;
+        const cx = b.x + b.w / 2,
+            cy = b.y + b.h / 2;
+        /** A small triangle pointing left (-1) or right (1), its tip at x. */
+        const tri = (x: number, dir: number, r = 3.4) => {
+            ctx.beginPath();
+            ctx.moveTo(x, cy);
+            ctx.lineTo(x - dir * r * 1.3, cy - r);
+            ctx.lineTo(x - dir * r * 1.3, cy + r);
+            ctx.closePath();
+            ctx.fill();
+        };
+        /** A small diamond: a highlight's marker. */
+        const diamond = (x: number) => {
+            ctx.fillStyle = '#ffe27a';
+            ctx.beginPath();
+            ctx.moveTo(x, cy - 3.5);
+            ctx.lineTo(x + 2.8, cy);
+            ctx.lineTo(x, cy + 3.5);
+            ctx.lineTo(x - 2.8, cy);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = ink;
+        };
+        switch (b.action) {
+            case 'pause':
+                if (v.paused) tri(cx + 4, 1, 4);
+                else {
+                    ctx.fillRect(cx - 4, cy - 4, 3, 8);
+                    ctx.fillRect(cx + 1, cy - 4, 3, 8);
+                }
+                break;
+            case 'back':
+                tri(cx - 4, -1);
+                tri(cx + 1, -1);
+                break;
+            case 'forward':
+                tri(cx + 4, 1);
+                tri(cx - 1, 1);
+                break;
+            case 'prev':
+                tri(cx - 2, -1);
+                diamond(cx + 5);
+                break;
+            case 'next':
+                diamond(cx - 5);
+                tri(cx + 2, 1);
+                break;
+            case 'speed':
+                ctx.font = `6.5px ${ARCADE}`;
+                ctx.textAlign = 'center';
+                ctx.fillText(`${v.speed}×`, cx, cy + 2.5);
+                break;
+        }
     }
 }
 
@@ -702,6 +828,11 @@ export const HIGHLIGHT_COLOR: Record<HighlightKind, string> = {
     ko: '#ffffff',
 };
 
+/** The replay panel's buttons, left to right. */
+const REPLAY_BUTTONS = ['prev', 'back', 'pause', 'forward', 'next', 'speed'] as const;
+/** What a replay panel button does. */
+type ReplayButton = (typeof REPLAY_BUTTONS)[number];
+
 /** A box in view units. */
 type Box = { x: number; y: number; w: number; h: number };
 
@@ -712,8 +843,8 @@ type Box = { x: number; y: number; w: number; h: number };
 export function replayPanelLayout(W: number, H: number, rounds: number) {
     const wide = W > 320;
     const pw = wide ? Math.min(380, W * 0.62) : W - 14;
-    const ph = 42;
-    const panel: Box = { x: (W - pw) / 2, y: H - ph - (wide ? 22 : 8), w: pw, h: ph };
+    const ph = 58;
+    const panel: Box = { x: (W - pw) / 2, y: H - ph - (wide ? 20 : 6), w: pw, h: ph };
     const bar: Box = { x: panel.x + 12, y: panel.y + 22, w: pw - 24, h: 4 };
     const barHit: Box = { x: bar.x - 6, y: bar.y - 10, w: bar.w + 12, h: 22 };
     const cw = 17,
@@ -726,7 +857,21 @@ export function replayPanelLayout(W: number, H: number, rounds: number) {
         w: cw,
         h: 11,
     }));
-    return { panel, bar, barHit, chips };
+    // The minimise button at the top line's right end, and the tab the minimised panel shrinks to.
+    const hide: Box = { x: panel.x + pw - 22, y: panel.y + 4, w: 13, h: 11 };
+    const tab: Box = { x: W / 2 - 34, y: H - 17, w: 68, h: 12 };
+    // The buttons along the bottom, so a touchscreen can do everything the keys do.
+    const bw = 24,
+        bgap = 5;
+    const bx0 = panel.x + pw / 2 - (REPLAY_BUTTONS.length * bw + (REPLAY_BUTTONS.length - 1) * bgap) / 2;
+    const buttons = REPLAY_BUTTONS.map((action, i) => ({
+        action,
+        x: bx0 + i * (bw + bgap),
+        y: panel.y + 38,
+        w: bw,
+        h: 15,
+    }));
+    return { panel, bar, barHit, chips, hide, tab, buttons };
 }
 
 /** A five-point star path centred on (x, y). */
