@@ -147,7 +147,7 @@ const REVERSE_LINE_GAP = 6000;
 /** How long after a round ends its winner speaks (s), once the loser's last words have begun. */
 const WIN_LINE_DELAY = 1.1;
 /** How long the Fight! banner stays as play starts (s). */
-const FIGHT_BANNER_TIME = 0.8;
+const FIGHT_BANNER_TIME = 1;
 
 /**
  * Owns the whole game: the screens, match and round flow, both meadows, the CPU pilot and the online session. Fields
@@ -1098,7 +1098,7 @@ export class Game {
         const final = this.wins[0] === C.ROUNDS_TO_WIN - 1 && this.wins[1] === C.ROUNDS_TO_WIN - 1;
         const take = final ? 2 : Math.min(roundIndex, 1);
         this.announceTake = take;
-        this.callReadyAt = this.mode === 'endless' ? ANNOUNCER.endlessReadyAt : ANNOUNCER.readyAt[take];
+        this.callReadyAt = ANNOUNCER.readyAt;
         this.readyCalled = false;
         const call = this.mode === 'endless' ? null : final ? ANNOUNCER.final : ANNOUNCER.rounds[roundIndex];
         if (call && !this.seeking) this.sound.speak(call, 'announcer', 0, 1, 'cut');
@@ -1648,7 +1648,7 @@ export class Game {
             // Online, the server already has this player's controls when the round begins.
             if (this.online) this.sendControls();
             this.announceReady();
-            if (this.phaseT > 2) {
+            if (this.phaseT > C.COUNTDOWN_TIME) {
                 this.phase = 'playing';
                 this.phaseT = 0;
                 this.ui('start');

@@ -15,7 +15,7 @@ import type { Controls, MatchOutcome, Progress, ReplayData, ReplayRound } from '
 /** No buttons held. */
 const IDLE: Controls = { left: false, right: false, up: false, down: false, fire: false };
 /** Steps of countdown before a round starts, and of the round-over pause before the next. */
-const COUNTDOWN_STEPS = Math.round(2 / C.STEP);
+const COUNTDOWN_STEPS = Math.round(C.COUNTDOWN_TIME / C.STEP);
 const ROUND_OVER_STEPS = Math.round(3.5 / C.STEP);
 /** Steps gathered into one message to the players. */
 const STEPS_PER_MESSAGE = 2;
