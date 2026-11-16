@@ -1,3 +1,4 @@
+import { powi } from './dmath';
 // Tuning constants for Trench Duel. All distances are in field pixels,
 // all times in seconds.
 
@@ -318,7 +319,7 @@ export const PERFECT_SPEED_MAX = 1.5;
 export const FIREBALL_MAX_SPEED = 300;
 /** A fireball's speed multiplier after `reflects` reflections, with the sender's Perfect `boost`. */
 export const fireballSpeedMul = (reflects: number, boost: number) =>
-    Math.min(3, SPEED_NORMAL * SPEED_REVERSE ** reflects * boost);
+    Math.min(3, SPEED_NORMAL * powi(SPEED_REVERSE, reflects) * boost);
 /** A shot that doesn't break a fireball slows it to FIREBALL_HIT_SLOW for FIREBALL_STALL s and flashes it. */
 export const FIREBALL_STALL = 0.06;
 export const FIREBALL_HIT_SLOW = 0.6;

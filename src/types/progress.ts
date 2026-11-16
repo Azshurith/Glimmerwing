@@ -31,3 +31,15 @@ export type KeyAction = 'up' | 'down' | 'left' | 'right' | 'fire' | 'bloom' | 'a
 export type KeyScheme = 'solo' | 'p1' | 'p2';
 /** For each scheme, the keys (KeyboardEvent codes, up to two) bound to each action. */
 export type KeyBindings = Record<KeyScheme, Record<KeyAction, string[]>>;
+
+/** A finished match or Endless run, as the rewards see it (game/rewards.ts). */
+export interface MatchOutcome {
+    mode: 'cpu' | 'versus' | 'online' | 'endless';
+    /** Rounds won by each side (an Endless run has none). */
+    wins: [number, number];
+    /** The best chain, and the Fevers, of the human player(s) (both, two players on one screen). */
+    bestChain: number;
+    fevers: number;
+    /** An Endless run's length (seconds) and the guardians it weathered. */
+    endless?: { seconds: number; guardians: number };
+}

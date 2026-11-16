@@ -22,6 +22,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createApi } from './api.mjs';
 import { openStore } from './db.mjs';
+import { createVerifier } from './verifier.mjs';
 
 const PORT = Number(process.env.PORT) || 8787;
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -39,7 +40,8 @@ const rooms = new Map();
 // ---- HTTP ------------------------------------------------------------------
 
 const store = await openStore();
-const handleApi = createApi(store);
+const verifier = store ? createVerifier() : null;
+const handleApi = createApi(store, verifier);
 
 const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');

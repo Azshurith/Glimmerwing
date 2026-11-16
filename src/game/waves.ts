@@ -4,6 +4,7 @@
 //
 // Everything here is in meadow units (FIELD_W x FIELD_H). The renderer scales the meadow to fit any
 // screen, portrait or landscape, so formations keep their shape and spacing on every device.
+import * as dm from '@/core/dmath';
 import * as C from '@/core/config';
 import type { Rng } from '@/core/rng';
 import type {
@@ -75,7 +76,7 @@ export function shapeSlots(shape: FormationShape, n: number, s: number): Vec[] {
             for (let b = a + 1; b < pts.length; b++) {
                 const dx = pts[b].x - pts[a].x,
                     dy = pts[b].y - pts[a].y,
-                    d = Math.hypot(dx, dy);
+                    d = dm.hypot(dx, dy);
                 if (d >= s * 0.999) continue;
                 // Coincident members part sideways.
                 const ux = d > 1e-6 ? dx / d : 1,
@@ -120,13 +121,13 @@ function layoutSlots(shape: FormationShape, n: number, s: number): Vec[] {
                 // A shallow bowl, ends raised.
                 const a = Math.PI * (0.15 + (0.7 * i) / Math.max(1, n - 1));
                 const r = (s * (n - 1)) / (Math.PI * 0.7);
-                out.push({ x: -Math.cos(a) * r, y: Math.sin(a) * r * 0.42 - r * 0.25 });
+                out.push({ x: -dm.cos(a) * r, y: dm.sin(a) * r * 0.42 - r * 0.25 });
                 break;
             }
             case 'ring': {
                 const r = Math.max(s * 0.9, (s * n) / (Math.PI * 2));
                 const a = (Math.PI * 2 * i) / n - Math.PI / 2;
-                out.push({ x: Math.cos(a) * r, y: Math.sin(a) * r * 0.8 });
+                out.push({ x: dm.cos(a) * r, y: dm.sin(a) * r * 0.8 });
                 break;
             }
             case 'grid': {
@@ -160,13 +161,13 @@ function layoutSlots(shape: FormationShape, n: number, s: number): Vec[] {
                 break;
             }
             case 'wave':
-                out.push({ x: (i - c) * s, y: Math.sin(i * 1.15) * s * 0.3 });
+                out.push({ x: (i - c) * s, y: dm.sin(i * 1.15) * s * 0.3 });
                 break;
             case 'surround': {
                 // Sized to the meadow, not the spacing: members sit well apart, as in TSS.
                 const r = surroundRadius();
                 const a = (Math.PI * 2 * i) / n - Math.PI / 2;
-                out.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+                out.push({ x: dm.cos(a) * r, y: dm.sin(a) * r });
                 break;
             }
             default:
@@ -235,7 +236,7 @@ function signatureSlots(shape: FormationShape, n: number, s: number): Vec[] {
                 r = Math.max(s, (s * p) / (Math.PI * 2));
             for (let i = 0; i < p; i++) {
                 const a = (Math.PI * 2 * i) / p - Math.PI / 2;
-                out.push({ x: Math.cos(a) * r, y: Math.sin(a) * r * 0.85 });
+                out.push({ x: dm.cos(a) * r, y: dm.sin(a) * r * 0.85 });
             }
             break;
         }
@@ -265,7 +266,7 @@ function signatureSlots(shape: FormationShape, n: number, s: number): Vec[] {
             // Beach: a seashell's spiral, wound out from the middle: walk the curve and drop a member every step.
             const at = (a: number): Vec => {
                 const r = s * 0.2 + (s * 1.6 * a) / (Math.PI * 2);
-                return { x: Math.cos(a) * r, y: Math.sin(a) * r * 0.8 };
+                return { x: dm.cos(a) * r, y: dm.sin(a) * r * 0.8 };
             };
             let a = 0,
                 last = at(0),
@@ -274,7 +275,7 @@ function signatureSlots(shape: FormationShape, n: number, s: number): Vec[] {
             while (out.length < n && a < 40) {
                 a += 0.02;
                 const p = at(a);
-                run += Math.hypot(p.x - last.x, p.y - last.y);
+                run += dm.hypot(p.x - last.x, p.y - last.y);
                 last = p;
                 if (run >= s * 0.92) {
                     out.push(p);
@@ -309,7 +310,7 @@ function signatureSlots(shape: FormationShape, n: number, s: number): Vec[] {
             for (let i = 0; i < n; i++) {
                 const a = -Math.PI / 2 + (Math.PI * i) / 5,
                     r = i % 2 ? ri : ro;
-                out.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+                out.push({ x: dm.cos(a) * r, y: dm.sin(a) * r });
             }
             break;
         }
@@ -332,7 +333,7 @@ function extent(sets: Vec[][]): { l: number; r: number; u: number; d: number; ra
             r = Math.max(r, p.x);
             u = Math.min(u, p.y);
             d = Math.max(d, p.y);
-            rad = Math.max(rad, Math.hypot(p.x, p.y));
+            rad = Math.max(rad, dm.hypot(p.x, p.y));
         }
     return { l, r, u, d, rad };
 }
@@ -623,30 +624,30 @@ function groupAt(g: Formation, t: number): { x: number; y: number; turn: number 
         turn = 0;
     switch (s.move) {
         case 'sway':
-            x = A * Math.sin(t * 0.85);
-            y = B * 0.3 * Math.sin(t * 1.7);
+            x = A * dm.sin(t * 0.85);
+            y = B * 0.3 * dm.sin(t * 1.7);
             break;
         case 'bob':
-            x = A * 0.3 * Math.sin(t * 0.6);
-            y = B * Math.sin(t * 1.5);
+            x = A * 0.3 * dm.sin(t * 0.6);
+            y = B * dm.sin(t * 1.5);
             break;
         case 'figure8':
-            x = A * Math.sin(t * 0.75);
-            y = B * Math.sin(t * 1.5);
+            x = A * dm.sin(t * 0.75);
+            y = B * dm.sin(t * 1.5);
             break;
         case 'orbit':
             turn = t * 0.55;
-            y = B * 0.4 * Math.sin(t * 1.2);
+            y = B * 0.4 * dm.sin(t * 1.2);
             break;
         case 'march':
             // Side to side at an even pace with a little hop on each step.
-            x = A * (2 / Math.PI) * Math.asin(Math.sin(t * 0.8));
-            y = -B * 0.35 * Math.abs(Math.sin(t * 4));
+            x = A * (2 / Math.PI) * dm.asin(dm.sin(t * 0.8));
+            y = -B * 0.35 * Math.abs(dm.sin(t * 4));
             break;
         case 'creep':
             // Sink toward the fairy and draw back up again.
-            x = A * 0.35 * Math.sin(t * 1.1);
-            y = B * (0.5 - 0.5 * Math.cos(t * 0.55)) * 1.6 - B * 0.6;
+            x = A * 0.35 * dm.sin(t * 1.1);
+            y = B * (0.5 - 0.5 * dm.cos(t * 0.55)) * 1.6 - B * 0.6;
             break;
     }
     return { x: s.cx + x, y: s.cy + y, turn };
@@ -655,8 +656,8 @@ function groupAt(g: Formation, t: number): { x: number; y: number; turn: number 
 /** The highest point any member of formation `g` reaches at time `t` (its own idle bob included), in a group at `grp`. */
 function groupTop(g: Formation, t: number, grp: { y: number; turn?: number }): number {
     const k = g.slotsTo ? smooth(Math.min(1, Math.max(0, (t - allInTime(g.spec) - g.spec.hold * 0.4) / 1.2))) : 0;
-    const c = Math.cos(grp.turn ?? 0),
-        sn = Math.sin(grp.turn ?? 0);
+    const c = dm.cos(grp.turn ?? 0),
+        sn = dm.sin(grp.turn ?? 0);
     let top = Infinity;
     g.slots.forEach((p, i) => {
         const q = g.slotsTo ? g.slotsTo[i] : p;
@@ -679,8 +680,8 @@ function slotAt(g: Formation, i: number, t: number, kind: CritterKind): Vec {
     }
     const grp = groupAt(g, t);
     if (grp.turn) {
-        const c = Math.cos(grp.turn),
-            sn = Math.sin(grp.turn);
+        const c = dm.cos(grp.turn),
+            sn = dm.sin(grp.turn);
         p = { x: p.x * c - p.y * sn, y: p.x * sn + p.y * c };
     }
     // Each critter also has its own little idle motion, by kind.
@@ -688,12 +689,12 @@ function slotAt(g: Formation, i: number, t: number, kind: CritterKind): Vec {
     let ix = 0,
         iy = 0;
     if (kind === 'spinner') {
-        ix = Math.cos(ph * 1.6) * 3.5;
-        iy = Math.sin(ph * 1.6) * 3.5;
-    } else if (kind === 'beetle') iy = -Math.abs(Math.sin(ph * 1.4)) * 2.5;
+        ix = dm.cos(ph * 1.6) * 3.5;
+        iy = dm.sin(ph * 1.6) * 3.5;
+    } else if (kind === 'beetle') iy = -Math.abs(dm.sin(ph * 1.4)) * 2.5;
     else {
-        ix = Math.sin(ph * 0.7) * 1.5;
-        iy = Math.sin(ph) * 2.5;
+        ix = dm.sin(ph * 0.7) * 1.5;
+        iy = dm.sin(ph) * 2.5;
     }
     // However it moves, never up behind the HUD strip: if the group's top reaches it, the whole group sits lower,
     // keeping its shape (squashing members onto the line would stack them on top of each other).
@@ -745,7 +746,7 @@ function entryTime(g: Formation, i: number): number {
     const s = g.spec;
     const to = { x: s.cx + g.slots[i].x, y: s.cy + g.slots[i].y };
     const c = entryCurve(g, i, to);
-    const len = Math.hypot(c.via.x - c.from.x, c.via.y - c.from.y) + Math.hypot(to.x - c.via.x, to.y - c.via.y);
+    const len = dm.hypot(c.via.x - c.from.x, c.via.y - c.from.y) + dm.hypot(to.x - c.via.x, to.y - c.via.y);
     return Math.min(s.enterTime * ENTRY_LONGEST, Math.max(s.enterTime, (len * 0.8) / ENTRY_SPEED));
 }
 
@@ -775,7 +776,7 @@ function exitCurve(g: Formation, i: number, from: Vec): { to: Vec; via: Vec } {
         case 'scatter':
         default: {
             // Burst outward from the centre.
-            const d = Math.hypot(g.slots[i].x, g.slots[i].y) || 1;
+            const d = dm.hypot(g.slots[i].x, g.slots[i].y) || 1;
             const ux = d > 1 ? g.slots[i].x / d : i % 2 ? -1 : 1,
                 uy = d > 1 ? g.slots[i].y / d : -1;
             // Always well past a side wall, so nobody vanishes on screen when the flight ends.

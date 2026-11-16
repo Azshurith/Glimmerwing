@@ -1,24 +1,24 @@
 import { ApiError, apiBase, apiCall } from '@/net/api';
+import { freshProgress } from './rewards';
 import type {
     EndlessRank,
-    EndlessRecord,
     LeaderEntry,
-    MatchRecord,
     MeResponse,
     Progress,
     ReplayData,
     ReplaySummary,
+    ResultResponse,
     Saved,
     SyncedSettings,
 } from '@/types';
 
 const ACCOUNT_KEY = 'glimmerwing-account-v1';
 const SYNC_KEY = 'glimmerwing-sync-v1';
-const PENDING_KEY = 'glimmerwing-pending-v1';
-/** How long saves are gathered before they're sent, so a burst of changes is one request. */
+const PENDING_KEY = 'glimmerwing-pending-results-v1';
+/** How long settings changes are gathered before they're sent, so a burst of changes is one request. */
 const SEND_DELAY = 1500;
-/** The most reports kept to send later while the server can't be reached. */
-const MAX_PENDING = 50;
+/** The most finished games kept to send later while the server can't be reached. */
+const MAX_PENDING = 20;
 
 /** The guest identity a browser keeps: the token is all it needs to prove who it is. */
 interface StoredAccount {
@@ -27,16 +27,12 @@ interface StoredAccount {
     token: string;
 }
 
-/** When this browser last saved each thing (its own clock, ms); the newer copy wins when it syncs. */
+/** When this browser last saved its settings (its own clock, ms); the newer copy wins when it syncs. */
 interface SyncStamps {
-    progressAt: number;
     settingsAt: number;
 }
 
-/** A report that couldn't be sent yet. */
-type Pending = { k: 'match'; d: MatchRecord } | { k: 'endless'; d: EndlessRecord };
-
-/** What the server had that's newer than this browser's copy, for the game to take on. */
+/** What the server has for the game to take on: its progress always, settings when they're newer. */
 export interface SyncResult {
     progress?: Progress;
     settings?: SyncedSettings;
@@ -62,23 +58,29 @@ function writeStore(key: string, v: unknown): void {
 }
 
 /**
- * The player's account on the game server: a guest made the first time this browser reaches the server. The browser
- * stays the first place everything is saved, so the game plays the same offline or from a file; the account copies
- * progress and settings up to the database, reports finished matches and Endless runs, and fetches the leaderboard.
- * Whichever copy of progress or settings was saved later wins when they meet.
+ * The player's account on the game server: a guest made the first time this browser reaches the server.
+ *
+ * The server decides progress. A finished game goes to it as its replay; the server plays it through again,
+ * works out what it earned, and answers with the progress that counts, which the game takes on (it shows its own
+ * reckoning at once, then the server's). Games finished while the server can't be reached wait in this browser
+ * and count once they've been sent and checked. Settings are the player's own and simply sync (the newer copy
+ * wins). The browser keeps a copy of everything, so the game plays the same offline or from a file.
  */
 export class Account {
     private base = apiBase();
     private stored: StoredAccount | null = readStore<StoredAccount | null>(ACCOUNT_KEY, null);
-    private stamps: SyncStamps = { progressAt: 0, settingsAt: 0, ...readStore<Partial<SyncStamps>>(SYNC_KEY, {}) };
-    private timers: Partial<Record<'progress' | 'settings', number>> = {};
-    private latest: { progress?: Progress; settings?: SyncedSettings } = {};
+    private stamps: SyncStamps = { settingsAt: 0, ...readStore<Partial<SyncStamps>>(SYNC_KEY, {}) };
+    private timer = 0;
+    private latest: SyncedSettings | null = null;
+    private flushing = false;
     /** Whether the server has answered since the game started. */
     online = false;
     /** Everyone's best Endless runs, as last fetched. */
     leaders: LeaderEntry[] = [];
     /** Where the player's best Endless run ranks among everyone's, as last heard. */
     rank: EndlessRank | null = null;
+    /** Told whenever the server's progress arrives (after games waiting here have been counted, say). */
+    onProgress: ((p: Progress) => void) | null = null;
 
     /** The player's name: the account's once there is one. */
     get name(): string {
@@ -95,34 +97,35 @@ export class Account {
         return this.base !== null;
     }
 
+    /** How many finished games are waiting in this browser to be sent and counted. */
+    get pending(): number {
+        return readStore<ReplayData[]>(PENDING_KEY, []).length;
+    }
+
     /**
-     * Meet the server: make a guest if this browser has none, then compare saves. Resolves with whatever the server
-     * has that's newer than this browser's copy (and sends up whatever is newer here); resolves empty when there's no
-     * server or it can't be reached.
+     * Meet the server: make a guest if this browser has none, then take its progress (it decides that) and
+     * whichever copy of the settings is newer, and send the games waiting here. Resolves empty when there's no
+     * server or it can't be reached: the game plays on from this browser's copies.
      */
-    async start(progress: Progress, settings: SyncedSettings): Promise<SyncResult> {
+    async start(settings: SyncedSettings): Promise<SyncResult> {
         if (!this.base) return {};
         try {
             const me = await this.me();
             this.online = true;
             this.rank = me.endless;
-            const out: SyncResult = {};
-            const p = this.meet(me.progress, this.stamps.progressAt);
-            if (p) {
-                out.progress = p.data;
-                this.stamps.progressAt = p.savedAt;
-            } else this.send('progress', progress);
+            // The server's record is the one that counts (a new account's is empty).
+            const out: SyncResult = { progress: me.progress?.data ?? freshProgress() };
             const s = this.meet(me.settings, this.stamps.settingsAt);
             if (s) {
                 out.settings = s.data;
                 this.stamps.settingsAt = s.savedAt;
-            } else this.send('settings', settings);
-            writeStore(SYNC_KEY, this.stamps);
+                writeStore(SYNC_KEY, this.stamps);
+            } else this.sendSettings(settings);
             void this.flush();
             void this.refreshLeaders();
             return out;
         } catch (e) {
-            console.warn('Game server unavailable; saves stay in this browser.', e);
+            console.warn('Game server unavailable; games are kept here to count later.', e);
             return {};
         }
     }
@@ -144,94 +147,109 @@ export class Account {
         }
         this.stored = await apiCall<StoredAccount>(base, 'POST', '/guest', {});
         writeStore(ACCOUNT_KEY, this.stored);
-        // A new account has nothing saved yet: this browser's copies go up as they are.
-        this.stamps = { progressAt: 0, settingsAt: 0 };
+        this.stamps = { settingsAt: 0 };
+        // A new account starts from nothing: the server keeps the record from here on.
         return { id: this.stored.id, name: this.stored.name, progress: null, settings: null, endless: null };
-    }
-
-    /** Progress was saved in this browser: stamp it and send it up shortly. */
-    saveProgress(p: Progress): void {
-        this.stamps.progressAt = Date.now();
-        writeStore(SYNC_KEY, this.stamps);
-        this.send('progress', p);
     }
 
     /** Settings were saved in this browser: stamp them and send them up shortly. */
     saveSettings(s: SyncedSettings): void {
         this.stamps.settingsAt = Date.now();
         writeStore(SYNC_KEY, this.stamps);
-        this.send('settings', s);
+        this.sendSettings(s);
     }
 
-    /** Send the latest copy of progress or settings after a short wait (a newer save in the meantime replaces it). */
-    private send(what: 'progress' | 'settings', data: Progress | SyncedSettings): void {
+    /** Send the latest settings after a short wait (a newer save in the meantime replaces them). */
+    private sendSettings(s: SyncedSettings): void {
         if (!this.base || !this.stored) return;
-        this.latest[what] = structuredClone(data) as Progress & SyncedSettings;
-        clearTimeout(this.timers[what]);
-        this.timers[what] = window.setTimeout(() => {
-            const body = { data: this.latest[what], savedAt: this.stamps[`${what}At`] };
-            apiCall(this.base!, 'PUT', `/me/${what}`, body, this.stored!.token).catch((e: unknown) =>
-                console.warn(`Couldn't save ${what} to the server.`, e),
+        this.latest = structuredClone(s);
+        clearTimeout(this.timer);
+        this.timer = window.setTimeout(() => {
+            const body = { data: this.latest, savedAt: this.stamps.settingsAt };
+            apiCall(this.base!, 'PUT', '/me/settings', body, this.stored!.token).catch((e: unknown) =>
+                console.warn("Couldn't save settings to the server.", e),
             );
         }, SEND_DELAY);
     }
 
-    /** Report a finished match to the player's history (kept to send later if the server can't be reached). */
-    reportMatch(m: MatchRecord): void {
-        void this.report({ k: 'match', d: m });
-    }
-
-    /** Report a finished Endless run; resolves with where the player's best now ranks, or null if unknown. */
-    async reportEndless(r: EndlessRecord): Promise<EndlessRank | null> {
-        const rank = (await this.report({ k: 'endless', d: r })) as EndlessRank | null;
-        if (rank) {
-            this.rank = rank;
-            void this.refreshLeaders();
-        }
-        return rank;
-    }
-
-    /** Send one report, or keep it to send later. */
-    private async report(item: Pending): Promise<unknown> {
+    /**
+     * Send a finished game to be checked and counted. Resolves with what the server made of it, or null if it
+     * couldn't be counted now (no server, or it couldn't be reached: then it waits here to be sent later).
+     */
+    async submit(replay: ReplayData): Promise<ResultResponse | null> {
         if (!this.base) return null;
         if (!this.stored || !this.online) {
-            this.keep(item);
+            this.keep(replay);
             return null;
         }
         try {
-            const path = item.k === 'match' ? '/matches' : '/endless';
-            return await apiCall(this.base, 'POST', path, item.d, this.stored.token);
+            const r = await this.send(replay);
+            this.adopt(r);
+            return r;
         } catch (e) {
-            // A bad report would fail every time; keep only those the server never got.
-            if (!(e instanceof ApiError && e.status < 500)) this.keep(item);
+            // One the server turned down (it doesn't hold up, it's from another version, it's counted already)
+            // would be turned down every time; keep only those it never got.
+            if (!(e instanceof ApiError && e.status >= 400 && e.status < 500)) this.keep(replay);
+            else console.warn("The server didn't count that game:", e.message);
             return null;
         }
     }
 
-    /** Keep a report to send once the server answers again. */
-    private keep(item: Pending): void {
-        const list = readStore<Pending[]>(PENDING_KEY, []);
-        list.push(item);
+    /** Post one game to the server. */
+    private send(replay: ReplayData): Promise<ResultResponse> {
+        return apiCall<ResultResponse>(this.base!, 'POST', '/results', { replay }, this.stored!.token);
+    }
+
+    /** Take on what the server answered for a game: its progress, and an Endless run's rank. */
+    private adopt(r: ResultResponse): void {
+        if (r.rank) {
+            this.rank = r.rank;
+            void this.refreshLeaders();
+        }
+        this.onProgress?.(r.progress);
+    }
+
+    /** Keep a game to send once the server answers again (the oldest go first when there are too many). */
+    private keep(replay: ReplayData): void {
+        const list = readStore<ReplayData[]>(PENDING_KEY, []);
+        if (list.some(d => d.at === replay.at)) return;
+        list.push(replay);
         writeStore(PENDING_KEY, list.slice(-MAX_PENDING));
     }
 
-    /** Send the reports kept while the server couldn't be reached. */
+    /** Send the games kept while the server couldn't be reached, oldest first. */
     private async flush(): Promise<void> {
-        const list = readStore<Pending[]>(PENDING_KEY, []);
-        if (!list.length) return;
-        writeStore(PENDING_KEY, []);
-        for (const item of list) await this.report(item);
+        if (this.flushing) return;
+        this.flushing = true;
+        try {
+            for (;;) {
+                const list = readStore<ReplayData[]>(PENDING_KEY, []);
+                if (!list.length) break;
+                const d = list[0];
+                try {
+                    this.adopt(await this.send(d));
+                } catch (e) {
+                    // Can't reach the server: try again next time. Turned down: drop it.
+                    if (!(e instanceof ApiError && e.status >= 400 && e.status < 500)) break;
+                }
+                writeStore(
+                    PENDING_KEY,
+                    readStore<ReplayData[]>(PENDING_KEY, []).filter(x => x.at !== d.at),
+                );
+            }
+        } finally {
+            this.flushing = false;
+        }
     }
 
-    /** Save a replay to the server; resolves with its share code, or null when it couldn't be saved. */
-    async saveReplay(d: ReplayData): Promise<string | null> {
-        if (!this.base || !this.stored || !this.online) return null;
+    /** Start the record over on the server; resolves with the fresh progress, or null if it couldn't. */
+    async reset(): Promise<Progress | null> {
+        if (!this.base || !this.stored) return null;
         try {
-            const body = { mode: d.mode, map: d.map, version: d.sim, seconds: d.seconds, data: d };
-            const r = await apiCall<{ code: string }>(this.base, 'POST', '/replays', body, this.stored.token);
-            return r.code;
-        } catch (e) {
-            console.warn("Couldn't save the replay to the server.", e);
+            writeStore(PENDING_KEY, []);
+            const r = await apiCall<{ progress: Progress }>(this.base, 'POST', '/me/reset', {}, this.stored.token);
+            return r.progress;
+        } catch {
             return null;
         }
     }

@@ -11,6 +11,7 @@ export type * from './characters';
 export type * from './flow';
 export type * from './game';
 export type * from './hud';
+export type * from './match';
 export type * from './net';
 export type * from './progress';
 export type * from './replay';
