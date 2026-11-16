@@ -27,7 +27,7 @@ export type Sfx =
     | 'lose';
 
 /**
- * The background music: the synthesised loops (a calm one for the menus and a driving one for rounds), or a map's
- * own recorded track (`map:<id>`, see data/music.ts).
+ * The background music: the menus', the fairy and map select screens' (`select`), a round's synthesised loop
+ * (`battle`) or a map's own recorded track (`map:<id>`); see data/music.ts.
  */
-export type MusicTrack = 'menu' | 'battle' | `map:${string}`;
+export type MusicTrack = 'menu' | 'select' | 'battle' | `map:${string}`;

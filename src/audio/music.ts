@@ -2,7 +2,7 @@
 // TSS's arcade era (bells, electric piano, slap bass, brass): a gentle one for the menus and a bouncy one for
 // rounds, played by a small step sequencer that schedules notes a little ahead of time.
 import type { MusicTrack } from '@/types';
-import { MAP_MUSIC, MENU_MUSIC } from '@/data/music';
+import { MAP_MUSIC, MENU_MUSIC, SELECT_MUSIC } from '@/data/music';
 import { PATCHES, fmNote, hz, type PatchName } from './synth';
 
 /** One voice of a loop: a note, a chord (several notes) or rest on each step. */
@@ -208,29 +208,50 @@ export class Music {
         this.bus.gain.exponentialRampToValueAtTime(1, ctx.currentTime + 0.6);
         this.bus.connect(this.out);
         // A recorded track where there is one: the menus' own, or a map's.
-        const url = track === 'menu' ? MENU_MUSIC : track.startsWith('map:') ? MAP_MUSIC[track.slice(4)] : undefined;
+        const url =
+            track === 'menu'
+                ? MENU_MUSIC
+                : track === 'select'
+                  ? (SELECT_MUSIC ?? MENU_MUSIC)
+                  : track.startsWith('map:')
+                    ? MAP_MUSIC[track.slice(4)]
+                    : undefined;
         if (url || track.startsWith('map:')) {
             if (url) this.playFile(url, track, this.bus);
+            // From the menus the next stop is picking fairies: have its track ready so it starts on time.
+            if (track === 'menu' && SELECT_MUSIC) void this.decode(SELECT_MUSIC);
             return;
         }
-        this.loop = LOOPS[track as 'menu' | 'battle'];
+        this.loop = LOOPS[track === 'battle' ? 'battle' : 'menu'];
         this.step = 0;
         this.next = ctx.currentTime + 0.1;
         this.timer = window.setInterval(() => this.schedule(), TICK_MS);
         this.schedule();
     }
 
+    /**
+     * A recorded track's decoded audio, decoding it the first time. Decoded tracks are big (tens of MB each), so
+     * only the last few are kept.
+     */
+    private decode(url: string): Promise<AudioBuffer> {
+        let buf = this.decoded.get(url);
+        if (buf) {
+            // Most recently used goes to the back.
+            this.decoded.delete(url);
+        } else {
+            buf = fetch(url)
+                .then(r => r.arrayBuffer())
+                .then(data => this.ctx.decodeAudioData(data));
+        }
+        this.decoded.set(url, buf);
+        while (this.decoded.size > 3) this.decoded.delete(this.decoded.keys().next().value!);
+        return buf;
+    }
+
     /** Decode a recorded track (once) and loop it into `bus`, unless the music has moved on meanwhile. */
     private playFile(url: string, track: MusicTrack, bus: GainNode): void {
         const ctx = this.ctx;
-        let buf = this.decoded.get(url);
-        if (!buf) {
-            buf = fetch(url)
-                .then(r => r.arrayBuffer())
-                .then(data => ctx.decodeAudioData(data));
-            this.decoded.set(url, buf);
-        }
-        buf.then(
+        this.decode(url).then(
             b => {
                 if (this.track !== track || this.bus !== bus) return;
                 const src = ctx.createBufferSource();
