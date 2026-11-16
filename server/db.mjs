@@ -230,10 +230,21 @@ async function mariaStore(env) {
         },
         async listReplays(id, limit) {
             const r = await rows(
-                `SELECT code, mode, map, version, seconds, created_at FROM replays WHERE player_id = ?
-                 ORDER BY id DESC LIMIT ?`,
+                `SELECT code, mode, map, version, seconds, created_at,
+                    JSON_EXTRACT(data, '$.fairies') AS fairies, JSON_EXTRACT(data, '$.wins') AS wins,
+                    JSON_EXTRACT(data, '$.at') AS recorded
+                 FROM replays WHERE player_id = ? ORDER BY id DESC LIMIT ?`,
                 [id, limit],
             );
+            /** A JSON array column, or null. */
+            const arr = v => {
+                try {
+                    const a = typeof v === 'string' ? JSON.parse(v) : v;
+                    return Array.isArray(a) ? a : null;
+                } catch {
+                    return null;
+                }
+            };
             return r.map(x => ({
                 code: x.code,
                 mode: x.mode,
@@ -241,6 +252,9 @@ async function mariaStore(env) {
                 version: x.version,
                 seconds: x.seconds,
                 at: new Date(x.created_at).toISOString(),
+                fairies: arr(x.fairies),
+                wins: arr(x.wins),
+                recorded: x.recorded == null ? null : Number(x.recorded),
             }));
         },
         close: () => pool.end(),
@@ -336,7 +350,17 @@ function memoryStore() {
                 .filter(r => r.playerId === id)
                 .reverse()
                 .slice(0, limit)
-                .map(({ code, mode, map, version, seconds, at }) => ({ code, mode, map, version, seconds, at }));
+                .map(({ code, mode, map, version, seconds, at, data }) => ({
+                    code,
+                    mode,
+                    map,
+                    version,
+                    seconds,
+                    at,
+                    fairies: Array.isArray(data.fairies) ? data.fairies : null,
+                    wins: Array.isArray(data.wins) ? data.wins : null,
+                    recorded: typeof data.at === 'number' ? data.at : null,
+                }));
         },
         close: async () => {},
     };

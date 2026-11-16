@@ -1,4 +1,4 @@
-// The main menu (Play, Characters, Maps, Profile, Settings) and Play's choice of modes: a screen of cards.
+// The main menu (Play, Characters, Maps, Profile, Replays, Settings) and Play's choice of modes: a screen of cards.
 import * as C from '@/core/config';
 import type { Layout, ModeMenu, ModeView, TitleAction } from '@/types';
 import { Backdrop } from '@/render/backdrop';
@@ -29,6 +29,7 @@ const MENUS: Record<ModeMenu, Omit<ModeCard, 'x' | 'y' | 'w' | 'h'>[]> = {
         { action: 'characters', label: 'CHARACTERS', sub: 'Meet the fairies and their skills', color: '#ff9ac8' },
         { action: 'maps', label: 'MAPS', sub: 'Stages, formations and monsters', color: '#8ff0a0' },
         { action: 'profile', label: 'PROFILE', sub: 'Your record and unlocks', color: '#8fd8ff' },
+        { action: 'replays', label: 'REPLAYS', sub: 'Watch your matches and runs again', color: '#ff8a5c' },
         { action: 'settings', label: 'SETTINGS', sub: 'Screen and play options', color: '#c9b8ff' },
     ],
     play: [
@@ -54,10 +55,16 @@ const GRID = {
     tall: { w: 236, h: 70, gap: 10, y0: 62, W: C.TALL_W },
 } as const;
 
+/** A menu of six cards packs them a little closer, so they fit the same screen as five. */
+const PACKED = {
+    wide: { w: 74, h: 214, gap: 8, y0: 50, W: C.VIEW_W },
+    tall: { w: 236, h: 62, gap: 8, y0: 60, W: C.TALL_W },
+} as const;
+
 /** Where a menu's cards sit in a layout's design units (the tall layout as designed, before fitting). */
 function designCards(menu: ModeMenu, layout: Layout, dy = 0): ModeCard[] {
-    const g = GRID[layout],
-        n = MENUS[menu].length;
+    const n = MENUS[menu].length,
+        g = n > 5 ? PACKED[layout] : GRID[layout];
     if (layout === 'wide') {
         const x0 = (g.W - (n * g.w + (n - 1) * g.gap)) / 2;
         return MENUS[menu].map((m, i) => ({ ...m, x: x0 + i * (g.w + g.gap), y: g.y0, w: g.w, h: g.h }));
@@ -385,6 +392,26 @@ export class ModeScreen {
                 ctx.closePath();
                 ctx.fill();
                 ctx.restore();
+                break;
+            }
+            case 'replays': {
+                // A strip of film with a play mark on it.
+                ctx.beginPath();
+                ctx.rect(-17, -13, 34, 26);
+                ctx.globalAlpha = 0.25;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.stroke();
+                for (let i = 0; i < 4; i++) {
+                    ctx.fillRect(-14 + i * 8.5, -11, 4, 3);
+                    ctx.fillRect(-14 + i * 8.5, 8, 4, 3);
+                }
+                ctx.beginPath();
+                ctx.moveTo(-5, -6);
+                ctx.lineTo(7, 0);
+                ctx.lineTo(-5, 6);
+                ctx.closePath();
+                ctx.fill();
                 break;
             }
             case 'profile': {

@@ -583,6 +583,46 @@ export class Hud {
             ctx.fillText(v.extra.toUpperCase(), W / 2, ey, W - 60);
         }
     }
+
+    /**
+     * The badge shown while a replay plays: a slanted plate low in the middle of the view with a play mark, the
+     * word REPLAY and the speed, and a hint under it, so it's always clear the fairies are flying themselves.
+     */
+    replayBadge(speed: number, hint: string, time: number): void {
+        const ctx = this.ctx;
+        const W = this.viewW,
+            y = this.viewH - 46;
+        const text = speed > 1 ? `REPLAY  ${speed}×` : 'REPLAY';
+        ctx.save();
+        ctx.font = `8px ${ARCADE}`;
+        const w = ctx.measureText(text).width + 30;
+        ctx.globalAlpha = 0.88;
+        ctx.fillStyle = 'rgba(16,10,40,0.85)';
+        slanted(W / 2 - w / 2, y - 10, w, 15, 4)(ctx);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(201,162,74,0.8)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // A play mark that pulses gently.
+        const x0 = W / 2 - w / 2 + 10;
+        ctx.globalAlpha = 0.65 + 0.35 * Math.sin(time * 4);
+        ctx.fillStyle = '#ff6b8a';
+        ctx.beginPath();
+        ctx.moveTo(x0, y - 6.5);
+        ctx.lineTo(x0 + 6, y - 2.5);
+        ctx.lineTo(x0, y + 1.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = '#ffe27a';
+        ctx.textAlign = 'left';
+        ctx.fillText(text, x0 + 10, y + 1);
+        ctx.font = `6px ${ARCADE}`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(203,188,245,0.85)';
+        ctx.fillText(hint, W / 2, y + 14, W - 20);
+        ctx.restore();
+    }
 }
 
 /** A five-point star path centred on (x, y). */

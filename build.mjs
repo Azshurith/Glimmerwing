@@ -1,6 +1,15 @@
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync } from 'node:fs';
+
+// The simulation's build: a hash of the source that decides how a round plays out. Replays carry it, so one
+// recorded on a different build can be flagged (it may not play out the same).
+const simHash = createHash('sha256');
+for (const dir of ['src/core', 'src/game', 'src/data'])
+    for (const f of readdirSync(dir).sort())
+        if (f.endsWith('.ts') && f !== 'account.ts') simHash.update(f).update(readFileSync(`${dir}/${f}`));
+const sim = simHash.digest('hex').slice(0, 12);
+
 const out = await build({
     entryPoints: ['src/main.ts'],
     bundle: true,
@@ -10,7 +19,7 @@ const out = await build({
     write: false,
     loader: { '.png': 'dataurl', '.jpg': 'dataurl', '.mp3': 'dataurl' },
     // GW_SERVER=wss://your-host/ws npm run build  bakes in where the online relay lives.
-    define: { __GW_SERVER__: JSON.stringify(process.env.GW_SERVER ?? '') },
+    define: { __GW_SERVER__: JSON.stringify(process.env.GW_SERVER ?? ''), __GW_SIM__: JSON.stringify(sim) },
 });
 const js = out.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 mkdirSync('dist', { recursive: true });

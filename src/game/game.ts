@@ -25,6 +25,10 @@ import type {
     Outgoing,
     PeerMsg,
     Phase,
+    ReplayData,
+    ReplayRound,
+    ReplayRow,
+    ReplaySummary,
     Placement,
     Progress,
     Settings,
@@ -42,6 +46,9 @@ import { MapPreview } from './map-preview';
 import { loadProgress, resetProgress, saveProgress } from './progress';
 import { loadSettings, saveSettings } from './settings';
 import { Account } from './account';
+import { Recorder, ReplayPlayer, loadLocalReplay, quantize, saveLocalReplay } from './replay';
+import { REPLAY_ROWS, replayLinkBox, replayRowBoxes } from '@/render/screens/replays-screen';
+import { Rng } from '@/core/rng';
 
 /** Seconds from an attack leaving one meadow to arriving in the other: its `stagger`, then its flight. */
 const transitTime = (o: Outgoing) => (o.stagger ?? 0) + flightTime(o);
@@ -177,6 +184,26 @@ export class Game {
     private matchStart = 0;
     /** The player's account on the game server: progress and settings are copied there, results reported. */
     readonly account = new Account();
+    /** Records the match being played (VS CPU, 2 Players, Endless) so it can be watched again. */
+    private recorder: Recorder | null = null;
+    /** The replay being watched, if any: its seeds and controls drive the rounds in place of the players. */
+    private replay: ReplayPlayer | null = null;
+    /** Watching a replay: how many steps run each step's time (1, 2 or 4), and the next round to deal. */
+    private replaySpeed = 1;
+    private replayRound = 0;
+    /** Watching a replay: shown on its last banner when the recording ended before the match did. */
+    private replayCut = false;
+    /** The last match's recording, and its code on the server once saved there (null until then, or offline). */
+    lastReplay: ReplayData | null = null;
+    lastReplayCode: string | null = null;
+    /** The Replays screen: its list (a server code, or 'local' for this browser's own copy), cursor and lines. */
+    private replayList: { code: string; s: ReplaySummary }[] = [];
+    private replaysIndex = 0;
+    private replaysMessage = '';
+    private replaysNote = '';
+    private replaysNoteT = 0;
+    /** Endless: picks which of the hidden meadow's attacks get through, from the round's seed so a replay agrees. */
+    private endlessRng = new Rng(1);
     /** A map forced by the page's address (`?map=<id>`), for trying a map out. */
     private forcedMap =
         typeof location === 'undefined' ? null : mapById(new URLSearchParams(location.search).get('map'));
@@ -351,6 +378,11 @@ export class Game {
         this.endlessNew = false;
         this.endlessRank = null;
         this.matchStart = performance.now();
+        const m = this.mode;
+        this.recorder =
+            !this.replay && (m === 'cpu' || m === 'versus' || m === 'endless')
+                ? new Recorder(m, [this.picks[0].id, this.picks[1].id], this.matchMap)
+                : null;
         this.newRound(seed);
     }
 
@@ -370,6 +402,227 @@ export class Game {
         this.settings = { ...this.settings, ...next };
         saveSettings(this.settings);
         this.account.saveSettings(this.synced());
+    }
+
+    /** How many simulation steps the page should run each step's time: more while fast-forwarding a replay. */
+    get speed(): number {
+        return this.replay && this.phase === 'playing' ? this.replaySpeed : 1;
+    }
+
+    /** Whether a replay is being watched. */
+    get watching(): boolean {
+        return this.replay !== null;
+    }
+
+    /**
+     * Watch a recorded match: its fairies, map and rounds play out as they did, the recording flying both meadows.
+     * Nothing it does counts toward progress. Esc (or ◀ Back) leaves it for the Replays screen.
+     */
+    watchReplay(data: ReplayData): void {
+        if (this.net) this.disconnect();
+        this.replay = new ReplayPlayer(data);
+        this.recorder = null;
+        this.replayRound = 0;
+        this.replaySpeed = 1;
+        this.replayCut = false;
+        this.mode = data.mode;
+        this.picks = [fairyById(data.fairies[0]) ?? FAIRIES[0], fairyById(data.fairies[1]) ?? FAIRIES[1]];
+        this.matchMap = data.map;
+        this.wins = [0, 0];
+        this.matchBestChain = 0;
+        this.newlyUnlocked = [];
+        this.newStages = [];
+        this.trophyDelta = 0;
+        this.endlessNew = false;
+        this.endlessRank = null;
+        this.paused = false;
+        this.newRound();
+    }
+
+    /** Stop watching and go to the Replays screen. */
+    exitReplay(): void {
+        this.replay = null;
+        this.paused = false;
+        this.transits = [];
+        this.openReplays(false);
+        this.ui('tick');
+    }
+
+    /** Open the Replays screen and fetch the list (keeping the cursor where it was, unless `fresh`). */
+    openReplays(fresh = true): void {
+        this.phase = 'replays';
+        if (fresh) this.replaysIndex = 0;
+        this.replaysNote = '';
+        if (!this.replayList.length) this.replaysMessage = 'Loading replays…';
+        void this.loadReplays();
+    }
+
+    /**
+     * Fill the Replays list: the player's replays on the server, and this browser's own last replay if the server
+     * doesn't have it (it was played offline, or before there was a server).
+     */
+    private async loadReplays(): Promise<void> {
+        let list: ReplaySummary[] = [];
+        let failed = false;
+        try {
+            list = await this.account.listReplays();
+        } catch {
+            failed = true;
+        }
+        const rows = list.map(s => ({ code: s.code, s }));
+        const local = loadLocalReplay();
+        if (local && !list.some(s => s.recorded === local.at))
+            rows.unshift({
+                code: 'local',
+                s: {
+                    code: 'local',
+                    mode: local.mode,
+                    map: local.map,
+                    seconds: local.seconds,
+                    at: new Date(local.at).toISOString(),
+                    fairies: local.fairies,
+                    wins: local.wins,
+                    recorded: local.at,
+                },
+            });
+        this.replayList = rows;
+        this.replaysIndex = Math.min(this.replaysIndex, Math.max(0, rows.length - 1));
+        this.replaysMessage = rows.length
+            ? ''
+            : failed || !this.account.hasServer
+              ? 'No replays here yet.\nPlay a match: it is recorded as you play,\nand saved here when the game server is reached.'
+              : 'No replays yet.\nEvery VS CPU, 2 Players and Endless game you play is recorded here.';
+    }
+
+    /** Open a replay by its share code (a `?replay=` link): fetch it from the server and watch it. */
+    openReplayCode(code: string): void {
+        this.openReplays();
+        this.watchCode(code);
+    }
+
+    /** Fetch the replay with this code (or this browser's own, for 'local') and watch it. */
+    private watchCode(code: string): void {
+        if (code === 'local') {
+            const d = loadLocalReplay();
+            if (d) this.watchReplay(d);
+            return;
+        }
+        this.replaysNote = 'Loading replay…';
+        this.replaysNoteT = this.time;
+        this.account
+            .fetchReplay(code)
+            .then(d => {
+                if (this.phase === 'replays') this.watchReplay(d);
+            })
+            .catch(() => {
+                this.replaysNote = "Couldn't load that replay";
+                this.replaysNoteT = this.time;
+            });
+    }
+
+    /** The share link for a replay saved on the server (empty for one kept only here, or a page from a file). */
+    private replayLink(code: string): string {
+        if (code === 'local' || typeof location === 'undefined' || !location.protocol.startsWith('http')) return '';
+        return `${location.origin}${location.pathname}?replay=${code}`;
+    }
+
+    /** The first row in view on the Replays screen, keeping the cursor in sight. */
+    private get replaysStart(): number {
+        const n = this.replayList.length;
+        return Math.max(0, Math.min(this.replaysIndex - Math.floor(REPLAY_ROWS / 2), n - REPLAY_ROWS));
+    }
+
+    /** The Replays screen: arrows choose, Enter (or a tap) watches, C (or a tap on the link) copies its link. */
+    private stepReplays(pr: Set<string>): void {
+        if (this.replaysNote && this.time - this.replaysNoteT > 2.5) this.replaysNote = '';
+        if (pr.has('Escape')) {
+            this.backToMenu();
+            return;
+        }
+        const n = this.replayList.length;
+        if (!n) return;
+        const was = this.replaysIndex;
+        if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.replaysIndex = (this.replaysIndex + n - 1) % n;
+        if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.replaysIndex = (this.replaysIndex + 1) % n;
+        if (this.replaysIndex !== was) this.ui('tick');
+        const start = this.replaysStart;
+        const tap = this.input.tap;
+        let pick = -1;
+        if (tap) {
+            const boxes = replayRowBoxes(this.r.layout, Math.min(REPLAY_ROWS, n - start), this.r.viewH);
+            const k = boxes.findIndex(b => inBox(tap, b));
+            if (k >= 0) pick = start + k;
+            else if (inBox(tap, replayLinkBox(this.r.layout, this.r.viewH))) this.copyReplayLink();
+        }
+        if (pick < 0 && ['Space', 'Enter', 'KeyZ', 'KeyG', 'NumpadEnter'].some(k => pr.has(k)))
+            pick = this.replaysIndex;
+        if (pr.has('KeyC')) this.copyReplayLink();
+        if (pick < 0) return;
+        this.replaysIndex = pick;
+        this.ui('ok');
+        this.watchCode(this.replayList[pick].code);
+    }
+
+    /** Copy the chosen replay's share link to the clipboard. */
+    private copyReplayLink(): void {
+        const row = this.replayList[this.replaysIndex];
+        const link = row ? this.replayLink(row.code) : '';
+        if (!link) return;
+        const done = (ok: boolean) => {
+            this.replaysNote = ok ? 'Link copied' : 'Copy the link above to share it';
+            this.replaysNoteT = this.time;
+        };
+        if (navigator.clipboard)
+            navigator.clipboard.writeText(link).then(
+                () => done(true),
+                () => done(false),
+            );
+        else done(false);
+    }
+
+    /** One line of the Replays list. */
+    private replayRow(r: { code: string; s: ReplaySummary }): ReplayRow {
+        const s = r.s;
+        const name = (id: string | undefined) => (id ? (fairyById(id)?.name ?? id) : '?');
+        const map = mapById(s.map)?.name ?? s.map;
+        const endless = s.mode === 'endless';
+        const tag = endless ? 'ENDLESS' : s.mode === 'versus' ? '2 PLAYERS' : s.mode === 'online' ? 'ONLINE' : 'VS CPU';
+        const color = endless ? '#ff8a5c' : s.mode === 'versus' ? '#8ff0a0' : '#ffd45c';
+        const f = s.fairies;
+        const title = endless ? `${name(f?.[0])} alone` : `${name(f?.[0])}  vs  ${name(f?.[1])}`;
+        const w = s.wins;
+        const result = endless ? `survived ${clock(s.seconds)}` : w ? `${w[0]}-${w[1]}` : '';
+        const detail = [map, result, endless ? '' : clock(s.seconds)].filter(Boolean).join('  ·  ');
+        const when = new Date(s.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toUpperCase();
+        return { tag, color, title, detail, when, local: r.code === 'local' };
+    }
+
+    /** The recording ran out before its round ended (it was cut short, or plays differently on this build). */
+    private replayRanOut(): void {
+        for (const f of this.fields) f.settled = true;
+        this.replayCut = true;
+        this.phase = 'matchOver';
+        this.phaseT = 0;
+        this.transits = [];
+    }
+
+    /** The match just ended: keep its recording here, and save it to the server for the Replays screen. */
+    private keepReplay(): void {
+        const rec = this.recorder;
+        if (!rec) return;
+        this.recorder = null;
+        const endless = this.mode === 'endless';
+        const data = rec.finish({
+            wins: endless ? [0, 0] : [this.wins[0], this.wins[1]],
+            guardians: endless ? this.endlessBosses : 0,
+            map: this.roundMap,
+        });
+        this.lastReplay = data;
+        this.lastReplayCode = null;
+        saveLocalReplay(data);
+        void this.account.saveReplay(data).then(code => {
+            if (this.lastReplay === data) this.lastReplayCode = code;
+        });
     }
 
     /** The settings that follow the player's account: the game's own and the sound's. */
@@ -410,6 +663,17 @@ export class Game {
     /** Set up both meadows for a new round from one shared seed, so their waves match. */
     private newRound(seed = (Math.random() * 2 ** 31) | 0): void {
         const roundIndex = this.wins[0] + this.wins[1];
+        // A replay deals its own rounds, at the meadow size they were played at.
+        let recorded: ReplayRound | null = null;
+        if (this.replay) {
+            const s = this.replay.startRound(this.replayRound++);
+            if (s === null) {
+                this.replayRanOut();
+                return;
+            }
+            seed = s;
+            recorded = this.replay.data.rounds[this.replayRound - 1];
+        }
         if (this.online) {
             // The host deals each round; the guest follows when the 'round' message lands.
             if (this.net!.isHost) this.net!.peer({ k: 'round', seed, wins: [this.wins[1], this.wins[0]] });
@@ -424,11 +688,16 @@ export class Game {
         // On a wide landscape screen a local match plays in wider meadows, so the view fills the screen; online
         // both players must share one width, so it stays the usual one there.
         // Endless shows one meadow: on a landscape screen it's the whole width (on a phone, the solo tall layout).
-        if (this.mode === 'endless' && !this.r.portrait) C.setFieldWidth(this.r.viewWidthToFill, true);
-        else C.setFieldWidth(this.online || this.mode === 'endless' ? C.FIELD_W_BASE : this.r.fieldWidthToFill);
-        // With the rival's meadow hidden on an upright phone, the meadows grow to reach the top of the screen
-        // (both, so the round stays fair), leaving a slim bar for the round and the rival's hearts.
-        C.setFieldHeight(this.soloView ? (this.r.tallH - C.TALL_SOLO_BAR) / C.TALL_OWN_S : C.FIELD_H_BASE);
+        if (recorded) {
+            C.setFieldWidth(recorded.field.w, recorded.field.single);
+            C.setFieldHeight(recorded.field.h);
+        } else {
+            if (this.mode === 'endless' && !this.r.portrait) C.setFieldWidth(this.r.viewWidthToFill, true);
+            else C.setFieldWidth(this.online || this.mode === 'endless' ? C.FIELD_W_BASE : this.r.fieldWidthToFill);
+            // With the rival's meadow hidden on an upright phone, the meadows grow to reach the top of the screen
+            // (both, so the round stays fair), leaving a slim bar for the round and the rival's hearts.
+            C.setFieldHeight(this.soloView ? (this.r.tallH - C.TALL_SOLO_BAR) / C.TALL_OWN_S : C.FIELD_H_BASE);
+        }
         const sideA = (seed & 1) === 0;
         const crowHere = this.online ? (this.net!.isHost ? sideA : !sideA) : sideA;
         this.fields = [
@@ -437,8 +706,10 @@ export class Game {
         ];
         // The second meadow's rival is to its left, so its countered fireballs arc off that way.
         this.fields[1].rivalSide = -1;
-        const map = this.forcedMap?.id ?? (this.matchMap || mapForSeed(seed).id);
+        const map = this.replay ? this.replay.data.map : (this.forcedMap?.id ?? (this.matchMap || mapForSeed(seed).id));
         for (const f of this.fields) f.mapId = map;
+        this.recorder?.startRound(seed, { w: C.FIELD_W, h: C.FIELD_H, single: C.VIEW_W === C.FIELD_W });
+        this.endlessRng = new Rng(seed ^ 0x5bd1e995);
         this.transits = [];
         // The CPU is sharper further along the trophy road.
         this.cpu = new CpuPilot(stageFor(map).cpuReaction);
@@ -451,7 +722,9 @@ export class Game {
 
     /** True once a match is under way (not on the title, the menus, the Characters or Profile screens, or select). */
     private get inGame(): boolean {
-        return !['title', 'modes', 'roster', 'maps', 'profile', 'settings', 'select', 'mapselect'].includes(this.phase);
+        return !['title', 'modes', 'roster', 'maps', 'profile', 'settings', 'replays', 'select', 'mapselect'].includes(
+            this.phase,
+        );
     }
 
     /** Leave the Settings screen (its page panel's Esc). */
@@ -461,7 +734,7 @@ export class Game {
 
     /** Back to the main menu, with the card for where you came from highlighted. */
     private backToMenu(): void {
-        const from = { roster: 1, maps: 2, profile: 3, settings: 4 }[this.phase as string] ?? 0;
+        const from = { roster: 1, maps: 2, profile: 3, replays: 4, settings: 5 }[this.phase as string] ?? 0;
         this.phase = 'modes';
         this.menu = 'main';
         this.modeIndex = from;
@@ -583,6 +856,9 @@ export class Game {
                 break;
             case 'settings':
                 this.phase = 'settings';
+                break;
+            case 'replays':
+                this.openReplays();
                 break;
             case 'guide':
                 this.onWantGuide?.();
@@ -827,6 +1103,18 @@ export class Game {
             this.pollNet(dt);
             if (!this.net) return;
         }
+        // Watching a replay: Esc leaves it; fire, Space or a tap steps the speed through 1×, 2× and 4×.
+        if (this.replay && this.inGame) {
+            if (pr.has('Escape')) {
+                this.exitReplay();
+                return;
+            }
+            const tap = ['Space', 'Enter', 'KeyZ', 'KeyF', 'Pointer'].some(k => pr.has(k));
+            if (tap && (this.phase === 'playing' || this.phase === 'countdown')) {
+                this.replaySpeed = this.replaySpeed >= 4 ? 1 : this.replaySpeed * 2;
+                this.ui('tick');
+            }
+        }
         if ((pr.has('Escape') || pr.has('KeyP')) && this.phase === 'playing' && this.mode !== 'online')
             this.paused = !this.paused;
 
@@ -883,6 +1171,10 @@ export class Game {
             if (pr.has('Escape') || pr.has('Enter') || pr.has('Space')) this.backToMenu();
             return;
         }
+        if (this.phase === 'replays') {
+            this.stepReplays(pr);
+            return;
+        }
         // Settings is the page's own panel under the heading bar; here only Esc (or ◀ Back) leaves it.
         if (this.phase === 'settings') {
             if (pr.has('Escape')) this.backToMenu();
@@ -926,7 +1218,8 @@ export class Game {
             const go = this.phaseT > 1.2 && (pr.has('Space') || pr.has('Enter') || pr.has('KeyG') || pr.has('Pointer'));
             if (go || (this.phase === 'roundOver' && this.phaseT > 3.5)) {
                 if (this.phase === 'matchOver') {
-                    this.start(this.mode);
+                    if (this.replay) this.exitReplay();
+                    else this.start(this.mode);
                     return;
                 }
                 // Online, the host deals the next round and the guest follows.
@@ -950,8 +1243,20 @@ export class Game {
         }
 
         this.shareFairies();
-        const c0 = this.vsCpu ? this.input.solo(this.fields[0].player) : this.input.p1(this.fields[0].player);
-        const c1 = this.vsCpu ? this.cpu.think(this.fields[1], dt) : this.input.p2(this.fields[1].player);
+        let c0: Controls, c1: Controls;
+        if (this.replay) {
+            // Watching: the recording flies both meadows. One that runs out before its round ends is cut short.
+            [c0, c1] = this.replay.next();
+            if (this.replay.roundSpent) {
+                this.replayRanOut();
+                return;
+            }
+        } else {
+            // Touch targets are snapped to the recording's grid, so a replay gives the meadows exactly this.
+            c0 = quantize(this.vsCpu ? this.input.solo(this.fields[0].player) : this.input.p1(this.fields[0].player));
+            c1 = quantize(this.vsCpu ? this.cpu.think(this.fields[1], dt) : this.input.p2(this.fields[1].player));
+            this.recorder?.step(c0, c1);
+        }
         this.fields[0].update(dt, c0);
         this.fields[1].update(dt, c1);
         if (this.mode === 'endless') this.directEndless(dt);
@@ -996,7 +1301,7 @@ export class Game {
             this.endlessT < C.ENDLESS_GRACE
                 ? 0
                 : Math.min(1, C.ENDLESS_SHARE_START + (this.endlessT - C.ENDLESS_GRACE) / C.ENDLESS_SHARE_RAMP);
-        ghost.outbox = ghost.outbox.filter(o => o.kind === 'moth' || Math.random() < share);
+        ghost.outbox = ghost.outbox.filter(o => o.kind === 'moth' || this.endlessRng.next() < share);
         if (this.endlessT >= this.endlessNextBoss) {
             ghost.summonGuardian();
             this.endlessBosses++;
@@ -1007,6 +1312,13 @@ export class Game {
     /** Your fairy went down in Endless: the run is over. Save a new best, then show the result. */
     private endEndless(): void {
         for (const f of this.fields) f.settled = true;
+        if (this.replay) {
+            this.phase = 'matchOver';
+            this.phaseT = 0;
+            this.transits = [];
+            return;
+        }
+        this.keepReplay();
         const p = this.progress;
         this.endlessNew = this.endlessT > p.endlessBest;
         p.endlessBest = Math.max(p.endlessBest, this.endlessT);
@@ -1112,14 +1424,17 @@ export class Game {
         );
         if (this.roundWinner >= 0) this.wins[this.roundWinner as 0 | 1]++;
 
-        // Only human players earn progress.
-        const humans = this.mode === 'versus' ? this.fields : [this.fields[0]];
+        // Only human players earn progress (and a replay being watched earns nothing).
+        const humans = this.replay ? [] : this.mode === 'versus' ? this.fields : [this.fields[0]];
         for (const f of humans) {
             this.matchBestChain = Math.max(this.matchBestChain, f.bestChain);
             this.progress.fevers += f.fevers;
         }
         const over = this.wins[0] >= C.ROUNDS_TO_WIN || this.wins[1] >= C.ROUNDS_TO_WIN;
-        if (over) this.recordMatch();
+        if (over && !this.replay) {
+            this.keepReplay();
+            this.recordMatch();
+        }
         this.phase = over ? 'matchOver' : 'roundOver';
         this.phaseT = 0;
         this.transits = [];
@@ -1220,7 +1535,8 @@ export class Game {
             r.endless(
                 {
                     time: this.endlessT,
-                    best: this.progress.endlessBest,
+                    // A replay shows the run's own length as the mark to reach.
+                    best: this.replay ? this.replay.data.seconds : this.progress.endlessBest,
                     bosses: this.endlessBosses,
                     nextBoss: Math.max(0, this.endlessNextBoss - this.endlessT),
                     tempo: this.fields[0].tempo,
@@ -1362,6 +1678,22 @@ export class Game {
                     this.time,
                 );
                 break;
+            case 'replays': {
+                const row = this.replayList[this.replaysIndex];
+                r.replays(
+                    {
+                        touch,
+                        rows: this.replayList.map(x => this.replayRow(x)),
+                        index: this.replaysIndex,
+                        start: this.replaysStart,
+                        message: this.replaysMessage,
+                        link: row ? this.replayLink(row.code) : '',
+                        note: this.replaysNote,
+                    },
+                    this.time,
+                );
+                break;
+            }
             case 'profile':
                 r.profile(
                     {
@@ -1507,6 +1839,30 @@ export class Game {
                 break;
             }
             case 'matchOver': {
+                if (this.replay) {
+                    const g = this.endlessBosses;
+                    const d = this.replay.data;
+                    const w = this.wins[0] > this.wins[1] ? 0 : 1;
+                    const result =
+                        this.mode === 'endless'
+                            ? `Survived ${clock(this.endlessT)}  ·  ${g} guardian${g === 1 ? '' : 's'}`
+                            : `${names[w]} won ${Math.max(...this.wins)}-${Math.min(...this.wins)}`;
+                    r.banner({
+                        title: this.replayCut ? 'Replay ends here' : 'Replay over',
+                        sub: touch ? 'Tap to go back' : 'Press Space or tap to go back',
+                        extra: this.replayCut
+                            ? this.replay.sameSim
+                                ? 'The recording stops before the match ended'
+                                : 'Recorded on another version of the game'
+                            : `${result}  ·  ${new Date(d.at).toLocaleDateString()}`,
+                        age: this.phaseT,
+                        dim: 0.6,
+                        size: 30,
+                        tone: 'blue',
+                        blinkSub: true,
+                    });
+                    break;
+                }
                 if (this.mode === 'endless') {
                     const g = this.endlessBosses;
                     // Where the player's best stands among everyone's, once the server has answered.
@@ -1533,6 +1889,7 @@ export class Game {
                 if (this.newStages.length) notes.push(`New stage: ${this.newStages.join(', ')}`);
                 if (this.newlyUnlocked.length)
                     notes.push(`New fairy: ${this.newlyUnlocked.map(f => f.name).join(', ')}`);
+                if (this.lastReplayCode) notes.push('Replay saved');
                 const unlocked = notes.length ? notes.join('  ·  ') : undefined;
                 r.banner({
                     title,
@@ -1555,6 +1912,10 @@ export class Game {
                         tone: 'blue',
                         blinkSub: true,
                     });
+        }
+        if (this.replay && (this.phase === 'playing' || this.phase === 'countdown') && !this.paused) {
+            const hint = touch ? 'TAP FOR SPEED  ·  ◀ BACK LEAVES' : 'SPACE: SPEED  ·  P: PAUSE  ·  ESC: LEAVE';
+            r.replayBadge(this.replaySpeed, hint, this.time);
         }
     }
 }
