@@ -13,6 +13,7 @@ export type * from './game';
 export type * from './hud';
 export type * from './net';
 export type * from './progress';
+export type * from './replay';
 export type * from './scenery';
 export type * from './screens';
 export type * from './sprites';

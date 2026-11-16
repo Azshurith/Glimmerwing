@@ -29,6 +29,9 @@ const startMode = new URLSearchParams(location.search).get('mode');
 game.debugPaths = new URLSearchParams(location.search).get('debug') === 'paths';
 if (startMode === 'cpu' || startMode === 'versus' || startMode === 'endless') game.start(startMode);
 else if (startMode === 'online') lobby.open();
+// A shared replay link (?replay=CODE) opens straight into it.
+const replayCode = new URLSearchParams(location.search).get('replay');
+if (replayCode && /^[A-Za-z0-9]{10}$/.test(replayCode)) game.openReplayCode(replayCode.toUpperCase());
 
 // ---- fitting the screen ---------------------------------------------------------
 // The view is 504x320 side by side, or the tall view on a portrait screen during a round
@@ -168,7 +171,8 @@ game.onWantGuide = () => (location.href = 'guide.html');
 let shownMode = '',
     shownPhase = '',
     shownLayout = '',
-    shownTouch: boolean | null = null;
+    shownTouch: boolean | null = null,
+    shownWatching = false;
 /** The view width the page was last fitted to (it changes when a round plays in wider meadows). */
 let shownViewW = 0;
 /** Keeps the page's touch layer in step with the game: which buttons show, and what the top one does. */
@@ -184,10 +188,14 @@ function syncPage(): void {
         shownTouch = input.touchActive;
         document.documentElement.classList.toggle('touch', shownTouch);
     }
-    if (game.modeName !== shownMode || game.phaseName !== shownPhase) {
+    if (game.modeName !== shownMode || game.phaseName !== shownPhase || game.watching !== shownWatching) {
         shownMode = screenEl.dataset.mode = game.modeName;
         shownPhase = screenEl.dataset.phase = game.phaseName;
-        const back = ['select', 'mapselect', 'modes', 'roster', 'maps', 'profile', 'settings'].includes(shownPhase);
+        shownWatching = game.watching;
+        // While a replay plays, the button (Esc) leaves it.
+        const back =
+            game.watching ||
+            ['select', 'mapselect', 'modes', 'roster', 'maps', 'profile', 'settings', 'replays'].includes(shownPhase);
         menuBtn.textContent = back ? '◀ BACK' : '❚❚';
         menuBtn.setAttribute('aria-label', back ? 'Back' : 'Pause');
         void keepAwake(shownPhase === 'playing' || shownPhase === 'countdown');
@@ -223,7 +231,7 @@ function pickMusic(): void {
     }
     mapsBrowsed = '';
     // The menus have their own loop; everything from the countdown on plays the round's.
-    const menus = ['modes', 'roster', 'profile', 'settings'].includes(phase);
+    const menus = ['modes', 'roster', 'profile', 'settings', 'replays'].includes(phase);
     const picking = phase === 'select' || phase === 'mapselect';
     sound.playMusic(phase === 'title' ? null : picking ? 'select' : menus ? 'menu' : roundMusic(game.roundMap));
 }
@@ -275,8 +283,11 @@ function frame(now: number) {
     }
     last = now;
     while (acc >= C.STEP) {
-        game.step(C.STEP);
-        input.endFrame();
+        // A replay can be fast-forwarded: several steps in each step's time.
+        for (let i = game.speed; i > 0; i--) {
+            game.step(C.STEP);
+            input.endFrame();
+        }
         acc -= C.STEP;
     }
     game.draw();

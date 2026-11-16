@@ -6,6 +6,8 @@ import type {
     MatchRecord,
     MeResponse,
     Progress,
+    ReplayData,
+    ReplaySummary,
     Saved,
     SyncedSettings,
 } from '@/types';
@@ -219,6 +221,32 @@ export class Account {
         if (!list.length) return;
         writeStore(PENDING_KEY, []);
         for (const item of list) await this.report(item);
+    }
+
+    /** Save a replay to the server; resolves with its share code, or null when it couldn't be saved. */
+    async saveReplay(d: ReplayData): Promise<string | null> {
+        if (!this.base || !this.stored || !this.online) return null;
+        try {
+            const body = { mode: d.mode, map: d.map, version: d.sim, seconds: d.seconds, data: d };
+            const r = await apiCall<{ code: string }>(this.base, 'POST', '/replays', body, this.stored.token);
+            return r.code;
+        } catch (e) {
+            console.warn("Couldn't save the replay to the server.", e);
+            return null;
+        }
+    }
+
+    /** The player's replays on the server, newest first (empty when there's no server). */
+    async listReplays(): Promise<ReplaySummary[]> {
+        if (!this.base || !this.stored) return [];
+        return apiCall<ReplaySummary[]>(this.base, 'GET', '/me/replays?limit=30', undefined, this.stored.token);
+    }
+
+    /** Fetch a replay by its share code (anyone's). */
+    async fetchReplay(code: string): Promise<ReplayData> {
+        if (!this.base) throw new Error('No game server');
+        const r = await apiCall<{ data: ReplayData }>(this.base, 'GET', `/replays/${encodeURIComponent(code)}`);
+        return r.data;
     }
 
     /** Fetch everyone's best Endless runs. */

@@ -91,6 +91,34 @@ export interface ProfileView {
     me: number | null;
 }
 
+/** One replay in the Replays screen's list. */
+export interface ReplayRow {
+    /** The mode, on a coloured tag: VS CPU, 2 PLAYERS or ENDLESS. */
+    tag: string;
+    color: string;
+    /** Who flew (e.g. "Pip vs Clove"), and the map, result and length. */
+    title: string;
+    detail: string;
+    /** When it was played. */
+    when: string;
+    /** Kept only in this browser (not saved to the server). */
+    local: boolean;
+}
+
+/** What the Replays screen shows. */
+export interface ReplaysView {
+    touch: boolean;
+    rows: ReplayRow[];
+    index: number;
+    /** The first row in view (the list scrolls with the cursor). */
+    start: number;
+    /** A line in place of the list while it loads, or when it's empty. */
+    message: string;
+    /** The chosen replay's share link (empty when it has none), and a short note such as "Link copied". */
+    link: string;
+    note: string;
+}
+
 /** What a title-screen choice or a mode-menu card does when it's picked. */
 export type TitleAction =
     | 'google'
@@ -105,6 +133,7 @@ export type TitleAction =
     | 'versus'
     | 'online'
     | 'settings'
+    | 'replays'
     | 'guide';
 
 /** What the Maps screen shows: the map in view, which are locked, your trophies and the demo's caption. */

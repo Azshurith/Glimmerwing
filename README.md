@@ -20,6 +20,9 @@ whatever you chain in your meadow lands in your rival's.
 `make help` lists the rest (logs, rebuild, a MariaDB prompt, a dump). The layout follows the usual one:
 `.docker/<Service>/Dockerfile`, `.env` for ports and passwords, `docker-compose.yml`.
 
+Every VS CPU, 2 Players and Endless game is recorded (each round's seed and the controls step by step, a few
+tens of KB) and can be watched again from **Replays** in the main menu, or shared as a `?replay=CODE` link.
+
 Each browser gets a guest account the first time it reaches the server. Progress, settings (keys, display,
 sound), every match, every Endless run (the leaderboard) and saved replays go to the database; the browser
 keeps its own copy too, so the game still plays offline or from a file, and whichever copy was saved last wins
