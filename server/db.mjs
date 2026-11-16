@@ -29,6 +29,17 @@ export async function openStore(env = process.env) {
     return null;
 }
 
+/**
+ * A JSON column's value. MariaDB marks a `CHECK (JSON_VALID(…))` column as JSON, and mysql2 then hands it back
+ * already parsed; a server or driver that doesn't sends the text (or bytes), which is parsed here.
+ */
+export function fromJson(v) {
+    if (v == null) return null;
+    if (typeof v === 'string') return JSON.parse(v);
+    if (Buffer.isBuffer(v)) return JSON.parse(v.toString('utf8'));
+    return v;
+}
+
 /** Wait for `ms` milliseconds. */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -85,7 +96,7 @@ async function mariaStore(env) {
         },
         async getProgress(id) {
             const [r] = await rows('SELECT data, saved_at FROM progress WHERE player_id = ?', [id]);
-            return r ? { data: JSON.parse(r.data), savedAt: Number(r.saved_at) } : null;
+            return r ? { data: fromJson(r.data), savedAt: Number(r.saved_at) } : null;
         },
         async setProgress(id, data) {
             // The server's own decision, so it simply replaces what was there.
@@ -104,7 +115,7 @@ async function mariaStore(env) {
         },
         async getSettings(id) {
             const [r] = await rows('SELECT data, saved_at FROM settings WHERE player_id = ?', [id]);
-            return r ? { data: JSON.parse(r.data), savedAt: Number(r.saved_at) } : null;
+            return r ? { data: fromJson(r.data), savedAt: Number(r.saved_at) } : null;
         },
         async putSettings(id, data, savedAt) {
             await pool.query(
@@ -224,7 +235,7 @@ async function mariaStore(env) {
                 seconds: r.seconds,
                 name: r.name,
                 at: new Date(r.created_at).toISOString(),
-                data: JSON.parse(r.data),
+                data: fromJson(r.data),
             };
         },
         async listReplays(id, limit) {
@@ -238,7 +249,7 @@ async function mariaStore(env) {
             /** A JSON array column, or null. */
             const arr = v => {
                 try {
-                    const a = typeof v === 'string' ? JSON.parse(v) : v;
+                    const a = fromJson(v);
                     return Array.isArray(a) ? a : null;
                 } catch {
                     return null;
