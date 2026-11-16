@@ -1,10 +1,11 @@
 // The catalog: the fairies, maps and modes in the characters, maps and types_modes tables, each numbered by the
 // database and known to the game by its `code`. The server reads them at start and again every little while, so
-// switching a fairy, map or mode off (is_enabled = 0, or soft-deleting the row, e.g. in phpMyAdmin) takes effect
-// without a restart. Without a database nothing is off, and nothing is numbered.
+// switching a fairy, map or mode off (is_enabled = 0, or soft-deleting the row, e.g. in phpMyAdmin) or changing
+// its art takes effect without a restart. Without a database nothing is off, nothing is numbered and there's no
+// art (the game draws its own).
 import type { DataSource } from 'typeorm';
-import { Character, GameMap, ModeType } from './database/entities/catalog';
-import type { CatalogResponse } from '@/types';
+import { fromJson } from './database/entities/columns';
+import type { CatalogArt, CatalogResponse, MonsterArt, SpriteAtlas } from '@/types';
 
 /** How often the catalog is read again (ms). */
 const REFRESH_MS = 15_000;
@@ -19,22 +20,36 @@ interface Table {
 /** An empty table. */
 const empty = (): Table => ({ ids: new Map(), codes: new Map(), off: new Set() });
 
+/** A catalog row as read (raw, so a sheet's bytes are never read here). */
+interface Row {
+    id: number;
+    code: string;
+    is_enabled: number | boolean;
+    deleted_at: Date | null;
+    updated_at: Date;
+}
+
 /** A catalog table as read: every row, deleted ones too. */
-function tableOf(rows: { id: number; code: string; isEnabled?: boolean; deletedAt: Date | null }[]): Table {
+function tableOf(rows: Row[]): Table {
     const t = empty();
     for (const r of rows) {
-        t.ids.set(r.code, r.id);
-        t.codes.set(r.id, r.code);
-        if (r.isEnabled === false || r.deletedAt) t.off.add(r.code);
+        const id = Number(r.id);
+        t.ids.set(r.code, id);
+        t.codes.set(id, r.code);
+        if (!Number(r.is_enabled) || r.deleted_at) t.off.add(r.code);
     }
     return t;
 }
+
+/** A row's version: when it last changed (ms). */
+const version = (r: Row) => new Date(r.updated_at).getTime();
 
 /** The fairies, maps and modes, as last read. */
 export class Catalog {
     private characters = empty();
     private maps = empty();
     private modes = empty();
+    private art: CatalogArt = { characters: {}, maps: {} };
     private timer: NodeJS.Timeout | null = null;
 
     constructor(private db: DataSource | null) {}
@@ -42,15 +57,45 @@ export class Catalog {
     /** Read the catalog again (a failed read keeps the last one). */
     async refresh(): Promise<void> {
         if (!this.db) return;
+        const db = this.db;
+        /** Rows of a query. */
+        const rows = <T>(sql: string) => db.query(sql) as Promise<T[]>;
         try {
-            const [cs, ms, ts] = await Promise.all([
-                this.db.getRepository(Character).find({ withDeleted: true }),
-                this.db.getRepository(GameMap).find({ withDeleted: true }),
-                this.db.getRepository(ModeType).find({ withDeleted: true }),
+            const [cs, ms, ts, mons] = await Promise.all([
+                rows<Row & { sprite_atlas: unknown; has_sheet: number }>(
+                    `SELECT id, code, is_enabled, deleted_at, updated_at, sprite_atlas,
+                        sprite_sheet IS NOT NULL AS has_sheet FROM characters`,
+                ),
+                rows<Row & { monster_cell: number | null; monster_overlay_row: number | null; has_sheet: number }>(
+                    `SELECT id, code, is_enabled, deleted_at, updated_at, monster_cell, monster_overlay_row,
+                        monster_sheet IS NOT NULL AS has_sheet FROM maps`,
+                ),
+                rows<Row>('SELECT id, code, is_enabled, deleted_at, updated_at FROM types_modes'),
+                rows<{ map_id: number; code: string; name: string; role: MonsterArt['role']; sheet_row: number }>(
+                    'SELECT map_id, code, name, role, sheet_row FROM monsters WHERE deleted_at IS NULL ORDER BY id',
+                ),
             ]);
             this.characters = tableOf(cs);
             this.maps = tableOf(ms);
             this.modes = tableOf(ts);
+            const art: CatalogArt = { characters: {}, maps: {} };
+            for (const c of cs) {
+                const atlas = c.sprite_atlas == null ? null : (fromJson(c.sprite_atlas) as SpriteAtlas);
+                if (Number(c.has_sheet) && atlas) art.characters[c.code] = { v: version(c), atlas };
+            }
+            for (const m of ms) {
+                if (!Number(m.has_sheet) || m.monster_cell == null) continue;
+                const monsters = mons
+                    .filter(x => Number(x.map_id) === Number(m.id))
+                    .map(x => ({ code: x.code, name: x.name, role: x.role, row: Number(x.sheet_row) }));
+                art.maps[m.code] = {
+                    v: version(m),
+                    cell: Number(m.monster_cell),
+                    overlay: Number(m.monster_overlay_row ?? 0),
+                    monsters,
+                };
+            }
+            this.art = art;
         } catch (e) {
             console.error('Reading the catalog failed:', e);
         }
@@ -90,6 +135,11 @@ export class Catalog {
             disabledMaps: [...this.maps.off],
             disabledModes: [...this.modes.off],
         };
+    }
+
+    /** What's switched off and the art the database keeps, as GET /api/catalog answers. */
+    response(): CatalogResponse {
+        return { ...this.off(), art: this.art };
     }
 
     /** The characters row of the fairy `code`. */

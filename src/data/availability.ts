@@ -21,14 +21,16 @@ export function setCatalog(c: CatalogResponse): void {
     }
 }
 
-/** Take on what the server last said, as kept in this browser. */
-export function loadCatalog(): void {
+/** Take on what the server last said, as kept in this browser; answers with it (null if nothing's kept). */
+export function loadCatalog(): CatalogResponse | null {
     try {
         const raw = localStorage.getItem(CATALOG_KEY);
         const c = raw ? (JSON.parse(raw) as Partial<CatalogResponse>) : null;
-        if (Array.isArray(c?.disabledCharacters) && Array.isArray(c?.disabledMaps)) setCatalog(c as CatalogResponse);
+        if (!Array.isArray(c?.disabledCharacters) || !Array.isArray(c?.disabledMaps)) return null;
+        setCatalog(c as CatalogResponse);
+        return c as CatalogResponse;
     } catch {
-        /* nothing kept */
+        return null;
     }
 }
 

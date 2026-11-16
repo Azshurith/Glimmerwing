@@ -36,7 +36,12 @@ The server is Express and TypeORM (TypeScript in `server/src/`). The tables are 
 start-up; every table ends with `created_at`, `updated_at` and `deleted_at` (soft deletes). The `characters`,
 `maps` and `types_modes` tables list the game's fairies, maps and modes: set `is_enabled` to 0 (in phpMyAdmin,
 say) to switch one off. Within 15 seconds the server stops accepting games with it, and the game shows it as
-unavailable from the next time it opens Play (or is reloaded). All three are numbered by the database, with the game's own id (`pip`, `forest`)
+unavailable from the next time it opens Play (or is reloaded).
+
+The art is in the database too: each fairy's spritesheet and its layout (`characters.sprite_sheet` and
+`sprite_atlas`), each map's monster sheet (`maps.monster_sheet`, `monster_cell`, `monster_overlay_row`) and the
+monsters on it (`monsters`: name, role and row). The server fills them from `assets/` where they're empty; change
+them in the database and the game uses the new art the next time it opens Play, keeping its own copy offline. All three are numbered by the database, with the game's own id (`pip`, `forest`)
 as `code`. A player's tables are `players_progress`, `players_settings`, `players_matches`, `players_runs`
 (Endless) and `players_replays`; they point at the catalog by foreign key (`mode_id`, `map_id`, `fairy_id`,
 `rival_fairy_id`).

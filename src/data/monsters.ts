@@ -161,7 +161,20 @@ const SHEETS: Record<string, MonsterSheet> = {
     space: SPACE,
 };
 
+/** Sheets from the server's database (maps and monsters tables), used in place of the bundled ones. */
+const FROM_SERVER: Record<string, MonsterSheet> = {};
+
 /** The monster sheet for a map, or undefined if its critters stay puffs. */
 export function monstersFor(mapId: string): MonsterSheet | undefined {
+    return FROM_SERVER[mapId] ?? SHEETS[mapId];
+}
+
+/** The bundled monster sheet for a map (what the server first fills its database with). */
+export function bundledMonsters(mapId: string): MonsterSheet | undefined {
     return SHEETS[mapId];
+}
+
+/** Use a sheet from the server for a map from now on. */
+export function useServerMonsters(mapId: string, sheet: MonsterSheet): void {
+    FROM_SERVER[mapId] = sheet;
 }
