@@ -87,7 +87,7 @@ export function initSettingsPanel(d: SettingsPanelDeps): { open: () => void; hid
     // Let go of the slider: a line at the new level.
     voice?.addEventListener('change', () => {
         const lines = VOICES.pip?.pick ?? [];
-        if (lines.length) d.sound.speak(lines[Math.floor(Math.random() * lines.length)], 'settings', 0, 1, true);
+        if (lines.length) d.sound.speak(lines[Math.floor(Math.random() * lines.length)], 'settings', 0, 1, 'cut');
     });
     soundBox?.addEventListener('change', () => {
         d.sound.unlock();
