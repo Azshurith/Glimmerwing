@@ -26,5 +26,8 @@ export type Sfx =
     | 'win'
     | 'lose';
 
-/** The background music loops: a calm one for the menus and a driving one for rounds. */
-export type MusicTrack = 'menu' | 'battle';
+/**
+ * The background music: the synthesised loops (a calm one for the menus and a driving one for rounds), or a map's
+ * own recorded track (`map:<id>`, see data/music.ts).
+ */
+export type MusicTrack = 'menu' | 'battle' | `map:${string}`;

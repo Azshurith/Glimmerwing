@@ -242,6 +242,10 @@ export class Game {
     get phaseName(): Phase {
         return this.phase;
     }
+    /** The map the round is on, for the page to pick its music. */
+    get roundMap(): string {
+        return this.fields[0].mapId;
+    }
 
     /** The page went to the background (app switch, tab hidden): pause an offline round. */
     pauseForBackground(): void {
