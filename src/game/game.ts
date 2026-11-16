@@ -242,6 +242,10 @@ export class Game {
     get phaseName(): Phase {
         return this.phase;
     }
+    /** The map shown on the Maps screen, for the page to play its music. */
+    get browsedMap(): string {
+        return MAPS[this.mapsIndex].id;
+    }
     /** The map the round is on, for the page to pick its music. */
     get roundMap(): string {
         return this.fields[0].mapId;

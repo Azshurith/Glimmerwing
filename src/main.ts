@@ -191,17 +191,38 @@ function syncPage(): void {
         // Settings is the page's panel, shown while the game is on its Settings screen.
         if (shownPhase === 'settings') settings.open();
         else settings.hide();
-        // The menus have their own calm loop; everything from the countdown on plays the round's.
-        const menus = ['title', 'modes', 'roster', 'maps', 'profile', 'settings', 'select', 'mapselect'].includes(
-            shownPhase,
-        );
-        // Picking fairies and a map has its own tune; the other menus share theirs.
-        const picking = shownPhase === 'select' || shownPhase === 'mapselect';
-        // The title screen is quiet.
-        sound.playMusic(
-            shownPhase === 'title' ? null : picking ? 'select' : menus ? 'menu' : roundMusic(game.roundMap),
-        );
     }
+    pickMusic();
+}
+
+/** When the Maps screen last moved to another map, and which: its music waits until you stop on one. */
+let mapsBrowsed = '';
+let mapsBrowsedAt = 0;
+/** How long the Maps screen must rest on a map before its music takes over (ms), so scrolling past doesn't. */
+const MAPS_MUSIC_DELAY = 450;
+
+/**
+ * Play the music for where the game is: nothing on the title screen, the select track while picking fairies and a
+ * map, the map you're looking at on the Maps screen, the menu track on the other menus, and a round its map's.
+ * Asking for the music already playing changes nothing, so this runs every frame.
+ */
+function pickMusic(): void {
+    const phase = game.phaseName;
+    if (phase === 'maps') {
+        const id = game.browsedMap;
+        if (id !== mapsBrowsed) {
+            mapsBrowsed = id;
+            mapsBrowsedAt = performance.now();
+        }
+        // Keep what's playing until the choice settles.
+        if (performance.now() - mapsBrowsedAt >= MAPS_MUSIC_DELAY) sound.playMusic(roundMusic(id));
+        return;
+    }
+    mapsBrowsed = '';
+    // The menus have their own loop; everything from the countdown on plays the round's.
+    const menus = ['modes', 'roster', 'profile', 'settings'].includes(phase);
+    const picking = phase === 'select' || phase === 'mapselect';
+    sound.playMusic(phase === 'title' ? null : picking ? 'select' : menus ? 'menu' : roundMusic(game.roundMap));
 }
 
 // ---- background and sleep -------------------------------------------------------
