@@ -11,6 +11,7 @@ import type {
     HudTag,
     ModeView,
     ProfileView,
+    ReplayPanelView,
     ReplaysView,
     RosterView,
     Layer,
@@ -475,9 +476,9 @@ export class Renderer {
         this.hudLayer.banner(v);
     }
 
-    /** The badge shown while a replay plays (see Hud.replayBadge). */
-    replayBadge(speed: number, hint: string, time: number): void {
-        this.hudLayer.replayBadge(speed, hint, time);
+    /** The replay's controls along the bottom (see Hud.replayPanel). */
+    replayPanel(v: ReplayPanelView, time: number): void {
+        this.hudLayer.replayPanel(v, time);
     }
 
     /** The arcade title screen (see title-screen.ts). */

@@ -13,7 +13,7 @@ import { MAP_CARDS, MAP_COLS, mapCards } from '@/render/screens/map-screen';
 import { MAPS, mapById, mapForSeed } from '@/data/maps';
 import { stageFor, stageOpen } from '@/data/stages';
 import { titleButtons } from '@/render/screens/title-screen';
-import { clock } from '@/render/hud';
+import { clock, replayPanelLayout } from '@/render/hud';
 import { PALETTE, PLAYER_COLORS } from '@/render/theme';
 import type {
     Controls,
@@ -26,6 +26,7 @@ import type {
     PeerMsg,
     Phase,
     ReplayData,
+    ReplayHighlight,
     ReplayRound,
     ReplayRow,
     ReplaySummary,
@@ -123,6 +124,8 @@ function tallPlacement(h: number): { at: readonly [Placement, Placement]; band: 
     };
 }
 const IDLE: Controls = { left: false, right: false, up: false, down: false, fire: false };
+/** No keys pressed: what a step reads while a replay runs ahead. */
+const NO_KEYS: Set<string> = new Set();
 
 /** True if point `p` lies inside box `b`. */
 const inBox = (p: { x: number; y: number }, b: { x: number; y: number; w: number; h: number }) =>
@@ -193,6 +196,13 @@ export class Game {
     private replayRound = 0;
     /** Watching a replay: shown on its last banner when the recording ended before the match did. */
     private replayCut = false;
+    /** The replay's highlights (found by playing it through once, silently, when it opens). */
+    private highlights: ReplayHighlight[] = [];
+    /** Running the replay ahead silently: to seek, or (scanning) to find its highlights. */
+    private seeking = false;
+    private scanning = false;
+    /** While the timeline's knob is being dragged: where it is (0 to 1). */
+    private scrub: number | null = null;
     /** The last match's recording, and its code on the server once saved there (null until then, or offline). */
     lastReplay: ReplayData | null = null;
     lastReplayCode: string | null = null;
@@ -246,6 +256,14 @@ export class Game {
 
     /** Play what each meadow asked for. Offline, sounds lean toward their meadow and the CPU's are quieter. */
     private drainSfx(): void {
+        // Running a replay ahead: nothing is heard, but its big moments are noted as highlights.
+        if (this.seeking) {
+            this.fields.forEach((f, i) => {
+                if (this.scanning) for (const e of f.sfx) this.noteHighlight(e.k, e.p, i as 0 | 1);
+                f.sfx = [];
+            });
+            return;
+        }
         this.fields.forEach((f, i) => {
             const pan = this.online ? 0 : i === 0 ? -0.35 : 0.35;
             // Endless's hidden meadow makes no sound at all.
@@ -257,6 +275,7 @@ export class Game {
 
     /** Play an interface sound (centred, full volume). */
     private ui(k: Sfx): void {
+        if (this.seeking) return;
         this.sound.play(k);
     }
 
@@ -420,7 +439,21 @@ export class Game {
      */
     watchReplay(data: ReplayData): void {
         if (this.net) this.disconnect();
+        // Play it through once, silently, to find its highlights; then from the start.
+        this.highlights = [];
+        this.resetReplay(data);
+        this.scanning = true;
+        this.runReplayTo(Infinity);
+        this.scanning = false;
+        this.resetReplay(data);
+        this.replaySpeed = 1;
+        this.paused = false;
+    }
+
+    /** Set a replay up from its start: its fairies, map and first round. */
+    private resetReplay(data: ReplayData): void {
         this.replay = new ReplayPlayer(data);
+        this.scrub = null;
         this.recorder = null;
         this.replayRound = 0;
         this.replaySpeed = 1;
@@ -437,6 +470,150 @@ export class Game {
         this.endlessRank = null;
         this.paused = false;
         this.newRound();
+    }
+
+    /**
+     * Run the replay ahead silently until its timeline reaches `target` (in playing steps), skipping the
+     * countdowns and round banners, and never stopping between rounds; or to its end.
+     */
+    private runReplayTo(target: number): void {
+        const wasPaused = this.paused;
+        this.paused = false;
+        this.seeking = true;
+        for (let guard = 0; this.replay && guard < 2_000_000; guard++) {
+            if (this.phase === 'matchOver') break;
+            if (this.phase === 'countdown') {
+                if (this.replay.played >= target) break;
+                this.phaseT = 3;
+            } else if (this.phase === 'roundOver') this.phaseT = 4;
+            else if (this.replay.played >= target) break;
+            this.step(C.STEP);
+        }
+        this.seeking = false;
+        this.paused = wasPaused;
+    }
+
+    /** Jump the replay to `target` playing steps in, keeping its speed and pause (going back starts it over). */
+    seekReplay(target: number): void {
+        const rp = this.replay;
+        if (!rp) return;
+        target = Math.max(0, Math.min(rp.length, Math.round(target)));
+        const speed = this.replaySpeed,
+            paused = this.paused;
+        if (target < rp.played || this.phase === 'matchOver') this.resetReplay(rp.data);
+        this.runReplayTo(target);
+        this.replaySpeed = speed;
+        this.paused = paused;
+    }
+
+    /** Note a sound from a replay being scanned as a highlight, if it marks a big moment. */
+    private noteHighlight(k: Sfx, p: number, side: 0 | 1): void {
+        const kind =
+            k === 'fever'
+                ? 'fever'
+                : k === 'extra' && p === 0
+                  ? 'extra'
+                  : k === 'bossIn'
+                    ? 'guardian'
+                    : k === 'bomb'
+                      ? 'bomb'
+                      : k === 'death'
+                        ? 'ko'
+                        : k === 'send' && p >= 7
+                          ? 'chain'
+                          : null;
+        if (!kind || !this.replay) return;
+        const at = this.replay.played;
+        // One marker for a burst of the same thing.
+        if (this.highlights.some(h => h.kind === kind && h.side === side && at - h.at < 120)) return;
+        this.highlights.push({ at, kind, side });
+    }
+
+    /** A short label for a highlight, e.g. "FEVER · PIP". */
+    private highlightLabel(h: ReplayHighlight): string {
+        const what = {
+            chain: 'BIG CHAIN',
+            fever: 'FEVER',
+            extra: 'EXTRA ATTACK',
+            guardian: 'GUARDIAN',
+            bomb: 'BOMB',
+            ko: 'KNOCKOUT',
+        }[h.kind];
+        return `${what} · ${this.picks[h.side].name.toUpperCase()}`;
+    }
+
+    /** The highlight within a small reach of a point on the timeline (0 to 1), if any. */
+    private highlightNear(x: number): ReplayHighlight | null {
+        const len = this.replay?.length ?? 0;
+        if (!len) return null;
+        let best: ReplayHighlight | null = null,
+            d = 0.012;
+        for (const h of this.highlights) {
+            const dh = Math.abs(h.at / len - x);
+            if (dh < d) {
+                d = dh;
+                best = h;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * The replay's controls, read each step while watching: dragging on the timeline moves its knob and lets go
+     * to seek there (landing just before a highlight it's on); a round chip jumps to that round; ← → skip five
+     * seconds; [ and ] jump to the previous or next highlight; 1–9 to a round; Space or a tap steps the speed.
+     * Returns true if it seeked, so the step that read it stops there.
+     */
+    private replayControls(pr: Set<string>): boolean {
+        const rp = this.replay!;
+        const L = replayPanelLayout(this.r.viewW - 2 * this.r.viewX, this.r.viewH, rp.data.rounds.length);
+        const at = (x: number) => Math.max(0, Math.min(1, (x - L.bar.x) / L.bar.w));
+        const tap = this.input.tap;
+        if (tap) {
+            const chip = L.chips.findIndex(c => inBox(tap, c));
+            if (chip >= 0) {
+                pr.delete('Pointer');
+                this.seekReplay(chip === 0 ? 0 : rp.roundStarts[chip - 1]);
+                return true;
+            }
+            if (inBox(tap, L.barHit)) {
+                pr.delete('Pointer');
+                this.scrub = at(tap.x);
+            }
+        }
+        if (this.scrub !== null) {
+            const p = this.input.pointer;
+            if (p) {
+                this.scrub = at(p.x);
+                return false;
+            }
+            const h = this.highlightNear(this.scrub);
+            const target = h ? Math.max(0, h.at - 90) : this.scrub * rp.length;
+            this.scrub = null;
+            this.seekReplay(target);
+            return true;
+        }
+        const pos = rp.played;
+        if (pr.has('ArrowLeft') || pr.has('ArrowRight')) {
+            this.seekReplay(pos + (pr.has('ArrowLeft') ? -300 : 300));
+            return true;
+        }
+        if (pr.has('BracketLeft') || pr.has('BracketRight')) {
+            const next = pr.has('BracketRight');
+            // From a little way back, so jumping twice to the same highlight moves on.
+            const list = this.highlights.map(h => Math.max(0, h.at - 90));
+            const t = next ? list.find(t => t > pos + 30) : [...list].reverse().find(t => t < pos - 30);
+            if (t !== undefined) {
+                this.seekReplay(t);
+                return true;
+            }
+        }
+        for (let i = 0; i < Math.min(9, rp.data.rounds.length); i++)
+            if (pr.has(`Digit${i + 1}`)) {
+                this.seekReplay(i === 0 ? 0 : rp.roundStarts[i - 1]);
+                return true;
+            }
+        return false;
     }
 
     /** Stop watching and go to the Replays screen. */
@@ -1096,19 +1273,22 @@ export class Game {
     /** Advance the game by one fixed step. */
     step(dt: number): void {
         this.time += dt;
-        const pr = this.input.pressed;
+        // Running a replay ahead reads no input at all.
+        const pr = this.seeking ? NO_KEYS : this.input.pressed;
         this.drainSfx();
         if (pr.has('KeyM')) this.sound.toggleMute();
         if (this.mode === 'online') {
             this.pollNet(dt);
             if (!this.net) return;
         }
-        // Watching a replay: Esc leaves it; fire, Space or a tap steps the speed through 1×, 2× and 4×.
-        if (this.replay && this.inGame) {
+        // Watching a replay: Esc leaves it; the timeline, rounds and highlights seek; fire, Space or a tap
+        // elsewhere steps the speed through 1×, 2× and 4×.
+        if (this.replay && this.inGame && !this.seeking) {
             if (pr.has('Escape')) {
                 this.exitReplay();
                 return;
             }
+            if (this.replayControls(pr)) return;
             const tap = ['Space', 'Enter', 'KeyZ', 'KeyF', 'Pointer'].some(k => pr.has(k));
             if (tap && (this.phase === 'playing' || this.phase === 'countdown')) {
                 this.replaySpeed = this.replaySpeed >= 4 ? 1 : this.replaySpeed * 2;
@@ -1913,9 +2093,27 @@ export class Game {
                         blinkSub: true,
                     });
         }
-        if (this.replay && (this.phase === 'playing' || this.phase === 'countdown') && !this.paused) {
-            const hint = touch ? 'TAP FOR SPEED  ·  ◀ BACK LEAVES' : 'SPACE: SPEED  ·  P: PAUSE  ·  ESC: LEAVE';
-            r.replayBadge(this.replaySpeed, hint, this.time);
+        if (this.replay) {
+            const rp = this.replay,
+                len = rp.length || 1;
+            const near = this.scrub !== null ? this.highlightNear(this.scrub) : null;
+            r.replayPanel(
+                {
+                    speed: this.replaySpeed,
+                    paused: this.paused,
+                    pos: rp.played * C.STEP,
+                    len: rp.length * C.STEP,
+                    rounds: [0, ...rp.roundStarts.map(s => s / len)],
+                    round: Math.max(0, this.replayRound - 1),
+                    highlights: this.highlights.map(h => ({ x: h.at / len, kind: h.kind, side: h.side })),
+                    scrub: this.scrub,
+                    label: near ? this.highlightLabel(near) : '',
+                    hint: touch
+                        ? 'DRAG TO SEEK  ·  TAP FOR SPEED'
+                        : 'SPACE SPEED · ←→ 5S · [ ] HIGHLIGHTS · 1-9 ROUND · P PAUSE · ESC LEAVE',
+                },
+                this.time,
+            );
         }
     }
 }

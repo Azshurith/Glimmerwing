@@ -160,8 +160,21 @@ export class ReplayPlayer {
     private round = -1;
     private tapes: [TapeReader, TapeReader] | null = null;
     private stepsLeft = 0;
+    /** Playing steps fed so far, over the whole recording: where the playback is on its timeline. */
+    played = 0;
+    /** The whole recording's length in playing steps, and the step each round after the first starts at. */
+    readonly length: number;
+    readonly roundStarts: number[];
 
-    constructor(readonly data: ReplayData) {}
+    constructor(readonly data: ReplayData) {
+        let n = 0;
+        this.roundStarts = [];
+        for (const r of data.rounds) {
+            if (n > 0) this.roundStarts.push(n);
+            n += r.steps;
+        }
+        this.length = n;
+    }
 
     /** Whether this build's simulation is the one that recorded it (else it may play out differently). */
     get sameSim(): boolean {
@@ -173,6 +186,8 @@ export class ReplayPlayer {
         const r = this.data.rounds[i];
         if (!r) return null;
         this.round = i;
+        // The timeline jumps to the round's start even if the round before ended a step or two early.
+        this.played = i === 0 ? 0 : this.roundStarts[i - 1];
         this.tapes = [new TapeReader(r.tapes[0]), new TapeReader(r.tapes[1])];
         this.stepsLeft = r.steps;
         return r.seed;
@@ -181,6 +196,7 @@ export class ReplayPlayer {
     /** The next playing step's controls for both meadows. */
     next(): [Controls, Controls] {
         this.stepsLeft--;
+        if (this.stepsLeft >= 0) this.played++;
         if (!this.tapes) return [IDLE, IDLE];
         return [this.tapes[0].next(), this.tapes[1].next()];
     }

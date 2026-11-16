@@ -1,6 +1,6 @@
 import * as C from '@/core/config';
 import type { Field } from '@/game/field';
-import type { BannerView, ConsoleView, EndlessView, HudTag } from '@/types';
+import type { BannerView, ConsoleView, EndlessView, HighlightKind, HudTag, ReplayPanelView } from '@/types';
 import { arcadeText, slanted, sparkle } from './draw';
 import { drawBlossom, drawHeart } from './icons';
 import { ARCADE } from './theme';
@@ -585,44 +585,148 @@ export class Hud {
     }
 
     /**
-     * The badge shown while a replay plays: a slanted plate low in the middle of the view with a play mark, the
-     * word REPLAY and the speed, and a hint under it, so it's always clear the fairies are flying themselves.
+     * The replay's controls along the bottom of the view: a dark plate with REPLAY and the speed, a round picker
+     * and the time on its top line, and the timeline under them, with ticks where rounds begin, a marker for
+     * each highlight and a knob that can be dragged; a hint line under it all.
      */
-    replayBadge(speed: number, hint: string, time: number): void {
+    replayPanel(v: ReplayPanelView, time: number): void {
         const ctx = this.ctx;
-        const W = this.viewW,
-            y = this.viewH - 46;
-        const text = speed > 1 ? `REPLAY  ${speed}×` : 'REPLAY';
+        const L = replayPanelLayout(this.viewW, this.viewH, v.rounds.length);
+        const { panel: P, bar: B } = L;
         ctx.save();
-        ctx.font = `8px ${ARCADE}`;
-        const w = ctx.measureText(text).width + 30;
-        ctx.globalAlpha = 0.88;
-        ctx.fillStyle = 'rgba(16,10,40,0.85)';
-        slanted(W / 2 - w / 2, y - 10, w, 15, 4)(ctx);
+        ctx.fillStyle = 'rgba(14,8,36,0.82)';
+        slanted(P.x, P.y, P.w, P.h, 5)(ctx);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(201,162,74,0.8)';
+        ctx.strokeStyle = 'rgba(201,162,74,0.75)';
         ctx.lineWidth = 1;
         ctx.stroke();
-        // A play mark that pulses gently.
-        const x0 = W / 2 - w / 2 + 10;
-        ctx.globalAlpha = 0.65 + 0.35 * Math.sin(time * 4);
+        // Top line: a play (or pause) mark, REPLAY and the speed.
+        const ty = P.y + 12;
+        const mx = P.x + 12;
         ctx.fillStyle = '#ff6b8a';
-        ctx.beginPath();
-        ctx.moveTo(x0, y - 6.5);
-        ctx.lineTo(x0 + 6, y - 2.5);
-        ctx.lineTo(x0, y + 1.5);
-        ctx.closePath();
-        ctx.fill();
-        ctx.globalAlpha = 0.95;
-        ctx.fillStyle = '#ffe27a';
+        ctx.globalAlpha = v.paused ? 1 : 0.65 + 0.35 * Math.sin(time * 4);
+        if (v.paused) {
+            ctx.fillRect(mx, ty - 7, 2, 7);
+            ctx.fillRect(mx + 4, ty - 7, 2, 7);
+        } else {
+            ctx.beginPath();
+            ctx.moveTo(mx, ty - 7.5);
+            ctx.lineTo(mx + 6, ty - 3.5);
+            ctx.lineTo(mx, ty + 0.5);
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.font = `7px ${ARCADE}`;
         ctx.textAlign = 'left';
-        ctx.fillText(text, x0 + 10, y + 1);
-        ctx.font = `6px ${ARCADE}`;
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(203,188,245,0.85)';
-        ctx.fillText(hint, W / 2, y + 14, W - 20);
+        ctx.fillStyle = '#ffe27a';
+        ctx.fillText(v.speed > 1 ? `REPLAY ${v.speed}×` : 'REPLAY', mx + 10, ty);
+        // The round picker: one chip a round, the playing one lit.
+        L.chips.forEach((c, i) => {
+            const on = i === v.round;
+            ctx.fillStyle = on ? '#ffd45c' : 'rgba(60,40,110,0.9)';
+            slanted(c.x, c.y, c.w, c.h, 2)(ctx);
+            ctx.fill();
+            ctx.strokeStyle = on ? '#fff3c9' : 'rgba(201,162,74,0.6)';
+            ctx.stroke();
+            ctx.fillStyle = on ? '#140a26' : '#e8e0ff';
+            ctx.textAlign = 'center';
+            ctx.font = `6px ${ARCADE}`;
+            ctx.fillText(L.chips.length > 1 ? `R${i + 1}` : 'RUN', c.x + c.w / 2, c.y + c.h - 3);
+        });
+        // The time, or while dragging the time under the knob.
+        const shown = v.scrub !== null ? v.scrub * v.len : v.pos;
+        ctx.textAlign = 'right';
+        ctx.font = `7px ${ARCADE}`;
+        ctx.fillStyle = v.scrub !== null ? '#ffe27a' : '#e8e0ff';
+        ctx.fillText(`${clock(shown)} / ${clock(v.len)}`, P.x + P.w - 10, ty);
+        // The timeline: the track, the part played, round ticks and highlights.
+        const k = Math.min(1, v.len > 0 ? v.pos / v.len : 0);
+        ctx.fillStyle = 'rgba(255,255,255,0.14)';
+        ctx.fillRect(B.x, B.y, B.w, B.h);
+        const fill = ctx.createLinearGradient(B.x, 0, B.x + B.w, 0);
+        fill.addColorStop(0, '#ff9a2e');
+        fill.addColorStop(1, '#ffd45c');
+        ctx.fillStyle = fill;
+        ctx.fillRect(B.x, B.y, B.w * k, B.h);
+        ctx.fillStyle = 'rgba(255,243,201,0.85)';
+        for (const r of v.rounds.slice(1)) ctx.fillRect(B.x + B.w * r - 0.5, B.y - 3, 1, B.h + 6);
+        for (const h of v.highlights) {
+            const x = B.x + B.w * h.x,
+                y = h.side === 0 ? B.y - 4 : B.y + B.h + 4;
+            ctx.fillStyle = HIGHLIGHT_COLOR[h.kind];
+            ctx.beginPath();
+            ctx.moveTo(x, y - 2.6);
+            ctx.lineTo(x + 2.2, y);
+            ctx.lineTo(x, y + 2.6);
+            ctx.lineTo(x - 2.2, y);
+            ctx.closePath();
+            ctx.fill();
+        }
+        // The knob, and over it while dragging the highlight it would land on.
+        const kx = B.x + B.w * (v.scrub ?? k);
+        ctx.fillStyle = '#fff3c9';
+        ctx.strokeStyle = '#140a26';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(kx, B.y + B.h / 2, v.scrub !== null ? 4.5 : 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        if (v.label) {
+            ctx.font = `6px ${ARCADE}`;
+            ctx.textAlign = 'center';
+            const w = ctx.measureText(v.label).width + 10;
+            const lx = Math.max(P.x + w / 2, Math.min(P.x + P.w - w / 2, kx));
+            ctx.fillStyle = 'rgba(14,8,36,0.92)';
+            ctx.fillRect(lx - w / 2, P.y - 14, w, 11);
+            ctx.fillStyle = '#ffe27a';
+            ctx.fillText(v.label, lx, P.y - 6);
+        }
+        if (v.hint) {
+            ctx.font = `5.5px ${ARCADE}`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'rgba(203,188,245,0.85)';
+            ctx.fillText(v.hint, P.x + P.w / 2, P.y + P.h - 3.5, P.w - 16);
+        }
         ctx.restore();
     }
+}
+
+/** Each kind of highlight's colour on the replay timeline. */
+export const HIGHLIGHT_COLOR: Record<HighlightKind, string> = {
+    chain: '#ff9a2e',
+    fever: '#ffe27a',
+    extra: '#ff6bd5',
+    guardian: '#ff4d5a',
+    bomb: '#7fd8ff',
+    ko: '#ffffff',
+};
+
+/** A box in view units. */
+type Box = { x: number; y: number; w: number; h: number };
+
+/**
+ * Where the replay panel's parts sit in a view `W` × `H`: the plate, the timeline's track (and the taller strip a
+ * tap or drag on it counts in) and a chip for each of `rounds` rounds. Shared by the drawing and the game's taps.
+ */
+export function replayPanelLayout(W: number, H: number, rounds: number) {
+    const wide = W > 320;
+    const pw = wide ? Math.min(380, W * 0.62) : W - 14;
+    const ph = 42;
+    const panel: Box = { x: (W - pw) / 2, y: H - ph - (wide ? 22 : 8), w: pw, h: ph };
+    const bar: Box = { x: panel.x + 12, y: panel.y + 22, w: pw - 24, h: 4 };
+    const barHit: Box = { x: bar.x - 6, y: bar.y - 10, w: bar.w + 12, h: 22 };
+    const cw = 17,
+        gap = 3,
+        n = Math.max(1, rounds);
+    const cx0 = panel.x + pw / 2 - (n * cw + (n - 1) * gap) / 2;
+    const chips: Box[] = Array.from({ length: n }, (_, i) => ({
+        x: cx0 + i * (cw + gap),
+        y: panel.y + 4,
+        w: cw,
+        h: 11,
+    }));
+    return { panel, bar, barHit, chips };
 }
 
 /** A five-point star path centred on (x, y). */
