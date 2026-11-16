@@ -195,7 +195,12 @@ function syncPage(): void {
         const menus = ['title', 'modes', 'roster', 'maps', 'profile', 'settings', 'select', 'mapselect'].includes(
             shownPhase,
         );
-        sound.playMusic(menus ? 'menu' : roundMusic(game.roundMap));
+        // Picking fairies and a map has its own tune; the other menus share theirs.
+        const picking = shownPhase === 'select' || shownPhase === 'mapselect';
+        // The title screen is quiet.
+        sound.playMusic(
+            shownPhase === 'title' ? null : picking ? 'select' : menus ? 'menu' : roundMusic(game.roundMap),
+        );
     }
 }
 
