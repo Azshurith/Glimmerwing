@@ -32,8 +32,11 @@ export type Sfx =
  */
 export type MusicTrack = 'menu' | 'select' | 'battle' | `map:${string}`;
 
-/** A moment a fairy speaks at: picked, a level-2 or level-3 (guardian) charge shot, Fever, hit, knocked out. */
-export type VoiceEvent = 'pick' | 'charge' | 'summon' | 'fever' | 'hit' | 'death';
+/**
+ * A moment a fairy speaks at: picked, a level-2 or level-3 (guardian) charge shot, Fever, hit, knocked out, the
+ * match won, and a volley of fireballs shot back.
+ */
+export type VoiceEvent = 'pick' | 'charge' | 'summon' | 'fever' | 'hit' | 'death' | 'win' | 'reverse';
 
 /** A fairy's spoken lines (clip URLs) for each moment; one is picked at random each time. */
 export type FairyVoice = Partial<Record<VoiceEvent, string[]>>;
