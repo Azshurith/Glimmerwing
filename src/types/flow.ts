@@ -1,5 +1,5 @@
 /** How the match is played: against the CPU, two players on one device, or online. */
-export type Mode = 'cpu' | 'versus' | 'online';
+export type Mode = 'cpu' | 'versus' | 'online' | 'endless';
 
 /** How the screen is laid out: both meadows side by side, or tall for a portrait screen. */
 export type Layout = 'wide' | 'tall';

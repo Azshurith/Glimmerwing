@@ -25,7 +25,7 @@ export interface ModeCard {
 /** The cards of each menu, in reading order: the main menu, and Play's choice of modes. */
 const MENUS: Record<ModeMenu, Omit<ModeCard, 'x' | 'y' | 'w' | 'h'>[]> = {
     main: [
-        { action: 'play', label: 'PLAY', sub: 'Story, VS CPU, online or two players', color: '#ffd45c' },
+        { action: 'play', label: 'PLAY', sub: 'Story, VS CPU, endless, online or two players', color: '#ffd45c' },
         { action: 'characters', label: 'CHARACTERS', sub: 'Meet the fairies and their skills', color: '#ff9ac8' },
         { action: 'maps', label: 'MAPS', sub: 'Stages, formations and monsters', color: '#8ff0a0' },
         { action: 'profile', label: 'PROFILE', sub: 'Your record and unlocks', color: '#8fd8ff' },
@@ -34,6 +34,7 @@ const MENUS: Record<ModeMenu, Omit<ModeCard, 'x' | 'y' | 'w' | 'h'>[]> = {
     play: [
         { action: 'story', label: 'STORY MODE', sub: 'Coming soon', color: '#ff9ac8', disabled: true },
         { action: 'cpu', label: 'VS CPU', sub: 'Battle the computer', color: '#ffd45c' },
+        { action: 'endless', label: 'ENDLESS', sub: 'Survive alone as long as you can', color: '#ff8a5c' },
         { action: 'online', label: 'ONLINE PLAY', sub: 'Find a rival or invite a friend', color: '#8fd8ff' },
         { action: 'versus', label: '2 PLAYERS', sub: 'Share a keyboard, pads or a tablet', color: '#8ff0a0' },
     ],
@@ -307,6 +308,24 @@ export class ModeScreen {
                 ctx.fillRect(-6, 7 + bob, 12, 2);
                 ctx.fillRect(-19, -2 + bob, 4, 8);
                 ctx.fillRect(15, -2 + bob, 4, 8);
+                break;
+            }
+            case 'endless': {
+                // An infinity loop with a star running round it.
+                ctx.beginPath();
+                for (let i = 0; i <= 48; i++) {
+                    const a = (i / 48) * Math.PI * 2;
+                    const d = 1 + Math.sin(a) ** 2;
+                    const x = (17 * Math.cos(a)) / d,
+                        y = (17 * Math.sin(a) * Math.cos(a)) / d + bob;
+                    if (i) ctx.lineTo(x, y);
+                    else ctx.moveTo(x, y);
+                }
+                ctx.stroke();
+                const a = t * 1.6;
+                const d = 1 + Math.sin(a) ** 2;
+                star(ctx, (17 * Math.cos(a)) / d, (17 * Math.sin(a) * Math.cos(a)) / d + bob, 5, 2.2);
+                ctx.fill();
                 break;
             }
             case 'versus': {

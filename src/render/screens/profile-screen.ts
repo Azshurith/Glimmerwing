@@ -3,6 +3,7 @@ import * as C from '@/core/config';
 import { FAIRIES } from '@/data/characters';
 import { mapById } from '@/data/maps';
 import { STAGES } from '@/data/stages';
+import { clock } from '@/render/hud';
 import { drawTrophy } from '@/render/icons';
 import type { Layout, ProfileView } from '@/types';
 import { Backdrop } from '@/render/backdrop';
@@ -75,6 +76,7 @@ export class ProfileScreen {
             ['FLAWLESS WINS', String(v.flawless)],
             ['FAIRIES', `${unlocked}/${FAIRIES.length}`],
             ['TROPHIES', String(v.trophies)],
+            ['ENDLESS BEST', clock(v.endlessBest)],
         ];
         // The next stage on the trophy road, if any is still locked.
         const nextStage = STAGES.find(st => st.trophies > v.bestTrophies);
@@ -109,7 +111,7 @@ export class ProfileScreen {
 
         // The roster: unlocked fairies in colour, locked ones as a ? with how to get them.
         const rows = Math.ceil(tiles.length / cols);
-        const ry = tall ? 392 : y0 + rows * (th + 8) + 40,
+        const ry = y0 + rows * (th + 8) + (tall ? 34 : 40),
             rx0 = tall ? 20 : regionX,
             rowW = tall ? W - 40 : regionW;
         // The whole roster fits the row: wider apart on a wide screen, closer and smaller once it's long.

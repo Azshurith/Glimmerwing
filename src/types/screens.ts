@@ -75,6 +75,8 @@ export interface ProfileView {
     locked: boolean[];
     trophies: number;
     bestTrophies: number;
+    /** The longest Endless run, in seconds. */
+    endlessBest: number;
 }
 
 /** What a title-screen choice or a mode-menu card does when it's picked. */
@@ -86,6 +88,7 @@ export type TitleAction =
     | 'profile'
     | 'maps'
     | 'story'
+    | 'endless'
     | 'cpu'
     | 'versus'
     | 'online'

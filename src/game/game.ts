@@ -12,6 +12,7 @@ import { MAP_CARDS, MAP_COLS, mapCards } from '@/render/screens/map-screen';
 import { MAPS, mapById, mapForSeed } from '@/data/maps';
 import { stageFor, stageOpen } from '@/data/stages';
 import { titleButtons } from '@/render/screens/title-screen';
+import { clock } from '@/render/hud';
 import { PALETTE, PLAYER_COLORS } from '@/render/theme';
 import type {
     Controls,
@@ -151,6 +152,11 @@ export class Game {
     private mapIndex = 0;
     /** The map this match plays on (empty online, where each round's seed picks it). */
     private matchMap = '';
+    /** Endless: how long this run has lasted, guardians sent so far, when the next comes, and a new best. */
+    private endlessT = 0;
+    private endlessBosses = 0;
+    private endlessNextBoss = 0;
+    private endlessNew = false;
     /** A map forced by the page's address (`?map=<id>`), for trying a map out. */
     private forcedMap =
         typeof location === 'undefined' ? null : mapById(new URLSearchParams(location.search).get('map'));
@@ -195,8 +201,9 @@ export class Game {
     private drainSfx(): void {
         this.fields.forEach((f, i) => {
             const pan = this.online ? 0 : i === 0 ? -0.35 : 0.35;
-            const vol = this.mode === 'cpu' && i === 1 ? 0.45 : 1;
-            for (const e of f.sfx) this.sound.play(e.k, e.p, pan, vol);
+            // Endless's hidden meadow makes no sound at all.
+            const vol = i === 1 ? (this.mode === 'endless' ? 0 : this.mode === 'cpu' ? 0.45 : 1) : 1;
+            if (vol > 0) for (const e of f.sfx) this.sound.play(e.k, e.p, pan, vol);
             f.sfx = [];
         });
     }
@@ -217,7 +224,7 @@ export class Game {
         this.selectT = 0;
         this.readyAt = -1;
         // Online, the rival's cursor is whatever they last told us.
-        const rival = mode === 'online' ? this.pickers[1].done : mode === 'cpu';
+        const rival = mode === 'online' ? this.pickers[1].done : mode === 'cpu' || mode === 'endless';
         this.pickers = [
             { index: this.pickers[0].index, done: false },
             { index: this.pickers[1].index, done: rival },
@@ -232,6 +239,11 @@ export class Game {
         this.notice = '';
         this.pickers[1] = { index: 1, done: false };
         this.start('online');
+    }
+
+    /** Whether the other meadow is flown by the computer: VS CPU, and Endless's hidden meadow. */
+    private get vsCpu(): boolean {
+        return this.mode === 'cpu' || this.mode === 'endless';
     }
 
     /** For the page: which on-screen touch buttons make sense right now. */
@@ -298,7 +310,7 @@ export class Game {
 
     /** Start a match with the chosen fairies (the CPU picks its own), then its first round. */
     private beginMatch(seed?: number): void {
-        if (this.mode === 'cpu') {
+        if (this.vsCpu) {
             // The CPU flies a random fairy from the whole roster, locked ones included,
             // so you can see what you're working toward.
             const others = FAIRIES.filter(f => f !== this.picks[0]);
@@ -311,6 +323,7 @@ export class Game {
         this.newlyUnlocked = [];
         this.newStages = [];
         this.trophyDelta = 0;
+        this.endlessNew = false;
         this.newRound(seed);
     }
 
@@ -336,7 +349,8 @@ export class Game {
      * setting on. Such a round plays in taller meadows that reach the top of the screen.
      */
     private get soloView(): boolean {
-        return this.settings.hideRival && this.mode === 'cpu' && !this.online && this.r.portrait;
+        // Endless always plays alone; against the CPU it's the setting's choice.
+        return (this.mode === 'endless' || (this.settings.hideRival && this.mode === 'cpu')) && this.r.portrait;
     }
 
     /** Set up both meadows for a new round from one shared seed, so their waves match. */
@@ -355,7 +369,8 @@ export class Game {
         // ours on both screens, so "side A" means the host's meadow.
         // On a wide landscape screen a local match plays in wider meadows, so the view fills the screen; online
         // both players must share one width, so it stays the usual one there.
-        C.setFieldWidth(this.online ? C.FIELD_W_BASE : this.r.fieldWidthToFill);
+        // Endless shows one meadow, centred between its panels, at the usual width.
+        C.setFieldWidth(this.online || this.mode === 'endless' ? C.FIELD_W_BASE : this.r.fieldWidthToFill);
         // With the rival's meadow hidden on an upright phone, the meadows grow to reach the top of the screen
         // (both, so the round stays fair), leaving a slim bar for the round and the rival's hearts.
         C.setFieldHeight(this.soloView ? (this.r.tallH - C.TALL_SOLO_BAR) / C.TALL_OWN_S : C.FIELD_H_BASE);
@@ -372,6 +387,9 @@ export class Game {
         this.transits = [];
         // The CPU is sharper further along the trophy road.
         this.cpu = new CpuPilot(stageFor(map).cpuReaction);
+        this.endlessT = 0;
+        this.endlessBosses = 0;
+        this.endlessNextBoss = C.ENDLESS_FIRST_BOSS;
         this.phase = 'countdown';
         this.phaseT = 0;
     }
@@ -515,6 +533,7 @@ export class Game {
                 break;
             case 'cpu':
             case 'versus':
+            case 'endless':
                 this.start(c.action);
                 break;
         }
@@ -875,10 +894,11 @@ export class Game {
         }
 
         this.shareFairies();
-        const c0 = this.mode === 'cpu' ? this.input.solo(this.fields[0].player) : this.input.p1(this.fields[0].player);
-        const c1 = this.mode === 'cpu' ? this.cpu.think(this.fields[1], dt) : this.input.p2(this.fields[1].player);
+        const c0 = this.vsCpu ? this.input.solo(this.fields[0].player) : this.input.p1(this.fields[0].player);
+        const c1 = this.vsCpu ? this.cpu.think(this.fields[1], dt) : this.input.p2(this.fields[1].player);
         this.fields[0].update(dt, c0);
         this.fields[1].update(dt, c1);
+        if (this.mode === 'endless') this.directEndless(dt);
 
         this.fields.forEach((f, i) => {
             for (const o of f.outbox) {
@@ -897,7 +917,50 @@ export class Game {
 
         const dead0 = !this.fields[0].alive,
             dead1 = !this.fields[1].alive;
-        if (dead0 || dead1) this.endRound(dead0, dead1);
+        if (this.mode === 'endless') {
+            if (dead0) this.endEndless();
+        } else if (dead0 || dead1) this.endRound(dead0, dead1);
+    }
+
+    /**
+     * Endless mode's director. The hidden meadow is flown by the CPU and can't be beaten (its hearts refill), so
+     * its chains keep raining attacks on you; your own attacks go nowhere. On top of that it sends guardians on a
+     * schedule that tightens as the run goes on, and the waves and tempo build as in any round.
+     */
+    private directEndless(dt: number): void {
+        this.endlessT += dt;
+        const ghost = this.fields[1];
+        ghost.player.hull = C.MAX_HULL;
+        // Nothing of yours reaches it: a run is about surviving, not knocking anyone out.
+        this.fields[0].outbox = [];
+        // A short grace at the start while you find your feet, then its attacks get through more and more often:
+        // a share at first, all of them a few minutes in. Its guardians always come.
+        const share =
+            this.endlessT < C.ENDLESS_GRACE
+                ? 0
+                : Math.min(1, C.ENDLESS_SHARE_START + (this.endlessT - C.ENDLESS_GRACE) / C.ENDLESS_SHARE_RAMP);
+        ghost.outbox = ghost.outbox.filter(o => o.kind === 'moth' || Math.random() < share);
+        if (this.endlessT >= this.endlessNextBoss) {
+            ghost.summonGuardian();
+            this.endlessBosses++;
+            this.endlessNextBoss += Math.max(C.ENDLESS_BOSS_MIN, C.ENDLESS_BOSS_EVERY - this.endlessBosses * 3);
+        }
+    }
+
+    /** Your fairy went down in Endless: the run is over. Save a new best, then show the result. */
+    private endEndless(): void {
+        for (const f of this.fields) f.settled = true;
+        const p = this.progress;
+        this.endlessNew = this.endlessT > p.endlessBest;
+        p.endlessBest = Math.max(p.endlessBest, this.endlessT);
+        p.endlessBosses = Math.max(p.endlessBosses, this.endlessBosses);
+        p.bestChain = Math.max(p.bestChain, this.fields[0].bestChain);
+        p.fevers += this.fields[0].fevers;
+        saveProgress(p);
+        this.ui(this.endlessNew ? 'win' : 'lose');
+        this.phase = 'matchOver';
+        this.phaseT = 0;
+        this.transits = [];
     }
 
     /** One playing step online: only our meadow is simulated here. */
@@ -1039,23 +1102,28 @@ export class Game {
                 ? 'tall'
                 : 'wide';
         const tall = r.layout === 'tall' ? tallPlacement(r.viewH) : null;
+        // Endless side by side: one meadow in the middle, between its panels.
+        const endless = inRound && this.mode === 'endless';
         // With the rival's meadow hidden it's placed far off screen, so nothing of it (or flying to it) shows.
+        const offscreen: Placement = { x: 0, y: -10000, s: tall ? tall.at[0].s : 1 };
         const at: readonly [Placement, Placement] = !tall
-            ? wide()
+            ? endless
+                ? [{ x: (C.VIEW_W - C.FIELD_W) / 2, y: 0, s: 1 }, offscreen]
+                : wide()
             : soloTall
-              ? [tall.at[0], { x: 0, y: -10000, s: tall.at[0].s }]
+              ? [tall.at[0], offscreen]
               : tall.at;
         if (tall) r.tallBand = tall.band;
         r.begin();
         const solo = this.mode !== 'versus';
         const tags: [HudTag, HudTag] = [
             { label: solo ? 'YOU' : '1P', color: PLAYER_COLORS.p1 },
-            this.mode === 'cpu'
+            this.vsCpu
                 ? { label: 'CPU', color: PLAYER_COLORS.cpu }
                 : { label: this.mode === 'online' ? 'RIVAL' : '2P', color: PLAYER_COLORS.p2 },
         ];
         r.field(this.fields[0], at[0].x, this.wins[0], this.time, tags[0], at[0].y, at[0].s);
-        if (!soloTall) r.field(this.fields[1], at[1].x, this.wins[1], this.time, tags[1], at[1].y, at[1].s);
+        if (!soloTall && !endless) r.field(this.fields[1], at[1].x, this.wins[1], this.time, tags[1], at[1].y, at[1].s);
         // Between rounds the console still shows the round just played.
         const played = this.wins[0] + this.wins[1];
         const between = this.phase === 'roundOver' || this.phase === 'matchOver';
@@ -1064,7 +1132,18 @@ export class Game {
             tempo: this.fields[0].tempo,
             ping: this.online ? Math.round(this.net!.rtt * 1000) : undefined,
         };
-        if (soloTall) r.soloBar(consoleView, this.fields[1], tags[1], this.time);
+        if (endless)
+            r.endless(
+                {
+                    time: this.endlessT,
+                    best: this.progress.endlessBest,
+                    bosses: this.endlessBosses,
+                    nextBoss: Math.max(0, this.endlessNextBoss - this.endlessT),
+                    tempo: this.fields[0].tempo,
+                },
+                this.time,
+            );
+        else if (soloTall) r.soloBar(consoleView, this.fields[1], tags[1], this.time);
         else r.console(consoleView, this.time);
 
         for (const tr of this.transits) {
@@ -1140,12 +1219,11 @@ export class Game {
 
         if (this.debugPaths && r.layout === 'wide') this.drawFireballPaths(at);
 
-        const names =
-            this.mode === 'cpu'
-                ? ['You', `CPU ${this.picks[1].name}`]
-                : this.mode === 'online'
-                  ? ['You', `Rival ${this.picks[1].name}`]
-                  : [this.picks[0].name, this.picks[1].name];
+        const names = this.vsCpu
+            ? ['You', `CPU ${this.picks[1].name}`]
+            : this.mode === 'online'
+              ? ['You', `Rival ${this.picks[1].name}`]
+              : [this.picks[0].name, this.picks[1].name];
         switch (this.phase) {
             case 'title':
                 r.title(
@@ -1211,6 +1289,7 @@ export class Game {
                         locked: FAIRIES.map(f => !this.isUnlocked(f)),
                         trophies: this.progress.trophies,
                         bestTrophies: this.progress.bestTrophies,
+                        endlessBest: this.progress.endlessBest,
                     },
                     this.time,
                 );
@@ -1239,8 +1318,15 @@ export class Game {
                         tag: solo ? 'YOU' : '1P',
                         color: P1,
                     },
-                    this.mode === 'cpu'
-                        ? { fairy: FAIRIES[0], locked: false, done: true, tag: 'CPU', color: CPU, cpu: true }
+                    this.vsCpu
+                        ? {
+                              fairy: FAIRIES[0],
+                              locked: false,
+                              done: true,
+                              tag: this.mode === 'endless' ? 'WAVES' : 'CPU',
+                              color: CPU,
+                              cpu: true,
+                          }
                         : // A rival may fly a fairy you haven't unlocked yet, so only a local 2P sees locks.
                           {
                               fairy: FAIRIES[p2.index],
@@ -1251,7 +1337,7 @@ export class Game {
                           },
                 ];
                 const cursors = [{ index: p1.index, color: P1, tag: solo ? 'YOU' : '1P', done: p1.done }];
-                if (this.mode !== 'cpu')
+                if (!this.vsCpu)
                     cursors.push({
                         index: p2.index,
                         color: P2,
@@ -1281,6 +1367,21 @@ export class Game {
                 break;
             }
             case 'countdown': {
+                if (this.mode === 'endless') {
+                    if (this.phaseT < 1)
+                        r.banner({
+                            title: 'Endless',
+                            sub:
+                                this.progress.endlessBest > 0
+                                    ? `Best ${clock(this.progress.endlessBest)}`
+                                    : 'Survive as long as you can',
+                            age: this.phaseT,
+                            dim: 0.35,
+                            tone: 'gold',
+                        });
+                    else r.banner({ title: 'Fly!', age: this.phaseT - 1, dim: 0.15, size: 40, tone: 'pink' });
+                    break;
+                }
                 const final = this.wins[0] === C.ROUNDS_TO_WIN - 1 && this.wins[1] === C.ROUNDS_TO_WIN - 1;
                 if (this.phaseT < 1)
                     r.banner({
@@ -1307,6 +1408,20 @@ export class Game {
                 break;
             }
             case 'matchOver': {
+                if (this.mode === 'endless') {
+                    const g = this.endlessBosses;
+                    r.banner({
+                        title: this.endlessNew ? 'New record!' : 'Run over',
+                        sub: touch ? 'Tap to fly again' : 'Press Space or tap to fly again',
+                        extra: `Survived ${clock(this.endlessT)}  ·  ${g} guardian${g === 1 ? '' : 's'}  ·  Best ${clock(this.progress.endlessBest)}`,
+                        age: this.phaseT,
+                        dim: 0.6,
+                        size: 34,
+                        tone: this.endlessNew ? 'gold' : 'pink',
+                        blinkSub: true,
+                    });
+                    break;
+                }
                 const w = this.wins[0] > this.wins[1] ? 0 : 1;
                 const title = solo ? (w === 0 ? 'You win!' : `${names[1]} wins`) : `${names[w]} wins!`;
                 // Under the result: trophies won or lost, and anything the match opened up.

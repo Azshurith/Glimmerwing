@@ -369,6 +369,18 @@ export const FIREBALL_BOUNCE_SPREAD = 0.25;
 export const fireballTransitSpeed = (reflects: number, boost: number) =>
     Math.min(FIREBALL_MAX_SPEED, FIREBALL_TRANSIT_SPEED * fireballSpeedMul(reflects, boost));
 export const ROUNDS_TO_WIN = 2;
+/**
+ * Endless mode: the first guardian comes after ENDLESS_FIRST_BOSS seconds, then one every ENDLESS_BOSS_EVERY,
+ * three seconds sooner each time, down to ENDLESS_BOSS_MIN apart.
+ */
+export const ENDLESS_FIRST_BOSS = 35;
+export const ENDLESS_BOSS_EVERY = 45;
+export const ENDLESS_BOSS_MIN = 20;
+/** Endless mode: for this many seconds at the start, the hidden meadow's attacks don't reach you. */
+export const ENDLESS_GRACE = 12;
+/** After the grace, this share of the hidden meadow's attacks gets through, rising to all of them over RAMP s. */
+export const ENDLESS_SHARE_START = 0.3;
+export const ENDLESS_SHARE_RAMP = 200;
 /** Trophies won for a VS CPU or Online match win, and lost for a defeat (never below 0). */
 export const TROPHY_WIN = 30;
 export const TROPHY_LOSS = 20;

@@ -10,6 +10,8 @@ const fresh = (): Progress => ({
     unlocked: [],
     trophies: 0,
     bestTrophies: 0,
+    endlessBest: 0,
+    endlessBosses: 0,
 });
 
 /** Read saved progress, or start fresh if there is none or storage is unavailable. */
