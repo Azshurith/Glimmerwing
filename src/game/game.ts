@@ -146,6 +146,8 @@ const REVERSE_WINDOW = 700;
 const REVERSE_LINE_GAP = 6000;
 /** How long after a round ends its winner speaks (s), once the loser's last words have begun. */
 const WIN_LINE_DELAY = 1.1;
+/** How long the Fight! banner stays as play starts (s). */
+const FIGHT_BANNER_TIME = 0.8;
 
 /**
  * Owns the whole game: the screens, match and round flow, both meadows, the CPU pilot and the online session. Fields
@@ -260,8 +262,10 @@ export class Game {
     /** When each side last reversed fireballs (recent ones, for spotting a volley) and last said a reverse line. */
     private reversedAt: [number[], number[]] = [[], []];
     private reverseLineAt: [number, number] = [0, 0];
-    /** Which take of Ready and Fight goes with this round's call. */
+    /** Which take of Ready and Fight goes with this round's call, when its Ready comes, and whether it has. */
     private announceTake = 0;
+    private callReadyAt = 1;
+    private readyCalled = false;
     /** Whether the winner has had her say at this round's end. */
     private winVoiced = false;
     private lastLine = new Map<string, string>();
@@ -1086,17 +1090,25 @@ export class Game {
     }
 
     /**
-     * The countdown's call: the round (or the final round), then Ready. Fight! follows as play starts
-     * (`announceFight`), right after Ready if she's still saying it. Endless has no rounds: just Ready.
+     * The countdown's call: the round (or the final round) at once; Ready at `callReadyAt`, as the call finishes
+     * (`announceReady`); Fight! as play starts (`announceFight`). The countdown's banners follow the same moments.
+     * Endless has no rounds: its banner, then Ready.
      */
     private announceRound(roundIndex: number): void {
-        if (this.seeking) return;
         const final = this.wins[0] === C.ROUNDS_TO_WIN - 1 && this.wins[1] === C.ROUNDS_TO_WIN - 1;
         const take = final ? 2 : Math.min(roundIndex, 1);
         this.announceTake = take;
+        this.callReadyAt = this.mode === 'endless' ? ANNOUNCER.endlessReadyAt : ANNOUNCER.readyAt[take];
+        this.readyCalled = false;
         const call = this.mode === 'endless' ? null : final ? ANNOUNCER.final : ANNOUNCER.rounds[roundIndex];
-        if (call) this.sound.speak(call, 'announcer', 0, 1, 'cut');
-        this.sound.speak(ANNOUNCER.ready[take], 'announcer', 0, 1, call ? 'after' : 'cut');
+        if (call && !this.seeking) this.sound.speak(call, 'announcer', 0, 1, 'cut');
+    }
+
+    /** The countdown has reached Ready (once a round). */
+    private announceReady(): void {
+        if (this.readyCalled || this.phaseT < this.callReadyAt) return;
+        this.readyCalled = true;
+        if (!this.seeking) this.sound.speak(ANNOUNCER.ready[this.announceTake], 'announcer', 0, 1, 'cut');
     }
 
     /** Play begins: Fight! (after Ready, if she's still saying it). */
@@ -1635,6 +1647,7 @@ export class Game {
         if (this.phase === 'countdown') {
             // Online, the server already has this player's controls when the round begins.
             if (this.online) this.sendControls();
+            this.announceReady();
             if (this.phaseT > 2) {
                 this.phase = 'playing';
                 this.phaseT = 0;
@@ -2102,10 +2115,10 @@ export class Game {
                     });
                 const heading =
                     this.mode === 'versus'
-                        ? 'CHOOSE YOUR FAIRIES'
+                        ? 'CHOOSE YOUR CHAMPIONS'
                         : this.mode === 'online' && p1.done && !p2.done
                           ? 'WAITING FOR YOUR RIVAL…'
-                          : 'CHOOSE YOUR FAIRY';
+                          : 'CHOOSE YOUR CHAMPION';
                 const hints = touch
                     ? [
                           this.mode === 'versus'
@@ -2133,8 +2146,17 @@ export class Game {
                 break;
             }
             case 'countdown': {
+                // Each banner while the announcer says it: the round's call, then Ready (Fight! comes with play).
+                const ready = () =>
+                    r.banner({
+                        title: 'Ready',
+                        age: this.phaseT - this.callReadyAt,
+                        dim: 0.2,
+                        size: 36,
+                        tone: 'gold',
+                    });
                 if (this.mode === 'endless') {
-                    if (this.phaseT < 1)
+                    if (this.phaseT < this.callReadyAt)
                         r.banner({
                             title: 'Endless',
                             sub:
@@ -2145,11 +2167,11 @@ export class Game {
                             dim: 0.35,
                             tone: 'gold',
                         });
-                    else r.banner({ title: 'Fly!', age: this.phaseT - 1, dim: 0.15, size: 40, tone: 'pink' });
+                    else ready();
                     break;
                 }
                 const final = this.wins[0] === C.ROUNDS_TO_WIN - 1 && this.wins[1] === C.ROUNDS_TO_WIN - 1;
-                if (this.phaseT < 1)
+                if (this.phaseT < this.callReadyAt)
                     r.banner({
                         title: final ? 'Final round' : `Round ${played + 1}`,
                         sub: `${this.picks[0].name}  vs  ${this.picks[1].name}`,
@@ -2157,9 +2179,14 @@ export class Game {
                         dim: 0.35,
                         tone: final ? 'pink' : 'gold',
                     });
-                else r.banner({ title: 'Fly!', age: this.phaseT - 1, dim: 0.15, size: 40, tone: 'pink' });
+                else ready();
                 break;
             }
+            case 'playing':
+                // Fight!: as play starts, with the announcer, fading off the meadows.
+                if (this.phaseT < FIGHT_BANNER_TIME)
+                    r.banner({ title: 'Fight!', age: this.phaseT, dim: 0.1, size: 40, tone: 'pink' });
+                break;
             case 'roundOver': {
                 const w = this.roundWinner;
                 const title = w < 0 ? 'Draw' : solo && w === you ? 'You take the round' : `${names[w]} takes the round`;
