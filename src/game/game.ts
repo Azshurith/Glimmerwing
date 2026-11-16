@@ -144,8 +144,8 @@ const HIT_LINE_GAP = 2500;
 const REVERSE_VOLLEY = 2;
 const REVERSE_WINDOW = 700;
 const REVERSE_LINE_GAP = 6000;
-/** How long after a match ends its winner speaks (s), once the loser's last words have begun. */
-const MATCH_WIN_LINE_DELAY = 1.1;
+/** How long after a round ends its winner speaks (s), once the loser's last words have begun. */
+const WIN_LINE_DELAY = 1.1;
 
 /**
  * Owns the whole game: the screens, match and round flow, both meadows, the CPU pilot and the online session. Fields
@@ -260,7 +260,7 @@ export class Game {
     /** When each side last reversed fireballs (recent ones, for spotting a volley) and last said a reverse line. */
     private reversedAt: [number[], number[]] = [[], []];
     private reverseLineAt: [number, number] = [0, 0];
-    /** Whether the winner has had her say at this match's end. */
+    /** Whether the winner has had her say at this round's end. */
     private winVoiced = false;
     private lastLine = new Map<string, string>();
     /** Stages the last match's trophies opened, and how many trophies it won or lost. */
@@ -326,23 +326,22 @@ export class Game {
             }
             f.sfx = [];
         });
-        this.matchEndVoice();
+        this.roundEndVoice();
     }
 
     /**
-     * The match is over: a moment after (so a knocked-out fairy's last words come first), the winner says a line,
-     * from her side and at her meadow's volume. Endless has no winner, and a drawn match no one to cheer.
+     * A round has been won: a moment after (so the knocked-out fairy's last words come first), its winner says a
+     * line, from her side and at her meadow's volume. Endless has no winner, and a drawn round no one to cheer.
      */
-    private matchEndVoice(): void {
-        if (this.phase !== 'matchOver' || this.mode === 'endless') {
+    private roundEndVoice(): void {
+        if ((this.phase !== 'roundOver' && this.phase !== 'matchOver') || this.mode === 'endless') {
             this.winVoiced = false;
             return;
         }
-        if (this.winVoiced || this.phaseT < MATCH_WIN_LINE_DELAY) return;
+        if (this.winVoiced || this.phaseT < WIN_LINE_DELAY) return;
         this.winVoiced = true;
-        const [a, b] = this.wins;
-        if (a === b) return;
-        const side = a > b ? 0 : 1;
+        if (this.roundWinner < 0) return;
+        const side = this.roundWinner as 0 | 1;
         const pan = this.online ? 0 : side === 0 ? -0.35 : 0.35;
         const vol = this.online ? (side === this.me ? 1 : 0.45) : side === 1 && this.mode === 'cpu' ? 0.45 : 1;
         this.voice(side, this.fields[side].fairy, 'win', pan, vol, true);
