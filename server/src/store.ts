@@ -1,8 +1,11 @@
-// What the API and the online matches keep in the database, through the TypeORM entities. Soft-deleted rows
+// What the API and the online matches keep in the database, through the TypeORM entities. Fairies, maps and modes
+// come and go as the game's codes ('pip', 'forest', 'cpu'); the tables hold their catalog ids (fairy_id, map_id,
+// mode_id), which the catalog turns them into and back. Soft-deleted rows
 // (deleted_at set) are left out of everything: the repositories do that themselves, and the few raw queries
 // (rankings and summaries) say so in their WHERE.
 import { randomBytes } from 'node:crypto';
 import type { DataSource, Repository } from 'typeorm';
+import type { Catalog } from './catalog';
 import { fromJson } from './database/entities/columns';
 import { EndlessRun } from './database/entities/endless-run';
 import { MatchRow } from './database/entities/match';
@@ -99,7 +102,10 @@ export class Store {
     private runs: Repository<EndlessRun>;
     private replays: Repository<ReplayRow>;
 
-    constructor(private db: DataSource) {
+    constructor(
+        private db: DataSource,
+        private catalog: Catalog,
+    ) {
         this.players = db.getRepository(Player);
         this.progress = db.getRepository(ProgressRow);
         this.settings = db.getRepository(SettingsRow);
@@ -176,17 +182,31 @@ export class Store {
 
     /** Add a finished match to the player's history. */
     async addMatch(id: number, m: MatchInput): Promise<void> {
-        await this.matches.insert({ playerId: id, ...m });
+        const c = this.catalog;
+        await this.matches.insert({
+            playerId: id,
+            modeId: c.modeId(m.mode),
+            mapId: c.mapId(m.map),
+            fairyId: c.characterId(m.fairy),
+            rivalFairyId: c.characterId(m.rivalFairy),
+            roundsWon: m.roundsWon,
+            roundsLost: m.roundsLost,
+            won: m.won,
+            bestChain: m.bestChain,
+            trophyDelta: m.trophyDelta,
+            seconds: m.seconds,
+        });
     }
 
     /** The player's latest matches, newest first. */
     async recentMatches(id: number, limit: number) {
         const rows = await this.matches.find({ where: { playerId: id }, order: { id: 'DESC' }, take: limit });
+        const c = this.catalog;
         return rows.map(x => ({
-            mode: x.mode,
-            map: x.map,
-            fairy: x.fairy,
-            rivalFairy: x.rivalFairy,
+            mode: c.modeCode(x.modeId),
+            map: c.mapCode(x.mapId),
+            fairy: c.characterCode(x.fairyId),
+            rivalFairy: c.characterCode(x.rivalFairyId),
             roundsWon: x.roundsWon,
             roundsLost: x.roundsLost,
             won: !!x.won,
@@ -199,20 +219,27 @@ export class Store {
 
     /** Add an Endless run; answers with where the player's best now ranks. */
     async addEndless(id: number, r: EndlessInput): Promise<EndlessRank | null> {
-        await this.runs.insert({ playerId: id, ...r });
+        await this.runs.insert({
+            playerId: id,
+            seconds: r.seconds,
+            guardians: r.guardians,
+            fairyId: this.catalog.characterId(r.fairy),
+            mapId: this.catalog.mapId(r.map),
+            bestChain: r.bestChain,
+        });
         return this.endlessRank(id);
     }
 
     /** Where a player's best Endless run ranks among every player's best, or null without one. */
     async endlessRank(id: number): Promise<EndlessRank | null> {
         const [mine] = await this.rows<{ best: number | null }>(
-            'SELECT MAX(seconds) AS best FROM endless_runs WHERE player_id = ? AND deleted_at IS NULL',
+            'SELECT MAX(seconds) AS best FROM players_runs WHERE player_id = ? AND deleted_at IS NULL',
             [id],
         );
         if (mine?.best == null) return null;
         const best = Number(mine.best);
         // Every player's best: how many beat this one, and how many there are.
-        const bests = `SELECT MAX(r.seconds) AS best FROM endless_runs r
+        const bests = `SELECT MAX(r.seconds) AS best FROM players_runs r
             JOIN players p ON p.id = r.player_id AND p.deleted_at IS NULL
             WHERE r.deleted_at IS NULL GROUP BY r.player_id`;
         const [ahead] = await this.rows<{ n: number | string }>(
@@ -234,12 +261,13 @@ export class Store {
             map: string;
             created_at: Date;
         }>(
-            `SELECT t.player_id, t.name, t.seconds, t.guardians, t.fairy, t.map, t.created_at FROM (
-                SELECT r.player_id, p.name, r.seconds, r.guardians, r.fairy, r.map, r.created_at,
+            `SELECT t.player_id, t.name, t.seconds, t.guardians, c.code AS fairy, m.code AS map, t.created_at FROM (
+                SELECT r.player_id, p.name, r.seconds, r.guardians, r.fairy_id, r.map_id, r.created_at,
                     ROW_NUMBER() OVER (PARTITION BY r.player_id ORDER BY r.seconds DESC, r.id) AS rn
-                FROM endless_runs r JOIN players p ON p.id = r.player_id AND p.deleted_at IS NULL
+                FROM players_runs r JOIN players p ON p.id = r.player_id AND p.deleted_at IS NULL
                 WHERE r.deleted_at IS NULL
-             ) t WHERE t.rn = 1 ORDER BY t.seconds DESC, t.created_at LIMIT ?`,
+             ) t JOIN characters c ON c.id = t.fairy_id JOIN maps m ON m.id = t.map_id
+             WHERE t.rn = 1 ORDER BY t.seconds DESC, t.created_at LIMIT ?`,
             [limit],
         );
         return rows.map(x => ({
@@ -261,8 +289,8 @@ export class Store {
                 await this.replays.insert({
                     code,
                     playerId: id,
-                    mode: r.mode,
-                    map: r.map,
+                    modeId: this.catalog.modeId(r.mode),
+                    mapId: this.catalog.mapId(r.map),
                     version: r.version,
                     seconds: r.seconds,
                     recorded: r.recorded || null,
@@ -288,8 +316,9 @@ export class Store {
             created_at: Date;
             name: string;
         }>(
-            `SELECT r.code, r.mode, r.map, r.version, r.seconds, r.data, r.created_at, p.name
-             FROM replays r JOIN players p ON p.id = r.player_id
+            `SELECT r.code, t.code AS mode, m.code AS map, r.version, r.seconds, r.data, r.created_at, p.name
+             FROM players_replays r JOIN players p ON p.id = r.player_id
+                JOIN types_modes t ON t.id = r.mode_id JOIN maps m ON m.id = r.map_id
              WHERE r.code = ? AND r.deleted_at IS NULL`,
             [code],
         );
@@ -318,9 +347,10 @@ export class Store {
             fairies: unknown;
             wins: unknown;
         }>(
-            `SELECT code, mode, map, seconds, created_at, recorded,
-                JSON_EXTRACT(data, '$.fairies') AS fairies, JSON_EXTRACT(data, '$.wins') AS wins
-             FROM replays WHERE player_id = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT ?`,
+            `SELECT r.code, t.code AS mode, m.code AS map, r.seconds, r.created_at, r.recorded,
+                JSON_EXTRACT(r.data, '$.fairies') AS fairies, JSON_EXTRACT(r.data, '$.wins') AS wins
+             FROM players_replays r JOIN types_modes t ON t.id = r.mode_id JOIN maps m ON m.id = r.map_id
+             WHERE r.player_id = ? AND r.deleted_at IS NULL ORDER BY r.id DESC LIMIT ?`,
             [id, limit],
         );
         /** A JSON array value, or null. */

@@ -2,7 +2,7 @@ import { Column, Entity, PrimaryColumn } from 'typeorm';
 import { Timestamped, asJson, asNumber } from './columns';
 
 /** A player's settings (key bindings, display, sound); the newer of two copies wins. */
-@Entity('settings')
+@Entity('players_settings')
 export class SettingsRow extends Timestamped {
     @PrimaryColumn({ name: 'player_id', type: 'int', unsigned: true })
     playerId!: number;

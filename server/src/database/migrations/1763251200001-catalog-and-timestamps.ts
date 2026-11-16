@@ -1,5 +1,6 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
-import { seedCatalog } from '@server/catalog-seed';
+import { FAIRIES } from '@/data/characters';
+import { MAPS } from '@/data/maps';
 
 const TABLE = 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 /** The three columns every table ends with. */
@@ -51,7 +52,26 @@ export class CatalogAndTimestamps1763251200001 implements MigrationInterface {
             ${STAMPS},
             PRIMARY KEY (id)
         ) ${TABLE}`);
-        await seedCatalog(q);
+        // The rows as the game had them then (ids were their names; a later migration numbers them).
+        const add = async (table: string, rows: [string, string][]) =>
+            q.query(
+                `INSERT IGNORE INTO ${table} (id, name) VALUES ${rows.map(() => '(?, ?)').join(', ')}`,
+                rows.flat(),
+            );
+        await add(
+            'characters',
+            FAIRIES.map(f => [f.id, f.name]),
+        );
+        await add(
+            'maps',
+            MAPS.map(m => [m.id, m.name]),
+        );
+        await add('types_modes', [
+            ['cpu', 'VS CPU'],
+            ['versus', '2 Players'],
+            ['endless', 'Endless'],
+            ['online', 'Online'],
+        ]);
 
         // players: id, token_hash, name, seen_at, then the stamps.
         await q.query(`ALTER TABLE players MODIFY COLUMN created_at ${CREATED} AFTER seen_at`);

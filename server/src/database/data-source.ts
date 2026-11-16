@@ -9,6 +9,7 @@ import { ReplayRow } from './entities/replay';
 import { SettingsRow } from './entities/settings';
 import { Initial1763251200000 } from './migrations/1763251200000-initial';
 import { CatalogAndTimestamps1763251200001 } from './migrations/1763251200001-catalog-and-timestamps';
+import { IntegerIdsAndPlayerTables1763251200002 } from './migrations/1763251200002-integer-ids-and-player-tables';
 
 /** Every table's entity. */
 export const ENTITIES = [
@@ -38,7 +39,7 @@ export function dataSource(env: NodeJS.ProcessEnv = process.env): DataSource {
         charset: 'utf8mb4',
         poolSize: Number(env.DB_POOL) || 8,
         entities: ENTITIES,
-        migrations: [Initial1763251200000, CatalogAndTimestamps1763251200001],
+        migrations: [Initial1763251200000, CatalogAndTimestamps1763251200001, IntegerIdsAndPlayerTables1763251200002],
         migrationsTableName: 'migrations',
         synchronize: false,
         logging: ['error', 'migration'],

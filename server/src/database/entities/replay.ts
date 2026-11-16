@@ -2,7 +2,7 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import { Timestamped, asJson, asNumber } from './columns';
 
 /** A saved replay: the game's recording, shared by a short code. */
-@Entity('replays')
+@Entity('players_replays')
 export class ReplayRow extends Timestamped {
     @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
     id!: string;
@@ -14,12 +14,12 @@ export class ReplayRow extends Timestamped {
     playerId!: number;
 
     /** A types_modes id. */
-    @Column({ type: 'varchar', length: 12 })
-    mode!: string;
+    @Column({ name: 'mode_id', type: 'int', unsigned: true })
+    modeId!: number;
 
     /** A maps id. */
-    @Column({ type: 'varchar', length: 16 })
-    map!: string;
+    @Column({ name: 'map_id', type: 'int', unsigned: true })
+    mapId!: number;
 
     /** The simulation build it was recorded on. */
     @Column({ type: 'varchar', length: 16 })

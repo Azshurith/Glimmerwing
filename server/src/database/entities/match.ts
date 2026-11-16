@@ -2,7 +2,7 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import { Timestamped } from './columns';
 
 /** A finished match (VS CPU, 2 Players or Online), as the player it belongs to played it. */
-@Entity('matches')
+@Entity('players_matches')
 export class MatchRow extends Timestamped {
     @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
     id!: string;
@@ -11,19 +11,19 @@ export class MatchRow extends Timestamped {
     playerId!: number;
 
     /** A types_modes id. */
-    @Column({ type: 'varchar', length: 12 })
-    mode!: string;
+    @Column({ name: 'mode_id', type: 'int', unsigned: true })
+    modeId!: number;
 
     /** A maps id. */
-    @Column({ type: 'varchar', length: 16 })
-    map!: string;
+    @Column({ name: 'map_id', type: 'int', unsigned: true })
+    mapId!: number;
 
     /** A characters id: the player's fairy, and the rival's. */
-    @Column({ type: 'varchar', length: 16 })
-    fairy!: string;
+    @Column({ name: 'fairy_id', type: 'int', unsigned: true })
+    fairyId!: number;
 
-    @Column({ name: 'rival_fairy', type: 'varchar', length: 16 })
-    rivalFairy!: string;
+    @Column({ name: 'rival_fairy_id', type: 'int', unsigned: true })
+    rivalFairyId!: number;
 
     @Column({ name: 'rounds_won', type: 'tinyint', unsigned: true })
     roundsWon!: number;

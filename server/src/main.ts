@@ -22,9 +22,9 @@ const PORT = Number(process.env.PORT) || 8787;
 /** Start everything. */
 async function main(): Promise<void> {
     const db = process.env.DB_HOST ? await openDatabase() : null;
-    const store = db ? new Store(db) : null;
     const catalog = new Catalog(db);
     await catalog.refresh();
+    const store = db ? new Store(db, catalog) : null;
     catalog.watch();
     const verifier = store ? Verifier.create() : null;
     const turns = new Turns();

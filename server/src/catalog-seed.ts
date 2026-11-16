@@ -1,5 +1,6 @@
-// The catalog's rows come from the game's own data: every fairy, map and mode the game has gets a row (enabled)
-// if it hasn't one yet. Rows already there are left alone, so a fairy or map switched off stays off.
+// The catalog's rows come from the game's own data: every fairy, map and mode the game has gets a row (enabled,
+// numbered by the database, its `code` the game's id) if it hasn't one yet. Rows already there are left alone,
+// so a fairy or map switched off stays off.
 import { FAIRIES } from '@/data/characters';
 import { MAPS } from '@/data/maps';
 
@@ -22,7 +23,7 @@ export async function seedCatalog(db: Runs): Promise<void> {
     const add = async (table: string, rows: [string, string][]) => {
         if (!rows.length) return;
         await db.query(
-            `INSERT IGNORE INTO ${table} (id, name) VALUES ${rows.map(() => '(?, ?)').join(', ')}`,
+            `INSERT IGNORE INTO ${table} (code, name) VALUES ${rows.map(() => '(?, ?)').join(', ')}`,
             rows.flat(),
         );
     };

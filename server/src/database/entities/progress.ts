@@ -3,7 +3,7 @@ import { Timestamped, asJson, asNumber } from './columns';
 import type { Progress } from '@/types';
 
 /** A player's progress (the game's Progress, decided by the server), with the numbers worth querying copied out. */
-@Entity('progress')
+@Entity('players_progress')
 export class ProgressRow extends Timestamped {
     @PrimaryColumn({ name: 'player_id', type: 'int', unsigned: true })
     playerId!: number;
