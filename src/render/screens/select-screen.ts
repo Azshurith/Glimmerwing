@@ -120,7 +120,9 @@ export class SelectScreen {
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
             const g = { ...TALL_PANEL, artY: TALL_PANEL.artY + this.dy };
-            v.sides.forEach((s, i) => this.panel(s, TALL_PANEL_X[i], i === 1, t, g));
+            v.sides.forEach((s, i) => {
+                if (i === 0 || !v.solo) this.panel(s, TALL_PANEL_X[i], i === 1, t, g);
+            });
         } else {
             this.h = h;
             this.dy = 0;
@@ -131,7 +133,10 @@ export class SelectScreen {
             this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H);
             ctx.restore();
             // On a widened view the two fairies' panels move out to the screen's edges.
-            v.sides.forEach((s, i) => this.panel(s, PANEL_X[i] + (i === 0 ? -bleed : bleed), i === 1, t));
+            // A solo run has no rival, so no second panel.
+            v.sides.forEach((s, i) => {
+                if (i === 0 || !v.solo) this.panel(s, PANEL_X[i] + (i === 0 ? -bleed : bleed), i === 1, t);
+            });
         }
         this.header(v.heading);
         this.centre(v, t);
@@ -412,7 +417,26 @@ export class SelectScreen {
         ctx.scale(vk, vk);
         ctx.shadowColor = '#ff6b8a';
         ctx.shadowBlur = 16;
-        arcadeText(ctx, 'VS', 0, cg.vsSize * 0.35, cg.vsSize, ['#ffffff', '#ffd1dc', '#ff3d6e'], 'center');
+        if (v.solo) {
+            // The mode's name in place of VS, with a line (the best run) under it; on a phone it takes the
+            // rival's empty half beside your panel.
+            if (this.layout === 'tall') ctx.translate(TALL_PANEL_X[1] + TALL_PANEL.w / 2 - cg.vsX, 60);
+            ctx.shadowColor = '#ff8a5c';
+            arcadeText(
+                ctx,
+                v.solo.title,
+                0,
+                cg.vsSize * 0.2,
+                cg.vsSize * 0.55,
+                ['#ffffff', '#ffd2a8', '#ff8a5c'],
+                'center',
+            );
+            ctx.shadowBlur = 0;
+            ctx.font = `8px ${ARCADE}`;
+            ctx.fillStyle = '#cbbcf5';
+            ctx.textAlign = 'center';
+            ctx.fillText(v.solo.line, 0, cg.vsSize * 0.2 + 16);
+        } else arcadeText(ctx, 'VS', 0, cg.vsSize * 0.35, cg.vsSize, ['#ffffff', '#ffd1dc', '#ff3d6e'], 'center');
         ctx.restore();
 
         // Control hints.
