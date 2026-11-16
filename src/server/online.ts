@@ -2,8 +2,8 @@
 // round (the same RoundSim as everywhere, so it plays out the same) using each player's latest controls, and
 // sends both players the controls it used, step by step. Each browser runs the very same round from them, so
 // what they see is what the server decided. The server deals the rounds, decides knockouts and the result, and
-// counts the match toward both players' progress. Bundled for Node by build.mjs as dist/online.mjs and driven by
-// server/server.mjs.
+// counts the match toward both players' progress. Bundled into the server (dist/server.cjs) and driven by
+// server/src/relay.ts.
 import * as C from '@/core/config';
 import { fairyById } from '@/data/characters';
 import { mapForSeed } from '@/data/maps';
@@ -42,6 +42,9 @@ export interface OnlineHooks {
             replay: ReplayData;
         },
     ): Promise<string | null>;
+    /** Whether a fairy, and a map, are switched on (the server's catalog). */
+    fairyOn(id: string): boolean;
+    mapOn(id: string): boolean;
 }
 
 /** Where a match is: picking fairies, counting down to a round, playing it, between rounds, or settling up. */
@@ -103,6 +106,10 @@ export class OnlineMatch {
             this.seats[seat].send({ t: 'error', msg: 'That fairy is locked' });
             return;
         }
+        if (!this.hooks.fairyOn(id)) {
+            this.seats[seat].send({ t: 'error', msg: 'That fairy is unavailable' });
+            return;
+        }
         this.picks[seat] = id;
         if (this.picks[0] && this.picks[1]) this.startMatch();
     }
@@ -151,7 +158,11 @@ export class OnlineMatch {
     private newRound(): void {
         const f0 = fairyById(this.picks[0]!)!,
             f1 = fairyById(this.picks[1]!)!;
-        this.seed = (Math.random() * 2 ** 31) | 0;
+        // A seed whose map is switched on (any, if every one is off).
+        for (let tries = 0; ; tries++) {
+            this.seed = (Math.random() * 2 ** 31) | 0;
+            if (this.hooks.mapOn(mapForSeed(this.seed).id) || tries >= 64) break;
+        }
         const map = mapForSeed(this.seed).id;
         // Online meadows are always the usual size, so both screens agree.
         C.setFieldWidth(C.FIELD_W_BASE);

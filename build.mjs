@@ -23,17 +23,20 @@ const out = await build({
 });
 const js = out.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 
-// The server's own copy of the game (src/server/): its check of finished games (verify.ts) and the online
-// matches it runs (online.ts), on the same simulation, bundled for Node. The game's data loads pictures with
-// new Image(), which Node hasn't got, so a stand-in is put in first; images and music are left out.
-for (const name of ['verify', 'online'])
+// The server (server/src/: Express, TypeORM, the online relay) and its worker that checks finished games, bundled
+// for Node with the game's own simulation inside (src/server/: verify.ts and online.ts). The packages it uses stay
+// in node_modules. The game's data loads pictures with new Image(), which Node hasn't got, so a stand-in is put
+// in first; images and music are left out.
+for (const name of ['main', 'verify-worker'])
     await build({
-        entryPoints: [`src/server/${name}.ts`],
+        entryPoints: [`server/src/${name}.ts`],
         bundle: true,
         platform: 'node',
-        format: 'esm',
-        target: 'node18',
-        outfile: `dist/${name}.mjs`,
+        format: 'cjs',
+        target: 'node20',
+        outfile: `dist/${name === 'main' ? 'server' : name}.cjs`,
+        tsconfig: 'server/tsconfig.json',
+        external: ['express', 'typeorm', 'mysql2', 'reflect-metadata'],
         loader: { '.png': 'empty', '.jpg': 'empty', '.mp3': 'empty' },
         define: { __GW_SERVER__: '""', __GW_SIM__: JSON.stringify(sim) },
         banner: { js: 'globalThis.Image ??= class { src = ""; complete = false; naturalWidth = 0; };' },

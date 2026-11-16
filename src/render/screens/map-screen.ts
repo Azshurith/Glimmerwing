@@ -1,6 +1,7 @@
 // The map select screen, after the fairies are picked: a card for each map with its scenery scrolling live inside,
 // and a Random card that flicks through them all. The game keeps which card is chosen (Game.mapIndex).
 import * as C from '@/core/config';
+import { mapAvailable } from '@/data/availability';
 import { MAPS } from '@/data/maps';
 import type { Layout, MapSelectView, MapTheme } from '@/types';
 import { Backdrop } from '@/render/backdrop';
@@ -172,11 +173,14 @@ export class MapScreen {
             drawPadlock(ctx, x + c.w / 2, cy, Math.min(30, c.w * 0.3));
             ctx.textAlign = 'center';
             ctx.font = `9px ${ARCADE}`;
-            const need = String(stageFor(map.id).trophies);
-            const nw = ctx.measureText(need).width;
-            ctx.fillStyle = '#ffe08a';
-            ctx.fillText(need, x + c.w / 2 + 6, cy + 30);
-            drawTrophy(ctx, x + c.w / 2 - nw / 2 - 2, cy + 26, 10);
+            // The trophies the stage needs (none to show for one the server has switched off).
+            if (mapAvailable(map.id)) {
+                const need = String(stageFor(map.id).trophies);
+                const nw = ctx.measureText(need).width;
+                ctx.fillStyle = '#ffe08a';
+                ctx.fillText(need, x + c.w / 2 + 6, cy + 30);
+                drawTrophy(ctx, x + c.w / 2 - nw / 2 - 2, cy + 26, 10);
+            }
         } else if (!on) {
             ctx.fillStyle = 'rgba(12,8,32,0.35)';
             ctx.fillRect(x, y, c.w, c.h);
@@ -189,7 +193,7 @@ export class MapScreen {
         ctx.fillRect(x, y + c.h - 26, c.w, 26);
         arcadeText(
             ctx,
-            random ? 'RANDOM' : locked ? 'LOCKED' : map.name.toUpperCase(),
+            random ? 'RANDOM' : locked ? (mapAvailable(map.id) ? 'LOCKED' : 'UNAVAILABLE') : map.name.toUpperCase(),
             x + c.w / 2,
             y + c.h - 8,
             on ? 12 : 11,

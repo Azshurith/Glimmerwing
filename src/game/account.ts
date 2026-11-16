@@ -1,6 +1,7 @@
 import { ApiError, apiBase, apiCall } from '@/net/api';
 import { freshProgress } from './rewards';
 import type {
+    CatalogResponse,
     EndlessRank,
     LeaderEntry,
     MeResponse,
@@ -270,6 +271,16 @@ export class Account {
         if (!this.base) throw new Error('No game server');
         const r = await apiCall<{ data: ReplayData }>(this.base, 'GET', `/replays/${encodeURIComponent(code)}`);
         return r.data;
+    }
+
+    /** What the server has switched off (fairies and maps), or null when it can't be reached. */
+    async catalog(): Promise<CatalogResponse | null> {
+        if (!this.base) return null;
+        try {
+            return await apiCall<CatalogResponse>(this.base, 'GET', '/catalog');
+        } catch {
+            return null;
+        }
     }
 
     /** Fetch everyone's best Endless runs. */

@@ -1,7 +1,7 @@
 // The server's check of a finished game: it plays the replay again, step by step, through the same simulation the
 // game ran (the player's own controls from the tape; the CPU deciding for itself, from the round's seed), and
-// works out the result itself. Bundled for Node by build.mjs as dist/verify.mjs and run in a worker thread by
-// server/verify-worker.mjs; nothing here touches the page.
+// works out the result itself. Bundled for Node by build.mjs into dist/verify-worker.cjs, a worker thread the
+// server (server/src/verifier.ts) hands games to; nothing here touches the page.
 import * as C from '@/core/config';
 import { fairyById } from '@/data/characters';
 import { mapById } from '@/data/maps';
@@ -9,7 +9,7 @@ import { stageOpen } from '@/data/stages';
 import { RoundSim } from '@/game/match';
 import { REPLAY_FORMAT, SIM_VERSION, TapeReader, isReplay, quantize } from '@/game/replay';
 import { applyOutcome, fairyOpen, freshProgress } from '@/game/rewards';
-import type { MatchOutcome, Progress, ReplayData } from '@/types';
+import type { CatalogResponse, MatchOutcome, Progress, ReplayData } from '@/types';
 
 /** The longest game the server will play through (in playing steps): an hour. */
 const MAX_STEPS = 60 * 60 * 60;
@@ -38,9 +38,14 @@ const fail = (error: string, stale = false): Verdict => ({ ok: false, error, sta
 /**
  * Play `data` again and, if it holds up, add it to `progress` (the player's progress as the server has it).
  * It doesn't hold up if it's from another build of the game, uses a fairy or a stage the player hasn't opened,
- * or its recording doesn't play out to the end it claims.
+ * uses a fairy or a map that's switched off (`off`, the server's catalog), or its recording doesn't play out to
+ * the end it claims.
  */
-export function verifyReplay(data: unknown, progress: Progress | null): Verdict {
+export function verifyReplay(
+    data: unknown,
+    progress: Progress | null,
+    off: CatalogResponse = { disabledCharacters: [], disabledMaps: [] },
+): Verdict {
     if (!isReplay(data)) return fail('Not a replay');
     const d: ReplayData = data;
     // Online matches are run, and counted, by the server itself.
@@ -54,6 +59,9 @@ export function verifyReplay(data: unknown, progress: Progress | null): Verdict 
     // Only what this player has opened: their fairy (both, two players on one screen) and the stage.
     if (!fairyOpen(p, f0.id) || (d.mode === 'versus' && !fairyOpen(p, f1.id))) return fail('That fairy is locked');
     if (!stageOpen(p, d.map)) return fail('That stage is locked');
+    if (off.disabledMaps.includes(d.map)) return fail('That map is unavailable');
+    if (off.disabledCharacters.includes(f0.id) || (d.mode === 'versus' && off.disabledCharacters.includes(f1.id)))
+        return fail('That fairy is unavailable');
     if (!d.rounds.length || d.rounds.length > 2 * C.ROUNDS_TO_WIN - 1) return fail('Wrong number of rounds');
 
     const dt = C.STEP;
