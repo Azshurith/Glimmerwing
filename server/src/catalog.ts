@@ -1,6 +1,6 @@
 // The catalog: the fairies, maps and modes in the characters, maps and types_modes tables, each numbered by the
 // database and known to the game by its `code`. The server reads them at start and again every little while, so
-// switching a fairy or map off (is_enabled = 0, or soft-deleting the row, e.g. in phpMyAdmin) takes effect
+// switching a fairy, map or mode off (is_enabled = 0, or soft-deleting the row, e.g. in phpMyAdmin) takes effect
 // without a restart. Without a database nothing is off, and nothing is numbered.
 import type { DataSource } from 'typeorm';
 import { Character, GameMap, ModeType } from './database/entities/catalog';
@@ -78,9 +78,18 @@ export class Catalog {
         return !this.maps.off.has(code);
     }
 
+    /** Whether the game mode `code` ('cpu', 'versus', 'endless', 'online') can be played. */
+    modeOn(code: string): boolean {
+        return !this.modes.off.has(code);
+    }
+
     /** What's switched off, as GET /api/catalog answers (and the verifier is told). */
     off(): CatalogResponse {
-        return { disabledCharacters: [...this.characters.off], disabledMaps: [...this.maps.off] };
+        return {
+            disabledCharacters: [...this.characters.off],
+            disabledMaps: [...this.maps.off],
+            disabledModes: [...this.modes.off],
+        };
     }
 
     /** The characters row of the fairy `code`. */

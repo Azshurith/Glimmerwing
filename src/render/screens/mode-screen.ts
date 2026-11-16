@@ -1,6 +1,7 @@
 // The main menu (Play, Characters, Maps, Profile, Replays, Settings) and Play's choice of modes: a screen of cards.
 import * as C from '@/core/config';
 import type { Layout, ModeMenu, ModeView, TitleAction } from '@/types';
+import { modeAvailable } from '@/data/availability';
 import { Backdrop } from '@/render/backdrop';
 import { arcadeText, sparkle } from '@/render/draw';
 import { drawTopBar } from './top-bar';
@@ -14,8 +15,9 @@ export interface ModeCard {
     sub: string;
     /** Its accent colour. */
     color: string;
-    /** Shown in grey with a Coming soon ribbon; picking it does nothing yet. */
+    /** Shown in grey with a ribbon (SOON, or OFF for a mode the server has switched off); picking it does nothing. */
     disabled?: boolean;
+    ribbon?: string;
     x: number;
     y: number;
     w: number;
@@ -89,15 +91,26 @@ const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
 
 /** A menu's cards for a layout and view height, in view units: also the tap targets. */
 export function modeCards(menu: ModeMenu, layout: Layout, h: number = C.TALL_H, bleed = 0): ModeCard[] {
-    if (layout !== 'tall') return designCards(menu, 'wide', 0, bleed);
+    if (layout !== 'tall') return designCards(menu, 'wide', 0, bleed).map(switchedOff);
     const f = tallMenuFit(h);
-    return designCards(menu, 'tall', tallShift(f.h)).map(c => ({
-        ...c,
-        x: f.x + c.x * f.s,
-        y: c.y * f.s,
-        w: c.w * f.s,
-        h: c.h * f.s,
-    }));
+    return designCards(menu, 'tall', tallShift(f.h))
+        .map(switchedOff)
+        .map(c => ({
+            ...c,
+            x: f.x + c.x * f.s,
+            y: c.y * f.s,
+            w: c.w * f.s,
+            h: c.h * f.s,
+        }));
+}
+
+/** The game modes the server can switch off (types_modes), by their cards' actions. */
+const MODES: readonly TitleAction[] = ['cpu', 'versus', 'endless', 'online'];
+
+/** A card as it shows while its mode is switched off on the server: greyed out, with an OFF ribbon. */
+function switchedOff(c: ModeCard): ModeCard {
+    if (!MODES.includes(c.action) || modeAvailable(c.action)) return c;
+    return { ...c, disabled: true, ribbon: 'OFF', sub: 'Not available right now' };
 }
 
 /** The mode menu screen: a heading bar, the mode cards, and a hint line. */
@@ -233,7 +246,7 @@ export class ModeScreen {
             wrap(ctx, c.sub, c.w - 14).forEach((line, i) => ctx.fillText(line, x + c.w / 2, y + 160 + i * 11));
         }
         if (c.disabled) {
-            // A "coming soon" ribbon across the top corner, trimmed to the card.
+            // A ribbon ("coming soon", or switched off) across the top corner, trimmed to the card.
             ctx.save();
             roundRect(ctx, x, y, c.w, c.h, r);
             ctx.clip();
@@ -244,7 +257,7 @@ export class ModeScreen {
             ctx.textAlign = 'center';
             ctx.font = `6px ${ARCADE}`;
             ctx.fillStyle = '#ddd';
-            ctx.fillText('SOON', 0, 2.5);
+            ctx.fillText(c.ribbon ?? 'SOON', 0, 2.5);
             ctx.restore();
         }
         ctx.restore();

@@ -4,6 +4,7 @@ import { Input } from './input/input';
 import { Lobby } from './net/lobby';
 import { Sound } from './audio/sound';
 import { roundMusic } from './data/music';
+import { modeAvailable } from './data/availability';
 import { Renderer } from './render/renderer';
 import { AdaptiveResolution } from './render/resolution';
 import { initSettingsPanel } from './page/settings-panel';
@@ -27,8 +28,11 @@ game.onWantOnline = () => lobby.open();
 const startMode = new URLSearchParams(location.search).get('mode');
 // ?debug=paths draws every fireball's path across the screen.
 game.debugPaths = new URLSearchParams(location.search).get('debug') === 'paths';
-if (startMode === 'cpu' || startMode === 'versus' || startMode === 'endless') game.start(startMode);
-else if (startMode === 'online') lobby.open();
+// A mode the server has switched off opens nothing: the menu shows it greyed out.
+if (startMode && modeAvailable(startMode)) {
+    if (startMode === 'cpu' || startMode === 'versus' || startMode === 'endless') game.start(startMode);
+    else if (startMode === 'online') lobby.open();
+}
 // A shared replay link (?replay=CODE) opens straight into it.
 const replayCode = new URLSearchParams(location.search).get('replay');
 if (replayCode && /^[A-Za-z0-9]{10}$/.test(replayCode)) game.openReplayCode(replayCode.toUpperCase());

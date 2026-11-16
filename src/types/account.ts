@@ -29,10 +29,12 @@ export interface MeResponse {
     endless: EndlessRank | null;
 }
 
-/** What the server has switched off (GET /api/catalog): fairies and maps that can't be picked. */
+/** What the server has switched off (GET /api/catalog): fairies, maps and game modes that can't be picked. */
 export interface CatalogResponse {
     disabledCharacters: string[];
     disabledMaps: string[];
+    /** Mode codes ('cpu', 'versus', 'endless', 'online'); a server from before modes could be switched off has none. */
+    disabledModes?: string[];
 }
 
 /** Where a player's best Endless run stands among everyone's. */
