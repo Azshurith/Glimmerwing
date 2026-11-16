@@ -58,6 +58,16 @@ import reverse2 from '@/../assets/voices/stella/reverse-2.mp3';
 import reverse3 from '@/../assets/voices/stella/reverse-3.mp3';
 import reverse4 from '@/../assets/voices/stella/reverse-4.mp3';
 import reverse5 from '@/../assets/voices/stella/reverse-5.mp3';
+import announceChoose from '@/../assets/voices/announcer/choose.mp3';
+import announceFight1 from '@/../assets/voices/announcer/fight-1.mp3';
+import announceFight2 from '@/../assets/voices/announcer/fight-2.mp3';
+import announceFight3 from '@/../assets/voices/announcer/fight-3.mp3';
+import announceFinal from '@/../assets/voices/announcer/final-round.mp3';
+import announceReady1 from '@/../assets/voices/announcer/ready-1.mp3';
+import announceReady2 from '@/../assets/voices/announcer/ready-2.mp3';
+import announceReady3 from '@/../assets/voices/announcer/ready-3.mp3';
+import announceRound1 from '@/../assets/voices/announcer/round-1.mp3';
+import announceRound2 from '@/../assets/voices/announcer/round-2.mp3';
 import type { FairyVoice } from '@/types';
 
 /** Each fairy's lines, by fairy id. */
@@ -72,4 +82,17 @@ export const VOICES: Partial<Record<string, FairyVoice>> = {
         win: [win1, win2, win3, win4, win5],
         reverse: [reverse1, reverse2, reverse3, reverse4, reverse5],
     },
+};
+
+/**
+ * The announcer (assets/source/voices/announcer-claire.mp3: "Choose your champion", then "Round 1 / Ready /
+ * Fight!", "Round 2 / Ready / Fight!" and "Final round / Ready / Fight!"). Each round's call has its own take of
+ * Ready and Fight, in the same order (the third pair goes with the final round).
+ */
+export const ANNOUNCER = {
+    choose: announceChoose,
+    rounds: [announceRound1, announceRound2],
+    final: announceFinal,
+    ready: [announceReady1, announceReady2, announceReady3],
+    fight: [announceFight1, announceFight2, announceFight3],
 };

@@ -13,7 +13,7 @@ import { MAP_CARDS, MAP_COLS, mapCards } from '@/render/screens/map-screen';
 import { MAPS, mapById, mapForSeed } from '@/data/maps';
 import { fairyAvailable, loadCatalog, mapAvailable, setCatalog } from '@/data/availability';
 import { useServerArt } from '@/data/server-art';
-import { VOICES } from '@/data/voices';
+import { ANNOUNCER, VOICES } from '@/data/voices';
 import { stageOpen } from '@/data/stages';
 import { titleButtons } from '@/render/screens/title-screen';
 import { clock, replayPanelLayout } from '@/render/hud';
@@ -260,6 +260,8 @@ export class Game {
     /** When each side last reversed fireballs (recent ones, for spotting a volley) and last said a reverse line. */
     private reversedAt: [number[], number[]] = [[], []];
     private reverseLineAt: [number, number] = [0, 0];
+    /** Which take of Ready and Fight goes with this round's call. */
+    private announceTake = 0;
     /** Whether the winner has had her say at this round's end. */
     private winVoiced = false;
     private lastLine = new Map<string, string>();
@@ -393,7 +395,7 @@ export class Game {
         const pool = lines.length > 1 ? lines.filter(l => l !== last) : lines;
         const line = pool[Math.floor(Math.random() * pool.length)];
         this.lastLine.set(key, line);
-        this.sound.speak(line, `side${side}`, pan, vol, interrupt);
+        this.sound.speak(line, `side${side}`, pan, vol, interrupt ? 'cut' : 'drop');
     }
 
     /** Get a fairy's lines ready, so the first of each comes at once. */
@@ -410,6 +412,12 @@ export class Game {
 
     /** Called by the page buttons and the title screen. */
     start(mode: Mode): void {
+        // Fresh onto fairy select (not back from map select): the announcer asks for a champion.
+        if (this.phase !== 'mapselect' && !this.seeking) {
+            this.sound.preloadVoice([ANNOUNCER.choose, ...ANNOUNCER.rounds, ANNOUNCER.final, ...ANNOUNCER.ready]);
+            this.sound.preloadVoice(ANNOUNCER.fight);
+            this.sound.speak(ANNOUNCER.choose, 'announcer', 0, 1, 'cut');
+        }
         // A match ends back on Play's menu.
         this.menu = 'play';
         if (mode !== 'online' && this.net) this.disconnect();
@@ -1074,6 +1082,26 @@ export class Game {
         this.recorder?.startRound(seed, { w: C.FIELD_W, h: C.FIELD_H, single: C.VIEW_W === C.FIELD_W });
         this.phase = 'countdown';
         this.phaseT = 0;
+        this.announceRound(roundIndex);
+    }
+
+    /**
+     * The countdown's call: the round (or the final round), then Ready. Fight! follows as play starts
+     * (`announceFight`), right after Ready if she's still saying it. Endless has no rounds: just Ready.
+     */
+    private announceRound(roundIndex: number): void {
+        if (this.seeking) return;
+        const final = this.wins[0] === C.ROUNDS_TO_WIN - 1 && this.wins[1] === C.ROUNDS_TO_WIN - 1;
+        const take = final ? 2 : Math.min(roundIndex, 1);
+        this.announceTake = take;
+        const call = this.mode === 'endless' ? null : final ? ANNOUNCER.final : ANNOUNCER.rounds[roundIndex];
+        if (call) this.sound.speak(call, 'announcer', 0, 1, 'cut');
+        this.sound.speak(ANNOUNCER.ready[take], 'announcer', 0, 1, call ? 'after' : 'cut');
+    }
+
+    /** Play begins: Fight! (after Ready, if she's still saying it). */
+    private announceFight(): void {
+        if (!this.seeking) this.sound.speak(ANNOUNCER.fight[this.announceTake], 'announcer', 0, 1, 'after');
     }
 
     /** True once a match is under way (not on the title, the menus, the Characters or Profile screens, or select). */
@@ -1611,6 +1639,7 @@ export class Game {
                 this.phase = 'playing';
                 this.phaseT = 0;
                 this.ui('start');
+                this.announceFight();
             }
             return;
         }

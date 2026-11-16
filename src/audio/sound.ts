@@ -25,6 +25,10 @@ export class Sound {
     /** Each voice clip once decoded, by url; and the line each speaker is saying now. */
     private clips = new Map<string, Promise<AudioBuffer | null>>();
     private speaking = new Map<string, AudioBufferSourceNode>();
+    /** Each speaker's lines in hand (saying or waiting), the end of the last of them, and a count bumped on a cut. */
+    private busy = new Set<string>();
+    private tails = new Map<string, Promise<void>>();
+    private voiceGen = new Map<string, number>();
     /** Sends into the room reverb, one for the effects and one for the music, each at its own volume. */
     private sfxRoom: GainNode | null = null;
     private musicRoom: GainNode | null = null;
@@ -149,44 +153,56 @@ export class Sound {
     }
 
     /**
-     * Say a voice line for `speaker` (one line at a time each: while one is being said another is dropped, unless
-     * `interrupt` cuts it off). Panned and scaled like the speaker's other sounds.
+     * Say a voice line for `speaker`, panned and scaled like the speaker's other sounds. One speaker says one line at
+     * a time: `how` is what happens if she's still talking (or has lines waiting): `'drop'` this line, `'cut'` her
+     * off (and drop what's waiting) to say it now, or say it `'after'` she's done.
      */
-    speak(url: string, speaker: string, pan = 0, vol = 1, interrupt = false): void {
+    speak(url: string, speaker: string, pan = 0, vol = 1, how: 'drop' | 'cut' | 'after' = 'drop'): void {
         if (!this.ctx || !this.voiceBus || this.muted) return;
-        if (this.speaking.has(speaker) && !interrupt) return;
-        const ctx = this.ctx,
-            bus = this.voiceBus;
-        void this.clip(url).then(buf => {
-            if (!buf) return;
-            const was = this.speaking.get(speaker);
-            if (was && !interrupt) return;
-            if (was) {
-                was.onended = null;
-                was.stop();
-            }
-            const src = ctx.createBufferSource();
-            src.buffer = buf;
-            const g = ctx.createGain();
-            g.gain.value = vol;
-            let tail: AudioNode = src.connect(g);
-            if (pan && ctx.createStereoPanner) {
-                const p = ctx.createStereoPanner();
-                p.pan.value = pan;
-                tail = tail.connect(p);
-            }
-            tail.connect(bus);
-            src.onended = () => {
-                if (this.speaking.get(speaker) === src) this.speaking.delete(speaker);
-            };
-            this.speaking.set(speaker, src);
-            src.start();
+        if (how === 'drop' && this.busy.has(speaker)) return;
+        let gen = this.voiceGen.get(speaker) ?? 0;
+        if (how === 'cut') {
+            this.voiceGen.set(speaker, ++gen);
+            this.speaking.get(speaker)?.stop();
+        }
+        const before = how === 'after' ? (this.tails.get(speaker) ?? Promise.resolve()) : Promise.resolve();
+        this.busy.add(speaker);
+        const line = before.then(() => this.sayNow(url, speaker, pan, vol, gen));
+        this.tails.set(speaker, line);
+        void line.then(() => {
+            if (this.tails.get(speaker) !== line) return;
+            this.tails.delete(speaker);
+            this.busy.delete(speaker);
         });
     }
 
-    /** Whether `speaker` is saying a line now. */
-    isSpeaking(speaker: string): boolean {
-        return this.speaking.has(speaker);
+    /** Play one line now (unless the speaker was cut off since it was asked for); resolves once it has been said. */
+    private sayNow(url: string, speaker: string, pan: number, vol: number, gen: number): Promise<void> {
+        const ctx = this.ctx!,
+            bus = this.voiceBus!;
+        return this.clip(url).then(
+            buf =>
+                new Promise<void>(done => {
+                    if (!buf || (this.voiceGen.get(speaker) ?? 0) !== gen) return done();
+                    const src = ctx.createBufferSource();
+                    src.buffer = buf;
+                    const g = ctx.createGain();
+                    g.gain.value = vol;
+                    let tail: AudioNode = src.connect(g);
+                    if (pan && ctx.createStereoPanner) {
+                        const p = ctx.createStereoPanner();
+                        p.pan.value = pan;
+                        tail = tail.connect(p);
+                    }
+                    tail.connect(bus);
+                    src.onended = () => {
+                        if (this.speaking.get(speaker) === src) this.speaking.delete(speaker);
+                        done();
+                    };
+                    this.speaking.set(speaker, src);
+                    src.start();
+                }),
+        );
     }
 
     /** Play a music loop (null for silence); it starts once audio is unlocked. */
