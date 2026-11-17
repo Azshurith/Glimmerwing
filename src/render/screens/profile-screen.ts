@@ -148,7 +148,6 @@ export class ProfileScreen {
         ctx.translate(0, -dy);
 
         enter(ctx, 'hint', () => {
-
             ctx.textAlign = 'center';
             ctx.font = `7px ${ARCADE}`;
             ctx.fillStyle = 'rgba(203,188,245,0.75)';
@@ -161,7 +160,6 @@ export class ProfileScreen {
                       ? 'TAP MATCH HISTORY FOR YOUR GAMES  ·  ◀ BACK'
                       : '◀ ▶ TABS  ·  ESC BACK';
             ctx.fillText(hint, W / 2, tall ? H - 14 : H - 8, W - 16);
-
         });
         ctx.restore();
     }

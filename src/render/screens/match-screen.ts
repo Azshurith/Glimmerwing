@@ -173,7 +173,6 @@ export class MatchScreen {
         ctx.translate(0, -dy);
 
         enter(ctx, 'hint', () => {
-
             ctx.textAlign = 'center';
             ctx.font = `7px ${ARCADE}`;
             ctx.fillStyle = 'rgba(203,188,245,0.75)';
@@ -182,7 +181,6 @@ export class MatchScreen {
                     ? '◀ ▶ TABS  ·  ▲ ▼ GRAPHS  ·  ENTER WATCHES  ·  ESC BACK'
                     : '◀ ▶ TABS  ·  ENTER WATCHES  ·  ESC BACK';
             ctx.fillText(v.touch ? '◀ BACK TO THE HISTORY' : keys, W / 2, tall ? H - 14 : H - 8, W - 16);
-
         });
         ctx.restore();
     }
