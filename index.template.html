@@ -312,22 +312,22 @@
             /* ---- Settings: a full panel in the game's own look (gold edges, slanted tabs, Bungee) ---- */
             /* The Settings panel fills the screen below the canvas's own heading bar (drawn by the game's Settings
                screen, like every menu screen), so the bar and the ◀ Back tab are the same as everywhere else. */
-            /* The lobby's chat panel: where the lobby's layout puts it (--chat-*, set by main.ts), over the stage. */
+            /* The lobby's chat panel: the whole height at the left (--chat-*, set by main.ts from the lobby's layout),
+               over everything else on the lobby, the Back tab included (the panel has its own ✕). */
             #chat {
                 position: absolute;
                 left: var(--chat-x, 0);
                 top: var(--chat-y, 0);
                 width: var(--chat-w, 40%);
-                height: var(--chat-h, 70%);
-                z-index: 5;
+                height: var(--chat-h, 100%);
+                z-index: 20;
                 display: flex;
                 flex-direction: column;
                 font-family: 'Fraunces', Georgia, serif;
                 font-size: clamp(12px, calc(var(--sw, 600px) * 0.016), 18px);
                 color: #efe6ff;
-                background: rgba(14, 8, 36, 0.9);
-                border: 1px solid rgba(201, 162, 74, 0.6);
-                border-radius: 0.5em;
+                background: rgba(14, 8, 36, 0.94);
+                border-right: 1px solid rgba(201, 162, 74, 0.6);
                 box-shadow: 0 0.4em 1.6em rgba(0, 0, 0, 0.45);
                 overflow: hidden;
             }
