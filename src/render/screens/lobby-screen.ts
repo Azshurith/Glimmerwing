@@ -57,7 +57,7 @@ export interface LobbyLayout {
     quick: Box[];
     /** The next stage's card (none on a phone). */
     card: Box | null;
-    /** World chat's ticker (a tap opens the panel), and where the panel opens. */
+    /** World chat's ticker (a tap opens the panel), and where the panel opens: the whole height, at the left. */
     ticker: Box;
     chat: Box;
     /** The friends panel, and on a phone the tab on the right edge that pulls it out. */
@@ -83,7 +83,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
             quick: LOBBY_QUICK.map((_, i) => ({ x: 6, y: 44 + i * 44, w: 38, h: 40 })),
             card: null,
             ticker: { x: 8, y: H - 104, w: W - 16, h: 40 },
-            chat: { x: 6, y: 42, w: W - 12, h: H - 104 - 42 - 6 },
+            chat: { x: 0, y: 0, w: W, h: H },
             friends: { x: W - 160, y: 44, w: 154, h: playY - 56 },
             friendsTab: { x: W - 20, y: 116, w: 20, h: 96 },
             island: { x: W / 2, y: (44 + playY) / 2 - 46, r: 104 },
@@ -100,7 +100,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
         quick: LOBBY_QUICK.map((_, i) => ({ x: L + i * 40, y: 32, w: 38, h: 38 })),
         card: { x: L, y: 76, w: 118, h: 64 },
         ticker: { x: L, y: 238, w: 132, h: 40 },
-        chat: { x: L, y: 32, w: Math.max(150, Math.min(250, W / 2 - 112 + bleed)), h: 246 },
+        chat: { x: -bleed, y: 0, w: Math.max(170, Math.min(280, W / 2 - 108 + bleed)), h: C.VIEW_H },
         friends: { x: R - 124, y: 32, w: 124, h: 246 },
         friendsTab: null,
         island: { x: W / 2, y: 112, r: 104 },
