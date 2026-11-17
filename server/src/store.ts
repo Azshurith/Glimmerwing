@@ -13,7 +13,7 @@ import { Player } from './database/entities/player';
 import { ProgressRow } from './database/entities/progress';
 import { ReplayRow } from './database/entities/replay';
 import { SettingsRow } from './database/entities/settings';
-import type { EndlessRank, LeaderEntry, Progress, ReplaySummary } from '@/types';
+import type { EndlessRank, HistoryEntry, LeaderEntry, Progress, ReplaySummary } from '@/types';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -49,6 +49,8 @@ export interface MatchInput {
     bestChain: number;
     trophyDelta: number;
     seconds: number;
+    /** The players_replays id of its replay. */
+    replayId?: string | null;
 }
 
 /** A finished Endless run. */
@@ -58,6 +60,8 @@ export interface EndlessInput {
     fairy: string;
     map: string;
     bestChain: number;
+    /** The players_replays id of its replay. */
+    replayId?: string | null;
 }
 
 /** A replay to keep. */
@@ -195,6 +199,7 @@ export class Store {
             bestChain: m.bestChain,
             trophyDelta: m.trophyDelta,
             seconds: m.seconds,
+            replayId: m.replayId ?? null,
         });
     }
 
@@ -217,6 +222,57 @@ export class Store {
         }));
     }
 
+    /** The player's match history, newest first: matches and Endless runs together, each with its replay's code. */
+    async history(id: number, limit: number): Promise<HistoryEntry[]> {
+        const rows = await this.rows<{
+            mode: string;
+            map: string;
+            fairy: string;
+            rival_fairy: string | null;
+            rounds_won: number;
+            rounds_lost: number;
+            won: number;
+            best_chain: number;
+            trophy_delta: number;
+            seconds: number;
+            guardians: number;
+            created_at: Date;
+            replay: string | null;
+            recorded: string | number | null;
+        }>(
+            `SELECT h.*, t.code AS mode, m.code AS map, f.code AS fairy, rf.code AS rival_fairy, r.code AS replay,
+                r.recorded FROM (
+                SELECT mode_id, map_id, fairy_id, rival_fairy_id, rounds_won, rounds_lost, won, best_chain,
+                    trophy_delta, seconds, 0 AS guardians, replay_id, created_at
+                FROM players_matches WHERE player_id = ? AND deleted_at IS NULL
+                UNION ALL
+                SELECT (SELECT id FROM types_modes WHERE code = 'endless'), map_id, fairy_id, NULL, 0, 0, 0,
+                    best_chain, 0, seconds, guardians, replay_id, created_at
+                FROM players_runs WHERE player_id = ? AND deleted_at IS NULL
+             ) h JOIN types_modes t ON t.id = h.mode_id JOIN maps m ON m.id = h.map_id
+                JOIN characters f ON f.id = h.fairy_id LEFT JOIN characters rf ON rf.id = h.rival_fairy_id
+                LEFT JOIN players_replays r ON r.id = h.replay_id AND r.deleted_at IS NULL
+             ORDER BY h.created_at DESC LIMIT ?`,
+            [id, id, limit],
+        );
+        return rows.map(x => ({
+            mode: x.mode,
+            map: x.map,
+            fairy: x.fairy,
+            rivalFairy: x.rival_fairy,
+            roundsWon: Number(x.rounds_won),
+            roundsLost: Number(x.rounds_lost),
+            won: !!Number(x.won),
+            bestChain: Number(x.best_chain),
+            trophyDelta: Number(x.trophy_delta),
+            seconds: Number(x.seconds),
+            guardians: Number(x.guardians),
+            at: iso(x.created_at),
+            replay: x.replay,
+            recorded: x.recorded == null ? null : Number(x.recorded),
+        }));
+    }
+
     /** Add an Endless run; answers with where the player's best now ranks. */
     async addEndless(id: number, r: EndlessInput): Promise<EndlessRank | null> {
         await this.runs.insert({
@@ -226,6 +282,7 @@ export class Store {
             fairyId: this.catalog.characterId(r.fairy),
             mapId: this.catalog.mapId(r.map),
             bestChain: r.bestChain,
+            replayId: r.replayId ?? null,
         });
         return this.endlessRank(id);
     }
@@ -281,12 +338,12 @@ export class Store {
         }));
     }
 
-    /** Keep a replay; answers with its share code. */
-    async addReplay(id: number, r: ReplayInput): Promise<string> {
+    /** Keep a replay; answers with its row id and share code. */
+    async addReplay(id: number, r: ReplayInput): Promise<{ id: string; code: string }> {
         for (;;) {
             const code = replayCode();
             try {
-                await this.replays.insert({
+                const res = await this.replays.insert({
                     code,
                     playerId: id,
                     modeId: this.catalog.modeId(r.mode),
@@ -296,7 +353,7 @@ export class Store {
                     recorded: r.recorded || null,
                     data: r.data as object,
                 });
-                return code;
+                return { id: String(res.identifiers[0]?.id), code };
             } catch (e) {
                 // Another replay drew the same code: draw again.
                 if (!duplicateOn(e, 'replays_code')) throw e;

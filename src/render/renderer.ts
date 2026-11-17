@@ -12,7 +12,7 @@ import type {
     ModeView,
     ProfileView,
     ReplayPanelView,
-    ReplaysView,
+    MatchInfoView,
     RosterView,
     Layer,
     Layout,
@@ -44,7 +44,7 @@ import { SkyScenery } from './scenery/scenery';
 import { MapScreen } from './screens/map-screen';
 import { ModeScreen } from './screens/mode-screen';
 import { ProfileScreen } from './screens/profile-screen';
-import { ReplaysScreen } from './screens/replays-screen';
+import { MatchScreen } from './screens/match-screen';
 import { SettingsScreen } from './screens/settings-screen';
 import { RosterScreen } from './screens/roster-screen';
 import { MapsScreen } from './screens/maps-screen';
@@ -71,7 +71,7 @@ export class Renderer {
     private mapCards: HTMLCanvasElement[] = [];
     private mapFrame = 0;
     private profileScreen: ProfileScreen;
-    private replaysScreen: ReplaysScreen;
+    private matchScreen: MatchScreen;
     /** HUD, console, popups and banners for a match. */
     private hudLayer: Hud;
     /** The layout this frame uses; Game picks it each frame. */
@@ -117,7 +117,7 @@ export class Renderer {
         this.rosterScreen = new RosterScreen(this.ctx);
         this.mapsScreen = new MapsScreen(this.ctx);
         this.profileScreen = new ProfileScreen(this.ctx);
-        this.replaysScreen = new ReplaysScreen(this.ctx);
+        this.matchScreen = new MatchScreen(this.ctx);
         this.settingsScreen = new SettingsScreen(this.ctx);
         this.mapScreen = new MapScreen(this.ctx);
         this.hudLayer = new Hud(this.ctx);
@@ -510,9 +510,9 @@ export class Renderer {
         this.profileScreen.draw(v, time, this.layout, this.viewH, this.viewX);
     }
 
-    /** The Replays screen (see replays-screen.ts). */
-    replays(v: ReplaysView, time: number): void {
-        this.replaysScreen.draw(v, time, this.layout, this.viewH, this.viewX);
+    /** The match details screen (see match-screen.ts). */
+    matchInfo(v: MatchInfoView, time: number): void {
+        this.matchScreen.draw(v, time, this.layout, this.viewH, this.viewX);
     }
 
     /** The Settings screen's sky and heading bar; the settings are the page's panel (see settings-screen.ts). */

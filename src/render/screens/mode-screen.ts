@@ -30,8 +30,7 @@ const MENUS: Record<ModeMenu, Omit<ModeCard, 'x' | 'y' | 'w' | 'h'>[]> = {
         { action: 'play', label: 'PLAY', sub: 'Story, VS CPU, endless, online or two players', color: '#ffd45c' },
         { action: 'characters', label: 'CHARACTERS', sub: 'Meet the fairies and their skills', color: '#ff9ac8' },
         { action: 'maps', label: 'MAPS', sub: 'Stages, formations and monsters', color: '#8ff0a0' },
-        { action: 'profile', label: 'PROFILE', sub: 'Your record and unlocks', color: '#8fd8ff' },
-        { action: 'replays', label: 'REPLAYS', sub: 'Watch your matches and runs again', color: '#ff8a5c' },
+        { action: 'profile', label: 'PROFILE', sub: 'Your record, unlocks and match history', color: '#8fd8ff' },
         { action: 'settings', label: 'SETTINGS', sub: 'Screen and play options', color: '#c9b8ff' },
     ],
     play: [
@@ -418,26 +417,6 @@ export class ModeScreen {
                 ctx.closePath();
                 ctx.fill();
                 ctx.restore();
-                break;
-            }
-            case 'replays': {
-                // A strip of film with a play mark on it.
-                ctx.beginPath();
-                ctx.rect(-17, -13, 34, 26);
-                ctx.globalAlpha = 0.25;
-                ctx.fill();
-                ctx.globalAlpha = 1;
-                ctx.stroke();
-                for (let i = 0; i < 4; i++) {
-                    ctx.fillRect(-14 + i * 8.5, -11, 4, 3);
-                    ctx.fillRect(-14 + i * 8.5, 8, 4, 3);
-                }
-                ctx.beginPath();
-                ctx.moveTo(-5, -6);
-                ctx.lineTo(7, 0);
-                ctx.lineTo(-5, 6);
-                ctx.closePath();
-                ctx.fill();
                 break;
             }
             case 'profile': {

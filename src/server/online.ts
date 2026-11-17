@@ -68,7 +68,7 @@ export class OnlineMatch {
     private steps = 0;
     private outgoing: (number[][] | null)[] = [];
     private firstUnsent = 0;
-    /** The match as a replay (for both players' Replays screens), and what it counts for each player. */
+    /** The match as a replay (for both players' match histories), and what it counts for each player. */
     private tapes: [TapeWriter, TapeWriter] | null = null;
     private rounds: ReplayRound[] = [];
     private seed = 0;

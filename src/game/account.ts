@@ -3,6 +3,7 @@ import { freshProgress } from './rewards';
 import type {
     CatalogResponse,
     EndlessRank,
+    HistoryEntry,
     LeaderEntry,
     MeResponse,
     Progress,
@@ -264,6 +265,12 @@ export class Account {
     async listReplays(): Promise<ReplaySummary[]> {
         if (!this.base || !this.stored) return [];
         return apiCall<ReplaySummary[]>(this.base, 'GET', '/me/replays?limit=30', undefined, this.stored.token);
+    }
+
+    /** The player's match history on the server, newest first, each game with its replay's code (empty with none). */
+    async history(): Promise<HistoryEntry[]> {
+        if (!this.base || !this.stored) return [];
+        return apiCall<HistoryEntry[]>(this.base, 'GET', '/me/history?limit=50', undefined, this.stored.token);
     }
 
     /** Fetch a replay by its share code (anyone's). */

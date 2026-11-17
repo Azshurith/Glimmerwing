@@ -14,6 +14,7 @@ import { IntegerIdsAndPlayerTables1763251200002 } from './migrations/17632512000
 import { ModeSwitch1763251200003 } from './migrations/1763251200003-mode-switch';
 import { Art1763251200004 } from './migrations/1763251200004-art';
 import { RenameStella1763251200005 } from './migrations/1763251200005-rename-stella';
+import { HistoryReplays1763251200006 } from './migrations/1763251200006-history-replays';
 
 /** Every table's entity. */
 export const ENTITIES = [
@@ -51,6 +52,7 @@ export function dataSource(env: NodeJS.ProcessEnv = process.env): DataSource {
             ModeSwitch1763251200003,
             Art1763251200004,
             RenameStella1763251200005,
+            HistoryReplays1763251200006,
         ],
         migrationsTableName: 'migrations',
         synchronize: false,

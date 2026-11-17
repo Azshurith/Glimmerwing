@@ -89,32 +89,54 @@ export interface ProfileView {
     /** The best Endless runs of all, best first, and which of them is the player's (by account id). */
     leaders: LeaderEntry[];
     me: number | null;
+    /** Which tab is showing, and the match history: its rows, cursor, first row in view and a line in their place. */
+    tab: ProfileTab;
+    history: HistoryRow[];
+    index: number;
+    start: number;
+    message: string;
 }
 
-/** One replay in the Replays screen's list. */
-export interface ReplayRow {
-    /** The mode, on a coloured tag: VS CPU, 2 PLAYERS or ENDLESS. */
+/** Which half of the Profile screen is showing: the record and unlocks, or the match history. */
+export type ProfileTab = 'record' | 'history';
+
+/** One game in Profile's match history. */
+export interface HistoryRow {
+    /** The mode, on a coloured tag: VS CPU, 2 PLAYERS, ONLINE or ENDLESS. */
     tag: string;
     color: string;
-    /** Who flew (e.g. "Stella vs Clove"), and the map, result and length. */
+    /** Who flew (e.g. "Stella vs Clove"). */
     title: string;
+    /** The result on the right: WIN 2-1, LOSS 1-2, or an Endless run's time. */
+    result: string;
+    resultColor: string;
+    /** The map, the length and the trophies won or lost. */
     detail: string;
     /** When it was played. */
     when: string;
-    /** Kept only in this browser (not saved to the server). */
+    /** Kept only in this browser (not yet saved to the server). */
     local: boolean;
 }
 
-/** What the Replays screen shows. */
-export interface ReplaysView {
+/** What the match details screen shows: one game from the history, in full, with its replay to watch. */
+export interface MatchInfoView {
     touch: boolean;
-    rows: ReplayRow[];
-    index: number;
-    /** The first row in view (the list scrolls with the cursor). */
-    start: number;
-    /** A line in place of the list while it loads, or when it's empty. */
-    message: string;
-    /** The chosen replay's share link (empty when it has none), and a short note such as "Link copied". */
+    tag: string;
+    color: string;
+    /** VICTORY, DEFEAT or RUN OVER, and the line under it (when it was played). */
+    banner: string;
+    won: boolean;
+    when: string;
+    /** The player's fairy and the rival's (null in Endless), by id. */
+    fairy: string;
+    rival: string | null;
+    /** The rounds (e.g. "2 - 1"), or an Endless run's time, and the line under it. */
+    score: string;
+    scoreLabel: string;
+    /** The numbers, as tiles. */
+    stats: [label: string, value: string][];
+    /** Whether there's a replay to watch, its share link (empty without one) and a short note. */
+    hasReplay: boolean;
     link: string;
     note: string;
 }
@@ -133,7 +155,6 @@ export type TitleAction =
     | 'versus'
     | 'online'
     | 'settings'
-    | 'replays'
     | 'guide';
 
 /** What the Maps screen shows: the map in view, which are locked, your trophies and the demo's caption. */

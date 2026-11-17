@@ -14,6 +14,7 @@
 //   POST /api/results              {replay}                -> {progress, trophyDelta, unlocked, …, code, rank}
 //   POST /api/me/reset                                     -> {progress}
 //   GET  /api/me/matches?limit=                            -> [match]
+//   GET  /api/me/history?limit=                            -> [match or Endless run, with its replay's code]
 //   GET  /api/me/replays?limit=                            -> [replay summary]
 //
 // The server decides progress: a browser can't send its own. A finished game is sent as its replay, which the
@@ -128,7 +129,7 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
         const v = await verifier.verify(replay, saved?.data ?? null, catalog.off());
         if (!v.ok) throw new HttpError(422, v.error, !!v.stale);
         await s.setProgress(p.id, v.progress);
-        const code = await s.addReplay(p.id, {
+        const kept = await s.addReplay(p.id, {
             mode: v.outcome.mode,
             map: v.map,
             version: String(r.sim ?? '').slice(0, 16),
@@ -144,6 +145,7 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
                 fairy: v.fairies[0],
                 map: v.map,
                 bestChain: v.outcome.bestChain,
+                replayId: kept.id,
             });
         } else {
             const [won, lost] = v.outcome.wins;
@@ -158,6 +160,7 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
                 bestChain: v.outcome.bestChain,
                 trophyDelta: v.trophyDelta,
                 seconds: v.seconds,
+                replayId: kept.id,
             });
         }
         return {
@@ -167,7 +170,7 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
             unlocked: v.unlocked,
             newStages: v.newStages,
             endlessNew: v.endlessNew,
-            code,
+            code: kept.code,
             rank,
         };
     }
@@ -269,6 +272,9 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
     });
     api.get('/me/matches', async (req, res) => {
         res.json(await db().recentMatches(me(res).id, limitOf(req, 20, 200)));
+    });
+    api.get('/me/history', async (req, res) => {
+        res.json(await db().history(me(res).id, limitOf(req, 30, 200)));
     });
     api.get('/me/replays', async (req, res) => {
         res.json(await db().listReplays(me(res).id, limitOf(req, 20, 200)));

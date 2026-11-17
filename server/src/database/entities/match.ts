@@ -42,4 +42,8 @@ export class MatchRow extends Timestamped {
 
     @Column({ type: 'double', default: 0 })
     seconds!: number;
+
+    /** The players_replays id of the game's replay, if it has one. */
+    @Column({ name: 'replay_id', type: 'bigint', unsigned: true, nullable: true })
+    replayId!: string | null;
 }
