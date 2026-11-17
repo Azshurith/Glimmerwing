@@ -8,6 +8,7 @@ import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
 import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
+import { enter } from '@/render/transition';
 
 // Layout, in view units (504 x 320).
 const PANEL_W = 160;
@@ -117,12 +118,13 @@ export class SelectScreen {
             this.h = f.h;
             this.dy = tallShift(f.h);
             this.bleed = f.bleed;
-            this.backdrop.draw(t, C.TALL_W / 2, (150 + this.dy) * f.s, C.TALL_W, h);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.TALL_W / 2, (150 + this.dy) * f.s, C.TALL_W, h));
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
             const g = { ...TALL_PANEL, artY: TALL_PANEL.artY + this.dy };
             v.sides.forEach((s, i) => {
-                if (i === 0 || !v.solo) this.panel(s, TALL_PANEL_X[i], i === 1, t, g);
+                if (i === 0 || !v.solo)
+                    enter(ctx, 'panels', () => this.panel(s, TALL_PANEL_X[i], i === 1, t, g), { dx: i ? 22 : -22 });
             });
         } else {
             this.h = h;
@@ -131,16 +133,19 @@ export class SelectScreen {
             this.bleed = bleed;
             ctx.save();
             ctx.translate(-bleed, 0);
-            this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
             ctx.restore();
             // On a widened view the two fairies' panels move out to the screen's edges.
             // A solo run has no rival, so no second panel.
             v.sides.forEach((s, i) => {
-                if (i === 0 || !v.solo) this.panel(s, PANEL_X[i] + (i === 0 ? -bleed : bleed), i === 1, t);
+                if (i === 0 || !v.solo)
+                    enter(ctx, 'panels', () => this.panel(s, PANEL_X[i] + (i === 0 ? -bleed : bleed), i === 1, t), {
+                        dx: i ? 22 : -22,
+                    });
             });
         }
-        this.header(v.heading);
-        this.centre(v, t);
+        enter(ctx, 'bar', () => this.header(v.heading));
+        enter(ctx, 'buttons', () => this.centre(v, t), { dy: 10 });
         ctx.restore();
     }
 

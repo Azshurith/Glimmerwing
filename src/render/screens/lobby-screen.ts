@@ -16,6 +16,7 @@ import { ARCADE, SANS } from '@/render/theme';
 import { drawBadge, drawEmblem, hexA, roundRect } from './emblems';
 import { tallMenuFit } from './menu-fit';
 import { drawMedal } from './profile-screen';
+import { enter } from '@/render/transition';
 
 /** A box, in design or view units. */
 export interface Box {
@@ -158,23 +159,31 @@ export class LobbyScreen {
         }
         const lay = designLayout(layout, H, tall ? 0 : bleed);
         const theme = mapById(v.map);
-        this.sky(t, W, H, bleed, lay.island);
-        if (theme) this.island(v.map, theme, lay.island, t, stage);
-        this.stageName(v, lay.island.x, lay.play.y - 10);
-        this.topBar(v, t, W, bleed, tall);
-        lay.quick.forEach((b, i) => this.quick(b, i, t));
-        if (lay.card && v.next) this.card(v, lay.card, t, stage);
-        this.modeButton(v, lay, t);
-        this.ticker(v, lay.ticker, t);
-        if (!tall || v.friendsOpen) this.friends(lay.friends, t);
-        if (lay.friendsTab && !v.friendsOpen) this.friendsTab(lay.friendsTab, t);
-        this.nav(v, lay.nav, t, W, bleed, tall);
+        // Coming in from another screen, the bar and buttons pop in first, then the sky and the island rise out of the
+        // dark, then the panels slide in (see render/transition.ts).
+        enter(ctx, 'bg', () => this.sky(t, W, H, bleed, lay.island));
+        if (theme) enter(ctx, 'panels', () => this.island(v.map, theme, lay.island, t, stage), { dx: 0, dy: 14 });
+        enter(ctx, 'panels', () => this.stageName(v, lay.island.x, lay.play.y - 10), { dx: 0, dy: 8 });
+        enter(ctx, 'bar', () => this.topBar(v, t, W, bleed, tall));
+        lay.quick.forEach((b, i) => enter(ctx, 'buttons', () => this.quick(b, i, t), { box: b, i }));
+        const card = lay.card;
+        if (card && v.next) enter(ctx, 'panels', () => this.card(v, card, t, stage), { dx: -22 });
+        enter(ctx, 'buttons', () => this.modeButton(v, lay, t), { box: lay.play, i: 2 });
+        enter(ctx, 'panels', () => this.ticker(v, lay.ticker, t), { dx: -22 });
+        if (!tall || v.friendsOpen) enter(ctx, 'panels', () => this.friends(lay.friends, t), { dx: 22 });
+        if (lay.friendsTab && !v.friendsOpen) {
+            const tab = lay.friendsTab;
+            enter(ctx, 'buttons', () => this.friendsTab(tab, t), { box: tab, i: 3 });
+        }
+        enter(ctx, 'buttons', () => this.nav(v, lay.nav, t, W, bleed, tall), { i: 1, dy: 10 });
         if (!v.touch && !v.chatOpen && !v.mode.off) {
-            ctx.textAlign = 'center';
-            ctx.font = `5px ${ARCADE}`;
-            ctx.fillStyle = 'rgba(255,236,220,0.75)';
-            const y = lay.play.y + lay.play.h + (tall ? 10 : 9);
-            ctx.fillText('◀ ▶ MODE  ·  ENTER PLAY  ·  ▼ MENU  ·  T CHAT', lay.island.x, y, tall ? W - 20 : 230);
+            enter(ctx, 'hint', () => {
+                ctx.textAlign = 'center';
+                ctx.font = `5px ${ARCADE}`;
+                ctx.fillStyle = 'rgba(255,236,220,0.75)';
+                const y = lay.play.y + lay.play.h + (tall ? 10 : 9);
+                ctx.fillText('◀ ▶ MODE  ·  ENTER PLAY  ·  ▼ MENU  ·  T CHAT', lay.island.x, y, tall ? W - 20 : 230);
+            });
         }
         ctx.restore();
     }

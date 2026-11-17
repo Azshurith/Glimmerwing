@@ -8,6 +8,7 @@ import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
 import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
+import { enter } from '@/render/transition';
 
 /** What each charge-shot style does. */
 const SHOT_TEXT: Record<string, string> = {
@@ -139,7 +140,7 @@ export class RosterScreen {
             dy = 0;
         if (layout === 'tall') {
             const f = tallMenuFit(h);
-            this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h));
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
             bleed = f.bleed;
@@ -148,27 +149,31 @@ export class RosterScreen {
         } else {
             ctx.save();
             ctx.translate(-bleed, 0);
-            this.backdrop.draw(t, 90 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, 90 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
             ctx.restore();
         }
         const L = LAYOUT[layout];
-        drawTopBar(ctx, 'CHARACTERS', L.W, bleed, layout === 'tall', 16);
+        enter(ctx, 'bar', () => drawTopBar(ctx, 'CHARACTERS', L.W, bleed, layout === 'tall', 16));
         const fy = FAIRIES[v.index],
             locked = v.locked[v.index];
         ctx.save();
         ctx.translate(0, dy);
         const { art, demo: win, info } = layout === 'wide' ? spread(bleed) : L;
-        this.art(fy, locked, art, t);
-        if (layout === 'wide') this.demo(fy, locked, win, v.caption, demo);
-        else if (!locked) this.previewButton(fy, t);
-        this.info(fy, locked, info, layout === 'tall', t);
+        enter(ctx, 'panels', () => this.art(fy, locked, art, t), { dx: -22 });
+        if (layout === 'wide') enter(ctx, 'panels', () => this.demo(fy, locked, win, v.caption, demo), { dx: 22 });
+        else if (!locked) enter(ctx, 'buttons', () => this.previewButton(fy, t), { i: 4 });
+        enter(ctx, 'panels', () => this.info(fy, locked, info, layout === 'tall', t), { dx: 0, dy: 10 });
         ctx.restore();
-        designMedallions(layout, dy).forEach((m, i) => this.medallion(FAIRIES[i], v.locked[i], m, i === v.index, t));
-        ctx.textAlign = 'center';
-        ctx.font = `7px ${ARCADE}`;
-        ctx.fillStyle = 'rgba(203,188,245,0.75)';
-        const hint = v.touch ? 'TAP A FAIRY  ·  ◀ BACK' : 'LEFT / RIGHT BROWSE  ·  ESC BACK';
-        ctx.fillText(hint, L.W / 2, layout === 'tall' ? H - 14 : H - 10, L.W - 16);
+        designMedallions(layout, dy).forEach((m, i) =>
+            enter(ctx, 'buttons', () => this.medallion(FAIRIES[i], v.locked[i], m, i === v.index, t), { i }),
+        );
+        enter(ctx, 'hint', () => {
+            ctx.textAlign = 'center';
+            ctx.font = `7px ${ARCADE}`;
+            ctx.fillStyle = 'rgba(203,188,245,0.75)';
+            const hint = v.touch ? 'TAP A FAIRY  ·  ◀ BACK' : 'LEFT / RIGHT BROWSE  ·  ESC BACK';
+            ctx.fillText(hint, L.W / 2, layout === 'tall' ? H - 14 : H - 10, L.W - 16);
+        });
         if (layout === 'tall' && v.demoOpen && !locked) this.popup(fy, v, H, demo);
         ctx.restore();
     }

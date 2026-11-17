@@ -12,6 +12,7 @@ import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { drawMedal } from './profile-screen';
+import { enter } from '@/render/transition';
 
 /** How far the tall screen's content moves down to sit centred in a view `h` tall. */
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
@@ -137,7 +138,7 @@ export class MatchScreen {
             dy = 0;
         if (tall) {
             const f = tallMenuFit(h);
-            this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h));
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
             bleed = f.bleed;
@@ -147,30 +148,40 @@ export class MatchScreen {
         } else {
             ctx.save();
             ctx.translate(-bleed, 0);
-            this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
             ctx.restore();
         }
-        drawTopBar(ctx, 'MATCH DETAILS', W, bleed, tall, 16);
+        enter(ctx, 'bar', () => drawTopBar(ctx, 'MATCH DETAILS', W, bleed, tall, 16));
         const lay = designLayout(layout, 0);
         ctx.translate(0, dy);
-        lay.tabs.forEach((b, i) => this.tab(b, TAB_LABELS[MATCH_TABS[i]], MATCH_TABS[i] === v.tab, v.color));
-        if (v.tab === 'overview') this.overview(v, t, tall, W, lay);
-        else if (!v.stats) this.waiting(v, W, tall);
-        else if (v.tab === 'scoreboard') this.scoreboard(v, v.stats, t, tall, W, bleed);
+        lay.tabs.forEach((b, i) =>
+            enter(ctx, 'buttons', () => this.tab(b, TAB_LABELS[MATCH_TABS[i]], MATCH_TABS[i] === v.tab, v.color), {
+                box: b,
+                i,
+            }),
+        );
+        const stats = v.stats;
+        if (v.tab === 'overview') enter(ctx, 'panels', () => this.overview(v, t, tall, W, lay));
+        else if (!stats) this.waiting(v, W, tall);
+        else if (v.tab === 'scoreboard') enter(ctx, 'panels', () => this.scoreboard(v, stats, t, tall, W, bleed));
         else {
-            lay.graphs.forEach((b, i) => this.tab(b, GRAPHS[i], i === v.graph, '#c9b8ff', 6));
-            this.graph(v, v.stats, tall, W, bleed);
+            lay.graphs.forEach((b, i) =>
+                enter(ctx, 'buttons', () => this.tab(b, GRAPHS[i], i === v.graph, '#c9b8ff', 6), { box: b, i: i + 3 }),
+            );
+            enter(ctx, 'panels', () => this.graph(v, stats, tall, W, bleed));
         }
         ctx.translate(0, -dy);
 
-        ctx.textAlign = 'center';
-        ctx.font = `7px ${ARCADE}`;
-        ctx.fillStyle = 'rgba(203,188,245,0.75)';
-        const keys =
-            v.tab === 'graphs'
-                ? '◀ ▶ TABS  ·  ▲ ▼ GRAPHS  ·  ENTER WATCHES  ·  ESC BACK'
-                : '◀ ▶ TABS  ·  ENTER WATCHES  ·  ESC BACK';
-        ctx.fillText(v.touch ? '◀ BACK TO THE HISTORY' : keys, W / 2, tall ? H - 14 : H - 8, W - 16);
+        enter(ctx, 'hint', () => {
+            ctx.textAlign = 'center';
+            ctx.font = `7px ${ARCADE}`;
+            ctx.fillStyle = 'rgba(203,188,245,0.75)';
+            const keys =
+                v.tab === 'graphs'
+                    ? '◀ ▶ TABS  ·  ▲ ▼ GRAPHS  ·  ENTER WATCHES  ·  ESC BACK'
+                    : '◀ ▶ TABS  ·  ENTER WATCHES  ·  ESC BACK';
+            ctx.fillText(v.touch ? '◀ BACK TO THE HISTORY' : keys, W / 2, tall ? H - 14 : H - 8, W - 16);
+        });
         ctx.restore();
     }
 

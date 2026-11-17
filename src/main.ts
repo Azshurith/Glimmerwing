@@ -7,6 +7,7 @@ import { roundMusic } from './data/music';
 import { modeAvailable } from './data/availability';
 import { Renderer } from './render/renderer';
 import { AdaptiveResolution } from './render/resolution';
+import { ScreenTransition } from './render/transition';
 import { initChatPanel } from './page/chat-panel';
 import { initSettingsPanel } from './page/settings-panel';
 import { lobbyLayout } from './render/screens/lobby-screen';
@@ -288,6 +289,10 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 
 // Fixed-step simulation, decoupled from display refresh rate.
 const resolution = new AdaptiveResolution();
+/** The staged entrance of each menu screen (see render/transition.ts). */
+const wipe = new ScreenTransition();
+/** Players who ask for less motion get no entrance: the new screen just shows. */
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let last = performance.now();
 let acc = 0;
 /** One animation frame: run as many fixed simulation steps as time has passed, then draw. */
@@ -300,6 +305,7 @@ function frame(now: number) {
         renderer.resize();
     }
     last = now;
+    const was = game.phaseName;
     while (acc >= C.STEP) {
         // A replay can be fast-forwarded: several steps in each step's time.
         for (let i = game.speed; i > 0; i--) {
@@ -308,7 +314,13 @@ function frame(now: number) {
         }
         acc -= C.STEP;
     }
+    // Moving between menu screens: the canvas still shows the one being left, which fades away
+    // as the new one builds itself up.
+    const now2 = game.phaseName;
+    if (ScreenTransition.between(was, now2) && !game.watching && !reducedMotion.matches)
+        wipe.begin(canvas, now2 === 'modes' || now2 === 'title');
     game.draw();
+    wipe.draw(canvas);
     syncPage();
     requestAnimationFrame(frame);
 }
