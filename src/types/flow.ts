@@ -19,7 +19,7 @@ export type Phase =
     | 'profile'
     | 'maps'
     | 'settings'
-    | 'replays'
+    | 'matchinfo'
     | 'select'
     | 'mapselect'
     | 'countdown'

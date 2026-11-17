@@ -199,7 +199,7 @@ function syncPage(): void {
         // While a replay plays, the button (Esc) leaves it.
         const back =
             game.watching ||
-            ['select', 'mapselect', 'modes', 'roster', 'maps', 'profile', 'settings', 'replays'].includes(shownPhase);
+            ['select', 'mapselect', 'modes', 'roster', 'maps', 'profile', 'settings', 'matchinfo'].includes(shownPhase);
         menuBtn.textContent = back ? '◀ BACK' : '❚❚';
         menuBtn.setAttribute('aria-label', back ? 'Back' : 'Pause');
         void keepAwake(shownPhase === 'playing' || shownPhase === 'countdown');
@@ -235,7 +235,7 @@ function pickMusic(): void {
     }
     mapsBrowsed = '';
     // The menus have their own loop; everything from the countdown on plays the round's.
-    const menus = ['modes', 'roster', 'profile', 'settings', 'replays'].includes(phase);
+    const menus = ['modes', 'roster', 'profile', 'settings', 'matchinfo'].includes(phase);
     const picking = phase === 'select' || phase === 'mapselect';
     sound.playMusic(phase === 'title' ? null : picking ? 'select' : menus ? 'menu' : roundMusic(game.roundMap));
 }

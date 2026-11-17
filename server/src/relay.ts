@@ -92,6 +92,14 @@ export class Relay {
                 return turns.run(id, async () => {
                     await store.setProgress(id, r.progress);
                     const [won, lost] = r.outcome.wins;
+                    const saved = await store.addReplay(id, {
+                        mode: 'online',
+                        map: r.map,
+                        version: r.replay.sim,
+                        seconds: r.seconds,
+                        recorded: r.replay.at,
+                        data: r.replay,
+                    });
                     await store.addMatch(id, {
                         mode: 'online',
                         map: r.map,
@@ -103,15 +111,9 @@ export class Relay {
                         bestChain: r.outcome.bestChain,
                         trophyDelta: r.trophyDelta,
                         seconds: r.seconds,
+                        replayId: saved.id,
                     });
-                    return store.addReplay(id, {
-                        mode: 'online',
-                        map: r.map,
-                        version: r.replay.sim,
-                        seconds: r.seconds,
-                        recorded: r.replay.at,
-                        data: r.replay,
-                    });
+                    return saved.code;
                 });
             },
             fairyOn: id => catalog.fairyOn(id),

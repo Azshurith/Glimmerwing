@@ -33,8 +33,10 @@ import type {
     ReplayData,
     ReplayHighlight,
     ReplayRound,
-    ReplayRow,
-    ReplaySummary,
+    HistoryEntry,
+    HistoryRow,
+    MatchInfoView,
+    ProfileTab,
     Placement,
     Progress,
     Settings,
@@ -62,7 +64,21 @@ import {
     saveLocalReplay,
     unpackControls,
 } from './replay';
-import { REPLAY_ROWS, replayLinkBox, replayRowBoxes } from '@/render/screens/replays-screen';
+import { HISTORY_ROWS, profileBoxes } from '@/render/screens/profile-screen';
+import { matchButtons } from '@/render/screens/match-screen';
+
+/** The phases before a match is under way: the title, the menu screens and select. */
+const MENU_PHASES: Phase[] = [
+    'title',
+    'modes',
+    'roster',
+    'maps',
+    'profile',
+    'settings',
+    'matchinfo',
+    'select',
+    'mapselect',
+];
 
 /** One player's cursor on the select screen, and whether they have locked in their pick. */
 interface Picker {
@@ -236,12 +252,18 @@ export class Game {
     /** The last match's recording, and its code on the server once saved there (null until then, or offline). */
     lastReplay: ReplayData | null = null;
     lastReplayCode: string | null = null;
-    /** The Replays screen: its list (a server code, or 'local' for this browser's own copy), cursor and lines. */
-    private replayList: { code: string; s: ReplaySummary }[] = [];
-    private replaysIndex = 0;
-    private replaysMessage = '';
-    private replaysNote = '';
-    private replaysNoteT = 0;
+    /**
+     * Profile's tab, and its match history: the games (a replay is a server code, or 'local' for this browser's own
+     * copy not yet on the server), the cursor, a line in the list's place, and a short note on the details screen.
+     */
+    private profileTab: ProfileTab = 'record';
+    private history: HistoryEntry[] = [];
+    private historyIndex = 0;
+    private historyMessage = '';
+    private historyNote = '';
+    private historyNoteT = 0;
+    /** Where leaving a replay goes: the game's details, or (a shared link's replay) the history. */
+    private replayFrom: 'matchinfo' | 'profile' = 'matchinfo';
     /** A map forced by the page's address (`?map=<id>`), for trying a map out. */
     private forcedMap =
         typeof location === 'undefined' ? null : mapById(new URLSearchParams(location.search).get('map'));
@@ -597,7 +619,7 @@ export class Game {
 
     /**
      * Watch a recorded match: its fairies, map and rounds play out as they did, the recording flying both meadows.
-     * Nothing it does counts toward progress. Esc (or ◀ Back) leaves it for the Replays screen.
+     * Nothing it does counts toward progress. Esc (or ◀ Back) leaves it for the match's details.
      */
     watchReplay(data: ReplayData): void {
         if (this.net) this.disconnect();
@@ -816,64 +838,73 @@ export class Game {
         return false;
     }
 
-    /** Stop watching and go to the Replays screen. */
+    /** Stop watching and go back to the game's details (or Profile's history, for a shared link's replay). */
     exitReplay(): void {
         this.replay = null;
         this.paused = false;
         this.transits = [];
-        this.openReplays(false);
+        if (this.replayFrom === 'matchinfo' && this.history[this.historyIndex]) this.phase = 'matchinfo';
+        else this.openProfile('history', false);
+        this.historyNote = '';
         this.ui('tick');
     }
 
-    /** Open the Replays screen and fetch the list (keeping the cursor where it was, unless `fresh`). */
-    openReplays(fresh = true): void {
-        this.phase = 'replays';
-        if (fresh) this.replaysIndex = 0;
-        this.replaysNote = '';
-        if (!this.replayList.length) this.replaysMessage = 'Loading replays…';
-        void this.loadReplays();
+    /** Open the Profile screen on a tab and fetch the match history (the cursor stays put, unless `fresh`). */
+    openProfile(tab: ProfileTab = this.profileTab, fresh = true): void {
+        this.phase = 'profile';
+        this.profileTab = tab;
+        if (fresh) this.historyIndex = 0;
+        if (!this.history.length) this.historyMessage = 'Loading your games…';
+        void this.account.refreshLeaders();
+        void this.loadHistory();
     }
 
     /**
-     * Fill the Replays list: the player's replays on the server, and this browser's own last replay if the server
+     * Fill the match history: the player's games on the server, and this browser's own last game if the server
      * doesn't have it (it was played offline, or before there was a server).
      */
-    private async loadReplays(): Promise<void> {
-        let list: ReplaySummary[] = [];
+    private async loadHistory(): Promise<void> {
+        let list: HistoryEntry[] = [];
         let failed = false;
         try {
-            list = await this.account.listReplays();
+            list = await this.account.history();
         } catch {
             failed = true;
         }
-        const rows = list.map(s => ({ code: s.code, s }));
         const local = loadLocalReplay();
-        if (local && !list.some(s => s.recorded === local.at))
-            rows.unshift({
-                code: 'local',
-                s: {
-                    code: 'local',
-                    mode: local.mode,
-                    map: local.map,
-                    seconds: local.seconds,
-                    at: new Date(local.at).toISOString(),
-                    fairies: local.fairies,
-                    wins: local.wins,
-                    recorded: local.at,
-                },
+        if (local && !list.some(e => e.recorded === local.at)) {
+            const endless = local.mode === 'endless';
+            const [won, lost] = local.wins ?? [0, 0];
+            list.unshift({
+                mode: local.mode,
+                map: local.map,
+                fairy: local.fairies[0],
+                rivalFairy: endless ? null : local.fairies[1],
+                roundsWon: won,
+                roundsLost: lost,
+                won: !endless && won > lost,
+                bestChain: -1,
+                trophyDelta: 0,
+                seconds: local.seconds,
+                guardians: local.guardians ?? 0,
+                at: new Date(local.at).toISOString(),
+                replay: 'local',
+                recorded: local.at,
             });
-        this.replayList = rows;
-        this.replaysIndex = Math.min(this.replaysIndex, Math.max(0, rows.length - 1));
-        this.replaysMessage = rows.length
+        }
+        this.history = list;
+        this.historyIndex = Math.min(this.historyIndex, Math.max(0, list.length - 1));
+        this.historyMessage = list.length
             ? ''
             : failed || !this.account.hasServer
-              ? 'No replays here yet.\nPlay a match: it is recorded as you play,\nand saved here when the game server is reached.'
-              : 'No replays yet.\nEvery VS CPU, 2 Players and Endless game you play is recorded here.';
+              ? 'No games here yet.\nPlay a match: it is recorded as you play,\nand kept here when the game server is reached.'
+              : 'No games yet.\nEvery match and Endless run you play is kept here,\nwith its replay to watch again.';
     }
 
     /** Open a replay by its share code (a `?replay=` link): fetch it from the server and watch it. */
     openReplayCode(code: string): void {
-        this.openReplays();
+        this.openProfile('history');
+        this.replayFrom = 'profile';
         this.watchCode(code);
     }
 
@@ -884,70 +915,110 @@ export class Game {
             if (d) this.watchReplay(d);
             return;
         }
-        this.replaysNote = 'Loading replay…';
-        this.replaysNoteT = this.time;
+        this.historyNote = 'Loading replay…';
+        this.historyNoteT = this.time;
+        const from = this.phase;
         this.account
             .fetchReplay(code)
             .then(d => {
-                if (this.phase === 'replays') this.watchReplay(d);
+                if (this.phase === from && !this.replay) this.watchReplay(d);
             })
             .catch(() => {
-                this.replaysNote = "Couldn't load that replay";
-                this.replaysNoteT = this.time;
+                this.historyNote = "Couldn't load that replay";
+                this.historyNoteT = this.time;
             });
     }
 
     /** The share link for a replay saved on the server (empty for one kept only here, or a page from a file). */
-    private replayLink(code: string): string {
-        if (code === 'local' || typeof location === 'undefined' || !location.protocol.startsWith('http')) return '';
+    private replayLink(code: string | null): string {
+        if (!code || code === 'local' || typeof location === 'undefined' || !location.protocol.startsWith('http'))
+            return '';
         return `${location.origin}${location.pathname}?replay=${code}`;
     }
 
-    /** The first row in view on the Replays screen, keeping the cursor in sight. */
-    private get replaysStart(): number {
-        const n = this.replayList.length;
-        return Math.max(0, Math.min(this.replaysIndex - Math.floor(REPLAY_ROWS / 2), n - REPLAY_ROWS));
+    /** The first history row in view, keeping the cursor in sight. */
+    private get historyStart(): number {
+        const n = this.history.length,
+            rows = HISTORY_ROWS[this.r.layout];
+        return Math.max(0, Math.min(this.historyIndex - Math.floor(rows / 2), n - rows));
     }
 
-    /** The Replays screen: arrows choose, Enter (or a tap) watches, C (or a tap on the link) copies its link. */
-    private stepReplays(pr: Set<string>): void {
-        if (this.replaysNote && this.time - this.replaysNoteT > 2.5) this.replaysNote = '';
+    /**
+     * The Profile screen: left/right (or a tap on a tab) switches between the record and the match history; on the
+     * history, up/down choose a game and Enter (or a tap) opens its details. Esc goes back to the menu.
+     */
+    private stepProfile(pr: Set<string>): void {
         if (pr.has('Escape')) {
             this.backToMenu();
             return;
         }
-        const n = this.replayList.length;
-        if (!n) return;
-        const was = this.replaysIndex;
-        if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.replaysIndex = (this.replaysIndex + n - 1) % n;
-        if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.replaysIndex = (this.replaysIndex + 1) % n;
-        if (this.replaysIndex !== was) this.ui('tick');
-        const start = this.replaysStart;
+        const boxes = profileBoxes(this.r.layout, this.r.viewH, this.r.viewX);
         const tap = this.input.tap;
+        let tab = this.profileTab;
+        if (['ArrowLeft', 'KeyA', 'KeyQ'].some(k => pr.has(k))) tab = 'record';
+        if (['ArrowRight', 'KeyD', 'KeyE'].some(k => pr.has(k))) tab = 'history';
+        if (pr.has('Tab')) tab = tab === 'record' ? 'history' : 'record';
+        const onTab = tap ? boxes.tabs.findIndex(b => inBox(tap, b)) : -1;
+        if (onTab >= 0) tab = onTab ? 'history' : 'record';
+        if (tab !== this.profileTab) {
+            this.profileTab = tab;
+            this.ui('tick');
+            return;
+        }
+        if (tab !== 'history') return;
+        const n = this.history.length;
+        if (!n) return;
+        const was = this.historyIndex;
+        if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.historyIndex = (this.historyIndex + n - 1) % n;
+        if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.historyIndex = (this.historyIndex + 1) % n;
+        if (this.historyIndex !== was) this.ui('tick');
         let pick = -1;
         if (tap) {
-            const boxes = replayRowBoxes(this.r.layout, Math.min(REPLAY_ROWS, n - start), this.r.viewH);
-            const k = boxes.findIndex(b => inBox(tap, b));
+            const start = this.historyStart;
+            const k = boxes.rows.slice(0, n - start).findIndex(b => inBox(tap, b));
             if (k >= 0) pick = start + k;
-            else if (inBox(tap, replayLinkBox(this.r.layout, this.r.viewH))) this.copyReplayLink();
         }
         if (pick < 0 && ['Space', 'Enter', 'KeyZ', 'KeyG', 'NumpadEnter'].some(k => pr.has(k)))
-            pick = this.replaysIndex;
-        if (pr.has('KeyC')) this.copyReplayLink();
+            pick = this.historyIndex;
         if (pick < 0) return;
-        this.replaysIndex = pick;
+        this.historyIndex = pick;
+        this.historyNote = '';
+        this.phase = 'matchinfo';
         this.ui('ok');
-        this.watchCode(this.replayList[pick].code);
     }
 
-    /** Copy the chosen replay's share link to the clipboard. */
+    /** The match details screen: Enter (or Watch Replay) watches it, C (or Copy Link) copies its link; Esc leaves. */
+    private stepMatchInfo(pr: Set<string>): void {
+        if (this.historyNote && this.time - this.historyNoteT > 2.5) this.historyNote = '';
+        const e = this.history[this.historyIndex];
+        if (pr.has('Escape') || !e) {
+            this.openProfile('history', false);
+            this.ui('tick');
+            return;
+        }
+        const b = matchButtons(this.r.layout, this.r.viewH);
+        const tap = this.input.tap;
+        if (pr.has('KeyC') || (tap && inBox(tap, b.copy))) this.copyReplayLink();
+        const watch =
+            ['Space', 'Enter', 'KeyZ', 'KeyG', 'NumpadEnter'].some(k => pr.has(k)) || (!!tap && inBox(tap, b.watch));
+        if (!watch) return;
+        if (!e.replay) {
+            this.historyNote = 'No replay for this game';
+            this.historyNoteT = this.time;
+            return;
+        }
+        this.ui('ok');
+        this.replayFrom = 'matchinfo';
+        this.watchCode(e.replay);
+    }
+
+    /** Copy the chosen game's replay link to the clipboard. */
     private copyReplayLink(): void {
-        const row = this.replayList[this.replaysIndex];
-        const link = row ? this.replayLink(row.code) : '';
+        const link = this.replayLink(this.history[this.historyIndex]?.replay ?? null);
         if (!link) return;
         const done = (ok: boolean) => {
-            this.replaysNote = ok ? 'Link copied' : 'Copy the link above to share it';
-            this.replaysNoteT = this.time;
+            this.historyNote = ok ? 'Link copied' : "Couldn't copy the link";
+            this.historyNoteT = this.time;
         };
         if (navigator.clipboard)
             navigator.clipboard.writeText(link).then(
@@ -957,21 +1028,68 @@ export class Game {
         else done(false);
     }
 
-    /** One line of the Replays list. */
-    private replayRow(r: { code: string; s: ReplaySummary }): ReplayRow {
-        const s = r.s;
-        const name = (id: string | undefined) => (id ? (fairyById(id)?.name ?? id) : '?');
-        const map = mapById(s.map)?.name ?? s.map;
-        const endless = s.mode === 'endless';
-        const tag = endless ? 'ENDLESS' : s.mode === 'versus' ? '2 PLAYERS' : s.mode === 'online' ? 'ONLINE' : 'VS CPU';
-        const color = endless ? '#ff8a5c' : s.mode === 'versus' ? '#8ff0a0' : '#ffd45c';
-        const f = s.fairies;
-        const title = endless ? `${name(f?.[0])} alone` : `${name(f?.[0])}  vs  ${name(f?.[1])}`;
-        const w = s.wins;
-        const result = endless ? `survived ${clock(s.seconds)}` : w ? `${w[0]}-${w[1]}` : '';
-        const detail = [map, result, endless ? '' : clock(s.seconds)].filter(Boolean).join('  ·  ');
-        const when = new Date(s.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toUpperCase();
-        return { tag, color, title, detail, when, local: r.code === 'local' };
+    /** A game's mode, as its tag and colour. */
+    private modeTag(mode: string): { tag: string; color: string } {
+        if (mode === 'endless') return { tag: 'ENDLESS', color: '#ff8a5c' };
+        if (mode === 'versus') return { tag: '2 PLAYERS', color: '#8ff0a0' };
+        if (mode === 'online') return { tag: 'ONLINE', color: '#8fd8ff' };
+        return { tag: 'VS CPU', color: '#ffd45c' };
+    }
+
+    /** One line of the match history. */
+    private historyRow(e: HistoryEntry): HistoryRow {
+        const name = (id: string | null) => (id ? (fairyById(id)?.name ?? id) : '?');
+        const map = mapById(e.map)?.name ?? e.map;
+        const endless = e.mode === 'endless';
+        const title = endless ? `${name(e.fairy)} alone` : `${name(e.fairy)}  vs  ${name(e.rivalFairy)}`;
+        const result = endless
+            ? clock(e.seconds)
+            : `${e.won ? 'WIN' : 'LOSS'} ${e.roundsWon}-${e.roundsLost}`;
+        const resultColor = endless ? '#ffb27a' : e.won ? '#ffe27a' : '#a9b4ff';
+        const trophies = e.trophyDelta ? `${e.trophyDelta > 0 ? '+' : ''}${e.trophyDelta} trophies` : '';
+        const detail = [
+            map,
+            endless ? `${e.guardians} guardian${e.guardians === 1 ? '' : 's'}` : clock(e.seconds),
+            trophies,
+        ]
+            .filter(Boolean)
+            .join('  ·  ');
+        const when = new Date(e.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toUpperCase();
+        return { ...this.modeTag(e.mode), title, result, resultColor, detail, when, local: e.replay === 'local' };
+    }
+
+    /** The match details screen's view of the chosen game. */
+    private matchInfo(e: HistoryEntry, touch: boolean): MatchInfoView {
+        const endless = e.mode === 'endless';
+        const map = mapById(e.map)?.name ?? e.map;
+        const when = new Date(e.at).toLocaleString(undefined, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+        });
+        const stats: [string, string][] = [['MAP', map.toUpperCase()]];
+        if (endless) stats.push(['GUARDIANS', String(e.guardians)]);
+        else stats.push(['LENGTH', clock(e.seconds)]);
+        stats.push(['BEST CHAIN', e.bestChain >= 0 ? String(e.bestChain) : '—']);
+        if (!endless && e.mode !== 'versus')
+            stats.push(['TROPHIES', e.trophyDelta ? `${e.trophyDelta > 0 ? '+' : ''}${e.trophyDelta}` : '0']);
+        return {
+            touch,
+            ...this.modeTag(e.mode),
+            banner: endless ? 'RUN OVER' : e.won ? 'VICTORY' : 'DEFEAT',
+            won: endless || e.won,
+            when: e.replay === 'local' ? `${when}  ·  kept on this device` : when,
+            fairy: e.fairy,
+            rival: endless ? null : e.rivalFairy,
+            score: endless ? clock(e.seconds) : `${e.roundsWon} - ${e.roundsLost}`,
+            scoreLabel: endless ? 'SURVIVED' : 'ROUNDS',
+            stats,
+            hasReplay: !!e.replay,
+            link: this.replayLink(e.replay),
+            note: this.historyNote,
+        };
     }
 
     /** The recording ran out before its round ended (it was cut short, or plays differently on this build). */
@@ -985,7 +1103,7 @@ export class Game {
 
     /**
      * The match just ended: keep its recording here, and send it to the server, which plays it through again to
-     * count it (and keeps it for the Replays screen). What the server makes of it replaces what the game showed.
+     * count it (and keeps it for Profile's match history). What the server makes of it replaces what the game showed.
      */
     private keepReplay(): void {
         const rec = this.recorder;
@@ -1118,9 +1236,7 @@ export class Game {
 
     /** True once a match is under way (not on the title, the menus, the Characters or Profile screens, or select). */
     private get inGame(): boolean {
-        return !['title', 'modes', 'roster', 'maps', 'profile', 'settings', 'replays', 'select', 'mapselect'].includes(
-            this.phase,
-        );
+        return !MENU_PHASES.includes(this.phase);
     }
 
     /** Leave the Settings screen (its page panel's Esc). */
@@ -1130,7 +1246,7 @@ export class Game {
 
     /** Back to the main menu, with the card for where you came from highlighted. */
     private backToMenu(): void {
-        const from = { roster: 1, maps: 2, profile: 3, replays: 4, settings: 5 }[this.phase as string] ?? 0;
+        const from = { roster: 1, maps: 2, profile: 3, settings: 4 }[this.phase as string] ?? 0;
         this.phase = 'modes';
         this.menu = 'main';
         this.modeIndex = from;
@@ -1246,17 +1362,13 @@ export class Game {
                 this.phase = 'maps';
                 break;
             case 'profile':
-                this.phase = 'profile';
-                void this.account.refreshLeaders();
+                this.openProfile();
                 break;
             case 'online':
                 this.onWantOnline?.();
                 break;
             case 'settings':
                 this.phase = 'settings';
-                break;
-            case 'replays':
-                this.openReplays();
                 break;
             case 'guide':
                 this.onWantGuide?.();
@@ -1609,11 +1721,11 @@ export class Game {
             return;
         }
         if (this.phase === 'profile') {
-            if (pr.has('Escape') || pr.has('Enter') || pr.has('Space')) this.backToMenu();
+            this.stepProfile(pr);
             return;
         }
-        if (this.phase === 'replays') {
-            this.stepReplays(pr);
+        if (this.phase === 'matchinfo') {
+            this.stepMatchInfo(pr);
             return;
         }
         // Settings is the page's own panel under the heading bar; here only Esc (or ◀ Back) leaves it.
@@ -2026,20 +2138,9 @@ export class Game {
                     this.time,
                 );
                 break;
-            case 'replays': {
-                const row = this.replayList[this.replaysIndex];
-                r.replays(
-                    {
-                        touch,
-                        rows: this.replayList.map(x => this.replayRow(x)),
-                        index: this.replaysIndex,
-                        start: this.replaysStart,
-                        message: this.replaysMessage,
-                        link: row ? this.replayLink(row.code) : '',
-                        note: this.replaysNote,
-                    },
-                    this.time,
-                );
+            case 'matchinfo': {
+                const e = this.history[this.historyIndex];
+                if (e) r.matchInfo(this.matchInfo(e, touch), this.time);
                 break;
             }
             case 'profile':
@@ -2059,6 +2160,11 @@ export class Game {
                         rank: this.account.rank,
                         leaders: this.account.leaders,
                         me: this.account.id,
+                        tab: this.profileTab,
+                        history: this.history.map(e => this.historyRow(e)),
+                        index: this.historyIndex,
+                        start: this.historyStart,
+                        message: this.historyMessage,
                     },
                     this.time,
                 );

@@ -103,6 +103,27 @@ export interface LeaderEntry {
     at: string;
 }
 
+/** One game in a player's match history (GET /api/me/history): a match, or an Endless run (mode 'endless'). */
+export interface HistoryEntry {
+    mode: string;
+    map: string;
+    /** The player's fairy, and the rival's (null for an Endless run). */
+    fairy: string;
+    rivalFairy: string | null;
+    roundsWon: number;
+    roundsLost: number;
+    won: boolean;
+    bestChain: number;
+    trophyDelta: number;
+    /** How long it lasted (an Endless run: the time survived), and the guardians an Endless run weathered. */
+    seconds: number;
+    guardians: number;
+    at: string;
+    /** Its replay's share code, if it has one, and when that was recorded (by the recording browser's clock). */
+    replay: string | null;
+    recorded: number | null;
+}
+
 /** What the server made of a finished game it checked: the progress that counts now, and what the game earned. */
 export interface ResultResponse {
     progress: Progress;

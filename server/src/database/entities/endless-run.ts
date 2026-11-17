@@ -26,4 +26,8 @@ export class EndlessRun extends Timestamped {
 
     @Column({ name: 'best_chain', type: 'int', default: 0 })
     bestChain!: number;
+
+    /** The players_replays id of the game's replay, if it has one. */
+    @Column({ name: 'replay_id', type: 'bigint', unsigned: true, nullable: true })
+    replayId!: string | null;
 }
