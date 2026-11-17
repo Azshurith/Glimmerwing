@@ -8,14 +8,17 @@
 //   POST /api/guest                {name?}                 -> {id, name, token}
 //   GET  /api/leaderboard/endless?limit=                   -> [entry]
 //   GET  /api/replays/<code>                               -> replay
-//   GET  /api/me                          -> {id, name, progress, settings, endless}  ({data, savedAt} | null; rank | null)
+//   GET  /api/chat/world?after=&limit=                     -> [message] (oldest first, newer than `after`)
+//   GET  /api/me                -> {id, name, progress, settings, endless, look}  ({data, savedAt} | null; rank | null)
 //   PUT  /api/me                   {name}                  -> {id, name}
 //   PUT  /api/me/settings          {data, savedAt}         -> {data, savedAt}   (the newer of the two copies)
+//   PUT  /api/me/look              {avatar, frame, bubble} -> look      (each must be open to the player)
 //   POST /api/results              {replay}                -> {progress, trophyDelta, unlocked, …, code, rank}
 //   POST /api/me/reset                                     -> {progress}
 //   GET  /api/me/matches?limit=                            -> [match]
 //   GET  /api/me/history?limit=                            -> [match or Endless run, with its replay's code]
 //   GET  /api/me/replays?limit=                            -> [replay summary]
+//   POST /api/chat/world           {body}                  -> message   (cleaned and masked; 429 if too fast)
 //
 // The server decides progress: a browser can't send its own. A finished game is sent as its replay, which the
 // server plays through again (the verifier, the game's own simulation) to work out what it earned; only then does
@@ -24,13 +27,15 @@
 import { createHash, randomBytes } from 'node:crypto';
 import express from 'express';
 import type { NextFunction, Request, Response, Router } from 'express';
+import { CHAT_MAX, cleanChat } from './chat-filter';
 import { HttpError } from './http-error';
 import type { Catalog } from './catalog';
 import type { PlayerRef, Store } from './store';
 import type { Turns } from './turns';
 import type { Verifier } from './verifier';
-import { freshProgress } from '@/game/rewards';
-import type { Progress, ResultResponse } from '@/types';
+import { BUBBLES, FRAMES } from '@/data/looks';
+import { fairyOpen, freshProgress } from '@/game/rewards';
+import type { PlayerLook, Progress, ResultResponse } from '@/types';
 
 const MAX_BODY = '64kb';
 const MAX_REPLAY = '4mb';
@@ -79,6 +84,31 @@ const body = (req: Request) => (req.body ?? {}) as Record<string, unknown>;
 /** The `limit` query parameter, 1 to `max`. */
 const limitOf = (req: Request, def: number, max: number) => int(req.query.limit ?? def, 1, max, def);
 
+/** Why a look can't be worn by a player with this progress (a fairy not unlocked, a style not reached), or null. */
+function lookRefusal(p: Progress, look: PlayerLook): string | null {
+    if (!fairyOpen(p, look.avatar)) return 'That fairy is locked';
+    const frame = FRAMES.find(f => f.id === look.frame),
+        bubble = BUBBLES.find(b => b.id === look.bubble);
+    if (!frame || !bubble) return 'No such style';
+    const best = p.bestTrophies ?? 0;
+    if (best < frame.trophies || best < bubble.trophies) return 'Reach more trophies to wear that';
+    return null;
+}
+
+/** The chat channels open so far (friends', lobbies' and guilds' come later). */
+const CHAT_CHANNELS = ['world'];
+
+/** The least time between one player's messages (ms), and the most they may post a minute. */
+const CHAT_GAP = 1500;
+const CHAT_PER_MINUTE = 12;
+
+/** The chat channel a request names, or a 404. */
+function chatChannel(req: Request): string {
+    const c = String(req.params.channel);
+    if (!CHAT_CHANNELS.includes(c)) throw new HttpError(404, 'No such chat channel');
+    return c;
+}
+
 /** The player a token belongs to (a WebSocket sends one to be known), or null. */
 export async function playerForToken(store: Store, token: unknown): Promise<PlayerRef | null> {
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,128}$/.test(token)) return null;
@@ -91,6 +121,8 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
     /** Guests made per address in the current hour, and games sent per player. */
     const made = new Map<string, number>();
     const sent = new Map<string, number>();
+    /** When each player last posted to chat (ms), over the last minute. */
+    const chatSent = new Map<number, number[]>();
     let hour = 0;
     const small = express.json({ limit: MAX_BODY });
 
@@ -228,6 +260,11 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
         res.json(r);
     });
 
+    api.get('/chat/:channel', async (req, res) => {
+        const channel = chatChannel(req);
+        res.json(await db().chat(channel, int(req.query.after, 0, Number.MAX_SAFE_INTEGER), limitOf(req, 50, 100)));
+    });
+
     // Everything below is a player's own: the bearer token says whose.
     api.use(async (req: Request, res: Response, next: NextFunction) => {
         const m = /^Bearer\s+([A-Za-z0-9_-]{20,128})$/.exec(req.headers.authorization ?? '');
@@ -240,18 +277,30 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
     api.get('/me', async (_req, res) => {
         const s = db(),
             p = me(res);
-        const [progress, settings, endless] = await Promise.all([
+        const [progress, settings, endless, look] = await Promise.all([
             s.getProgress(p.id),
             s.getSettings(p.id),
             s.endlessRank(p.id),
+            s.lookOf(p.id),
         ]);
-        res.json({ ...p, progress, settings, endless });
+        res.json({ ...p, progress, settings, endless, look });
     });
     api.put('/me', small, async (req, res) => {
         const p = me(res);
         const name = playerName(body(req).name);
         await db().rename(p.id, name);
         res.json({ id: p.id, name });
+    });
+    api.put('/me/look', small, async (req, res) => {
+        const s = db(),
+            p = me(res),
+            b = body(req);
+        const progress = (await s.getProgress(p.id))?.data ?? freshProgress();
+        const look = { avatar: String(b.avatar ?? ''), frame: String(b.frame ?? ''), bubble: String(b.bubble ?? '') };
+        const why = lookRefusal(progress, look);
+        if (why) throw new HttpError(403, why);
+        await s.setLook(p.id, look);
+        res.json(look);
     });
     api.put('/me/settings', express.json({ limit: MAX_SETTINGS }), async (req, res) => {
         const b = body(req);
@@ -275,6 +324,20 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
     });
     api.get('/me/history', async (req, res) => {
         res.json(await db().history(me(res).id, limitOf(req, 30, 200)));
+    });
+    api.post('/chat/:channel', small, async (req, res) => {
+        const channel = chatChannel(req),
+            p = me(res);
+        // At most one message every CHAT_GAP ms, and CHAT_PER_MINUTE a minute.
+        const now = Date.now();
+        const sent = (chatSent.get(p.id) ?? []).filter(t => now - t < 60_000);
+        if (sent.length && now - sent[sent.length - 1] < CHAT_GAP) throw new HttpError(429, 'Slow down a little');
+        if (sent.length >= CHAT_PER_MINUTE) throw new HttpError(429, 'Too many messages; wait a moment');
+        const text = cleanChat(body(req).body);
+        if (!text) throw new HttpError(400, `Say something (up to ${CHAT_MAX} characters)`);
+        sent.push(now);
+        chatSent.set(p.id, sent);
+        res.status(201).json(await db().addChat(p, channel, text));
     });
     api.get('/me/replays', async (req, res) => {
         res.json(await db().listReplays(me(res).id, limitOf(req, 20, 200)));

@@ -48,14 +48,45 @@ export interface TitleView {
     bestChain: number;
 }
 
-/** The menus shown as a screen of cards: the main menu, and Play's choice of modes. */
-export type ModeMenu = 'main' | 'play';
+/** Where the lobby's keyboard cursor is: on the mode picker, or along the bar of screens at the bottom. */
+export type LobbyFocus = 'mode' | 'nav';
 
-/** What a menu of cards shows: which menu, the highlighted card, and whether the player is on a touchscreen. */
-export interface ModeView {
-    menu: ModeMenu;
-    index: number;
+/** One mode on the lobby's mode picker. */
+export interface LobbyMode {
+    action: TitleAction;
+    label: string;
+    sub: string;
+    color: string;
+    /** Can't be started (coming soon, or switched off on the server), and the word on its ribbon. */
+    off: boolean;
+    ribbon: string;
+}
+
+/** What the lobby (the main menu) shows. */
+export interface LobbyView {
     touch: boolean;
+    /** The player: name, avatar (a fairy's id) and frame, wins, trophies, and whether the server is reached. */
+    name: string;
+    fairy: string;
+    frame: string;
+    wins: number;
+    trophies: number;
+    online: boolean;
+    /** Stages open on the trophy road, of all of them; and the next one, with the trophies toward it. */
+    stages: [number, number];
+    next: { map: string; name: string; have: number; need: number } | null;
+    /** The mode on the picker, and where the cursor is. */
+    mode: LobbyMode;
+    focus: LobbyFocus;
+    nav: number;
+    /** The stage behind it all (a map id), and its name. */
+    map: string;
+    mapName: string;
+    /** The latest World chat lines for the ticker, and whether the chat panel is open. */
+    chat: { name: string; body: string }[];
+    chatOpen: boolean;
+    /** On a phone, whether the friends panel is pulled out. */
+    friendsOpen: boolean;
 }
 
 /** What the Characters screen shows: the fairy in view, which fairies are still locked, and the input device. */

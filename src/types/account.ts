@@ -29,6 +29,8 @@ export interface MeResponse {
     settings: Saved<SyncedSettings> | null;
     /** Where the player's best Endless run ranks, if they have one. */
     endless: EndlessRank | null;
+    /** What they wear in chat. */
+    look: PlayerLook;
 }
 
 /** What the server has switched off (GET /api/catalog): fairies, maps and game modes that can't be picked. */
@@ -136,4 +138,23 @@ export interface ResultResponse {
     /** The replay's share code, and an Endless run's rank. */
     code: string;
     rank: EndlessRank | null;
+}
+
+/** What a player wears in chat and on their plate: a fairy's face, the frame round it, and their bubble. */
+export interface PlayerLook {
+    avatar: string;
+    frame: string;
+    bubble: string;
+}
+
+/** A chat message as the API hands it out, with what its writer wears. */
+export interface ChatMessage {
+    /** Rising with every message, so a browser asks only for what's newer than the last it has. */
+    id: number;
+    channel: string;
+    playerId: number;
+    name: string;
+    body: string;
+    at: string;
+    look: PlayerLook;
 }

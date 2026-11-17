@@ -107,8 +107,8 @@ export class Input {
 
     constructor(canvas: HTMLCanvasElement) {
         window.addEventListener('keydown', e => {
-            // Typing a room code in the online lobby, or using the Settings panel, shouldn't steer a fairy.
-            if ((e.target as HTMLElement | null)?.closest?.('#lobby, #settings')) return;
+            // Typing a room code, a chat message, or using the Settings panel, shouldn't steer a fairy.
+            if ((e.target as HTMLElement | null)?.closest?.('#lobby, #settings, #chat')) return;
             if (document.getElementById('settings')?.hidden === false) return;
             if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
             if (!this.held.has(e.code)) this.pressed.add(e.code);
