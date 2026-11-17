@@ -57,3 +57,52 @@ export interface ReplayHighlight {
     /** Whose meadow it happened in. */
     side: 0 | 1;
 }
+
+/** One side's numbers over a whole match, worked out by playing its replay through (see game/match-stats.ts). */
+export interface SideStats {
+    roundsWon: number;
+    /** Critters popped, chains that sent attacks, and the longest of them. */
+    pops: number;
+    chains: number;
+    bestChain: number;
+    /** Normal fireballs sent, fireballs shot back (Reverses), Extra Attacks and guardians sent. */
+    fireballs: number;
+    reverses: number;
+    extras: number;
+    guardians: number;
+    perfects: number;
+    fevers: number;
+    bombs: number;
+    /** Attacks that struck her, and critters she ran into. */
+    hits: number;
+    stuns: number;
+}
+
+/** A moment on a match's graphs, by seconds into the match and whose meadow it happened in. */
+export interface StatEvent {
+    t: number;
+    side: 0 | 1;
+    kind: HighlightKind;
+}
+
+/** Each side's standing at a moment of the match: hearts (half-hearts) and, so far, pops and attacks sent. */
+export interface StatSample {
+    t: number;
+    hull: [number, number];
+    pops: [number, number];
+    attacks: [number, number];
+}
+
+/** A match's numbers and its graphs' data, from playing its replay through. */
+export interface MatchStats {
+    /** How long it lasted (seconds of play), and each round: when it began, how long it lasted, who won it. */
+    seconds: number;
+    rounds: { start: number; seconds: number; winner: -1 | 0 | 1 }[];
+    /** The fairy each side flew, by id. */
+    fairies: [string, string];
+    sides: [SideStats, SideStats];
+    samples: StatSample[];
+    events: StatEvent[];
+    /** False when the replay is from another build of the game, or didn't play out as recorded. */
+    exact: boolean;
+}

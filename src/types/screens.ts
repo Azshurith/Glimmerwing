@@ -1,4 +1,5 @@
 import type { EndlessRank, LeaderEntry } from './account';
+import type { MatchStats } from './replay';
 import type { Fairy } from './characters';
 
 /** A roster medallion's place on screen; also the tap target. */
@@ -118,9 +119,24 @@ export interface HistoryRow {
     local: boolean;
 }
 
+/** The match details screen's tabs: the result, the players' numbers side by side, and graphs over time. */
+export type MatchTab = 'overview' | 'scoreboard' | 'graphs';
+
 /** What the match details screen shows: one game from the history, in full, with its replay to watch. */
 export interface MatchInfoView {
     touch: boolean;
+    tab: MatchTab;
+    /** Which graph is showing (see GRAPHS in match-screen.ts). */
+    graph: number;
+    /**
+     * The match's numbers from its replay, the player's side first (null until worked out, or without a replay),
+     * and a line in their place meanwhile.
+     */
+    stats: MatchStats | null;
+    statsNote: string;
+    /** The two sides' fairy names and what to call them (YOU and RIVAL, CPU or THE STORM). */
+    names: [string, string];
+    labels: [string, string];
     tag: string;
     color: string;
     /** VICTORY, DEFEAT or RUN OVER, and the line under it (when it was played). */
@@ -133,8 +149,8 @@ export interface MatchInfoView {
     /** The rounds (e.g. "2 - 1"), or an Endless run's time, and the line under it. */
     score: string;
     scoreLabel: string;
-    /** The numbers, as tiles. */
-    stats: [label: string, value: string][];
+    /** The overview's numbers, as tiles. */
+    tiles: [label: string, value: string][];
     /** Whether there's a replay to watch, its share link (empty without one) and a short note. */
     hasReplay: boolean;
     link: string;

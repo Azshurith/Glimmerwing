@@ -36,6 +36,8 @@ import type {
     HistoryEntry,
     HistoryRow,
     MatchInfoView,
+    MatchStats,
+    MatchTab,
     ProfileTab,
     Placement,
     Progress,
@@ -65,7 +67,8 @@ import {
     unpackControls,
 } from './replay';
 import { HISTORY_ROWS, profileBoxes } from '@/render/screens/profile-screen';
-import { matchButtons } from '@/render/screens/match-screen';
+import { GRAPHS, MATCH_TABS, matchBoxes } from '@/render/screens/match-screen';
+import { fromSide, matchStats } from './match-stats';
 
 /** The phases before a match is under way: the title, the menu screens and select. */
 const MENU_PHASES: Phase[] = [
@@ -262,6 +265,12 @@ export class Game {
     private historyMessage = '';
     private historyNote = '';
     private historyNoteT = 0;
+    /** The match details screen's tab and graph, and each game's numbers from its replay (by replay code). */
+    private matchTab: MatchTab = 'overview';
+    private matchGraph = 0;
+    private statsFor = new Map<string, MatchStats | 'loading' | 'failed'>();
+    /** Replays fetched for the details screen (by code), so watching one doesn't fetch it again. */
+    private replayCache = new Map<string, ReplayData>();
     /** Where leaving a replay goes: the game's details, or (a shared link's replay) the history. */
     private replayFrom: 'matchinfo' | 'profile' = 'matchinfo';
     /** A map forced by the page's address (`?map=<id>`), for trying a map out. */
@@ -915,12 +924,18 @@ export class Game {
             if (d) this.watchReplay(d);
             return;
         }
+        const cached = this.replayCache.get(code);
+        if (cached) {
+            this.watchReplay(cached);
+            return;
+        }
         this.historyNote = 'Loading replay…';
         this.historyNoteT = this.time;
         const from = this.phase;
         this.account
             .fetchReplay(code)
             .then(d => {
+                this.replayCache.set(code, d);
                 if (this.phase === from && !this.replay) this.watchReplay(d);
             })
             .catch(() => {
@@ -983,6 +998,7 @@ export class Game {
         if (pick < 0) return;
         this.historyIndex = pick;
         this.historyNote = '';
+        this.matchTab = 'overview';
         this.phase = 'matchinfo';
         this.ui('ok');
     }
@@ -996,11 +1012,37 @@ export class Game {
             this.ui('tick');
             return;
         }
-        const b = matchButtons(this.r.layout, this.r.viewH);
+        const b = matchBoxes(this.r.layout, this.r.viewH);
         const tap = this.input.tap;
-        if (pr.has('KeyC') || (tap && inBox(tap, b.copy))) this.copyReplayLink();
+        // Left and right (or a tap on one) change tab; up and down (or a tap) the graph.
+        let tab = MATCH_TABS.indexOf(this.matchTab);
+        if (['ArrowLeft', 'KeyA', 'KeyQ'].some(k => pr.has(k))) tab = (tab + MATCH_TABS.length - 1) % MATCH_TABS.length;
+        if (['ArrowRight', 'KeyD', 'KeyE', 'Tab'].some(k => pr.has(k))) tab = (tab + 1) % MATCH_TABS.length;
+        const onTab = tap ? b.tabs.findIndex(x => inBox(tap, x)) : -1;
+        if (onTab >= 0) tab = onTab;
+        if (MATCH_TABS[tab] !== this.matchTab) {
+            this.matchTab = MATCH_TABS[tab];
+            this.ui('tick');
+            if (this.matchTab !== 'overview') this.loadStats(e);
+            return;
+        }
+        if (this.matchTab === 'graphs') {
+            const was = this.matchGraph,
+                n = GRAPHS.length;
+            if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.matchGraph = (this.matchGraph + n - 1) % n;
+            if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.matchGraph = (this.matchGraph + 1) % n;
+            const onGraph = tap ? b.graphs.findIndex(x => inBox(tap, x)) : -1;
+            if (onGraph >= 0) this.matchGraph = onGraph;
+            if (this.matchGraph !== was) {
+                this.ui('tick');
+                return;
+            }
+        }
+        const overview = this.matchTab === 'overview';
+        if (pr.has('KeyC') || (overview && tap && inBox(tap, b.copy))) this.copyReplayLink();
         const watch =
-            ['Space', 'Enter', 'KeyZ', 'KeyG', 'NumpadEnter'].some(k => pr.has(k)) || (!!tap && inBox(tap, b.watch));
+            ['Space', 'Enter', 'KeyZ', 'KeyG', 'NumpadEnter'].some(k => pr.has(k)) ||
+            (overview && !!tap && inBox(tap, b.watch));
         if (!watch) return;
         if (!e.replay) {
             this.historyNote = 'No replay for this game';
@@ -1010,6 +1052,49 @@ export class Game {
         this.ui('ok');
         this.replayFrom = 'matchinfo';
         this.watchCode(e.replay);
+    }
+
+    /**
+     * Work out a game's numbers for its Scoreboard and Graphs: fetch its replay (or take this browser's own) and play
+     * it through. Done once a game; the screen shows a line meanwhile.
+     */
+    private loadStats(e: HistoryEntry): void {
+        const code = e.replay;
+        if (!code || this.statsFor.has(code)) return;
+        this.statsFor.set(code, 'loading');
+        const got =
+            code === 'local'
+                ? Promise.resolve(loadLocalReplay())
+                : this.replayCache.get(code)
+                  ? Promise.resolve(this.replayCache.get(code)!)
+                  : this.account.fetchReplay(code);
+        got.then(
+            d => {
+                if (!d) throw new Error('No replay');
+                if (code !== 'local') this.replayCache.set(code, d);
+                // A beat later, so the screen has drawn its loading line before the match is played through.
+                setTimeout(() => {
+                    try {
+                        this.statsFor.set(code, fromSide(matchStats(d), this.mySide(e, d)));
+                    } catch (err) {
+                        console.warn('Match stats failed', err);
+                        this.statsFor.set(code, 'failed');
+                    }
+                }, 30);
+            },
+            () => this.statsFor.set(code, 'failed'),
+        ).catch(() => this.statsFor.set(code, 'failed'));
+    }
+
+    /**
+     * Which side of a replay is this player's: the first, except in an online match, which the server records in
+     * seat order for both players; there it's the side flying this player's fairy (by the score, if both flew her).
+     */
+    private mySide(e: HistoryEntry, d: ReplayData): 0 | 1 {
+        if (d.mode !== 'online') return 0;
+        const [a, b] = d.fairies;
+        if (a !== b) return b === e.fairy ? 1 : 0;
+        return d.wins[1] === e.roundsWon && d.wins[0] !== e.roundsWon ? 1 : 0;
     }
 
     /** Copy the chosen game's replay link to the clipboard. */
@@ -1067,12 +1152,26 @@ export class Game {
             hour: 'numeric',
             minute: '2-digit',
         });
-        const stats: [string, string][] = [['MAP', map.toUpperCase()]];
-        if (endless) stats.push(['GUARDIANS', String(e.guardians)]);
-        else stats.push(['LENGTH', clock(e.seconds)]);
-        stats.push(['BEST CHAIN', e.bestChain >= 0 ? String(e.bestChain) : '—']);
+        const tiles: [string, string][] = [['MAP', map.toUpperCase()]];
+        if (endless) tiles.push(['GUARDIANS', String(e.guardians)]);
+        else tiles.push(['LENGTH', clock(e.seconds)]);
+        tiles.push(['BEST CHAIN', e.bestChain >= 0 ? String(e.bestChain) : '—']);
         if (!endless && e.mode !== 'versus')
-            stats.push(['TROPHIES', e.trophyDelta ? `${e.trophyDelta > 0 ? '+' : ''}${e.trophyDelta}` : '0']);
+            tiles.push(['TROPHIES', e.trophyDelta ? `${e.trophyDelta > 0 ? '+' : ''}${e.trophyDelta}` : '0']);
+        const got = e.replay ? this.statsFor.get(e.replay) : undefined;
+        const statsNote = !e.replay
+            ? 'No replay was saved for this game,\nso there are no numbers to show.'
+            : got === 'failed'
+              ? "Couldn't load this game's replay.\nTry again when the game server is reached."
+              : 'Playing the match through…';
+        const fairyName = (id: string | null) => (id ? (fairyById(id)?.name ?? id) : '?');
+        const rivalLabel = endless
+            ? 'THE STORM'
+            : e.mode === 'cpu'
+              ? 'CPU'
+              : e.mode === 'versus'
+                ? 'PLAYER 2'
+                : 'RIVAL';
         return {
             touch,
             ...this.modeTag(e.mode),
@@ -1083,7 +1182,13 @@ export class Game {
             rival: endless ? null : e.rivalFairy,
             score: endless ? clock(e.seconds) : `${e.roundsWon} - ${e.roundsLost}`,
             scoreLabel: endless ? 'SURVIVED' : 'ROUNDS',
-            stats,
+            tiles,
+            tab: this.matchTab,
+            graph: this.matchGraph,
+            stats: got && typeof got === 'object' ? got : null,
+            statsNote,
+            names: [fairyName(e.fairy), endless ? 'Hidden meadow' : fairyName(e.rivalFairy)],
+            labels: [e.mode === 'versus' ? 'PLAYER 1' : 'YOU', rivalLabel],
             hasReplay: !!e.replay,
             link: this.replayLink(e.replay),
             note: this.historyNote,
