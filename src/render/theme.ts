@@ -16,6 +16,9 @@ export const PALETTE = {
 /** Body text: the page's serif. */
 export const FONT = '"Fraunces", Georgia, "Times New Roman", serif';
 
+/** A clean rounded sans for chat and the lobby's small print (Nunito, else the system's own). */
+export const SANS = '"Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
 /** Chunky arcade lettering for headings, tags and nameplates. */
 export const ARCADE = '"Bungee", "Arial Black", Impact, sans-serif';
 
