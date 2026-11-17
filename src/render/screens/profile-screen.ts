@@ -13,6 +13,7 @@ import { arcadeText, shade, slanted } from '@/render/draw';
 import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
+import { enter } from '@/render/transition';
 
 /** How far the tall screen's content moves down to sit centred in a view `h` tall. */
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
@@ -89,7 +90,7 @@ export class ProfileScreen {
             dy = 0;
         if (tall) {
             const f = tallMenuFit(h);
-            this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h));
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
             bleed = f.bleed;
@@ -99,10 +100,10 @@ export class ProfileScreen {
         } else {
             ctx.save();
             ctx.translate(-bleed, 0);
-            this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
             ctx.restore();
         }
-        drawTopBar(ctx, 'PROFILE', W, bleed, tall, 16);
+        enter(ctx, 'bar', () => drawTopBar(ctx, 'PROFILE', W, bleed, tall, 16));
 
         ctx.translate(0, dy);
         // Player card: an avatar (Stella's face for now), the name, and the sign-in status.
@@ -113,42 +114,55 @@ export class ProfileScreen {
             cy = tall ? 92 : 104;
         const regionX = tall ? 0 : card.x + card.w + 14,
             regionW = tall ? W : W + bleed - 14 - regionX;
-        if (!tall) this.panel(card.x, card.y, card.w, card.h);
-        this.avatar(cx, cy, tall ? 40 : 44, t);
-        ctx.textAlign = 'center';
-        const name = v.name.toUpperCase();
-        // A long guest name gets smaller so it stays inside the card.
-        const nameSize = Math.min(18, Math.floor(172 / Math.max(1, name.length)));
-        arcadeText(ctx, name, cx, cy + (tall ? 64 : 70), nameSize, ['#ffffff', '#fff0c8', '#ffd27a'], 'center');
-        ctx.font = `italic 600 9px ${FONT}`;
-        ctx.fillStyle = 'rgba(203,188,245,0.85)';
-        ctx.fillText(
-            v.synced ? 'Progress is saved on the game server' : 'Progress is saved in this browser',
-            cx,
-            cy + (tall ? 80 : 86),
+        enter(
+            ctx,
+            'panels',
+            () => {
+                if (!tall) this.panel(card.x, card.y, card.w, card.h);
+                this.avatar(cx, cy, tall ? 40 : 44, t);
+                ctx.textAlign = 'center';
+                const name = v.name.toUpperCase();
+                // A long guest name gets smaller so it stays inside the card.
+                const nameSize = Math.min(18, Math.floor(172 / Math.max(1, name.length)));
+                arcadeText(ctx, name, cx, cy + (tall ? 64 : 70), nameSize, ['#ffffff', '#fff0c8', '#ffd27a'], 'center');
+                ctx.font = `italic 600 9px ${FONT}`;
+                ctx.fillStyle = 'rgba(203,188,245,0.85)';
+                ctx.fillText(
+                    v.synced ? 'Progress is saved on the game server' : 'Progress is saved in this browser',
+                    cx,
+                    cy + (tall ? 80 : 86),
+                );
+                ctx.fillText('Sign in with Google: coming soon', cx, cy + (tall ? 92 : 98));
+                // In landscape the card also holds the Endless leaderboard's top three.
+                if (!tall) this.leaders(v, card.x + 12, cy + 118, card.w - 24);
+            },
+            { dx: tall ? 0 : -22, dy: tall ? 10 : 0 },
         );
-        ctx.fillText('Sign in with Google: coming soon', cx, cy + (tall ? 92 : 98));
-        // In landscape the card also holds the Endless leaderboard's top three.
-        if (!tall) this.leaders(v, card.x + 12, cy + 118, card.w - 24);
 
         const lay = designLayout(layout, 0, bleed);
-        this.tabs(v, lay.tabs, tall ? '#8fd8ff' : '#8fd8ff');
-        if (v.tab === 'history') this.history(v, lay.rows, t, tall);
-        else this.record(v, t, tall, W, regionX, regionW, lay.top);
+        enter(ctx, 'buttons', () => this.tabs(v, lay.tabs, '#8fd8ff'), { i: 1 });
+        enter(ctx, 'panels', () => {
+            if (v.tab === 'history') this.history(v, lay.rows, t, tall);
+            else this.record(v, t, tall, W, regionX, regionW, lay.top);
+        });
         ctx.translate(0, -dy);
 
-        ctx.textAlign = 'center';
-        ctx.font = `7px ${ARCADE}`;
-        ctx.fillStyle = 'rgba(203,188,245,0.75)';
-        const hint =
-            v.tab === 'history'
-                ? v.touch
-                    ? 'TAP A GAME FOR ITS DETAILS  ·  ◀ BACK'
-                    : '◀ ▶ TABS  ·  ▲ ▼ CHOOSE  ·  ENTER DETAILS  ·  ESC BACK'
-                : v.touch
-                  ? 'TAP MATCH HISTORY FOR YOUR GAMES  ·  ◀ BACK'
-                  : '◀ ▶ TABS  ·  ESC BACK';
-        ctx.fillText(hint, W / 2, tall ? H - 14 : H - 8, W - 16);
+        enter(ctx, 'hint', () => {
+
+            ctx.textAlign = 'center';
+            ctx.font = `7px ${ARCADE}`;
+            ctx.fillStyle = 'rgba(203,188,245,0.75)';
+            const hint =
+                v.tab === 'history'
+                    ? v.touch
+                        ? 'TAP A GAME FOR ITS DETAILS  ·  ◀ BACK'
+                        : '◀ ▶ TABS  ·  ▲ ▼ CHOOSE  ·  ENTER DETAILS  ·  ESC BACK'
+                    : v.touch
+                      ? 'TAP MATCH HISTORY FOR YOUR GAMES  ·  ◀ BACK'
+                      : '◀ ▶ TABS  ·  ESC BACK';
+            ctx.fillText(hint, W / 2, tall ? H - 14 : H - 8, W - 16);
+
+        });
         ctx.restore();
     }
 

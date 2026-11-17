@@ -5,6 +5,7 @@ import type { Layout } from '@/types';
 import { Backdrop } from '@/render/backdrop';
 import { drawTopBar } from './top-bar';
 import { tallMenuFit } from './menu-fit';
+import { enter } from '@/render/transition';
 
 /** The Settings screen behind the page's panel. */
 export class SettingsScreen {
@@ -20,16 +21,16 @@ export class SettingsScreen {
         ctx.save();
         if (layout === 'tall') {
             const f = tallMenuFit(h);
-            this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h));
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
-            drawTopBar(ctx, 'SETTINGS', C.TALL_W, f.bleed, true, 16);
+            enter(ctx, 'bar', () => drawTopBar(ctx, 'SETTINGS', C.TALL_W, f.bleed, true, 16));
         } else {
             ctx.save();
             ctx.translate(-bleed, 0);
-            this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
             ctx.restore();
-            drawTopBar(ctx, 'SETTINGS', C.VIEW_W, bleed, false, 16);
+            enter(ctx, 'bar', () => drawTopBar(ctx, 'SETTINGS', C.VIEW_W, bleed, false, 16));
         }
         ctx.restore();
     }

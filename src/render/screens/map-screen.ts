@@ -11,6 +11,7 @@ import { tallMenuFit } from './menu-fit';
 import { drawTopBar, TOP_BAR_H } from './top-bar';
 import { stageFor } from '@/data/stages';
 import { drawTrophy } from '@/render/icons';
+import { enter } from '@/render/transition';
 
 /** Draws map `map`'s live scenery into the box (x, y, w, h), in the screen's design units. */
 export type MapPreviewDraw = (map: MapTheme, x: number, y: number, w: number, h: number) => void;
@@ -86,7 +87,7 @@ export class MapScreen {
             dy = 0;
         if (layout === 'tall') {
             const f = tallMenuFit(h);
-            this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h));
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
             bleed = f.bleed;
@@ -96,12 +97,12 @@ export class MapScreen {
         } else {
             ctx.save();
             ctx.translate(-bleed, 0);
-            this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
             ctx.restore();
         }
         const tall = layout === 'tall';
         this.open = MAPS.filter((_, i) => !v.locked[i]);
-        drawTopBar(ctx, 'CHOOSE A STAGE', W, bleed, tall, 16);
+        enter(ctx, 'bar', () => drawTopBar(ctx, 'CHOOSE A STAGE', W, bleed, tall, 16));
         // Your trophies, at the bar's right end.
         const barH = tall ? TOP_BAR_H.tall : TOP_BAR_H.wide;
         ctx.textAlign = 'right';
@@ -110,14 +111,21 @@ export class MapScreen {
         const tx = W + bleed - 10;
         ctx.fillText(String(v.trophies), tx, barH / 2 + 4);
         drawTrophy(ctx, tx - ctx.measureText(String(v.trophies)).width - 9, barH / 2, tall ? 12 : 10);
-        designCards(layout, dy).forEach((c, i) => this.card(c, i, i === v.index, i > 0 && v.locked[i - 1], t, preview));
-        ctx.textAlign = 'center';
-        ctx.font = `7px ${ARCADE}`;
-        ctx.fillStyle = 'rgba(203,188,245,0.75)';
-        const hint = v.touch
-            ? 'TAP A STAGE  ·  WIN VS CPU OR ONLINE FOR TROPHIES'
-            : 'ARROWS CHOOSE  ·  ENTER OR Z PLAY  ·  WIN VS CPU OR ONLINE FOR TROPHIES';
-        ctx.fillText(hint, W / 2, layout === 'tall' ? H - 14 : H - 10, W - 16);
+        designCards(layout, dy).forEach((c, i) =>
+            enter(ctx, 'buttons', () => this.card(c, i, i === v.index, i > 0 && v.locked[i - 1], t, preview), {
+                box: c,
+                i,
+            }),
+        );
+        enter(ctx, 'hint', () => {
+            ctx.textAlign = 'center';
+            ctx.font = `7px ${ARCADE}`;
+            ctx.fillStyle = 'rgba(203,188,245,0.75)';
+            const hint = v.touch
+                ? 'TAP A STAGE  ·  WIN VS CPU OR ONLINE FOR TROPHIES'
+                : 'ARROWS CHOOSE  ·  ENTER OR Z PLAY  ·  WIN VS CPU OR ONLINE FOR TROPHIES';
+            ctx.fillText(hint, W / 2, layout === 'tall' ? H - 14 : H - 10, W - 16);
+        });
         ctx.restore();
     }
 

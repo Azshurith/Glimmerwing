@@ -6,6 +6,7 @@ import { arcadeText, slanted, sparkle } from '@/render/draw';
 import { drawSprite } from '@/render/sprites';
 import { tallMenuFit } from './menu-fit';
 import { ARCADE, FONT } from '@/render/theme';
+import { enter } from '@/render/transition';
 
 /** A title menu entry and its tap target, in view units. */
 interface TitleButton {
@@ -80,19 +81,19 @@ export class TitleScreen {
             const W = C.TALL_W,
                 f = tallMenuFit(h),
                 dy = tallShift(f.h);
-            this.backdrop.draw(t, W / 2, (170 + dy) * f.s, W, h);
             const ctx = this.ctx;
+            enter(ctx, 'bg', () => this.backdrop.draw(t, W / 2, (170 + dy) * f.s, W, h));
             this.bleed = f.bleed;
             ctx.save();
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
             ctx.save();
             ctx.translate(0, dy);
-            this.heroArtTall(t);
-            this.logo(t, W / 2, TALL.logoY, 24);
+            enter(ctx, 'panels', () => this.heroArtTall(t), { dx: 0, dy: 12 });
+            enter(ctx, 'bar', () => this.logo(t, W / 2, TALL.logoY, 24));
             ctx.restore();
-            this.menu(v, t, tallButtons(dy));
-            this.footer(v, t, W / 2, TALL.ctaY + dy, W, f.h);
+            enter(ctx, 'buttons', () => this.menu(v, t, tallButtons(dy)), { dy: 10 });
+            enter(ctx, 'hint', () => this.footer(v, t, W / 2, TALL.ctaY + dy, W, f.h));
             ctx.restore();
             this.bleed = 0;
             return;
@@ -103,12 +104,12 @@ export class TitleScreen {
         const ctx = this.ctx;
         ctx.save();
         ctx.translate(-bleed, 0);
-        this.backdrop.draw(t, 150 + bleed, 170, C.VIEW_W + 2 * bleed, C.VIEW_H);
+        enter(ctx, 'bg', () => this.backdrop.draw(t, 150 + bleed, 170, C.VIEW_W + 2 * bleed, C.VIEW_H));
         ctx.restore();
-        this.heroArt(t);
-        this.logo(t);
-        this.menu(v, t, WIDE_BUTTONS);
-        this.footer(v, t);
+        enter(ctx, 'panels', () => this.heroArt(t), { dx: -22 });
+        enter(ctx, 'bar', () => this.logo(t));
+        enter(ctx, 'buttons', () => this.menu(v, t, WIDE_BUTTONS), { dy: 10 });
+        enter(ctx, 'hint', () => this.footer(v, t));
         this.bleed = 0;
     }
 

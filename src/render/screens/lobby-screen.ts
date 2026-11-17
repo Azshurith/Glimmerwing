@@ -12,10 +12,11 @@ import { mapById } from '@/data/maps';
 import type { Layout, LobbyView, MapTheme, TitleAction } from '@/types';
 import { arcadeText, slanted, sparkle } from '@/render/draw';
 import { drawTrophy } from '@/render/icons';
-import { ARCADE, FONT } from '@/render/theme';
+import { ARCADE, SANS } from '@/render/theme';
 import { drawBadge, drawEmblem, hexA, roundRect } from './emblems';
 import { tallMenuFit } from './menu-fit';
 import { drawMedal } from './profile-screen';
+import { enter } from '@/render/transition';
 
 /** A box, in design or view units. */
 export interface Box {
@@ -74,36 +75,42 @@ export interface LobbyLayout {
 function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
     if (layout === 'tall') {
         const W = C.TALL_W,
-            playY = H - 152;
+            playY = H - 178;
         return {
-            play: { x: W / 2 - 80, y: playY, w: 160, h: 34 },
-            prev: { x: W / 2 - 110, y: playY + 3, w: 26, h: 28 },
-            next: { x: W / 2 + 84, y: playY + 3, w: 26, h: 28 },
-            nav: LOBBY_NAV.map((_, i) => ({ x: 4 + i * ((W - 8) / 4), y: H - 54, w: (W - 8) / 4, h: 50 })),
-            quick: LOBBY_QUICK.map((_, i) => ({ x: 6, y: 44 + i * 44, w: 38, h: 40 })),
+            play: { x: W / 2 - 98, y: playY, w: 196, h: 46 },
+            prev: { x: W / 2 - 131, y: playY + 3, w: 32, h: 40 },
+            next: { x: W / 2 + 99, y: playY + 3, w: 32, h: 40 },
+            nav: LOBBY_NAV.map((_, i) => ({ x: 4 + i * ((W - 8) / 4), y: H - 64, w: (W - 8) / 4, h: 60 })),
+            quick: LOBBY_QUICK.map((_, i) => ({ x: 6 + i * 52, y: 42, w: 48, h: 50 })),
             card: null,
-            ticker: { x: 8, y: H - 104, w: W - 16, h: 40 },
+            ticker: { x: 8, y: H - 120, w: W - 16, h: 48 },
             chat: { x: 0, y: 0, w: W, h: H },
-            friends: { x: W - 160, y: 44, w: 154, h: playY - 56 },
-            friendsTab: { x: W - 20, y: 116, w: 20, h: 96 },
-            island: { x: W / 2, y: (44 + playY) / 2 - 46, r: 104 },
+            friends: { x: W - 166, y: 44, w: 160, h: playY - 56 },
+            friendsTab: { x: W - 28, y: 112, w: 28, h: 110 },
+            island: { x: W / 2, y: (96 + playY) / 2 - 40, r: 100 },
         };
     }
     const W = C.VIEW_W,
         L = -bleed + 6,
         R = W + bleed - 6;
+    // On a screen no wider than the usual view (a small or squarer window), the sides and the island draw in so
+    // nothing overlaps; on a wider one they spread out.
+    const compact = bleed < 40;
+    const side = compact ? 108 : 124,
+        playW = compact ? 168 : 190,
+        isle = compact ? 90 : 102;
     return {
-        play: { x: W / 2 - 78, y: 230, w: 156, h: 30 },
-        prev: { x: W / 2 - 106, y: 231, w: 24, h: 28 },
-        next: { x: W / 2 + 82, y: 231, w: 24, h: 28 },
-        nav: LOBBY_NAV.map((_, i) => ({ x: L + (i * (R - L)) / 4, y: 284, w: (R - L) / 4, h: 34 })),
-        quick: LOBBY_QUICK.map((_, i) => ({ x: L + i * 40, y: 32, w: 38, h: 38 })),
-        card: { x: L, y: 76, w: 118, h: 64 },
-        ticker: { x: L, y: 238, w: 132, h: 40 },
-        chat: { x: -bleed, y: 0, w: Math.max(170, Math.min(280, W / 2 - 108 + bleed)), h: C.VIEW_H },
-        friends: { x: R - 124, y: 32, w: 124, h: 246 },
+        play: { x: W / 2 - playW / 2, y: 224, w: playW, h: 38 },
+        prev: { x: W / 2 - playW / 2 - 37, y: 225, w: 34, h: 36 },
+        next: { x: W / 2 + playW / 2 + 3, y: 225, w: 34, h: 36 },
+        nav: LOBBY_NAV.map((_, i) => ({ x: L + (i * (R - L)) / 4, y: 278, w: (R - L) / 4, h: 42 })),
+        quick: LOBBY_QUICK.map((_, i) => ({ x: L + i * (compact ? 42 : 47), y: 30, w: compact ? 40 : 45, h: 46 })),
+        card: { x: L, y: 82, w: compact ? 122 : 137, h: 62 },
+        ticker: { x: L, y: 226, w: Math.max(96, Math.min(150, W / 2 - playW / 2 - 42 - L)), h: 46 },
+        chat: { x: -bleed, y: 0, w: Math.max(210, Math.min(280, W / 2 - 108 + bleed)), h: C.VIEW_H },
+        friends: { x: R - side, y: 30, w: side, h: 240 },
         friendsTab: null,
-        island: { x: W / 2, y: 112, r: 104 },
+        island: { x: W / 2, y: 108, r: isle },
     };
 }
 
@@ -152,23 +159,31 @@ export class LobbyScreen {
         }
         const lay = designLayout(layout, H, tall ? 0 : bleed);
         const theme = mapById(v.map);
-        this.sky(t, W, H, bleed, lay.island);
-        if (theme) this.island(v.map, theme, lay.island, t, stage);
-        this.stageName(v, lay.island.x, lay.play.y - 10);
-        this.topBar(v, t, W, bleed, tall);
-        lay.quick.forEach((b, i) => this.quick(b, i, t));
-        if (lay.card && v.next) this.card(v, lay.card, t, stage);
-        this.modeButton(v, lay, t);
-        this.ticker(v, lay.ticker, t);
-        if (!tall || v.friendsOpen) this.friends(lay.friends, t);
-        if (lay.friendsTab && !v.friendsOpen) this.friendsTab(lay.friendsTab, t);
-        this.nav(v, lay.nav, t, W, bleed, tall);
+        // Coming in from another screen, the bar and buttons pop in first, then the sky and the island rise out of the
+        // dark, then the panels slide in (see render/transition.ts).
+        enter(ctx, 'bg', () => this.sky(t, W, H, bleed, lay.island));
+        if (theme) enter(ctx, 'panels', () => this.island(v.map, theme, lay.island, t, stage), { dx: 0, dy: 14 });
+        enter(ctx, 'panels', () => this.stageName(v, lay.island.x, lay.play.y - 10), { dx: 0, dy: 8 });
+        enter(ctx, 'bar', () => this.topBar(v, t, W, bleed, tall));
+        lay.quick.forEach((b, i) => enter(ctx, 'buttons', () => this.quick(b, i, t), { box: b, i }));
+        const card = lay.card;
+        if (card && v.next) enter(ctx, 'panels', () => this.card(v, card, t, stage), { dx: -22 });
+        enter(ctx, 'buttons', () => this.modeButton(v, lay, t), { box: lay.play, i: 2 });
+        enter(ctx, 'panels', () => this.ticker(v, lay.ticker, t), { dx: -22 });
+        if (!tall || v.friendsOpen) enter(ctx, 'panels', () => this.friends(lay.friends, t), { dx: 22 });
+        if (lay.friendsTab && !v.friendsOpen) {
+            const tab = lay.friendsTab;
+            enter(ctx, 'buttons', () => this.friendsTab(tab, t), { box: tab, i: 3 });
+        }
+        enter(ctx, 'buttons', () => this.nav(v, lay.nav, t, W, bleed, tall), { i: 1, dy: 10 });
         if (!v.touch && !v.chatOpen && !v.mode.off) {
-            ctx.textAlign = 'center';
-            ctx.font = `5px ${ARCADE}`;
-            ctx.fillStyle = 'rgba(255,236,220,0.75)';
-            const y = lay.play.y + lay.play.h + (tall ? 10 : 9);
-            ctx.fillText('◀ ▶ MODE  ·  ENTER PLAY  ·  ▼ MENU  ·  T CHAT', lay.island.x, y, tall ? W - 20 : 230);
+            enter(ctx, 'hint', () => {
+                ctx.textAlign = 'center';
+                ctx.font = `5px ${ARCADE}`;
+                ctx.fillStyle = 'rgba(255,236,220,0.75)';
+                const y = lay.play.y + lay.play.h + (tall ? 10 : 9);
+                ctx.fillText('◀ ▶ MODE  ·  ENTER PLAY  ·  ▼ MENU  ·  T CHAT', lay.island.x, y, tall ? W - 20 : 230);
+            });
         }
         ctx.restore();
     }
@@ -533,7 +548,7 @@ export class LobbyScreen {
             r = tall ? 13 : 10.5;
         this.framedAvatar(v.fairy, v.frame, x, cy, r, t);
         ctx.textAlign = 'left';
-        ctx.font = `600 ${tall ? 10 : 9}px ${FONT}`;
+        ctx.font = `700 ${tall ? 10 : 9}px ${SANS}`;
         ctx.fillStyle = '#ffffff';
         ctx.fillText(v.name, x + r + 6, cy - 1, tall ? 96 : 104);
         ctx.font = `5px ${ARCADE}`;
@@ -621,12 +636,13 @@ export class LobbyScreen {
     private quick(b: Box, i: number, t: number): void {
         const ctx = this.ctx;
         const q = LOBBY_QUICK[i];
-        const cx = b.x + b.w / 2,
-            cy = b.y + 14,
-            r = 12;
+        const r = Math.min(b.w, b.h) * 0.34,
+            cx = b.x + b.w / 2,
+            cy = b.y + r + 3;
         drawBadge(ctx, q.color, cx, cy, r, false, t);
         ctx.save();
         ctx.translate(cx, cy);
+        ctx.scale(r / 12, r / 12);
         ctx.strokeStyle = '#fff6dc';
         ctx.fillStyle = '#fff6dc';
         ctx.lineWidth = 1.4;
@@ -664,9 +680,9 @@ export class LobbyScreen {
         }
         ctx.restore();
         ctx.textAlign = 'center';
-        ctx.font = `4.5px ${ARCADE}`;
+        ctx.font = `5.5px ${ARCADE}`;
         ctx.fillStyle = '#fff3c9';
-        ctx.fillText(q.label, cx, b.y + b.h - 4, b.w + 4);
+        ctx.fillText(q.label, cx, b.y + b.h - 2, b.w + 4);
     }
 
     /** The next stage on the trophy road: its scenery in a card, its name, and a bar of trophies toward it. */
@@ -765,18 +781,19 @@ export class LobbyScreen {
         roundRect(ctx, b.x + 3, b.y + 3, b.w - 6, b.h - 6, b.h / 2 - 3);
         ctx.stroke();
         // Emblem and name, centred together.
-        ctx.font = `12px ${ARCADE}`;
-        const tw = Math.min(b.w - 46, ctx.measureText(m.label).width);
-        const x0 = b.x + b.w / 2 - (tw + 22) / 2;
+        const size = Math.round(b.h * 0.36);
+        ctx.font = `${size}px ${ARCADE}`;
+        const tw = Math.min(b.w - 52, ctx.measureText(m.label).width);
+        const x0 = b.x + b.w / 2 - (tw + 26) / 2;
         ctx.save();
         if (m.off) {
             ctx.filter = 'grayscale(1)';
             ctx.globalAlpha = 0.6;
         }
-        drawEmblem(ctx, m.action, x0 + 8, b.y + b.h / 2, 0.3, t, false);
+        drawEmblem(ctx, m.action, x0 + 9, b.y + b.h / 2, b.h / 110, t, false);
         ctx.restore();
         const ink: [string, string, string] = m.off ? ['#ffffff', '#d6d0e6', '#8a80aa'] : GOLD_TEXT;
-        arcadeText(ctx, m.label, x0 + 22, b.y + b.h / 2 + 4.5, 12, ink, 'left', b.w - 46);
+        arcadeText(ctx, m.label, x0 + 26, b.y + b.h / 2 + size * 0.38, size, ink, 'left', b.w - 52);
         if (m.off) {
             ctx.textAlign = 'center';
             ctx.font = `5px ${ARCADE}`;
@@ -790,24 +807,26 @@ export class LobbyScreen {
             [lay.next, 1],
         ] as const) {
             const cx = box.x + box.w / 2 + dir * nudge,
-                cy = box.y + box.h / 2;
+                cy = box.y + box.h / 2,
+                d = Math.min(box.w, box.h) / 2 - 2,
+                k = d / 10;
             ctx.fillStyle = 'rgba(30,12,50,0.75)';
             ctx.beginPath();
-            ctx.moveTo(cx, cy - 10);
-            ctx.lineTo(cx + 10, cy);
-            ctx.lineTo(cx, cy + 10);
-            ctx.lineTo(cx - 10, cy);
+            ctx.moveTo(cx, cy - d);
+            ctx.lineTo(cx + d, cy);
+            ctx.lineTo(cx, cy + d);
+            ctx.lineTo(cx - d, cy);
             ctx.closePath();
             ctx.fill();
             ctx.strokeStyle = GOLD;
             ctx.lineWidth = 1.2;
             ctx.stroke();
             ctx.strokeStyle = '#ffe9a0';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 2 * k;
             ctx.beginPath();
-            ctx.moveTo(cx - dir * 2.5, cy - 4.5);
-            ctx.lineTo(cx + dir * 2.5, cy);
-            ctx.lineTo(cx - dir * 2.5, cy + 4.5);
+            ctx.moveTo(cx - dir * 2.5 * k, cy - 4.5 * k);
+            ctx.lineTo(cx + dir * 2.5 * k, cy);
+            ctx.lineTo(cx - dir * 2.5 * k, cy + 4.5 * k);
             ctx.stroke();
         }
     }
@@ -827,32 +846,32 @@ export class LobbyScreen {
         tg.addColorStop(0, '#8fd8ff');
         tg.addColorStop(1, '#3a7ad8');
         ctx.fillStyle = tg;
-        roundRect(ctx, b.x + 4, b.y + 4, 32, 9, 4.5);
+        roundRect(ctx, b.x + 4, b.y + 4, 36, 11, 5.5);
         ctx.fill();
         ctx.textAlign = 'center';
-        ctx.font = `5px ${ARCADE}`;
+        ctx.font = `5.5px ${ARCADE}`;
         ctx.fillStyle = '#0c2350';
-        ctx.fillText('WORLD', b.x + 20, b.y + 10.5);
+        ctx.fillText('WORLD', b.x + 22, b.y + 11.5);
         ctx.textAlign = 'right';
         ctx.fillStyle = `rgba(255,226,122,${0.6 + 0.3 * Math.sin(t * 3)})`;
-        ctx.fillText(v.touch ? 'TAP TO CHAT' : 'T TO CHAT', b.x + b.w - 5, b.y + 10.5);
+        ctx.fillText(v.touch ? 'TAP TO CHAT' : 'T TO CHAT', b.x + b.w - 5, b.y + 11.5);
         const lines = v.chat.slice(-2);
         ctx.textAlign = 'left';
         if (!lines.length) {
-            ctx.font = `italic 600 7.5px ${FONT}`;
+            ctx.font = `700 7.5px ${SANS}`;
             ctx.fillStyle = 'rgba(214,204,250,0.8)';
             const empty = v.online ? 'Say hi to everyone online' : 'Chat needs the game server';
             ctx.fillText(empty, b.x + 6, b.y + 24, b.w - 12);
             return;
         }
         lines.forEach((l, i) => {
-            const y = b.y + 22 + i * 10;
-            ctx.font = `600 7.5px ${FONT}`;
+            const y = b.y + 26 + i * 12;
+            ctx.font = `700 8.5px ${SANS}`;
             ctx.fillStyle = '#ffe27a';
             const name = `${l.name}:`;
             ctx.fillText(name, b.x + 6, y, 58);
             const nw = Math.min(58, ctx.measureText(name).width) + 3;
-            ctx.font = `7.5px ${FONT}`;
+            ctx.font = `8.5px ${SANS}`;
             ctx.fillStyle = '#ffffff';
             ctx.fillText(l.body, b.x + 6 + nw, y, b.w - 12 - nw);
         });
@@ -870,7 +889,7 @@ export class LobbyScreen {
         ctx.fill();
         // Online count and the switch beside it.
         ctx.textAlign = 'left';
-        ctx.font = `600 8px ${FONT}`;
+        ctx.font = `700 8px ${SANS}`;
         ctx.fillStyle = '#efe6ff';
         ctx.fillText('online 0/0', b.x + 10, b.y + 12);
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -907,7 +926,7 @@ export class LobbyScreen {
         ctx.font = `5.5px ${ARCADE}`;
         ctx.fillStyle = '#ffe27a';
         ctx.fillText('FRIENDS COMING NEXT', b.x + b.w / 2, ny);
-        ctx.font = `italic 600 7.5px ${FONT}`;
+        ctx.font = `700 7.5px ${SANS}`;
         ctx.fillStyle = 'rgba(214,204,250,0.85)';
         ['Add them by code, from your', 'matches or from World chat.'].forEach((l, i) =>
             ctx.fillText(l, b.x + b.w / 2, ny + 11 + i * 10, b.w - 10),
@@ -960,7 +979,7 @@ export class LobbyScreen {
         ctx.translate(b.x + b.w / 2 + 2, b.y + b.h / 2 + 8);
         ctx.rotate(-Math.PI / 2);
         ctx.textAlign = 'center';
-        ctx.font = `6px ${ARCADE}`;
+        ctx.font = `7px ${ARCADE}`;
         ctx.fillStyle = `rgba(255,247,194,${0.75 + 0.25 * Math.sin(t * 3)})`;
         ctx.fillText('FRIENDS', 0, 2.5);
         ctx.restore();
@@ -989,17 +1008,17 @@ export class LobbyScreen {
                 ctx.fillStyle = n.color;
                 ctx.fillRect(b.x + b.w * 0.25, b.y + b.h - 2, b.w * 0.5, 1.5);
             }
-            const r = tall ? 12 : 9;
+            const r = tall ? 16 : 11;
             if (tall) {
-                drawBadge(ctx, n.color, b.x + b.w / 2, b.y + r + 4, r, on, t);
-                drawEmblem(ctx, n.action, b.x + b.w / 2, b.y + r + 4, r / 34, t, on);
+                drawBadge(ctx, n.color, b.x + b.w / 2, b.y + r + 5, r, on, t);
+                drawEmblem(ctx, n.action, b.x + b.w / 2, b.y + r + 5, r / 34, t, on);
                 ctx.textAlign = 'center';
-                ctx.font = `5px ${ARCADE}`;
+                ctx.font = `6px ${ARCADE}`;
                 ctx.fillStyle = on ? '#fff7c2' : 'rgba(239,230,255,0.85)';
                 ctx.fillText(n.label, b.x + b.w / 2, b.y + b.h - 8, b.w - 4);
                 return;
             }
-            ctx.font = `6px ${ARCADE}`;
+            ctx.font = `7px ${ARCADE}`;
             const lw = ctx.measureText(n.label).width;
             const x0 = b.x + b.w / 2 - (lw + r * 2 + 6) / 2;
             drawBadge(ctx, n.color, x0 + r, b.y + b.h / 2, r, on, t);

@@ -13,6 +13,7 @@ import { drawPadlock } from './map-screen';
 import { tallMenuFit } from './menu-fit';
 import type { DemoDraw } from './roster-screen';
 import { drawTopBar } from './top-bar';
+import { enter } from '@/render/transition';
 
 /** Where things go in each layout, in its design units. */
 const LAYOUT = {
@@ -81,7 +82,7 @@ export class MapsScreen {
             dy = 0;
         if (tall) {
             const f = tallMenuFit(h);
-            this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h));
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
             bleed = f.bleed;
@@ -90,11 +91,11 @@ export class MapsScreen {
         } else {
             ctx.save();
             ctx.translate(-bleed, 0);
-            this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H);
+            enter(ctx, 'bg', () => this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
             ctx.restore();
         }
         const L = LAYOUT[layout];
-        drawTopBar(ctx, 'MAPS', L.W, bleed, tall, 16);
+        enter(ctx, 'bar', () => drawTopBar(ctx, 'MAPS', L.W, bleed, tall, 16));
         const map = MAPS[v.index],
             locked = v.locked[v.index];
         ctx.save();
@@ -110,17 +111,19 @@ export class MapsScreen {
             info = { ...L.info, x, w: room };
             tile = Math.max(L.tile, Math.min(96, (room - 4 * TILE_GAP) / ROLES.length));
         }
-        this.info(map, v.index, locked, info, tile, tall, t);
-        this.demo(map, win, v.caption, demo);
+        enter(ctx, 'panels', () => this.info(map, v.index, locked, info, tile, tall, t), { dx: -22 });
+        enter(ctx, 'panels', () => this.demo(map, win, v.caption, demo), { dx: 22 });
         ctx.restore();
         designMedallions(layout, dy, bleed).forEach((m, i) =>
-            this.medallion(MAPS[i], v.locked[i], m, i === v.index, t),
+            enter(ctx, 'buttons', () => this.medallion(MAPS[i], v.locked[i], m, i === v.index, t), { i }),
         );
-        ctx.textAlign = 'center';
-        ctx.font = `7px ${ARCADE}`;
-        ctx.fillStyle = 'rgba(203,188,245,0.75)';
-        const hint = v.touch ? 'TAP A MAP  ·  ◀ BACK' : 'LEFT / RIGHT BROWSE  ·  ESC BACK';
-        ctx.fillText(hint, L.W / 2, tall ? H - 14 : H - 10, L.W - 16);
+        enter(ctx, 'hint', () => {
+            ctx.textAlign = 'center';
+            ctx.font = `7px ${ARCADE}`;
+            ctx.fillStyle = 'rgba(203,188,245,0.75)';
+            const hint = v.touch ? 'TAP A MAP  ·  ◀ BACK' : 'LEFT / RIGHT BROWSE  ·  ESC BACK';
+            ctx.fillText(hint, L.W / 2, tall ? H - 14 : H - 10, L.W - 16);
+        });
         ctx.restore();
     }
 
