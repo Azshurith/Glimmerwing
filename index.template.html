@@ -334,6 +334,31 @@
             #chat[hidden] {
                 display: none;
             }
+            /* Panels come in rather than pop: chat slides in from the left, Settings rises in behind the wipe. */
+            #chat {
+                animation: chat-in 0.26s ease-out;
+            }
+            #settings {
+                animation: panel-in 0.42s ease-out;
+            }
+            @keyframes chat-in {
+                from {
+                    transform: translateX(-100%);
+                    opacity: 0.4;
+                }
+            }
+            @keyframes panel-in {
+                from {
+                    transform: translateY(1.5em);
+                    opacity: 0;
+                }
+            }
+            @media (prefers-reduced-motion: reduce) {
+                #chat,
+                #settings {
+                    animation: none;
+                }
+            }
             .chat-head {
                 display: flex;
                 align-items: center;
