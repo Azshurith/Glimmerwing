@@ -1042,9 +1042,7 @@ export class Game {
         const map = mapById(e.map)?.name ?? e.map;
         const endless = e.mode === 'endless';
         const title = endless ? `${name(e.fairy)} alone` : `${name(e.fairy)}  vs  ${name(e.rivalFairy)}`;
-        const result = endless
-            ? clock(e.seconds)
-            : `${e.won ? 'WIN' : 'LOSS'} ${e.roundsWon}-${e.roundsLost}`;
+        const result = endless ? clock(e.seconds) : `${e.won ? 'WIN' : 'LOSS'} ${e.roundsWon}-${e.roundsLost}`;
         const resultColor = endless ? '#ffb27a' : e.won ? '#ffe27a' : '#a9b4ff';
         const trophies = e.trophyDelta ? `${e.trophyDelta > 0 ? '+' : ''}${e.trophyDelta} trophies` : '';
         const detail = [
