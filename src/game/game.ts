@@ -6,7 +6,8 @@ import { sanitizeKeys } from '@/input/keys';
 import type { Net } from '@/net/net';
 import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
-import { modeCards, modeColumns } from '@/render/screens/mode-screen';
+import { LOBBY_NAV, LOBBY_QUICK, lobbyLayout } from '@/render/screens/lobby-screen';
+import { modeAvailable } from '@/data/availability';
 import { rosterMedallions, rosterPreviewButton } from '@/render/screens/roster-screen';
 import { mapsMedallions } from '@/render/screens/maps-screen';
 import { MAP_CARDS, MAP_COLS, mapCards } from '@/render/screens/map-screen';
@@ -14,7 +15,7 @@ import { MAPS, mapById, mapForSeed } from '@/data/maps';
 import { fairyAvailable, loadCatalog, mapAvailable, setCatalog } from '@/data/availability';
 import { useServerArt } from '@/data/server-art';
 import { ANNOUNCER, VOICES } from '@/data/voices';
-import { stageOpen } from '@/data/stages';
+import { STAGES, stageOpen } from '@/data/stages';
 import { titleButtons } from '@/render/screens/title-screen';
 import { clock, replayPanelLayout } from '@/render/hud';
 import { PALETTE, PLAYER_COLORS } from '@/render/theme';
@@ -42,7 +43,8 @@ import type {
     Placement,
     Progress,
     Settings,
-    ModeMenu,
+    LobbyFocus,
+    LobbyMode,
     SelectCard,
     SelectSide,
     Sfx,
@@ -69,6 +71,15 @@ import {
 import { HISTORY_ROWS, profileBoxes } from '@/render/screens/profile-screen';
 import { GRAPHS, MATCH_TABS, matchBoxes } from '@/render/screens/match-screen';
 import { fromSide, matchStats } from './match-stats';
+
+/** The modes on the lobby's picker, in order. */
+const LOBBY_MODES: Omit<LobbyMode, 'off' | 'ribbon'>[] = [
+    { action: 'story', label: 'STORY MODE', sub: 'Coming soon', color: '#ff9ac8' },
+    { action: 'cpu', label: 'VS CPU', sub: 'Battle the computer', color: '#ffd45c' },
+    { action: 'endless', label: 'ENDLESS', sub: 'Survive alone as long as you can', color: '#ff8a5c' },
+    { action: 'online', label: 'ONLINE PLAY', sub: 'Find a rival or invite a friend', color: '#8fd8ff' },
+    { action: 'versus', label: '2 PLAYERS', sub: 'Share a keyboard, pads or a tablet', color: '#8ff0a0' },
+];
 
 /** The phases before a match is under way: the title, the menu screens and select. */
 const MENU_PHASES: Phase[] = [
@@ -183,11 +194,19 @@ export class Game {
     ];
     /** Select-screen clock: seconds since it opened, and when both players were ready (-1: not yet). */
     private selectT = 0;
-    /** The highlighted choice on the title screen, and the highlighted card on the mode menu. */
+    /** The highlighted choice on the title screen. */
     private titleIndex = 1;
-    private modeIndex = 0;
-    /** Which menu of cards is showing: the main menu, or Play's choice of modes. */
-    private menu: ModeMenu = 'main';
+    /**
+     * The lobby: the mode on its picker (an index into LOBBY_MODES, VS CPU to begin with), where the keyboard
+     * cursor is, the screen chosen on the bar along the bottom, and on a phone whether the friends panel is out.
+     */
+    private lobbyMode = 1;
+    private lobbyFocus: LobbyFocus = 'mode';
+    private lobbyNav = 0;
+    private friendsOpen = false;
+    /** Whether the chat panel (the page's #chat) is open, and World chat's latest lines for the lobby's ticker. */
+    chatOpen = false;
+    chatLines: { name: string; body: string }[] = [];
     /** The fairy in view on the Characters screen. */
     private rosterIndex = 0;
     /** The Characters screen's live demo of the fairy in view. */
@@ -453,8 +472,6 @@ export class Game {
             this.sound.preloadVoice(ANNOUNCER.fight);
             this.sound.speak(ANNOUNCER.choose, 'announcer', 0, 1, 'cut');
         }
-        // A match ends back on Play's menu.
-        this.menu = 'play';
         if (mode !== 'online' && this.net) this.disconnect();
         this.mode = mode;
         this.phase = 'select';
@@ -525,7 +542,7 @@ export class Game {
         this.notice = notice;
         this.mode = 'cpu';
         this.phase = 'modes';
-        this.menu = 'play';
+        this.lobbyFocus = 'mode';
         this.transits = [];
     }
 
@@ -540,6 +557,11 @@ export class Game {
         this.progress = resetProgress();
         void this.account.reset().then(p => p && this.adoptProgress(p));
         this.phase = 'title';
+    }
+
+    /** The best trophies the player has ever had, which open frames and bubbles to wear (see data/looks.ts). */
+    get bestTrophies(): number {
+        return this.progress.bestTrophies;
     }
 
     /** Take on progress the server decided (it counts; this browser's copy only shows it in the meantime). */
@@ -1347,12 +1369,14 @@ export class Game {
         if (this.phase === 'settings') this.backToMenu();
     }
 
-    /** Back to the main menu, with the card for where you came from highlighted. */
+    /** Back to the lobby, with the screen you came from lit on its bar (or the mode picker, from a match). */
     private backToMenu(): void {
-        const from = { roster: 1, maps: 2, profile: 3, settings: 4 }[this.phase as string] ?? 0;
+        const from = { roster: 0, maps: 1, profile: 2, settings: 3 }[this.phase as string];
         this.phase = 'modes';
-        this.menu = 'main';
-        this.modeIndex = from;
+        if (from !== undefined) {
+            this.lobbyNav = from;
+            this.lobbyFocus = 'nav';
+        } else this.lobbyFocus = 'mode';
         this.demoOpen = false;
         this.ui('tick');
     }
@@ -1415,73 +1439,153 @@ export class Game {
         if (pr.has('Escape')) this.backToMenu();
     }
 
+    /** The lobby's modes on its picker, as they are now (one the server has switched off shows as such). */
+    private get lobbyModes(): LobbyMode[] {
+        return LOBBY_MODES.map(m => {
+            const off = m.action === 'story' || !modeAvailable(m.action);
+            return { ...m, off, ribbon: m.action === 'story' ? 'Coming soon' : 'Not available right now' };
+        });
+    }
+
     /**
-     * The mode menu: arrows move round the grid of cards, any fire button or Start picks one, number keys pick by
-     * position, a tap on a card picks it, and Esc goes back to the title. Greyed-out cards do nothing yet.
+     * The lobby: left/right (or a tap on an arrow) change the mode on the picker and Enter (or a tap on it) plays
+     * it; down moves to the bar of other screens along the bottom and up back; T (or a tap on the ticker) opens the
+     * chat panel; on a phone a tap on the edge tab pulls out the friends panel. Esc closes what's open, then goes
+     * back to the title.
      */
-    private stepModes(pr: Set<string>): void {
-        const cards = modeCards(this.menu, this.r.layout, this.r.viewH, this.r.viewX);
-        const n = cards.length,
-            cols = modeColumns(this.r.layout, this.menu);
-        const was = this.modeIndex;
-        if (['ArrowLeft', 'KeyA'].some(k => pr.has(k))) this.modeIndex = (this.modeIndex + n - 1) % n;
-        if (['ArrowRight', 'KeyD'].some(k => pr.has(k))) this.modeIndex = (this.modeIndex + 1) % n;
-        if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.modeIndex = (this.modeIndex + n - cols) % n;
-        if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.modeIndex = (this.modeIndex + cols) % n;
-        if (this.modeIndex !== was) this.ui('tick');
+    private stepLobby(pr: Set<string>): void {
+        const lay = lobbyLayout(this.r.layout, this.r.viewH, this.r.viewX);
+        const tap = this.input.tap;
+        const modes = this.lobbyModes,
+            n = modes.length,
+            nav = LOBBY_NAV.length;
         if (pr.has('Escape')) {
-            // Play's modes back to the main menu; the main menu back to the title.
-            if (this.menu === 'play') this.backToMenu();
+            if (this.friendsOpen) this.friendsOpen = false;
             else this.phase = 'title';
             this.ui('tick');
             return;
         }
-        let pick = -1;
-        const tap = this.input.tap;
-        if (tap) pick = cards.findIndex(c => tap.x >= c.x && tap.x <= c.x + c.w && tap.y >= c.y && tap.y <= c.y + c.h);
-        cards.forEach((_, i) => {
-            if (pr.has(`Digit${i + 1}`)) pick = i;
+        if (pr.has('KeyT') || (tap && !this.chatOpen && inBox(tap, lay.ticker))) {
+            this.setChatOpen(!this.chatOpen);
+            return;
+        }
+        if (tap && lay.friendsTab) {
+            if (!this.friendsOpen && inBox(tap, lay.friendsTab)) {
+                this.friendsOpen = true;
+                this.ui('tick');
+                return;
+            }
+            if (this.friendsOpen && !inBox(tap, lay.friends)) {
+                this.friendsOpen = false;
+                this.ui('tick');
+                return;
+            }
+        }
+        const was = [this.lobbyMode, this.lobbyNav, this.lobbyFocus].join();
+        const left = ['ArrowLeft', 'KeyA'].some(k => pr.has(k)),
+            right = ['ArrowRight', 'KeyD'].some(k => pr.has(k));
+        if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.lobbyFocus = 'nav';
+        if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.lobbyFocus = 'mode';
+        if (this.lobbyFocus === 'mode') {
+            if (left) this.lobbyMode = (this.lobbyMode + n - 1) % n;
+            if (right) this.lobbyMode = (this.lobbyMode + 1) % n;
+        } else {
+            if (left) this.lobbyNav = (this.lobbyNav + nav - 1) % nav;
+            if (right) this.lobbyNav = (this.lobbyNav + 1) % nav;
+        }
+        if (tap && inBox(tap, lay.prev)) {
+            this.lobbyMode = (this.lobbyMode + n - 1) % n;
+            this.lobbyFocus = 'mode';
+        }
+        if (tap && inBox(tap, lay.next)) {
+            this.lobbyMode = (this.lobbyMode + 1) % n;
+            this.lobbyFocus = 'mode';
+        }
+        if ([this.lobbyMode, this.lobbyNav, this.lobbyFocus].join() !== was) this.ui('tick');
+        // What's picked: the mode (Enter on the picker, or a tap on it), or a screen on the bar.
+        let screen = -1,
+            play = false;
+        LOBBY_NAV.forEach((_, i) => {
+            if (pr.has(`Digit${i + 1}`)) screen = i;
         });
-        if (pick < 0 && ['Space', 'Enter', 'KeyZ', 'KeyG', 'NumpadEnter'].some(k => pr.has(k))) pick = this.modeIndex;
-        if (pick < 0) return;
-        this.modeIndex = pick;
-        const c = cards[pick];
-        if (c.disabled) {
+        if (tap) {
+            const k = lay.nav.findIndex(b => inBox(tap, b));
+            if (k >= 0) screen = k;
+            if (inBox(tap, lay.play)) play = true;
+        }
+        if (['Space', 'Enter', 'KeyZ', 'KeyG', 'NumpadEnter'].some(k => pr.has(k))) {
+            if (this.lobbyFocus === 'nav') screen = this.lobbyNav;
+            else play = true;
+        }
+        const quick = tap ? lay.quick.findIndex(b => inBox(tap, b)) : -1;
+        if (quick >= 0) {
+            this.ui('ok');
+            this.setChatOpen(false);
+            const id = LOBBY_QUICK[quick].id;
+            if (id === 'guide') this.onWantGuide?.();
+            else this.openProfile(id === 'history' ? 'history' : 'record');
+            return;
+        }
+        if (screen >= 0) {
+            this.lobbyNav = screen;
+            this.lobbyFocus = 'nav';
+            this.ui('ok');
+            this.setChatOpen(false);
+            switch (LOBBY_NAV[screen].action) {
+                case 'characters':
+                    this.phase = 'roster';
+                    break;
+                case 'maps':
+                    this.phase = 'maps';
+                    break;
+                case 'profile':
+                    this.openProfile();
+                    break;
+                case 'settings':
+                    this.phase = 'settings';
+                    break;
+            }
+            return;
+        }
+        if (!play) return;
+        const m = modes[this.lobbyMode];
+        this.lobbyFocus = 'mode';
+        if (m.off) {
             this.ui('tick');
             return;
         }
         this.ui('ok');
-        switch (c.action) {
-            case 'play':
-                this.menu = 'play';
-                this.modeIndex = 1;
-                // Ask again, so a mode, fairy or map just switched on or off (or new art) shows as such.
-                this.refreshCatalog();
-                break;
-            case 'characters':
-                this.phase = 'roster';
-                break;
-            case 'maps':
-                this.phase = 'maps';
-                break;
-            case 'profile':
-                this.openProfile();
-                break;
-            case 'online':
-                this.onWantOnline?.();
-                break;
-            case 'settings':
-                this.phase = 'settings';
-                break;
-            case 'guide':
-                this.onWantGuide?.();
-                break;
-            case 'cpu':
-            case 'versus':
-            case 'endless':
-                this.start(c.action);
-                break;
-        }
+        this.setChatOpen(false);
+        if (m.action === 'online') this.onWantOnline?.();
+        else if (m.action === 'cpu' || m.action === 'versus' || m.action === 'endless') this.start(m.action);
+    }
+
+    /** Open or close the chat panel (the page shows it; see main.ts). */
+    setChatOpen(open: boolean): void {
+        if (this.chatOpen === open) return;
+        this.chatOpen = open;
+        this.ui('tick');
+    }
+
+    /** The next stage on the trophy road, with the trophies toward it, or null once they're all open. */
+    private get nextStage(): { map: string; name: string; have: number; need: number } | null {
+        const st = STAGES.find(x => x.trophies > this.progress.bestTrophies);
+        if (!st) return null;
+        return {
+            map: st.mapId,
+            name: mapById(st.mapId)?.name ?? st.mapId,
+            have: this.progress.bestTrophies,
+            need: st.trophies,
+        };
+    }
+
+    /** The stage behind the lobby: the furthest one open on the trophy road. */
+    private get lobbyMap(): string {
+        let best = 0;
+        MAPS.forEach((_, i) => {
+            if (this.mapOpen(i)) best = i;
+        });
+        return MAPS[best].id;
     }
 
     /** Move the select-screen cursors and lock in picks from keys, pads and taps. */
@@ -1546,7 +1650,9 @@ export class Game {
             if (this.online) this.disconnect();
             else {
                 this.phase = 'modes';
-                this.menu = 'play';
+                this.lobbyFocus = 'mode';
+                // Ask again, so a mode, fairy or map just switched on or off (or new art) shows as such.
+                this.refreshCatalog();
             }
             return;
         }
@@ -1805,8 +1911,9 @@ export class Game {
                 }
                 this.ui('ok');
                 this.phase = 'modes';
-                this.menu = 'main';
-                this.modeIndex = 0;
+                this.lobbyFocus = 'mode';
+                // Ask again, so a mode, fairy or map just switched on or off (or new art) shows as such.
+                this.refreshCatalog();
             }
             return;
         }
@@ -1841,7 +1948,7 @@ export class Game {
                 if (pr.size) this.notice = '';
                 return;
             }
-            this.stepModes(pr);
+            this.stepLobby(pr);
             return;
         }
         if (this.phase === 'select') {
@@ -2273,7 +2380,28 @@ export class Game {
                 );
                 break;
             case 'modes':
-                r.modes({ menu: this.menu, index: this.modeIndex, touch }, this.time);
+                r.lobby(
+                    {
+                        touch,
+                        name: this.account.name,
+                        fairy: this.account.look.avatar,
+                        frame: this.account.look.frame,
+                        wins: this.progress.wins,
+                        trophies: this.progress.trophies,
+                        online: this.account.online,
+                        stages: [MAPS.filter((_, i) => this.mapOpen(i)).length, MAPS.length],
+                        next: this.nextStage,
+                        mode: this.lobbyModes[this.lobbyMode],
+                        focus: this.lobbyFocus,
+                        nav: this.lobbyNav,
+                        map: this.lobbyMap,
+                        mapName: mapById(this.lobbyMap)?.name ?? '',
+                        chat: this.chatLines,
+                        chatOpen: this.chatOpen,
+                        friendsOpen: this.friendsOpen,
+                    },
+                    this.time,
+                );
                 if (this.notice)
                     r.banner({
                         title: this.notice,

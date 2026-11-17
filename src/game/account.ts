@@ -1,9 +1,11 @@
+import { DEFAULT_LOOK } from '@/data/looks';
 import { ApiError, apiBase, apiCall } from '@/net/api';
 import { freshProgress } from './rewards';
 import type {
     CatalogResponse,
     EndlessRank,
     HistoryEntry,
+    PlayerLook,
     LeaderEntry,
     MeResponse,
     Progress,
@@ -17,6 +19,7 @@ import type {
 const ACCOUNT_KEY = 'glimmerwing-account-v1';
 const SYNC_KEY = 'glimmerwing-sync-v1';
 const PENDING_KEY = 'glimmerwing-pending-results-v1';
+const LOOK_KEY = 'glimmerwing-look-v1';
 /** How long settings changes are gathered before they're sent, so a burst of changes is one request. */
 const SEND_DELAY = 1500;
 /** The most finished games kept to send later while the server can't be reached. */
@@ -77,6 +80,8 @@ export class Account {
     private flushing = false;
     /** Whether the server has answered since the game started. */
     online = false;
+    /** What the player wears in chat and on their plate (as the server has it, once it answers). */
+    look: PlayerLook = { ...DEFAULT_LOOK, ...readStore<Partial<PlayerLook>>(LOOK_KEY, {}) };
     /** Everyone's best Endless runs, as last fetched. */
     leaders: LeaderEntry[] = [];
     /** Where the player's best Endless run ranks among everyone's, as last heard. */
@@ -120,6 +125,10 @@ export class Account {
             const me = await this.me();
             this.online = true;
             this.rank = me.endless;
+            if (me.look) {
+                this.look = me.look;
+                writeStore(LOOK_KEY, me.look);
+            }
             // The server's record is the one that counts (a new account's is empty).
             const out: SyncResult = { progress: me.progress?.data ?? freshProgress() };
             const s = this.meet(me.settings, this.stamps.settingsAt);
@@ -156,7 +165,34 @@ export class Account {
         writeStore(ACCOUNT_KEY, this.stored);
         this.stamps = { settingsAt: 0 };
         // A new account starts from nothing: the server keeps the record from here on.
-        return { id: this.stored.id, name: this.stored.name, progress: null, settings: null, endless: null };
+        return {
+            id: this.stored.id,
+            name: this.stored.name,
+            progress: null,
+            settings: null,
+            endless: null,
+            look: { ...DEFAULT_LOOK },
+        };
+    }
+
+    /**
+     * Wear a new look: kept here at once and sent to the server, which checks it's open to the player. Resolves
+     * with null once it's saved, or why it couldn't be (and the look goes back to what it was).
+     */
+    async saveLook(look: PlayerLook): Promise<string | null> {
+        const was = this.look;
+        this.look = look;
+        writeStore(LOOK_KEY, look);
+        if (!this.base || !this.stored) return null;
+        try {
+            this.look = await apiCall<PlayerLook>(this.base, 'PUT', '/me/look', look, this.stored.token);
+            writeStore(LOOK_KEY, this.look);
+            return null;
+        } catch (e) {
+            this.look = was;
+            writeStore(LOOK_KEY, was);
+            return e instanceof ApiError ? e.message : "Couldn't reach the game server";
+        }
     }
 
     /** Settings were saved in this browser: stamp them and send them up shortly. */

@@ -7,13 +7,14 @@ import { randomBytes } from 'node:crypto';
 import type { DataSource, Repository } from 'typeorm';
 import type { Catalog } from './catalog';
 import { fromJson } from './database/entities/columns';
+import { ChatRow } from './database/entities/chat';
 import { EndlessRun } from './database/entities/endless-run';
 import { MatchRow } from './database/entities/match';
 import { Player } from './database/entities/player';
 import { ProgressRow } from './database/entities/progress';
 import { ReplayRow } from './database/entities/replay';
 import { SettingsRow } from './database/entities/settings';
-import type { EndlessRank, HistoryEntry, LeaderEntry, Progress, ReplaySummary } from '@/types';
+import type { ChatMessage, PlayerLook, EndlessRank, HistoryEntry, LeaderEntry, Progress, ReplaySummary } from '@/types';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -105,6 +106,7 @@ export class Store {
     private matches: Repository<MatchRow>;
     private runs: Repository<EndlessRun>;
     private replays: Repository<ReplayRow>;
+    private chats: Repository<ChatRow>;
 
     constructor(
         private db: DataSource,
@@ -116,6 +118,7 @@ export class Store {
         this.matches = db.getRepository(MatchRow);
         this.runs = db.getRepository(EndlessRun);
         this.replays = db.getRepository(ReplayRow);
+        this.chats = db.getRepository(ChatRow);
     }
 
     /** Rows of a raw query. */
@@ -135,6 +138,17 @@ export class Store {
         if (!p) return null;
         await this.players.update({ id: p.id }, { seenAt: new Date() });
         return { id: p.id, name: p.name };
+    }
+
+    /** What a player wears in chat. */
+    async lookOf(id: number): Promise<PlayerLook> {
+        const p = await this.players.findOne({ where: { id } });
+        return { avatar: p?.avatar ?? 'pip', frame: p?.avatarFrame ?? 'gold', bubble: p?.chatBubble ?? 'night' };
+    }
+
+    /** Change what a player wears in chat. */
+    async setLook(id: number, look: PlayerLook): Promise<void> {
+        await this.players.update({ id }, { avatar: look.avatar, avatarFrame: look.frame, chatBubble: look.bubble });
     }
 
     /** Give a player a new name. */
@@ -428,6 +442,43 @@ export class Store {
             fairies: pair<string>(x.fairies),
             wins: pair<number>(x.wins),
             recorded: x.recorded == null ? null : Number(x.recorded),
+        }));
+    }
+
+    /** Post a message on a channel; answers with it as the API hands it out. */
+    async addChat(p: PlayerRef, channel: string, body: string): Promise<ChatMessage> {
+        const r = await this.chats.insert({ channel, playerId: p.id, body });
+        const id = Number(r.identifiers[0]?.id);
+        const look = await this.lookOf(p.id);
+        return { id, channel, playerId: p.id, name: p.name, body, at: new Date().toISOString(), look };
+    }
+
+    /** A channel's latest messages (at most `limit`, after id `after`), oldest first, with who wrote them. */
+    async chat(channel: string, after: number, limit: number): Promise<ChatMessage[]> {
+        const rows = await this.rows<{
+            id: number | string;
+            player_id: number;
+            name: string;
+            avatar: string;
+            avatar_frame: string;
+            chat_bubble: string;
+            body: string;
+            created_at: Date;
+        }>(
+            `SELECT c.id, c.player_id, p.name, p.avatar, p.avatar_frame, p.chat_bubble, c.body, c.created_at
+             FROM chat_messages c
+             JOIN players p ON p.id = c.player_id AND p.deleted_at IS NULL
+             WHERE c.channel = ? AND c.id > ? AND c.deleted_at IS NULL ORDER BY c.id DESC LIMIT ?`,
+            [channel, after, limit],
+        );
+        return rows.reverse().map(x => ({
+            id: Number(x.id),
+            channel,
+            playerId: Number(x.player_id),
+            name: x.name,
+            body: x.body,
+            at: iso(x.created_at),
+            look: { avatar: x.avatar, frame: x.avatar_frame, bubble: x.chat_bubble },
         }));
     }
 

@@ -312,6 +312,265 @@
             /* ---- Settings: a full panel in the game's own look (gold edges, slanted tabs, Bungee) ---- */
             /* The Settings panel fills the screen below the canvas's own heading bar (drawn by the game's Settings
                screen, like every menu screen), so the bar and the ◀ Back tab are the same as everywhere else. */
+            /* The lobby's chat panel: where the lobby's layout puts it (--chat-*, set by main.ts), over the stage. */
+            #chat {
+                position: absolute;
+                left: var(--chat-x, 0);
+                top: var(--chat-y, 0);
+                width: var(--chat-w, 40%);
+                height: var(--chat-h, 70%);
+                z-index: 5;
+                display: flex;
+                flex-direction: column;
+                font-family: 'Fraunces', Georgia, serif;
+                font-size: clamp(12px, calc(var(--sw, 600px) * 0.016), 18px);
+                color: #efe6ff;
+                background: rgba(14, 8, 36, 0.9);
+                border: 1px solid rgba(201, 162, 74, 0.6);
+                border-radius: 0.5em;
+                box-shadow: 0 0.4em 1.6em rgba(0, 0, 0, 0.45);
+                overflow: hidden;
+            }
+            #chat[hidden] {
+                display: none;
+            }
+            .chat-head {
+                display: flex;
+                align-items: center;
+                gap: 0.3em;
+                padding: 0.45em 0.45em 0.35em;
+                border-bottom: 1px solid rgba(217, 168, 69, 0.3);
+            }
+            .chat-tabs {
+                display: flex;
+                gap: 0.3em;
+                flex: 1;
+                min-width: 0;
+            }
+            .chat-tab,
+            .chat-close,
+            .chat-style-btn,
+            .chat-form button {
+                border: 0;
+                cursor: pointer;
+                font:
+                    400 0.72em 'Bungee',
+                    'Arial Black',
+                    sans-serif;
+                letter-spacing: 0.04em;
+                color: #b9a8e8;
+                background: rgba(255, 255, 255, 0.06);
+                padding: 0.45em 0.6em;
+                border-radius: 0.3em;
+            }
+            .chat-tab {
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .chat-tab[aria-selected='true'] {
+                color: #1b1240;
+                background: linear-gradient(180deg, #fff0b0, #e0a83e 60%, #c48a2a);
+            }
+            .chat-tab.soon {
+                opacity: 0.55;
+            }
+            .chat-close:hover,
+            .chat-style-btn:hover,
+            .chat-tab:hover {
+                color: #fff3c9;
+            }
+            .chat-log {
+                flex: 1;
+                min-height: 0;
+                overflow-y: auto;
+                margin: 0;
+                padding: 0.4em 0.7em;
+                list-style: none;
+                user-select: text;
+                -webkit-user-select: text;
+            }
+            .chat-log li,
+            .chat-preview {
+                display: flex;
+                align-items: flex-start;
+                gap: 0.55em;
+                padding: 0.35em 0;
+            }
+            .chat-log li.mine {
+                flex-direction: row-reverse;
+            }
+            .chat-log li.mine .msg-head {
+                flex-direction: row-reverse;
+            }
+            .chat-log li.mine .msg-main {
+                align-items: flex-end;
+            }
+            /* The avatar: a round picture inside the player's frame (the frame-* styles, made by chat-panel.ts). */
+            .ava {
+                flex: none;
+                width: 2.5em;
+                height: 2.5em;
+                padding: 0.17em;
+                border-radius: 50%;
+                box-sizing: border-box;
+                background: #c9a24a;
+            }
+            .ava img {
+                display: block;
+                width: 100%;
+                height: 100%;
+                border-radius: 50%;
+                border: 0.08em solid rgba(0, 0, 0, 0.55);
+                box-sizing: border-box;
+            }
+            .msg-main {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                min-width: 0;
+                max-width: calc(100% - 3.2em);
+            }
+            .msg-head {
+                display: flex;
+                align-items: baseline;
+                gap: 0.45em;
+                font-size: 0.82em;
+                margin-bottom: 0.15em;
+            }
+            .msg-head b {
+                font-weight: 600;
+                color: #ffe27a;
+            }
+            .chat-log li.mine .msg-head b {
+                color: #8fd8ff;
+            }
+            .msg-head time {
+                font-size: 0.85em;
+                color: #8a80aa;
+            }
+            /* The bubble a message sits in (the bubble-* styles, made by chat-panel.ts). */
+            .bubble {
+                margin: 0;
+                padding: 0.4em 0.75em;
+                border-radius: 0.2em 0.9em 0.9em 0.9em;
+                line-height: 1.35;
+                color: #fff;
+                overflow-wrap: anywhere;
+                user-select: text;
+                -webkit-user-select: text;
+            }
+            .chat-log li.mine .bubble {
+                border-radius: 0.9em 0.2em 0.9em 0.9em;
+            }
+            .chat-style-btn[aria-pressed='true'] {
+                color: #1b1240;
+                background: linear-gradient(180deg, #c9f0ff, #6ab8ff);
+            }
+            .chat-style {
+                flex: 1;
+                min-height: 0;
+                overflow-y: auto;
+                padding: 0.4em 0.7em 0.6em;
+            }
+            .chat-style[hidden] {
+                display: none;
+            }
+            .chat-style h3 {
+                margin: 0.7em 0 0.35em;
+                font:
+                    400 0.72em 'Bungee',
+                    'Arial Black',
+                    sans-serif;
+                letter-spacing: 0.05em;
+                color: #fff3c9;
+            }
+            .chat-preview {
+                padding: 0.5em;
+                border-radius: 0.5em;
+                background: rgba(0, 0, 0, 0.3);
+            }
+            .chat-picks {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(3.6em, 1fr));
+                gap: 0.4em;
+            }
+            .chat-picks[data-kind='bubble'] {
+                grid-template-columns: repeat(auto-fill, minmax(5.4em, 1fr));
+            }
+            .pick {
+                position: relative;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 0.25em;
+                padding: 0.35em 0.2em 0.3em;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 0.45em;
+                background: rgba(255, 255, 255, 0.04);
+                color: #d6ccfa;
+                font: inherit;
+                font-size: 0.72em;
+                cursor: pointer;
+            }
+            .pick .ava {
+                font-size: 1.15em;
+            }
+            .pick .bubble {
+                font-size: 1.2em;
+                padding: 0.3em 0.6em;
+            }
+            .pick:hover {
+                background: rgba(255, 255, 255, 0.1);
+            }
+            .pick[aria-pressed='true'] {
+                border-color: #ffd45c;
+                background: rgba(255, 212, 92, 0.16);
+                color: #fff3c9;
+            }
+            .pick:disabled {
+                cursor: default;
+                opacity: 0.45;
+            }
+            .pick small {
+                font-size: 0.85em;
+                color: #ffcf9a;
+            }
+            .chat-note {
+                margin: 0;
+                padding: 0 0.7em 0.3em;
+                font-style: italic;
+                font-size: 0.85em;
+                color: #ffcf9a;
+                min-height: 1.2em;
+            }
+            .chat-form {
+                display: flex;
+                gap: 0.4em;
+                padding: 0.45em;
+                border-top: 1px solid rgba(217, 168, 69, 0.3);
+            }
+            .chat-form input {
+                flex: 1;
+                min-width: 0;
+                font: inherit;
+                color: #fff;
+                background: rgba(0, 0, 0, 0.35);
+                border: 1px solid rgba(201, 162, 74, 0.45);
+                border-radius: 0.3em;
+                padding: 0.45em 0.6em;
+            }
+            .chat-form button {
+                color: #1b1240;
+                background: linear-gradient(180deg, #fff0b0, #e0a83e 60%, #c48a2a);
+            }
+            .chat-form button:disabled,
+            .chat-form input:disabled {
+                opacity: 0.5;
+                cursor: default;
+            }
             #settings {
                 position: absolute;
                 inset: var(--bar-h, 0) 0 0 0;
@@ -743,6 +1002,64 @@
                 <canvas id="game" tabindex="0" aria-label="Glimmerwing playfield"></canvas>
                 <div class="touch-ui" aria-hidden="false">
                     <button class="tb small tb-menu" id="menu-btn" data-key="Escape" aria-label="Pause">❚❚</button>
+                </div>
+                <div id="chat" role="dialog" aria-label="Chat" hidden>
+                    <div class="chat-head">
+                        <div class="chat-tabs" role="tablist" aria-label="Chat channels">
+                            <button type="button" class="chat-tab" role="tab" data-ch="world" aria-selected="true">
+                                World
+                            </button>
+                            <button
+                                type="button"
+                                class="chat-tab soon"
+                                role="tab"
+                                data-ch="friends"
+                                aria-selected="false"
+                            >
+                                Friends
+                            </button>
+                            <button
+                                type="button"
+                                class="chat-tab soon"
+                                role="tab"
+                                data-ch="lobby"
+                                aria-selected="false"
+                            >
+                                Lobby
+                            </button>
+                            <button
+                                type="button"
+                                class="chat-tab soon"
+                                role="tab"
+                                data-ch="guild"
+                                aria-selected="false"
+                            >
+                                Guild
+                            </button>
+                        </div>
+                        <button type="button" class="chat-style-btn" aria-pressed="false">Style</button>
+                        <button type="button" class="chat-close" aria-label="Close chat">✕</button>
+                    </div>
+                    <ol class="chat-log" aria-live="polite"></ol>
+                    <div class="chat-style" hidden>
+                        <div class="chat-preview"></div>
+                        <h3>Avatar</h3>
+                        <div class="chat-picks" data-kind="avatar"></div>
+                        <h3>Frame</h3>
+                        <div class="chat-picks" data-kind="frame"></div>
+                        <h3>Chat bubble</h3>
+                        <div class="chat-picks" data-kind="bubble"></div>
+                    </div>
+                    <p class="chat-note"></p>
+                    <form class="chat-form" autocomplete="off">
+                        <input
+                            type="text"
+                            maxlength="140"
+                            placeholder="Say something to everyone"
+                            aria-label="Message"
+                        />
+                        <button type="submit">Send</button>
+                    </form>
                 </div>
                 <div id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
                     <div class="set-card">

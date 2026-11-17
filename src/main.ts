@@ -7,7 +7,9 @@ import { roundMusic } from './data/music';
 import { modeAvailable } from './data/availability';
 import { Renderer } from './render/renderer';
 import { AdaptiveResolution } from './render/resolution';
+import { initChatPanel } from './page/chat-panel';
 import { initSettingsPanel } from './page/settings-panel';
+import { lobbyLayout } from './render/screens/lobby-screen';
 import { topBarBottom } from './render/screens/top-bar';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -93,6 +95,14 @@ function fit(): void {
     // Where the menu screens' heading bar ends, so the Settings panel can start just under it.
     const barPx = topBarBottom(renderer.layout === 'tall', renderer.viewH) * (Math.floor(w) / renderer.viewW);
     screenEl.style.setProperty('--bar-h', `${barPx}px`);
+    // Where the lobby's chat panel opens, in px (its layout is in view units, from the view's left edge).
+    const px = Math.floor(w) / renderer.viewW;
+    const box = lobbyLayout(renderer.layout, renderer.viewH, renderer.viewX).chat;
+    const x0 = renderer.layout === 'tall' ? 0 : renderer.viewX;
+    screenEl.style.setProperty('--chat-x', `${(box.x + x0) * px}px`);
+    screenEl.style.setProperty('--chat-y', `${box.y * px}px`);
+    screenEl.style.setProperty('--chat-w', `${box.w * px}px`);
+    screenEl.style.setProperty('--chat-h', `${box.h * px}px`);
     renderer.resize();
 }
 for (const ev of ['resize', 'orientationchange'] as const)
@@ -171,6 +181,9 @@ const settings = initSettingsPanel({
     fullscreen: { supported: fsSupported, isOn: () => !!fsElement(), enter: () => void enterFull(), exit: exitFull },
 });
 game.onWantGuide = () => (location.href = 'guide.html');
+// ---- chat ----------------------------------------------------------------------
+// The lobby's chat panel (src/page/chat-panel.ts): World chat, polled while the lobby shows.
+const chat = initChatPanel({ game, account: game.account, canvas });
 
 let shownMode = '',
     shownPhase = '',
@@ -182,6 +195,7 @@ let shownViewW = 0;
 /** Keeps the page's touch layer in step with the game: which buttons show, and what the top one does. */
 function syncPage(): void {
     settings.sync();
+    chat.sync();
     // The layout changes with the phase and the orientation: refit to its shape.
     if (renderer.layout !== shownLayout || renderer.viewW !== shownViewW) {
         shownLayout = screenEl.dataset.layout = renderer.layout;

@@ -9,7 +9,7 @@ import type {
     ConsoleView,
     EndlessView,
     HudTag,
-    ModeView,
+    LobbyView,
     ProfileView,
     ReplayPanelView,
     MatchInfoView,
@@ -42,7 +42,7 @@ import { mapById, mapForSeed } from '@/data/maps';
 import { Hud } from './hud';
 import { SkyScenery } from './scenery/scenery';
 import { MapScreen } from './screens/map-screen';
-import { ModeScreen } from './screens/mode-screen';
+import { LobbyScreen } from './screens/lobby-screen';
 import { ProfileScreen } from './screens/profile-screen';
 import { MatchScreen } from './screens/match-screen';
 import { SettingsScreen } from './screens/settings-screen';
@@ -62,7 +62,7 @@ export class Renderer {
     private anims = new WeakMap<Field, PlayerAnimator>();
     private selectScreen: SelectScreen;
     private titleScreen: TitleScreen;
-    private modeScreen: ModeScreen;
+    private lobbyScreen: LobbyScreen;
     private rosterScreen: RosterScreen;
     private mapsScreen: MapsScreen;
     private settingsScreen: SettingsScreen;
@@ -113,7 +113,7 @@ export class Renderer {
         this.ctx = canvas.getContext('2d')!;
         this.selectScreen = new SelectScreen(this.ctx);
         this.titleScreen = new TitleScreen(this.ctx);
-        this.modeScreen = new ModeScreen(this.ctx);
+        this.lobbyScreen = new LobbyScreen(this.ctx);
         this.rosterScreen = new RosterScreen(this.ctx);
         this.mapsScreen = new MapsScreen(this.ctx);
         this.profileScreen = new ProfileScreen(this.ctx);
@@ -486,9 +486,20 @@ export class Renderer {
         this.titleScreen.draw(v, time, this.layout, this.viewH, this.viewX);
     }
 
-    /** The mode menu (see mode-screen.ts). */
-    modes(v: ModeView, time: number): void {
-        this.modeScreen.draw(v, time, this.layout, this.viewH, this.viewX);
+    /** The lobby, the main menu, with the stage's scenery scrolling live on its island (see lobby-screen.ts). */
+    lobby(v: LobbyView, time: number): void {
+        const ctx = this.ctx;
+        this.scenery.budget = 6;
+        this.lobbyScreen.draw(v, time, this.layout, this.viewH, this.viewX, (map, x, y, w, h) => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, y, w, h);
+            ctx.clip();
+            ctx.translate(x, y);
+            this.scenery.draw(ctx, 4242, time * 1.2, time, w, h, mapById(map) ?? undefined);
+            ctx.restore();
+        });
+        this.scenery.budget = 2;
     }
 
     /** The Characters screen (see roster-screen.ts), with the live demo meadow of the fairy in view. */
