@@ -67,7 +67,7 @@ export function drawNight(ctx: CanvasRenderingContext2D, t: number, x0: number, 
         ctx.fillStyle = '#fff6e0';
         for (let i = 0; i < 10; i++) {
             ctx.globalAlpha = Math.max(0, Math.sin(t * (0.8 + scatter(i, 5)) + i * 2)) * 0.9;
-            sparkle(ctx, x0 + scatter(i, 6) * w, 10 + scatter(i, 7) * H * 0.5, 1.5 + scatter(i, 8) * 2);
+            sparkle(ctx, x0 + scatter(i, 6) * w, H * (0.16 + scatter(i, 7) * 0.4), 1.5 + scatter(i, 8) * 2);
         }
         ctx.globalAlpha = 1;
         return;

@@ -5,14 +5,13 @@
 import * as C from '@/core/config';
 import { fairyById } from '@/data/characters';
 import type { Fairy, HighlightKind, Layout, MatchInfoView, MatchStats, MatchTab, SideStats } from '@/types';
-import { Backdrop } from '@/render/backdrop';
 import { arcadeText, slanted } from '@/render/draw';
 import { clock } from '@/render/hud';
-import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { drawMedal } from './profile-screen';
 import { enter } from '@/render/transition';
+import { ornateScreen, ornateTitle } from './ornate';
 
 /** How far the tall screen's content moves down to sit centred in a view `h` tall. */
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
@@ -121,12 +120,10 @@ function niceCeil(v: number): number {
 
 /** The match details screen. */
 export class MatchScreen {
-    private backdrop: Backdrop;
     private gold: [string, string, string] = ['#ffffff', '#ffe08a', '#ff9a2e'];
 
-    constructor(private ctx: CanvasRenderingContext2D) {
-        this.backdrop = new Backdrop(ctx);
-    }
+    /** Draw on `ctx`. */
+    constructor(private ctx: CanvasRenderingContext2D) {}
 
     /** Draw the screen; `bleed` is how far a widened landscape view reaches past each side. */
     draw(v: MatchInfoView, t: number, layout: Layout = 'wide', h: number = C.TALL_H, bleed = 0): void {
@@ -138,20 +135,15 @@ export class MatchScreen {
             dy = 0;
         if (tall) {
             const f = tallMenuFit(h);
-            enter(ctx, 'bg', () => this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h));
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
             bleed = f.bleed;
             W = C.TALL_W;
             H = f.h;
             dy = tallShift(f.h);
-        } else {
-            ctx.save();
-            ctx.translate(-bleed, 0);
-            enter(ctx, 'bg', () => this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
-            ctx.restore();
         }
-        enter(ctx, 'bar', () => drawTopBar(ctx, 'MATCH DETAILS', W, bleed, tall, 16));
+        enter(ctx, 'bg', () => ornateScreen(ctx, t, W, H, bleed, '', tall));
+        enter(ctx, 'bar', () => ornateTitle(ctx, 'MATCH DETAILS', W, t, tall));
         const lay = designLayout(layout, 0);
         ctx.translate(0, dy);
         lay.tabs.forEach((b, i) =>
