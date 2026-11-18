@@ -5,13 +5,19 @@
 import * as C from '@/core/config';
 import { fairyById } from '@/data/characters';
 import type { Fairy, HighlightKind, Layout, MatchInfoView, MatchStats, MatchTab, SideStats } from '@/types';
-import { arcadeText, slanted } from '@/render/draw';
+import { arcadeText, slanted, sparkle } from '@/render/draw';
 import { clock } from '@/render/hud';
-import { ARCADE, FONT } from '@/render/theme';
+import { ARCADE, FONT, SANS } from '@/render/theme';
+import { roundRect } from './emblems';
 import { tallMenuFit } from './menu-fit';
 import { drawKit } from './kit';
-import { kitButton, kitHintBar, kitPanel, kitPill, kitReady, kitTab } from './kit-ui';
-import { drawMedal } from './profile-screen';
+import { PieceAtlas } from './kit';
+import { kitButton, kitHintBar, kitPanel, kitPill, kitReady, kitTab, mockBox, mockFit } from './kit-ui';
+import type { MockFit } from './kit-ui';
+import kitUrl from '@/../assets/ui/match-kit.png';
+import goldUrl from '@/../assets/ui/match-kit-gold.png';
+import { MATCH_KIT } from '@/data/match-kit';
+import { drawMedal, drawPlayerCard, playerCardReady } from './profile-screen';
 import { enter } from '@/render/transition';
 import { ornateScreen, ornateTitle } from './ornate';
 
@@ -70,6 +76,61 @@ const MARKS: Record<HighlightKind, { letter: string; colour: string; name: strin
     ko: { letter: 'X', colour: '#ff5470', name: 'KO' },
 };
 
+/** The match details' painted pieces (`tools/extract-screen-kit.py match`), used in landscape once loaded. */
+const KIT = new PieceAtlas(kitUrl, goldUrl, MATCH_KIT);
+
+/**
+ * The painted landscape screen's layout, in its mockups' 2x pixels: the part fitted to the view, and the boxes of
+ * the tabs, graph tabs, buttons, the card, the score's frames and tiles, the scoreboard's columns and rows, and the
+ * chart.
+ */
+const MOCK = {
+    area: [90, 0, 3545, 1745] as const,
+    title: [1119, 25, 1309, 200],
+    tabs: [
+        [923, 231, 580, 122],
+        [1513, 231, 580, 122],
+        [2103, 231, 580, 122],
+    ],
+    graphs: [
+        [588, 347, 575, 98],
+        [1176, 347, 575, 98],
+        [1764, 347, 575, 98],
+        [2352, 347, 575, 98],
+    ],
+    card: [96, 176, 808, 1408],
+    tag: [1570, 376, 425, 72],
+    banner: [1279, 450, 995, 224],
+    frames: [
+        [1004, 600, 353, 488],
+        [2223, 600, 353, 488],
+    ],
+    roundsPill: [1624, 940, 298, 94],
+    tiles: { y: 1122, w: 450, h: 199, gap: 18, mid: 1871 },
+    watch: [996, 1380, 935, 157],
+    copy: [1962, 1382, 778, 159],
+    head: [440, 385, 3115, 105],
+    columns: [850, 1065, 1287, 1502, 1717, 1937, 2147, 2367, 2580, 2790, 3000, 3212, 3412],
+    rows: [
+        [55, 500, 3485, 225],
+        [55, 745, 3485, 205],
+    ],
+    roundsHead: [900, 950, 1762, 112],
+    round: { y: 1063, w: 811, h: 248, gap: 25, mid: 1790 },
+    chart: [160, 525, 3360, 790],
+    plot: [250, 600, 3190, 590],
+    hint: [960, 1600, 1660, 140],
+} as const;
+
+/** Where the landscape match details' mockup sits in a view widened by `bleed`. */
+function matchFit(bleed: number): MockFit {
+    const [x0, y0, x1, y1] = MOCK.area;
+    return mockFit(C.VIEW_W, C.VIEW_H, bleed, x0, y0, x1, y1, 2);
+}
+
+/** Whether the landscape screen is drawn from its painted pieces (once they've loaded). */
+const painted = () => KIT.ready() && kitReady() && playerCardReady();
+
 /** Where the tabs, the graph tabs and the buttons sit, in design units (`dy`: the tall screen's shift down). */
 function designLayout(layout: Layout, dy: number): { tabs: Box[]; graphs: Box[]; watch: Box; copy: Box } {
     if (layout === 'tall') {
@@ -104,7 +165,17 @@ function designLayout(layout: Layout, dy: number): { tabs: Box[]; graphs: Box[];
 }
 
 /** The tabs, graph tabs and buttons in view units (their tap targets), for a view `h` tall. */
-export function matchBoxes(layout: Layout, h: number = C.TALL_H): ReturnType<typeof designLayout> {
+export function matchBoxes(layout: Layout, h: number = C.TALL_H, bleed = 0): ReturnType<typeof designLayout> {
+    if (layout !== 'tall' && painted()) {
+        const f = matchFit(bleed);
+        const box = (b: readonly number[]) => mockBox(f, b[0], b[1], b[2], b[3]);
+        return {
+            tabs: MOCK.tabs.map(box),
+            graphs: MOCK.graphs.map(box),
+            watch: box(MOCK.watch),
+            copy: box(MOCK.copy),
+        };
+    }
     if (layout !== 'tall') return designLayout(layout, 0);
     const f = tallMenuFit(h);
     const d = designLayout(layout, tallShift(f.h));
@@ -134,6 +205,10 @@ export class MatchScreen {
         const ctx = this.ctx;
         this.t = t;
         const tall = layout === 'tall';
+        if (!tall && painted()) {
+            this.drawPainted(v, t, bleed);
+            return;
+        }
         ctx.save();
         let W: number = C.VIEW_W,
             H: number = C.VIEW_H,
@@ -184,6 +259,231 @@ export class MatchScreen {
             ctx.fillText(v.touch ? '◀ BACK TO THE HISTORY' : keys, W / 2, tall ? H - 14 : H - 8, W - 16);
         });
         ctx.restore();
+    }
+
+    /** Landscape match details drawn from the painted pieces, laid out as their mockups and fitted to the view. */
+    private drawPainted(v: MatchInfoView, t: number, bleed: number): void {
+        const ctx = this.ctx;
+        const W = C.VIEW_W,
+            H = C.VIEW_H;
+        const f = matchFit(bleed);
+        ctx.save();
+        enter(ctx, 'bg', () => ornateScreen(ctx, t, W, H, bleed, '', false));
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.scale(f.s, f.s);
+        enter(ctx, 'bar', () => this.piece('title', MOCK.title, 0));
+        MOCK.tabs.forEach((b, i) =>
+            enter(ctx, 'buttons', () => this.paintedTab(b, TAB_LABELS[MATCH_TABS[i]], MATCH_TABS[i] === v.tab, 56), {
+                i,
+            }),
+        );
+        const stats = v.stats;
+        if (v.tab === 'overview') enter(ctx, 'panels', () => this.paintedOverview(v, t));
+        else if (!stats) {
+            ctx.textAlign = 'center';
+            ctx.font = `italic 600 52px ${FONT}`;
+            ctx.fillStyle = 'rgba(214,204,250,0.9)';
+            v.statsNote.split('\n').forEach((l, i) => ctx.fillText(l, 1790, 820 + i * 70, 2600));
+        } else if (v.tab === 'scoreboard') enter(ctx, 'panels', () => this.paintedBoard(v, stats, t));
+        else {
+            MOCK.graphs.forEach((b, i) =>
+                enter(ctx, 'buttons', () => this.paintedTab(b, GRAPHS[i], i === v.graph, 44, true), { i: i + 3 }),
+            );
+            enter(ctx, 'panels', () => {
+                // A dark pane inside the painted frame for the chart to sit on.
+                ctx.fillStyle = 'rgba(16,8,40,0.86)';
+                roundRect(ctx, 200, 556, 3280, 734, 40);
+                ctx.fill();
+                this.piece('chart', MOCK.chart, 3);
+            });
+        }
+        const [hx, hy, hw, hh] = MOCK.hint;
+        enter(ctx, 'hint', () => {
+            this.piece('hintBar', MOCK.hint);
+            ctx.textAlign = 'center';
+            ctx.font = `800 40px ${SANS}`;
+            ctx.fillStyle = '#ffffff';
+            const keys =
+                v.tab === 'graphs'
+                    ? '◀ ▶ TABS  ·  ▲ ▼ GRAPHS  ·  ENTER WATCHES  ·  ESC BACK'
+                    : '◀ ▶ TABS  ·  ENTER WATCHES  ·  ESC BACK';
+            ctx.fillText(v.touch ? '◀ BACK TO THE HISTORY' : keys, hx + hw / 2, hy + hh * 0.62, hw - 150);
+        });
+        ctx.restore();
+        // The chart is drawn in view units over its painted frame, so its lines and lettering stay crisp.
+        if (v.tab === 'graphs' && stats) {
+            const [px, py, pw, ph] = MOCK.plot;
+            enter(ctx, 'panels', () => this.graph(v, stats, false, W, bleed, mockBox(f, px, py, pw, ph)));
+        }
+        ctx.restore();
+    }
+
+    /** Draws painted piece `name` filling box `b` (in the mockup's units), glinting if `phase` is given. */
+    private piece(name: string, b: readonly number[], phase?: number): void {
+        KIT.draw(this.ctx, name, b[0], b[1], b[2], b[3]);
+        if (phase !== undefined) KIT.glint(this.ctx, name, b[0], b[1], b[2], b[3], this.t, phase, 7);
+    }
+
+    /** A painted tab, gold when it's showing (lilac for the graphs' own tabs), with its label. */
+    private paintedTab(b: readonly number[], label: string, on: boolean, size: number, graph = false): void {
+        const ctx = this.ctx;
+        this.piece(graph ? (on ? 'subOn' : 'subOff') : on ? 'tabOn' : 'tabOff', b, on ? 1 : undefined);
+        ctx.textAlign = 'center';
+        ctx.font = `800 ${size}px ${SANS}`;
+        ctx.fillStyle = on ? (graph ? '#1e0c3c' : '#2e1004') : '#ffffff';
+        ctx.fillText(label, b[0] + b[2] / 2, b[1] + b[3] / 2 + size * 0.36, b[2] - 80);
+    }
+
+    /** The painted Overview: the card, the result on its banner, the fairies in their frames, score, tiles, buttons. */
+    private paintedOverview(v: MatchInfoView, t: number): void {
+        const ctx = this.ctx;
+        drawPlayerCard(ctx, v.card, MOCK.card, t);
+        const [tx, ty, tw, th] = MOCK.tag;
+        this.piece('tag', MOCK.tag, 2);
+        ctx.textAlign = 'center';
+        ctx.font = `800 40px ${SANS}`;
+        ctx.fillStyle = '#2e1004';
+        ctx.fillText(v.tag, tx + tw / 2, ty + th * 0.68, tw - 60);
+        const [bx, by, bw] = MOCK.banner;
+        this.piece('banner', MOCK.banner, 2.5);
+        const blue: [string, string, string] = ['#ffffff', '#c9d8ff', '#7d8cff'];
+        arcadeText(ctx, v.banner, bx + bw / 2, by + 132, 110, v.won ? this.gold : blue, 'center', 620);
+        ctx.font = `italic 600 44px ${FONT}`;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(v.when, bx + bw / 2, by + 196, 620);
+        // The fairies in their frames: the player's left, the rival's right (or the score there in Endless).
+        const fy = fairyById(v.fairy),
+            rival = v.rival ? fairyById(v.rival) : null;
+        const sides: [Fairy, number][] = [[fy, 0]];
+        if (rival) sides.push([rival, 1]);
+        sides.forEach(([fairy, side]) => {
+            const [x, y, w, h] = MOCK.frames[side];
+            const cx = x + w / 2;
+            drawMedal(ctx, fairy, cx, y + 232, 150, t);
+            this.piece('frame', [x, y, w, h], side + 0.7);
+            ctx.textAlign = 'center';
+            ctx.font = `800 40px ${SANS}`;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(v.labels[side], cx, y + 62, 160);
+            ctx.font = `700 56px ${FONT}`;
+            ctx.fillText(fairy.name, cx, y + 452, 280);
+        });
+        // The score, and what it counts on its pill.
+        const sx = rival ? MOCK.roundsPill[0] + MOCK.roundsPill[2] / 2 : 2400;
+        arcadeText(ctx, v.score, sx, 905, rival ? 150 : 130, this.gold, 'center');
+        const [, ry, rw, rh] = MOCK.roundsPill;
+        const pill = [sx - rw / 2, ry, rw, rh] as const;
+        this.piece('roundsPill', pill);
+        ctx.font = `800 40px ${SANS}`;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(v.scoreLabel, pill[0] + rw / 2, ry + rh * 0.66, rw - 50);
+        ctx.fillStyle = '#fff3c0';
+        sparkle(ctx, sx - 270, 810, 26 + 6 * Math.sin(t * 2.6));
+        sparkle(ctx, sx + 270, 980, 22 + 6 * Math.sin(t * 2.6 + 2));
+        // The numbers on tiles, centred under them.
+        const T = MOCK.tiles,
+            n = v.tiles.length;
+        const w = Math.min(T.w, (2700 - (n - 1) * T.gap) / n);
+        v.tiles.forEach(([label, value], i) => {
+            const x = T.mid - (n * w + (n - 1) * T.gap) / 2 + i * (w + T.gap);
+            this.piece('tile', [x, T.y, w, T.h], 3 + i * 0.4);
+            ctx.textAlign = 'left';
+            ctx.font = `800 40px ${SANS}`;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(label, x + 34, T.y + 74, w - 60);
+            arcadeText(ctx, value, x + 34, T.y + 162, 70, this.gold, 'left', w - 60);
+        });
+        // Watch the replay, copy its link: dimmed when there's nothing to do.
+        ctx.save();
+        if (!v.hasReplay) ctx.globalAlpha = 0.45;
+        this.piece('watch', MOCK.watch, v.hasReplay ? 0.2 : undefined);
+        ctx.restore();
+        ctx.save();
+        if (!v.link) ctx.globalAlpha = 0.45;
+        this.piece('copy', MOCK.copy, v.link ? 1.2 : undefined);
+        ctx.restore();
+        const noteY = MOCK.watch[1] + MOCK.watch[3] + 48;
+        ctx.textAlign = 'center';
+        if (v.note) arcadeText(ctx, v.note, 1871, noteY, 40, this.gold, 'center');
+        else if (!v.hasReplay) {
+            ctx.font = `italic 600 40px ${FONT}`;
+            ctx.fillStyle = 'rgba(214,204,250,0.85)';
+            ctx.fillText('No replay was saved for this game', 1871, noteY);
+        }
+    }
+
+    /** The painted Scoreboard: the column heads, a row per side (the winner's gold), and the rounds. */
+    private paintedBoard(v: MatchInfoView, s: MatchStats, t: number): void {
+        const ctx = this.ctx;
+        const solo = !v.rival;
+        const best = (c: (typeof COLUMNS)[number]) => {
+            const [a, b] = [c.get(s.sides[0]), c.get(s.sides[1])];
+            return a === b ? -1 : a > b !== !!c.low ? 0 : 1;
+        };
+        this.piece('boardHead', MOCK.head);
+        const cols = MOCK.columns;
+        [0, 1].forEach(side => {
+            const st = s.sides[side];
+            const won = !solo && st.roundsWon > s.sides[1 - side].roundsWon;
+            const [x, y, w, h] = MOCK.rows[side];
+            const my = y + (side ? 100 : 114);
+            drawMedal(ctx, fairyById(s.fairies[side]), 222, my, 92, t);
+            this.piece(won ? 'rowGold' : 'rowDark', [x, y, w, h], won ? 1.5 : undefined);
+            if (won) this.piece('ribbon', [572, y + 32, 236, 68]);
+            ctx.textAlign = 'left';
+            ctx.font = `italic 700 64px ${FONT}`;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(v.names[side], 400, y + h * 0.5, 400);
+            ctx.font = `800 40px ${SANS}`;
+            ctx.fillStyle = SIDE_COLOURS[side];
+            ctx.fillText(v.labels[side], 400, y + h * 0.5 + 52, 400);
+            const baseline = y + h * 0.5 + 26;
+            arcadeText(ctx, solo ? '—' : String(st.roundsWon), 900, baseline + 4, 64, this.gold, 'center');
+            COLUMNS.forEach((c, i) => {
+                const lit = best(c) === side;
+                ctx.textAlign = 'center';
+                ctx.font = `800 ${lit ? 60 : 54}px ${SANS}`;
+                ctx.fillStyle = lit ? '#ffe27a' : '#ffffff';
+                ctx.fillText(String(c.get(st)), cols[i + 1], baseline, 190);
+            });
+        });
+        this.piece('roundsHead', MOCK.roundsHead);
+        const R = MOCK.round,
+            n = s.rounds.length;
+        const w = Math.min(R.w, (3300 - (n - 1) * R.gap) / Math.max(1, n));
+        s.rounds.forEach((r, i) => {
+            const x = R.mid - (n * w + (n - 1) * R.gap) / 2 + i * (w + R.gap);
+            const who = r.winner === -1 ? null : r.winner;
+            const gold = who === 0;
+            this.piece(gold ? 'roundGold' : 'roundBlue', [x, R.y, w, R.h], gold ? 2 + i * 0.3 : undefined);
+            ctx.textAlign = 'center';
+            ctx.font = `800 40px ${SANS}`;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(solo ? 'RUN' : `ROUND ${i + 1}  •  ${clock(r.seconds)}`, x + w / 2, R.y + 80, w - 120);
+            const line = solo ? `SURVIVED ${clock(r.seconds)}` : who === null ? 'NO WINNER' : `${v.labels[who]} WON`;
+            arcadeText(
+                ctx,
+                line,
+                x + w / 2,
+                R.y + 178,
+                56,
+                gold ? this.gold : ['#ffffff', '#bff4ff', '#5ad8ff'],
+                'center',
+                w - 260,
+            );
+        });
+        if (!s.exact) {
+            ctx.textAlign = 'center';
+            ctx.font = `italic 600 38px ${FONT}`;
+            ctx.fillStyle = '#ffe9b0';
+            ctx.fillText(
+                '✦  Recorded on another version of the game: these numbers may be a little off  ✦',
+                R.mid,
+                R.y + R.h + 70,
+                3000,
+            );
+        }
     }
 
     /** A tab: lit in `colour` when it's the one showing. */
@@ -449,14 +749,14 @@ export class MatchScreen {
     }
 
     /** The Graphs tab: the chosen graph of the match over time, its rounds marked, and its key. */
-    private graph(v: MatchInfoView, s: MatchStats, tall: boolean, W: number, bleed: number): void {
+    private graph(v: MatchInfoView, s: MatchStats, tall: boolean, W: number, bleed: number, plot?: Plot): void {
         const ctx = this.ctx;
-        const p: Plot = tall
-            ? { x: 30, y: 112, w: W - 42, h: 268 }
-            : { x: 36 - bleed, y: 76, w: W + 2 * bleed - 70, h: 182 };
+        const p: Plot =
+            plot ??
+            (tall ? { x: 30, y: 112, w: W - 42, h: 268 } : { x: 36 - bleed, y: 76, w: W + 2 * bleed - 70, h: 182 });
         const T = Math.max(1, s.seconds);
         const X = (t: number) => p.x + (t / T) * p.w;
-        this.panel(p.x, p.y, p.w, p.h);
+        if (!plot) this.panel(p.x, p.y, p.w, p.h);
         // Time along the bottom, and where each round began.
         const step = [15, 30, 60, 120, 300].find(st => T / st <= 6) ?? 600;
         ctx.textAlign = 'center';
@@ -529,12 +829,12 @@ export class MatchScreen {
             });
             key.push([SIDE_COLOURS[0], v.labels[0]], [SIDE_COLOURS[1], v.labels[1]]);
         }
-        this.key(key, W / 2, p.y + p.h + 22, graph === 'ADVANTAGE');
+        this.key(key, plot ? p.x + p.w / 2 : W / 2, p.y + p.h + (plot ? 32 : 22), graph === 'ADVANTAGE');
         if (!s.exact) {
             ctx.textAlign = 'right';
             ctx.font = `italic 600 8px ${FONT}`;
             ctx.fillStyle = 'rgba(255,226,122,0.85)';
-            ctx.fillText('Recorded on another version: may be a little off', p.x + p.w, p.y - 4);
+            ctx.fillText('Recorded on another version: may be a little off', p.x + p.w, p.y - (plot ? 15 : 4));
         }
     }
 

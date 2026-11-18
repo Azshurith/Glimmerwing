@@ -1047,7 +1047,7 @@ export class Game {
             this.ui('tick');
             return;
         }
-        const b = matchBoxes(this.r.layout, this.r.viewH);
+        const b = matchBoxes(this.r.layout, this.r.viewH, this.r.viewX);
         const tap = this.input.tap;
         // Left and right (or a tap on one) change tab; up and down (or a tap) the graph.
         let tab = MATCH_TABS.indexOf(this.matchTab);
@@ -1236,6 +1236,12 @@ export class Game {
             hasReplay: !!e.replay,
             link: this.replayLink(e.replay),
             note: this.historyNote,
+            card: {
+                name: this.account.name,
+                synced: this.account.online,
+                leaders: this.account.leaders,
+                me: this.account.id,
+            },
         };
     }
 

@@ -197,6 +197,16 @@ export interface MatchInfoView {
     hasReplay: boolean;
     link: string;
     note: string;
+    /** The player's card beside it in landscape: their name, where progress is kept and the Endless top three. */
+    card: PlayerCard;
+}
+
+/** The player's card on Profile and the match details: their name, where progress is kept and the Endless top three. */
+export interface PlayerCard {
+    name: string;
+    synced: boolean;
+    leaders: LeaderEntry[];
+    me: number | null;
 }
 
 /** What a title-screen choice or a mode-menu card does when it's picked. */

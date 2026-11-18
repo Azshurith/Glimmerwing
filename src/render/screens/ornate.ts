@@ -364,6 +364,7 @@ export function ornateScreen(
 
 /** Just the winged heading of `ornateScreen`, for a screen that paints its own background. */
 export function ornateTitle(ctx: CanvasRenderingContext2D, title: string, W: number, t: number, tall: boolean): void {
+    if (!title) return;
     // On a phone the page's Back tab takes the top-left corner, so the heading sits a little right of centre.
     const cx = tall ? W / 2 + 22 : W / 2,
         y = tall ? 18 : 14,
