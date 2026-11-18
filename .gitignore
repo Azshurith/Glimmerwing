@@ -20,3 +20,4 @@ Thumbs.db
 # docker
 .env
 backup.sql
+__pycache__/

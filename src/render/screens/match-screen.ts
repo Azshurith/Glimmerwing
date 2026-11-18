@@ -9,6 +9,8 @@ import { arcadeText, slanted } from '@/render/draw';
 import { clock } from '@/render/hud';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
+import { drawKit } from './kit';
+import { kitButton, kitHintBar, kitPanel, kitPill, kitReady, kitTab } from './kit-ui';
 import { drawMedal } from './profile-screen';
 import { enter } from '@/render/transition';
 import { ornateScreen, ornateTitle } from './ornate';
@@ -121,6 +123,8 @@ function niceCeil(v: number): number {
 /** The match details screen. */
 export class MatchScreen {
     private gold: [string, string, string] = ['#ffffff', '#ffe08a', '#ff9a2e'];
+    /** The time of the frame being drawn, for the panels' glints. */
+    private t = 0;
 
     /** Draw on `ctx`. */
     constructor(private ctx: CanvasRenderingContext2D) {}
@@ -128,6 +132,7 @@ export class MatchScreen {
     /** Draw the screen; `bleed` is how far a widened landscape view reaches past each side. */
     draw(v: MatchInfoView, t: number, layout: Layout = 'wide', h: number = C.TALL_H, bleed = 0): void {
         const ctx = this.ctx;
+        this.t = t;
         const tall = layout === 'tall';
         ctx.save();
         let W: number = C.VIEW_W,
@@ -147,7 +152,7 @@ export class MatchScreen {
         const lay = designLayout(layout, 0);
         ctx.translate(0, dy);
         lay.tabs.forEach((b, i) =>
-            enter(ctx, 'buttons', () => this.tab(b, TAB_LABELS[MATCH_TABS[i]], MATCH_TABS[i] === v.tab, v.color), {
+            enter(ctx, 'buttons', () => this.tab(b, TAB_LABELS[MATCH_TABS[i]], MATCH_TABS[i] === v.tab, v.color, t), {
                 box: b,
                 i,
             }),
@@ -158,13 +163,17 @@ export class MatchScreen {
         else if (v.tab === 'scoreboard') enter(ctx, 'panels', () => this.scoreboard(v, stats, t, tall, W, bleed));
         else {
             lay.graphs.forEach((b, i) =>
-                enter(ctx, 'buttons', () => this.tab(b, GRAPHS[i], i === v.graph, '#c9b8ff', 6), { box: b, i: i + 3 }),
+                enter(ctx, 'buttons', () => this.tab(b, GRAPHS[i], i === v.graph, '#c9b8ff', t, 6), {
+                    box: b,
+                    i: i + 3,
+                }),
             );
             enter(ctx, 'panels', () => this.graph(v, stats, tall, W, bleed));
         }
         ctx.translate(0, -dy);
 
         enter(ctx, 'hint', () => {
+            if (kitReady() && !v.touch) kitHintBar(ctx, W / 2, tall ? H - 16 : H - 10.5, Math.min(W - 16, 300), 15);
             ctx.textAlign = 'center';
             ctx.font = `7px ${ARCADE}`;
             ctx.fillStyle = 'rgba(203,188,245,0.75)';
@@ -178,8 +187,13 @@ export class MatchScreen {
     }
 
     /** A tab: lit in `colour` when it's the one showing. */
-    private tab(b: Box, text: string, on: boolean, colour: string, size = 7): void {
+    private tab(b: Box, text: string, on: boolean, colour: string, t: number, size = 7): void {
         const ctx = this.ctx;
+        // From the kit: gold for the screen's tabs, lilac for the graphs'.
+        if (kitReady()) {
+            kitTab(ctx, b, text, on, t, undefined, size < 7 ? 'lilac' : 'gold');
+            return;
+        }
         ctx.fillStyle = on ? colour : 'rgba(20,12,48,0.85)';
         slanted(b.x, b.y, b.w, b.h, 4)(ctx);
         ctx.fill();
@@ -215,9 +229,12 @@ export class MatchScreen {
         const blue: [string, string, string] = ['#ffffff', '#c9d8ff', '#7d8cff'];
         const tagW = 84,
             tagY = tall ? 70 : 52;
-        ctx.fillStyle = v.color;
-        slanted(mid - tagW / 2, tagY, tagW, 13, 3)(ctx);
-        ctx.fill();
+        if (kitReady()) kitPill(ctx, { x: mid - tagW / 2, y: tagY - 1, w: tagW, h: 15 }, 'gold');
+        else {
+            ctx.fillStyle = v.color;
+            slanted(mid - tagW / 2, tagY, tagW, 13, 3)(ctx);
+            ctx.fill();
+        }
         ctx.textAlign = 'center';
         ctx.font = `6.5px ${ARCADE}`;
         ctx.fillStyle = '#140a26';
@@ -296,8 +313,11 @@ export class MatchScreen {
                 nameW = 132,
                 cw = (x1 - x0 - nameW - 28) / COLUMNS.length;
             const hy = 62;
+            // The column heads on a capsule, as on a scoreboard.
+            if (kitReady())
+                kitPill(ctx, { x: x0 + nameW - 4, y: hy - 9.5, w: x1 - (x0 + nameW - 4), h: 14 }, 'capsule');
             ctx.font = `5.5px ${ARCADE}`;
-            ctx.fillStyle = '#cbbcf5';
+            ctx.fillStyle = '#e8e0ff';
             ctx.textAlign = 'center';
             ctx.fillText('W', x0 + nameW + 14, hy, 26);
             COLUMNS.forEach((c, i) => ctx.fillText(c.label, x0 + nameW + 28 + (i + 0.5) * cw, hy, cw - 2));
@@ -354,9 +374,16 @@ export class MatchScreen {
 
         // The rounds.
         ctx.textAlign = tall ? 'left' : 'center';
-        ctx.font = `6.5px ${ARCADE}`;
-        ctx.fillStyle = '#cbbcf5';
-        ctx.fillText(solo ? 'THE RUN' : 'ROUNDS', tall ? 12 : W / 2, roundsY);
+        ctx.font = `${tall ? 6.5 : 8}px ${ARCADE}`;
+        ctx.fillStyle = kitReady() ? '#ffd45c' : '#cbbcf5';
+        const heading = solo ? 'THE RUN' : 'ROUNDS';
+        ctx.fillText(heading, tall ? 12 : W / 2, roundsY);
+        // Gold wings either side of it, as on the kit.
+        if (kitReady() && !tall) {
+            const hw = ctx.measureText(heading).width / 2;
+            drawKit(ctx, 'wingLeft', W / 2 - hw - 30, roundsY - 9, 24, 10);
+            drawKit(ctx, 'wingRight', W / 2 + hw + 6, roundsY - 9, 24, 10);
+        }
         const n = s.rounds.length,
             rw = tall ? W - 24 : Math.min(150, (W - 40) / n - 8),
             rh = tall ? 18 : 34;
@@ -607,6 +634,10 @@ export class MatchScreen {
     /** A dark panel with a gold edge (or `edge`). */
     private panel(x: number, y: number, w: number, h: number, edge?: string): void {
         const ctx = this.ctx;
+        if (kitReady()) {
+            kitPanel(ctx, { x, y, w, h }, this.t, (x + y) * 0.01, !!edge);
+            return;
+        }
         ctx.fillStyle = 'rgba(20,12,48,0.85)';
         ctx.fillRect(x, y, w, h);
         ctx.strokeStyle = edge ?? 'rgba(201,162,74,0.6)';
@@ -637,6 +668,10 @@ export class MatchScreen {
     /** A button: lit in its colour, or dim when there's nothing to do. */
     private button(b: Box, text: string, on: boolean, color: string, t: number): void {
         const ctx = this.ctx;
+        if (kitReady()) {
+            kitButton(ctx, b, text, color === '#c9b8ff' ? 'violet' : 'gold', on, t);
+            return;
+        }
         ctx.save();
         if (on) {
             ctx.shadowColor = color;
