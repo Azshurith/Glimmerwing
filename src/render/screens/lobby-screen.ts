@@ -1493,7 +1493,14 @@ export class LobbyScreen {
             const it = LOBBY_NAV[i],
                 on = v.focus === 'nav' && v.nav === i;
             if (on) {
-                const lg = ctx.createRadialGradient(n.x + n.w / 2, n.y + n.h / 2, 2, n.x + n.w / 2, n.y + n.h / 2, n.w * 0.6);
+                const lg = ctx.createRadialGradient(
+                    n.x + n.w / 2,
+                    n.y + n.h / 2,
+                    2,
+                    n.x + n.w / 2,
+                    n.y + n.h / 2,
+                    n.w * 0.6,
+                );
                 lg.addColorStop(0, hexA(it.color, 0.4));
                 lg.addColorStop(1, hexA(it.color, 0));
                 ctx.fillStyle = lg;
