@@ -6,7 +6,8 @@ import { sanitizeKeys } from '@/input/keys';
 import type { Net } from '@/net/net';
 import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
-import { LOBBY_NAV, LOBBY_QUICK, lobbyLayout } from '@/render/screens/lobby-screen';
+import { inTile, LOBBY_NAV, LOBBY_QUICK, lobbyLayout, roadAt, roadGeometry } from '@/render/screens/lobby-screen';
+import { tallMenuFit } from '@/render/screens/menu-fit';
 import { modeAvailable } from '@/data/availability';
 import { rosterMedallions, rosterPreviewButton } from '@/render/screens/roster-screen';
 import { mapsMedallions } from '@/render/screens/maps-screen';
@@ -204,6 +205,16 @@ export class Game {
     private lobbyFocus: LobbyFocus = 'mode';
     private lobbyNav = 0;
     private friendsOpen = false;
+    /** Whether the mode picker is open over the lobby (the PLAY button opens it). */
+    private picking = false;
+    /**
+     * Whether the trophy road is open over the lobby (a tap on the island opens it), how far up it's scrolled
+     * (design units), how fast it's still gliding after a drag, and where a dragging pointer last was (view units).
+     */
+    private roadOpen = false;
+    private roadScroll = 0;
+    private roadVel = 0;
+    private roadDrag: number | null = null;
     /** Whether the chat panel (the page's #chat) is open, and World chat's latest lines for the lobby's ticker. */
     chatOpen = false;
     chatLines: { name: string; body: string }[] = [];
@@ -1456,9 +1467,26 @@ export class Game {
     private stepLobby(pr: Set<string>): void {
         const lay = lobbyLayout(this.r.layout, this.r.viewH, this.r.viewX);
         const tap = this.input.tap;
-        const modes = this.lobbyModes,
-            n = modes.length,
-            nav = LOBBY_NAV.length;
+        const nav = LOBBY_NAV.length;
+        if (this.picking) {
+            this.stepPicker(pr, lay, tap);
+            return;
+        }
+        if (this.roadOpen) {
+            this.stepRoad(pr, lay, tap);
+            return;
+        }
+        // A tap on the island or the road strip under it (or R) opens the trophy road, scrolled to the player.
+        if (pr.has('KeyR') || (tap && !this.chatOpen && (inBox(tap, lay.isle) || inBox(tap, lay.road)))) {
+            const g = roadGeometry(this.r.layout, this.lobbyH);
+            this.roadScroll = Math.max(0, Math.min(g.max, roadAt(this.progress.trophies) - g.anchor * 0.45));
+            this.roadVel = 0;
+            this.roadDrag = null;
+            this.roadOpen = true;
+            this.setChatOpen(false);
+            this.ui('ok');
+            return;
+        }
         if (pr.has('Escape')) {
             if (this.friendsOpen) this.friendsOpen = false;
             else this.phase = 'title';
@@ -1493,9 +1521,7 @@ export class Game {
             row = Math.floor(this.lobbyNav / cols),
             rows = Math.ceil(nav / cols);
         if (this.lobbyFocus === 'mode') {
-            if (left) this.lobbyMode = (this.lobbyMode + n - 1) % n;
-            if (right) this.lobbyMode = (this.lobbyMode + 1) % n;
-            if (down || (up && cols === 1)) this.lobbyFocus = 'nav';
+            if (down || (up && cols === 1) || (left && cols === 1)) this.lobbyFocus = 'nav';
         } else if (cols === 1) {
             if (up) this.lobbyNav = Math.max(0, this.lobbyNav - 1);
             if (down) this.lobbyNav = Math.min(nav - 1, this.lobbyNav + 1);
@@ -1508,14 +1534,6 @@ export class Game {
                 if (row > 0) this.lobbyNav -= cols;
                 else this.lobbyFocus = 'mode';
             }
-        }
-        if (tap && inBox(tap, lay.prev)) {
-            this.lobbyMode = (this.lobbyMode + n - 1) % n;
-            this.lobbyFocus = 'mode';
-        }
-        if (tap && inBox(tap, lay.next)) {
-            this.lobbyMode = (this.lobbyMode + 1) % n;
-            this.lobbyFocus = 'mode';
         }
         if ([this.lobbyMode, this.lobbyNav, this.lobbyFocus].join() !== was) this.ui('tick');
         // What's picked: the mode (Enter on the picker, or a tap on it), or a screen on the bar.
@@ -1564,16 +1582,112 @@ export class Game {
             return;
         }
         if (!play) return;
-        const m = modes[this.lobbyMode];
+        // PLAY opens the mode picker.
         this.lobbyFocus = 'mode';
+        this.picking = true;
+        this.ui('ok');
+        this.setChatOpen(false);
+    }
+
+    /** The lobby's height in its design units (the tall view's own height on a phone). */
+    private get lobbyH(): number {
+        return this.r.layout === 'tall' ? tallMenuFit(this.r.viewH).h : C.VIEW_H;
+    }
+
+    /**
+     * The trophy road over the lobby: a drag scrolls it (and it glides on a little after), as do the wheel and the
+     * arrows; OK, Enter or Esc closes it.
+     */
+    private stepRoad(pr: Set<string>, lay: ReturnType<typeof lobbyLayout>, tap: { x: number; y: number } | null): void {
+        if (['Escape', 'Enter', 'NumpadEnter', 'Space', 'KeyZ', 'KeyR'].some(k => pr.has(k)) || (tap && inBox(tap, lay.roadOk))) {
+            this.roadOpen = false;
+            this.ui('tick');
+            return;
+        }
+        const g = roadGeometry(this.r.layout, this.lobbyH);
+        const scale = this.r.layout === 'tall' ? tallMenuFit(this.r.viewH).s : 1;
+        const p = this.input.pointer;
+        if (p) {
+            // Dragging down shows what's further up the road.
+            if (this.roadDrag !== null) {
+                const d = (p.y - this.roadDrag) / scale;
+                this.roadScroll += d;
+                this.roadVel = d;
+            }
+            this.roadDrag = p.y;
+        } else {
+            this.roadDrag = null;
+            this.roadScroll += this.roadVel;
+            this.roadVel *= 0.9;
+            if (Math.abs(this.roadVel) < 0.05) this.roadVel = 0;
+        }
+        this.roadScroll -= this.input.wheel * 0.4;
+        if (this.input.held.has('ArrowUp') || this.input.held.has('KeyW')) this.roadScroll += 5;
+        if (this.input.held.has('ArrowDown') || this.input.held.has('KeyS')) this.roadScroll -= 5;
+        this.roadScroll = Math.max(0, Math.min(g.max, this.roadScroll));
+    }
+
+    /**
+     * The mode picker over the lobby: the arrows move to the nearest tile that way, Enter or a tap on a tile plays its
+     * mode, and Esc, the close button or a tap off the tiles closes it.
+     */
+    private stepPicker(pr: Set<string>, lay: ReturnType<typeof lobbyLayout>, tap: { x: number; y: number } | null): void {
+        const modes = this.lobbyModes;
+        if (pr.has('Escape') || (tap && inBox(tap, lay.close))) {
+            this.picking = false;
+            this.ui('tick');
+            return;
+        }
+        const dirs: [string[], number, number][] = [
+            [['ArrowLeft', 'KeyA'], -1, 0],
+            [['ArrowRight', 'KeyD'], 1, 0],
+            [['ArrowUp', 'KeyW'], 0, -1],
+            [['ArrowDown', 'KeyS'], 0, 1],
+        ];
+        for (const [keys, dx, dy] of dirs) {
+            if (!keys.some(k => pr.has(k))) continue;
+            // The nearest tile whose direction from this one is within 60° of the arrow's.
+            const here = lay.tiles[this.lobbyMode];
+            let best = -1,
+                bestD = Infinity;
+            lay.tiles.forEach((t, i) => {
+                if (i === this.lobbyMode) return;
+                const vx = t.x - here.x,
+                    vy = t.y - here.y,
+                    len = Math.hypot(vx, vy);
+                if ((vx * dx + vy * dy) / len < 0.5) return;
+                if (len < bestD) {
+                    bestD = len;
+                    best = i;
+                }
+            });
+            if (best >= 0) {
+                this.lobbyMode = best;
+                this.ui('tick');
+            }
+        }
+        let chosen = -1;
+        if (['Space', 'Enter', 'KeyZ', 'KeyG', 'NumpadEnter'].some(k => pr.has(k))) chosen = this.lobbyMode;
+        if (tap) {
+            chosen = lay.tiles.findIndex(t => inTile(tap, t));
+            if (chosen < 0) {
+                this.picking = false;
+                this.ui('tick');
+                return;
+            }
+            this.lobbyMode = chosen;
+        }
+        if (chosen < 0) return;
+        const m = modes[chosen];
         if (m.off) {
             this.ui('tick');
             return;
         }
         this.ui('ok');
-        this.setChatOpen(false);
+        this.picking = false;
         if (m.action === 'online') this.onWantOnline?.();
         else if (m.action === 'cpu' || m.action === 'versus' || m.action === 'endless') this.start(m.action);
+
     }
 
     /** Open or close the chat panel (the page shows it; see main.ts). */
@@ -2407,9 +2521,12 @@ export class Game {
                         online: this.account.online,
                         stages: [MAPS.filter((_, i) => this.mapOpen(i)).length, MAPS.length],
                         next: this.nextStage,
-                        mode: this.lobbyModes[this.lobbyMode],
-                        modeIndex: this.lobbyMode,
-                        modeCount: this.lobbyModes.length,
+                        modes: this.lobbyModes,
+                        picking: this.picking,
+                        pick: this.lobbyMode,
+                        roadOpen: this.roadOpen,
+                        roadScroll: this.roadScroll,
+                        best: this.bestTrophies,
                         focus: this.lobbyFocus,
                         nav: this.lobbyNav,
                         map: this.lobbyMap,

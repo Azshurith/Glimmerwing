@@ -96,6 +96,8 @@ export class Input {
     touchActive = matchMedia?.('(pointer: coarse)').matches ?? false;
     /** Where the most recent tap landed this frame, in view coordinates. */
     tap: { x: number; y: number } | null = null;
+    /** How far the mouse wheel turned since the last step (its deltaY, in pixels; down is positive). */
+    wheel = 0;
 
     /** Where the first finger (or the mouse, while its button is down) is now, in view coordinates; null if none. */
     get pointer(): { x: number; y: number } | null {
@@ -161,6 +163,14 @@ export class Input {
         };
         canvas.addEventListener('pointerup', up);
         canvas.addEventListener('pointercancel', up);
+        canvas.addEventListener(
+            'wheel',
+            e => {
+                e.preventDefault();
+                this.wheel += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+            },
+            { passive: false },
+        );
         // Long-press menus and text selection get in the way of holding to charge.
         canvas.addEventListener('contextmenu', e => e.preventDefault());
     }
@@ -216,6 +226,7 @@ export class Input {
     endFrame(): void {
         this.pressed.clear();
         this.tap = null;
+        this.wheel = 0;
         this.bombAny = false;
         this.bombSide = [false, false];
     }

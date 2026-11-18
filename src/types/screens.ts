@@ -75,10 +75,14 @@ export interface LobbyView {
     /** Stages open on the trophy road, of all of them; and the next one, with the trophies toward it. */
     stages: [number, number];
     next: { map: string; name: string; have: number; need: number } | null;
-    /** The mode on the picker, which of how many it is, and where the cursor is. */
-    mode: LobbyMode;
-    modeIndex: number;
-    modeCount: number;
+    /** Every mode, whether the mode picker is open, the mode with its cursor, and where the lobby's cursor is. */
+    modes: LobbyMode[];
+    picking: boolean;
+    pick: number;
+    /** Whether the trophy road is open, how far up it's scrolled (design units), and the best trophies ever. */
+    roadOpen: boolean;
+    roadScroll: number;
+    best: number;
     focus: LobbyFocus;
     nav: number;
     /** The stage behind it all (a map id), and its name. */

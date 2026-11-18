@@ -20,6 +20,8 @@ import { TOP_BAR_H } from './top-bar';
 import { Backdrop } from '@/render/backdrop';
 import { drawMedal } from './profile-screen';
 import { enter } from '@/render/transition';
+import { STAGES } from '@/data/stages';
+import { drawPadlock } from './map-screen';
 
 /** A box, in design or view units. */
 export interface Box {
@@ -47,19 +49,78 @@ export const LOBBY_QUICK = [
 /** Paints a map's scenery over a rectangle, in the current transform. */
 type StagePainter = (map: string, x: number, y: number, w: number, h: number) => void;
 
+/** One of the mode picker's diamond tiles: its centre and half its diagonal. */
+export interface Tile {
+    x: number;
+    y: number;
+    d: number;
+}
+
+/**
+ * The mode picker's tiles, in LOBBY_MODES order (Story, VS CPU, Endless, Online, 2 Players), as offsets from the
+ * cluster's centre: VS CPU and Online Play big and side by side on the diagonal, the others small against their
+ * edges; and the stage painted inside each.
+ */
+const MODE_TILES: { x: number; y: number; d: number; map: string }[] = (() => {
+    const big = 66,
+        small = 38,
+        gap = 4;
+    const bb = (big + big) / 4 + gap / 2,
+        bs = (big + small) / 2 + gap;
+    const cpu = { x: -bb, y: bb },
+        online = { x: bb, y: -bb };
+    return [
+        { x: online.x - bs, y: online.y - bs, d: small, map: 'space' },
+        { ...cpu, d: big, map: 'forest' },
+        { x: cpu.x - bs, y: cpu.y - bs, d: small, map: 'volcano' },
+        { ...online, d: big, map: 'castle' },
+        { x: online.x + bs, y: online.y + bs, d: small, map: 'beach' },
+    ];
+})();
+
+/** Whether the point (x, y) is inside a diamond tile. */
+export function inTile(p: { x: number; y: number }, t: Tile): boolean {
+    return Math.abs(p.x - t.x) + Math.abs(p.y - t.y) <= t.d;
+}
+
+/** How far apart two stages' gates are on the trophy road, in design units. */
+const ROAD_STAGE = 200;
+
+/**
+ * The trophy road's geometry for a view `H` tall: where on screen the road's start sits (`anchor`, scrolled to 0),
+ * how far apart the stages are, and how far up it scrolls (the last stage's gate under the heading).
+ */
+export function roadGeometry(layout: Layout, H: number): { anchor: number; step: number; max: number } {
+    const anchor = H - (layout === 'tall' ? 150 : 112);
+    return { anchor, step: ROAD_STAGE, max: Math.max(0, (STAGES.length - 1) * ROAD_STAGE - anchor + 112) };
+}
+
+/** Where `trophies` sit on the trophy road, in design units up from its start (the first stage's gate). */
+export function roadAt(trophies: number): number {
+    for (let k = 0; k < STAGES.length - 1; k++) {
+        const a = STAGES[k].trophies,
+            b = STAGES[k + 1].trophies;
+        if (trophies < b) return (k + Math.max(0, trophies - a) / (b - a)) * ROAD_STAGE;
+    }
+    const last = STAGES[STAGES.length - 1].trophies;
+    return (STAGES.length - 1 + Math.min(0.4, (trophies - last) / 2000)) * ROAD_STAGE;
+}
+
 /** Where everything on the lobby sits. */
 export interface LobbyLayout {
-    /** The play bar, and its arrows. */
+    /** The PLAY button, and over everything once it's pressed, the mode picker's tiles and its close button. */
     play: Box;
-    prev: Box;
-    next: Box;
+    tiles: Tile[];
+    close: Box;
     /** The other screens' bars: a column down the left in landscape, a 2×2 grid on a phone. */
     nav: Box[];
     navCols: number;
     /** The quick icons (History, Ranking, Guide). */
     quick: Box[];
-    /** The trophy road strip under the island. */
+    /** The trophy road strip under the island; the island itself (a tap opens the road); the road's OK button. */
     road: Box;
+    isle: Box;
+    roadOk: Box;
     /** World chat's ticker (a tap opens the panel), and where the panel opens: the whole height, at the left. */
     ticker: Box;
     chat: Box;
@@ -80,11 +141,12 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
             playY = H - 218,
             navY = H - 132,
             cellW = (W - 24) / 2;
-        const play = { x: W / 2 - 96, y: playY, w: 192, h: 46 };
+        const play = { x: W / 2 - 92, y: playY, w: 184, h: 50 };
+        const cy = H / 2 + 14;
         return {
             play,
-            prev: { x: play.x - 32, y: playY + 6, w: 28, h: 34 },
-            next: { x: play.x + play.w + 4, y: playY + 6, w: 28, h: 34 },
+            tiles: MODE_TILES.map(m => ({ x: W / 2 + m.x * 0.98, y: cy + m.y * 0.98, d: m.d * 0.98 })),
+            close: { x: W - 40, y: 44, w: 32, h: 32 },
             nav: LOBBY_NAV.map((_, i) => ({
                 x: 8 + (i % 2) * (cellW + 8),
                 y: navY + Math.floor(i / 2) * 38,
@@ -94,6 +156,8 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
             navCols: 2,
             quick: LOBBY_QUICK.map((_, i) => ({ x: W - 86 + i * 27, y: 44, w: 24, h: 24 })),
             road: { x: W / 2 - 100, y: playY - 26, w: 200, h: 15 },
+            isle: { x: W / 2 - 100, y: (76 + playY) / 2 - 46 - 44, w: 200, h: 130 },
+            roadOk: { x: W / 2 - 60, y: H - 54, w: 120, h: 38 },
             ticker: { x: 8, y: H - 56, w: W - 16, h: 48 },
             chat: { x: 0, y: 0, w: W, h: H },
             friends: { x: W - 170, y: 44, w: 162, h: playY - 56 },
@@ -110,15 +174,17 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
         isle = compact ? 84 : 94;
     // The island and the play bar sit in the middle of the room right of the menu.
     const mid = Math.max(W / 2, (L + menuW + 14 + R - 26) / 2);
-    const play = { x: mid - 104, y: 230, w: 208, h: 44 };
+    const play = { x: mid - 96, y: 228, w: 192, h: 48 };
     return {
         play,
-        prev: { x: play.x - 32, y: play.y + 6, w: 28, h: 32 },
-        next: { x: play.x + play.w + 4, y: play.y + 6, w: 28, h: 32 },
+        tiles: MODE_TILES.map(m => ({ x: W / 2 + m.x * 1.1, y: 194 + m.y * 1.1, d: m.d * 1.1 })),
+        close: { x: R - 34, y: 34, w: 28, h: 28 },
         nav: LOBBY_NAV.map((_, i) => ({ x: L, y: 44 + i * 44, w: menuW, h: 36 })),
         navCols: 1,
         quick: LOBBY_QUICK.map((_, i) => ({ x: R - 226 + i * 25, y: 3, w: 21, h: 21 })),
         road: { x: mid - 104, y: 207, w: 208, h: 15 },
+        isle: { x: mid - isle, y: 96 - isle * 0.45, w: isle * 2, h: isle * 1.2 },
+        roadOk: { x: W / 2 - 56, y: C.VIEW_H - 40, w: 112, h: 32 },
         ticker: { x: L, y: 234, w: menuW, h: 70 },
         chat: { x: -bleed, y: 0, w: Math.max(210, Math.min(280, W / 2 - 108 + bleed)), h: C.VIEW_H },
         friends: { x: R - 168, y: 32, w: 162, h: 272 },
@@ -136,11 +202,13 @@ export function lobbyLayout(layout: Layout, h: number = C.TALL_H, bleed = 0): Lo
     return {
         ...d,
         play: view(d.play),
-        prev: view(d.prev),
-        next: view(d.next),
+        tiles: d.tiles.map(t => ({ x: f.x + t.x * f.s, y: t.y * f.s, d: t.d * f.s })),
+        close: view(d.close),
         nav: d.nav.map(view),
         quick: d.quick.map(view),
         road: view(d.road),
+        isle: view(d.isle),
+        roadOk: view(d.roadOk),
         ticker: view(d.ticker),
         chat: view(d.chat),
         friends: view(d.friends),
@@ -191,16 +259,16 @@ export class LobbyScreen {
         enter(ctx, 'panels', () => this.road(v, lay.road, t), { dx: 0, dy: 8 });
         enter(ctx, 'bar', () => this.topBar(v, t, W, bleed, tall));
         lay.quick.forEach((b, i) => enter(ctx, 'buttons', () => this.quickIcon(b, i, t), { box: b, i }));
-        enter(ctx, 'buttons', () => this.playBar(v, lay, t, tall), { box: lay.play, i: 2 });
+        enter(ctx, 'buttons', () => this.playButton(v, lay.play, t), { box: lay.play, i: 2 });
         lay.nav.forEach((b, i) => enter(ctx, 'buttons', () => this.menuBar(v, b, i, t, tall), { i: i + 1, dy: 8 }));
         enter(ctx, 'panels', () => this.ticker(v, lay.ticker, t), { dx: -22 });
         if (v.friendsOpen) enter(ctx, 'panels', () => this.friends(lay.friends, t), { dx: 22 });
         else enter(ctx, 'buttons', () => this.friendsTab(lay.friendsTab, t), { box: lay.friendsTab, i: 3 });
         if (!v.chatOpen) {
             enter(ctx, 'hint', () => {
-                const y = lay.play.y + lay.play.h + (tall ? 20 : 19);
+                const y = lay.play.y + lay.play.h + (tall ? 16 : 15);
                 // Blinking like the title's PRESS START while the play bar has the cursor.
-                if (v.focus === 'mode' && !v.mode.off && Math.floor(t * 2.2) % 2 === 0)
+                if (v.focus === 'mode' && Math.floor(t * 2.2) % 2 === 0)
                     arcadeText(
                         ctx,
                         v.touch ? 'TAP TO PLAY' : 'PRESS START',
@@ -214,10 +282,12 @@ export class LobbyScreen {
                     ctx.textAlign = 'center';
                     ctx.font = `5px ${ARCADE}`;
                     ctx.fillStyle = 'rgba(203,188,245,0.7)';
-                    ctx.fillText('◀ ▶ MODE  ·  ▲ ▼ MENU  ·  ENTER PLAY  ·  T CHAT', lay.island.x, y + 11, 230);
+                    ctx.fillText('ENTER PLAY  ·  ▲ ▼ MENU  ·  T CHAT', lay.island.x, y + 11, 230);
                 }
             });
         }
+        if (v.picking) this.modePicker(v, lay, t, stage, W, H, bleed, tall);
+        if (v.roadOpen) this.trophyRoad(v, lay, t, stage, W, H, bleed, tall);
         ctx.restore();
     }
 
@@ -828,73 +898,47 @@ export class LobbyScreen {
     }
 
     /**
-     * The play bar: a slanted bar like the title screen's chosen button (gold while it has the cursor, navy in a
-     * gold edge otherwise) with the mode's emblem on a coin spinning in a burst of light at its left, the mode's name
-     * and what it is, dots for the modes under it, and the title's bouncing gold pointers either side to change it.
+     * The PLAY button: a big slanted bar like the title's chosen button, gold while it has the cursor (navy in a
+     * gold edge otherwise), a light sweeping across it, a play coin spinning at its left and PLAY across it, and under
+     * it the mode last played. Pressing it opens the mode picker.
      */
-    private playBar(v: LobbyView, lay: LobbyLayout, t: number, tall: boolean): void {
+    private playButton(v: LobbyView, b: Box, t: number): void {
         const ctx = this.ctx;
-        const m = v.mode,
-            b = lay.play,
-            on = v.focus === 'mode';
-        const lit = on && !m.off;
-        const bar = slanted(b.x, b.y, b.w, b.h, 12);
-        ctx.save();
-        if (m.off) {
-            ctx.filter = 'grayscale(1)';
-            ctx.globalAlpha = on ? 0.8 : 0.6;
-        }
+        const lit = v.focus === 'mode';
+        const bar = slanted(b.x, b.y, b.w, b.h, 14);
         ctx.save();
         if (lit) {
             ctx.shadowColor = '#ffb43c';
-            ctx.shadowBlur = 14 + 4 * Math.sin(t * 6);
+            ctx.shadowBlur = 16 + 5 * Math.sin(t * 5);
             const g = ctx.createLinearGradient(b.x, 0, b.x + b.w, 0);
             g.addColorStop(0, '#fff0a8');
             g.addColorStop(0.5, '#ffd45c');
             g.addColorStop(1, '#ff9a2e');
             ctx.fillStyle = g;
-        } else ctx.fillStyle = 'rgba(20,12,48,0.88)';
+        } else ctx.fillStyle = 'rgba(20,12,48,0.9)';
         bar(ctx);
         ctx.fill();
         ctx.restore();
-        // A light sweeping across the gold now and then.
-        if (lit) {
-            ctx.save();
-            bar(ctx);
-            ctx.clip();
-            const sweep = ((t % 2.6) / 2.6) * (b.w + 120) - 60;
-            const sg = ctx.createLinearGradient(b.x + sweep - 18, 0, b.x + sweep + 18, 0);
-            sg.addColorStop(0, 'rgba(255,255,255,0)');
-            sg.addColorStop(0.5, 'rgba(255,255,255,0.55)');
-            sg.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = sg;
-            ctx.fillRect(b.x, b.y, b.w, b.h);
-            ctx.restore();
-        }
-        ctx.strokeStyle = lit ? '#fffbe0' : 'rgba(201,162,74,0.8)';
-        ctx.lineWidth = lit ? 1.6 : 1.2;
+        ctx.save();
+        bar(ctx);
+        ctx.clip();
+        const sweep = ((t % 2.4) / 2.4) * (b.w + 120) - 60;
+        const sg = ctx.createLinearGradient(b.x + sweep - 20, 0, b.x + sweep + 20, 0);
+        sg.addColorStop(0, 'rgba(255,255,255,0)');
+        sg.addColorStop(0.5, lit ? 'rgba(255,255,255,0.6)' : 'rgba(255,240,200,0.14)');
+        sg.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = sg;
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.restore();
+        ctx.strokeStyle = lit ? '#fffbe0' : 'rgba(201,162,74,0.85)';
+        ctx.lineWidth = lit ? 1.8 : 1.3;
         bar(ctx);
         ctx.stroke();
-        // The coin: a burst of light turning behind it, a gold rim, the mode's colour and emblem inside.
-        const cr = b.h * 0.62,
-            cx = b.x + cr + 2,
+        // The play coin: a gold disc with a dark play triangle, turning.
+        const cr = b.h * 0.36,
+            cx = b.x + 18 + cr,
             cy = b.y + b.h / 2;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(t * 0.7);
-        ctx.fillStyle = hexA(m.color, lit ? 0.38 : 0.22);
-        for (let i = 0; i < 10; i++) {
-            ctx.rotate((Math.PI * 2) / 10);
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(-3, -cr * 1.65);
-            ctx.lineTo(3, -cr * 1.65);
-            ctx.closePath();
-            ctx.fill();
-        }
-        ctx.restore();
-        // The coin turns: squashed sideways by how far round it is.
-        const spin = 0.82 + 0.18 * Math.cos(t * 1.6);
+        const spin = 0.8 + 0.2 * Math.cos(t * 1.8);
         ctx.save();
         ctx.translate(cx, cy);
         ctx.scale(spin, 1);
@@ -907,62 +951,183 @@ export class LobbyScreen {
         ctx.arc(0, 0, cr, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = '#2a0f2e';
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 1.3;
         ctx.stroke();
-        const face = ctx.createRadialGradient(-cr * 0.3, -cr * 0.35, 1, 0, 0, cr * 0.8);
-        face.addColorStop(0, hexA(m.color, 1));
-        face.addColorStop(1, '#1d1040');
-        ctx.fillStyle = face;
+        ctx.fillStyle = '#2a0f2e';
         ctx.beginPath();
-        ctx.arc(0, 0, cr * 0.8, 0, Math.PI * 2);
+        ctx.moveTo(-cr * 0.3, -cr * 0.45);
+        ctx.lineTo(cr * 0.5, 0);
+        ctx.lineTo(-cr * 0.3, cr * 0.45);
+        ctx.closePath();
         ctx.fill();
         ctx.restore();
-        drawEmblem(ctx, m.action, cx, cy, (cr * 0.8) / 30, t, lit);
-        ctx.fillStyle = 'rgba(255,255,255,0.8)';
-        sparkle(ctx, cx - cr * 0.45, cy - cr * 0.5, 2 + Math.abs(Math.sin(t * 2.4)) * 1.6);
-        // The mode's name and what it is.
-        const tx = cx + cr + 8,
-            room = b.x + b.w - 16 - tx;
-        ctx.textAlign = 'left';
-        ctx.font = `${tall ? 15 : 15}px ${ARCADE}`;
-        ctx.fillStyle = lit ? '#2a0f2e' : '#fff3c9';
-        ctx.fillText(m.label, tx, b.y + b.h / 2 + 1, room);
-        ctx.font = `700 ${tall ? 7.5 : 7.5}px ${SANS}`;
-        ctx.fillStyle = lit ? 'rgba(70,25,20,0.85)' : 'rgba(203,188,245,0.8)';
-        const sub = m.off ? (m.ribbon === 'Coming soon' ? 'Coming soon' : 'Switched off right now') : m.sub;
-        ctx.fillText(sub, tx, b.y + b.h / 2 + 12, room);
-        ctx.restore();
-        // A dot for each mode, the one in view lit in its colour.
-        const n = v.modeCount,
-            gap = 7,
-            dy = b.y + b.h + 7;
-        for (let i = 0; i < n; i++) {
-            const x = lay.island.x - ((n - 1) * gap) / 2 + i * gap;
-            const here = i === v.modeIndex;
-            ctx.fillStyle = here ? m.color : 'rgba(203,188,245,0.3)';
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        sparkle(ctx, cx - cr * 0.4, cy - cr * 0.5, 1.6 + Math.abs(Math.sin(t * 2.4)) * 1.4);
+        const tx = cx + cr + (b.w - (cx + cr - b.x)) / 2 - 6;
+        arcadeText(
+            ctx,
+            'PLAY',
+            tx,
+            cy + 8,
+            24,
+            lit ? ['#5a1a2e', '#3a0f2e', '#2a0f2e'] : ['#ffffff', '#ffe08a', '#ff9a2e'],
+            'center',
+        );
+    }
+
+    /**
+     * The mode picker, over the dimmed lobby: the modes as diamond tiles in a lattice, each its stage painted inside
+     * with the mode's emblem and name over it (VS CPU and Online Play big, the others small), the one with the
+     * cursor lifted in a glowing gold edge, one that can't be played greyed with its reason; a close button.
+     */
+    private modePicker(
+        v: LobbyView,
+        lay: LobbyLayout,
+        t: number,
+        stage: StagePainter,
+        W: number,
+        H: number,
+        bleed: number,
+        tall: boolean,
+    ): void {
+        const ctx = this.ctx;
+        ctx.fillStyle = 'rgba(6,4,18,0.8)';
+        ctx.fillRect(-bleed - 4, 0, W + 2 * bleed + 8, H);
+        // Light rays turning behind the tiles.
+        const mid = { x: (lay.tiles[1].x + lay.tiles[3].x) / 2, y: (lay.tiles[1].y + lay.tiles[3].y) / 2 };
+        ctx.save();
+        ctx.translate(mid.x, mid.y);
+        ctx.rotate(t * 0.08);
+        for (let i = 0; i < 12; i++) {
+            ctx.rotate(Math.PI / 6);
+            ctx.fillStyle = i % 2 ? 'rgba(255,214,140,0.05)' : 'rgba(170,140,255,0.05)';
             ctx.beginPath();
-            ctx.arc(x, dy, here ? 2.2 : 1.5, 0, Math.PI * 2);
+            ctx.moveTo(0, 0);
+            ctx.lineTo(-30, -400);
+            ctx.lineTo(30, -400);
             ctx.fill();
         }
-        // The title's bouncing gold pointers, either side.
-        for (const [box, dir] of [
-            [lay.prev, -1],
-            [lay.next, 1],
-        ] as const) {
-            const bounce = Math.max(0, Math.sin(t * 6)) * 2.5 * dir;
-            const ax = box.x + box.w / 2 + dir * 4 + bounce,
-                ay = box.y + box.h / 2;
-            ctx.fillStyle = '#ffd45c';
-            ctx.strokeStyle = '#2a0f2e';
-            ctx.lineWidth = 1.5;
-            ctx.lineJoin = 'round';
+        ctx.restore();
+        arcadeText(ctx, 'CHOOSE A MODE', W / 2, tall ? 52 : 46, tall ? 14 : 16, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'center');
+        // The tile with the cursor is drawn last, on top.
+        const order = v.modes.map((_, i) => i).filter(i => i !== v.pick);
+        order.push(v.pick);
+        for (const i of order) this.modeTile(v, i, lay.tiles[i], i === v.pick, t, stage);
+        // The close button.
+        const cb = lay.close;
+        ctx.fillStyle = 'rgba(20,12,48,0.9)';
+        slanted(cb.x, cb.y, cb.w, cb.h, 4)(ctx);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(201,162,74,0.8)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.strokeStyle = '#fff3c9';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        const k = cb.w * 0.2;
+        ctx.beginPath();
+        ctx.moveTo(cb.x + cb.w / 2 - k, cb.y + cb.h / 2 - k);
+        ctx.lineTo(cb.x + cb.w / 2 + k, cb.y + cb.h / 2 + k);
+        ctx.moveTo(cb.x + cb.w / 2 + k, cb.y + cb.h / 2 - k);
+        ctx.lineTo(cb.x + cb.w / 2 - k, cb.y + cb.h / 2 + k);
+        ctx.stroke();
+        ctx.textAlign = 'center';
+        ctx.font = `5.5px ${ARCADE}`;
+        ctx.fillStyle = 'rgba(203,188,245,0.75)';
+        const hint = v.touch ? 'TAP A MODE TO PLAY  ·  ✕ TO CLOSE' : 'ARROWS CHOOSE  ·  ENTER PLAYS  ·  ESC CLOSES';
+        ctx.fillText(hint, W / 2, H - (tall ? 16 : 5), W - 20);
+    }
+
+    /** One mode's diamond tile: its stage inside, darkening downward, the mode's emblem and name. */
+    private modeTile(v: LobbyView, i: number, tile: Tile, on: boolean, t: number, stage: StagePainter): void {
+        const ctx = this.ctx;
+        const m = v.modes[i];
+        const big = tile.d > 50;
+        const d = tile.d * (on ? 1.06 : 1) + (on ? Math.sin(t * 4) * 0.6 : 0);
+        const x = tile.x,
+            y = tile.y;
+        /** Trace the diamond. */
+        const diamond = (r: number) => {
             ctx.beginPath();
-            ctx.moveTo(ax, ay);
-            ctx.lineTo(ax - dir * 10, ay - 8);
-            ctx.lineTo(ax - dir * 10, ay + 8);
+            ctx.moveTo(x, y - r);
+            ctx.lineTo(x + r, y);
+            ctx.lineTo(x, y + r);
+            ctx.lineTo(x - r, y);
             ctx.closePath();
+        };
+        ctx.save();
+        if (m.off) {
+            ctx.filter = 'grayscale(1)';
+            ctx.globalAlpha = 0.75;
+        }
+        ctx.save();
+        if (on) {
+            ctx.shadowColor = m.off ? '#9a9a9a' : '#ffb43c';
+            ctx.shadowBlur = 18 + 4 * Math.sin(t * 5);
+        }
+        ctx.fillStyle = '#140c30';
+        diamond(d);
+        ctx.fill();
+        ctx.restore();
+        ctx.save();
+        diamond(d - 1);
+        ctx.clip();
+        stage(MODE_TILES[i].map, x - d, y - d, d * 2, d * 2);
+        const shade = ctx.createLinearGradient(0, y - d, 0, y + d);
+        shade.addColorStop(0, on ? 'rgba(20,10,40,0.05)' : 'rgba(20,10,40,0.3)');
+        shade.addColorStop(0.55, on ? 'rgba(20,10,40,0.35)' : 'rgba(20,10,40,0.55)');
+        shade.addColorStop(1, 'rgba(10,6,28,0.92)');
+        ctx.fillStyle = shade;
+        ctx.fillRect(x - d, y - d, d * 2, d * 2);
+        ctx.restore();
+        // The edge: gold, brighter and doubled on the tile with the cursor.
+        ctx.strokeStyle = on ? '#ffe9a0' : 'rgba(201,162,74,0.75)';
+        ctx.lineWidth = on ? 2.2 : 1.2;
+        diamond(d);
+        ctx.stroke();
+        if (on) {
+            ctx.strokeStyle = hexA(m.color, 0.8);
+            ctx.lineWidth = 1;
+            diamond(d - 4);
             ctx.stroke();
+        }
+        // The emblem, on a badge in the mode's colour, and the name under it.
+        const er = d * (big ? 0.24 : 0.3);
+        const ey = y - d * (big ? 0.12 : 0.1);
+        drawBadge(ctx, m.color, x, ey, er, on, t);
+        drawEmblem(ctx, m.action, x, ey, er / 34, t, on);
+        const size = big ? 11 : 6.5;
+        arcadeText(
+            ctx,
+            m.label,
+            x,
+            y + d * (big ? 0.38 : 0.42),
+            size,
+            on ? ['#ffffff', '#fff3a0', '#ffb43c'] : ['#ffffff', '#efe6ff', '#cbbcf5'],
+            'center',
+            d * (big ? 1.25 : 1.35),
+        );
+        if (big && !m.off) {
+            ctx.textAlign = 'center';
+            ctx.font = `700 6.5px ${SANS}`;
+            ctx.fillStyle = 'rgba(239,230,255,0.85)';
+            ctx.fillText(m.sub, x, y + d * 0.52, d * 0.95);
+        }
+        ctx.restore();
+        if (m.off) {
+            // A ribbon across it saying why it can't be played.
+            ctx.save();
+            ctx.translate(x, y + d * 0.05);
+            ctx.rotate(-0.18);
+            const rw = d * 1.3;
+            ctx.fillStyle = '#ff5a8a';
+            slanted(-rw / 2, -6, rw, 12, 3)(ctx);
             ctx.fill();
+            ctx.textAlign = 'center';
+            ctx.font = `${big ? 6 : 5}px ${ARCADE}`;
+            ctx.fillStyle = '#fff';
+            ctx.fillText(m.ribbon === 'Coming soon' ? 'COMING SOON' : 'OFF', 0, 2.5, rw - 6);
+            ctx.restore();
         }
     }
 
@@ -1026,6 +1191,256 @@ export class LobbyScreen {
             ctx.closePath();
             ctx.stroke();
             ctx.fill();
+        }
+    }
+
+    /**
+     * The trophy road, over everything: a carpet running up the middle of the screen with a step for every few
+     * trophies (gold once reached) and, at each stage, a gate with its scenery in a window, its name and the trophies
+     * it needs (gold once open, dark and padlocked until then); the player's avatar on the carpet at their trophies.
+     * It scrolls (`v.roadScroll`, design units up from its start): drag, the wheel or ▲ ▼. OK closes it.
+     */
+    private trophyRoad(
+        v: LobbyView,
+        lay: LobbyLayout,
+        t: number,
+        stage: StagePainter,
+        W: number,
+        H: number,
+        bleed: number,
+        tall: boolean,
+    ): void {
+        const ctx = this.ctx;
+        const g = roadGeometry(tall ? 'tall' : 'wide', H);
+        const x0 = -bleed - 4,
+            w = W + 2 * bleed + 8;
+        const cx = W / 2;
+        /** Where a point `u` units up the road is on screen. */
+        const Y = (u: number) => g.anchor - (u - v.roadScroll);
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#1a0c3a');
+        bg.addColorStop(1, '#0c0620');
+        ctx.fillStyle = bg;
+        ctx.fillRect(x0, 0, w, H);
+        // Stone walls either side, in bands that scroll with the road.
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        const band = 24,
+            off = ((v.roadScroll % band) + band) % band;
+        for (let y = -band + off; y < H + band; y += band) {
+            ctx.fillStyle = Math.floor((y - off) / band) % 2 ? 'rgba(60,40,110,0.35)' : 'rgba(40,26,88,0.35)';
+            ctx.fillRect(x0, y, w, band - 1);
+        }
+        ctx.restore();
+        // The carpet, purple with gold edges and a lighter stripe down the middle.
+        const cw = tall ? 54 : 60;
+        const carpet = ctx.createLinearGradient(cx - cw / 2, 0, cx + cw / 2, 0);
+        carpet.addColorStop(0, '#4a1a78');
+        carpet.addColorStop(0.5, '#7a34b8');
+        carpet.addColorStop(1, '#4a1a78');
+        ctx.fillStyle = carpet;
+        ctx.fillRect(cx - cw / 2, 0, cw, H);
+        ctx.fillStyle = '#c9a24a';
+        ctx.fillRect(cx - cw / 2 - 2, 0, 2, H);
+        ctx.fillRect(cx + cw / 2, 0, 2, H);
+        ctx.fillStyle = 'rgba(255,214,255,0.18)';
+        ctx.fillRect(cx - 3, 0, 6, H);
+        const best = v.best;
+        const sw = tall ? 168 : 190;
+        // The steps between the gates, then the gates over them.
+        for (let k = 0; k < STAGES.length - 1; k++) {
+            const a = STAGES[k].trophies,
+                b = STAGES[k + 1].trophies;
+            for (let j = 1; j <= 3; j++) {
+                const u = (k + j / 4) * g.step;
+                const y = Y(u);
+                if (y < -30 || y > H + 30) continue;
+                const n = Math.round((a + ((b - a) * j) / 4) / 10) * 10;
+                const got = best >= n;
+                const sh = 30;
+                ctx.save();
+                const sg = ctx.createLinearGradient(0, y - sh / 2, 0, y + sh / 2);
+                sg.addColorStop(0, got ? '#ffe08a' : '#5a4a8a');
+                sg.addColorStop(1, got ? '#d08a2a' : '#2a2050');
+                ctx.fillStyle = sg;
+                slanted(cx - sw / 2, y - sh / 2, sw, sh, 6)(ctx);
+                ctx.fill();
+                ctx.strokeStyle = got ? '#fff3c9' : 'rgba(201,162,74,0.55)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                // The carpet runs over the step's middle; trophies on the stone either side.
+                ctx.fillStyle = got ? 'rgba(122,52,184,0.9)' : 'rgba(74,26,120,0.9)';
+                ctx.fillRect(cx - cw / 2, y - sh / 2 + 1, cw, sh - 2);
+                ctx.restore();
+                drawTrophy(ctx, cx - sw / 2 + 22, y, 7);
+                drawTrophy(ctx, cx + sw / 2 - 22, y, 7);
+                arcadeText(ctx, String(n), cx, y + 5, 12, got ? ['#ffffff', '#fff3c9', '#ffe08a'] : ['#e9e2ff', '#cbbcf5', '#9a88c8'], 'center');
+            }
+        }
+        STAGES.forEach((st, k) => {
+            const y = Y(k * g.step);
+            if (y < -90 || y > H + 90) return;
+            this.roadGate(st.mapId, k, st.trophies, best >= st.trophies, cx, y, tall, t, stage);
+        });
+        // The player on the carpet at their trophies.
+        const my = Y(roadAt(v.trophies));
+        if (my > -20 && my < H + 20) {
+            const r = tall ? 13 : 14;
+            const bob = Math.sin(t * 3) * 2;
+            this.framedAvatar(v.fairy, v.frame, cx, my + bob, r, t);
+            const tag = `YOU  ${v.trophies}`;
+            ctx.font = `7px ${ARCADE}`;
+            const tw = ctx.measureText(tag).width + 18;
+            const tx = cx + r + 8;
+            ctx.fillStyle = 'rgba(20,12,48,0.92)';
+            slanted(tx, my - 7 + bob, tw, 14, 4)(ctx);
+            ctx.fill();
+            ctx.strokeStyle = '#ffd45c';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#ffe08a';
+            ctx.fillText(tag, tx + 7, my + 3 + bob);
+            drawTrophy(ctx, tx + tw - 8, my + bob, 4.5);
+        }
+        // The heading, and the OK button.
+        const hh = tall ? 36 : 27;
+        const hg = ctx.createLinearGradient(0, 0, 0, hh);
+        hg.addColorStop(0, 'rgba(10,6,28,0.98)');
+        hg.addColorStop(1, 'rgba(10,6,28,0.8)');
+        ctx.fillStyle = hg;
+        ctx.fillRect(x0, 0, w, hh);
+        ctx.fillStyle = '#c9a24a';
+        ctx.fillRect(x0, hh, w, 1);
+        arcadeText(ctx, 'TROPHY ROAD', cx, hh / 2 + 6, tall ? 14 : 16, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'center');
+        ctx.textAlign = 'right';
+        ctx.font = `${tall ? 9 : 9}px ${ARCADE}`;
+        ctx.fillStyle = '#ffe08a';
+        ctx.fillText(String(v.trophies), W + bleed - 10, hh / 2 + 4);
+        drawTrophy(ctx, W + bleed - 18 - ctx.measureText(String(v.trophies)).width, hh / 2, 6);
+        const fade = ctx.createLinearGradient(0, H - 60, 0, H);
+        fade.addColorStop(0, 'rgba(10,6,28,0)');
+        fade.addColorStop(1, 'rgba(10,6,28,0.95)');
+        ctx.fillStyle = fade;
+        ctx.fillRect(x0, H - 60, w, 60);
+        const ok = lay.roadOk;
+        const okBar = slanted(ok.x, ok.y, ok.w, ok.h, 8);
+        ctx.save();
+        ctx.shadowColor = '#ffb43c';
+        ctx.shadowBlur = 12 + 4 * Math.sin(t * 5);
+        const og = ctx.createLinearGradient(ok.x, 0, ok.x + ok.w, 0);
+        og.addColorStop(0, '#fff0a8');
+        og.addColorStop(0.5, '#ffd45c');
+        og.addColorStop(1, '#ff9a2e');
+        ctx.fillStyle = og;
+        okBar(ctx);
+        ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = '#fffbe0';
+        ctx.lineWidth = 1.5;
+        okBar(ctx);
+        ctx.stroke();
+        arcadeText(ctx, 'OK', ok.x + ok.w / 2, ok.y + ok.h / 2 + 6, 16, ['#5a1a2e', '#3a0f2e', '#2a0f2e'], 'center');
+        if (!v.touch) {
+            ctx.textAlign = 'left';
+            ctx.font = `5.5px ${ARCADE}`;
+            ctx.fillStyle = 'rgba(203,188,245,0.7)';
+            ctx.fillText('▲ ▼ / WHEEL SCROLLS', x0 + 14, H - 14);
+        }
+    }
+
+    /**
+     * One stage's gate on the trophy road, centred on (cx, y): a banner with the stage's scenery in an arched window,
+     * STAGE n and its name over it, and the trophies it needs; gold once open, dark with a padlock until then.
+     */
+    private roadGate(
+        map: string,
+        k: number,
+        need: number,
+        open: boolean,
+        cx: number,
+        y: number,
+        tall: boolean,
+        t: number,
+        stage: StagePainter,
+    ): void {
+        const ctx = this.ctx;
+        const gw = tall ? 220 : 250,
+            gh = 112;
+        const x = cx - gw / 2,
+            top = y - gh / 2;
+        // The banner: a slanted plate with a gold (or dim) frame, glowing once open.
+        ctx.save();
+        if (open) {
+            ctx.shadowColor = '#ffb43c';
+            ctx.shadowBlur = 12;
+        }
+        const g = ctx.createLinearGradient(0, top, 0, top + gh);
+        g.addColorStop(0, open ? '#5a2a8a' : '#2a2050');
+        g.addColorStop(1, open ? '#2a1250' : '#141030');
+        ctx.fillStyle = g;
+        slanted(x, top, gw, gh, 10)(ctx);
+        ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = open ? '#ffd45c' : 'rgba(201,162,74,0.5)';
+        ctx.lineWidth = open ? 2 : 1.2;
+        slanted(x, top, gw, gh, 10)(ctx);
+        ctx.stroke();
+        // The scenery in an arched window.
+        const ww = gw * 0.56,
+            wh = 58,
+            wx = cx - ww / 2,
+            wy = top + 24;
+        /** Trace the window: straight sides, an arch on top. */
+        const win = () => {
+            ctx.beginPath();
+            ctx.moveTo(wx, wy + wh);
+            ctx.lineTo(wx, wy + ww * 0.25);
+            ctx.quadraticCurveTo(wx, wy, cx, wy);
+            ctx.quadraticCurveTo(wx + ww, wy, wx + ww, wy + ww * 0.25);
+            ctx.lineTo(wx + ww, wy + wh);
+            ctx.closePath();
+        };
+        ctx.save();
+        win();
+        ctx.clip();
+        stage(map, wx, wy, ww, wh);
+        if (!open) {
+            ctx.fillStyle = 'rgba(8,5,22,0.72)';
+            ctx.fillRect(wx, wy, ww, wh);
+        }
+        ctx.restore();
+        ctx.strokeStyle = open ? '#fff3c9' : 'rgba(201,162,74,0.6)';
+        ctx.lineWidth = 1.5;
+        win();
+        ctx.stroke();
+        if (!open) drawPadlock(ctx, cx, wy + wh * 0.42, 22);
+        // STAGE n, the name, and the trophies it needs.
+        ctx.textAlign = 'center';
+        ctx.font = `6.5px ${ARCADE}`;
+        ctx.fillStyle = open ? '#ffe08a' : '#9a88c8';
+        ctx.fillText(`STAGE ${k + 1}`, cx, top + 15);
+        const name = (mapById(map)?.name ?? map).toUpperCase();
+        arcadeText(
+            ctx,
+            name,
+            cx,
+            wy + wh + 15,
+            13,
+            open ? ['#ffffff', '#fff3a0', '#ffb43c'] : ['#cbbcf5', '#9a88c8', '#6a5a9a'],
+            'center',
+        );
+        ctx.font = `6px ${ARCADE}`;
+        ctx.fillStyle = open ? '#fff3c9' : '#cbbcf5';
+        const label = need ? String(need) : 'START';
+        const lw = ctx.measureText(label).width;
+        ctx.fillText(label, cx + (need ? 5 : 0), wy + wh + 27);
+        if (need) drawTrophy(ctx, cx - lw / 2 - 2, wy + wh + 24.5, 4.5);
+        // Gold crowns at the banner's corners once it's open.
+        if (open) {
+            ctx.fillStyle = '#ffd45c';
+            sparkle(ctx, x + 14, top + 12, 3 + Math.abs(Math.sin(t * 2 + k)) * 1.5);
+            sparkle(ctx, x + gw - 14, top + 12, 3 + Math.abs(Math.cos(t * 2 + k)) * 1.5);
         }
     }
 }
