@@ -12,6 +12,48 @@ import { drawTopBar, TOP_BAR_H } from './top-bar';
 import { stageFor } from '@/data/stages';
 import { drawTrophy } from '@/render/icons';
 import { enter } from '@/render/transition';
+import { PieceAtlas } from './kit';
+import { kitReady, mockFit } from './kit-ui';
+import type { MockFit } from './kit-ui';
+import { MAPSELECT_KIT } from '@/data/mapselect-kit';
+import kitUrl from '@/../assets/ui/mapselect-kit.png';
+import goldUrl from '@/../assets/ui/mapselect-kit-gold.png';
+
+/** The painted map select's pieces (cut from its mockup by tools/extract-screen-kit.py). */
+const KIT = new PieceAtlas(kitUrl, goldUrl, MAPSELECT_KIT);
+
+/**
+ * The painted landscape map select's layout, in its mockup's 2x pixels: the heading, the trophies plate, the cards'
+ * middles and pitch, a card's frame and window (from its middle), and the hint bar.
+ */
+const MOCK = {
+    // Centred on the cards (the trophies plate stands out to the right, as Back does to the left).
+    area: [60, 20, 3524, 1722],
+    title: [920, 20, 1760, 190],
+    trophies: [3040, 56, 484, 140],
+    cards: { x0: 738, dx: 704, y0: 566, dy: 644 },
+    // A card's frame (on, off) and window, from the card's middle.
+    on: [-358, -326, 715, 653],
+    off: [-352, -326, 705, 653],
+    window: [-308, -276, 624, 410],
+    name: 236,
+    hint: [550, 1566, 2490, 156],
+} as const;
+
+/** How the painted map select sits in a widened landscape view `bleed` past each side. */
+function mapSelectFit(bleed: number): MockFit {
+    const [x0, y0, x1, y1] = MOCK.area;
+    return mockFit(C.VIEW_W, C.VIEW_H, bleed, x0, y0, x1, y1, 2);
+}
+
+/** Whether landscape map select is drawn from its painted pieces (once they've loaded). */
+const painted = () => KIT.ready() && kitReady();
+
+/** Card `i`'s middle in the painted layout, in its mockup's pixels. */
+function paintedCard(i: number): { x: number; y: number } {
+    const c = MOCK.cards;
+    return { x: c.x0 + (i % MAP_COLS.wide) * c.dx, y: c.y0 + Math.floor(i / MAP_COLS.wide) * c.dy };
+}
 
 /** Draws map `map`'s live scenery into the box (x, y, w, h), in the screen's design units. */
 export type MapPreviewDraw = (map: MapTheme, x: number, y: number, w: number, h: number) => void;
@@ -57,7 +99,19 @@ function designCards(layout: Layout, dy = 0): { x: number; y: number; w: number;
 }
 
 /** The cards in view units, for a view `h` tall: the tap targets. */
-export function mapCards(layout: Layout, h: number = C.TALL_H): { x: number; y: number; w: number; h: number }[] {
+export function mapCards(
+    layout: Layout,
+    h: number = C.TALL_H,
+    bleed = 0,
+): { x: number; y: number; w: number; h: number }[] {
+    if (layout !== 'tall' && painted()) {
+        const f = mapSelectFit(bleed),
+            [ox, oy, ow, oh] = MOCK.off;
+        return Array.from({ length: MAP_CARDS }, (_, i) => {
+            const c = paintedCard(i);
+            return { x: f.x + (c.x + ox) * f.s, y: f.y + (c.y + oy) * f.s, w: ow * f.s, h: oh * f.s };
+        });
+    }
     if (layout !== 'tall') return designCards('wide');
     const f = tallMenuFit(h);
     return designCards('tall', tallShift(f.h)).map(c => ({
@@ -99,6 +153,12 @@ export class MapScreen {
             ctx.translate(-bleed, 0);
             enter(ctx, 'bg', () => this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
             ctx.restore();
+            if (painted()) {
+                this.open = MAPS.filter((_, i) => !v.locked[i]);
+                this.drawPainted(v, t, bleed, preview);
+                ctx.restore();
+                return;
+            }
         }
         const tall = layout === 'tall';
         this.open = MAPS.filter((_, i) => !v.locked[i]);
@@ -127,6 +187,133 @@ export class MapScreen {
             ctx.fillText(hint, W / 2, layout === 'tall' ? H - 14 : H - 10, W - 16);
         });
         ctx.restore();
+    }
+
+    /**
+     * Landscape map select drawn from its painted mockup: the heading banner, your trophies on their plate, the cards
+     * (each map's scenery scrolling live in the window, the chosen one in the glowing frame) and the hint bar.
+     */
+    private drawPainted(v: MapSelectView, t: number, bleed: number, preview: MapPreviewDraw): void {
+        const ctx = this.ctx,
+            f = mapSelectFit(bleed);
+        /** Draws piece `name` into a box of the mockup, with its glint every so often. */
+        const piece = (name: string, b: readonly number[], phase = 0) => {
+            KIT.draw(ctx, name, b[0], b[1], b[2], b[3]);
+            KIT.glint(ctx, name, b[0], b[1], b[2], b[3], t, phase, 7);
+        };
+        /** Runs `draw` in the mockup's pixels. */
+        const inMock = (draw: () => void) => {
+            ctx.save();
+            ctx.translate(f.x, f.y);
+            ctx.scale(f.s, f.s);
+            draw();
+            ctx.restore();
+        };
+        enter(ctx, 'bar', () =>
+            inMock(() => {
+                piece('title', MOCK.title, 0.3);
+                piece('trophies', MOCK.trophies, 1);
+                arcadeText(ctx, String(v.trophies), 3330, 158, 78, ['#fff6d0', '#ffd45c', '#e88a1c'], 'center', 220);
+            }),
+        );
+        for (let i = 0; i < MAP_CARDS; i++) {
+            const c = paintedCard(i),
+                on = i === v.index,
+                locked = i > 0 && v.locked[i - 1];
+            enter(ctx, 'buttons', () => this.paintedCard(c, i, on, locked, t, f, preview, inMock, piece), { i });
+        }
+        enter(ctx, 'hint', () =>
+            inMock(() => {
+                const [x, y, w, h] = MOCK.hint;
+                piece('hint', MOCK.hint, 2);
+                const hint = v.touch
+                    ? 'TAP A STAGE  ·  WIN VS CPU OR ONLINE FOR TROPHIES'
+                    : 'ARROWS CHOOSE  ·  ENTER OR Z PLAY  ·  WIN VS CPU OR ONLINE FOR TROPHIES';
+                ctx.textAlign = 'center';
+                ctx.font = `44px ${ARCADE}`;
+                ctx.fillStyle = '#f0e6ff';
+                ctx.fillText(hint, x + w / 2, y + h / 2 + 15, w - 320);
+            }),
+        );
+    }
+
+    /** One painted card: its map's live scenery in the window (in view units), then its frame and name. */
+    private paintedCard(
+        c: { x: number; y: number },
+        i: number,
+        on: boolean,
+        locked: boolean,
+        t: number,
+        f: MockFit,
+        preview: MapPreviewDraw,
+        inMock: (draw: () => void) => void,
+        piece: (name: string, b: readonly number[], phase?: number) => void,
+    ): void {
+        const ctx = this.ctx;
+        const random = i === 0;
+        const map = random ? this.open[Math.floor(t / 1.1) % this.open.length] : MAPS[i - 1];
+        const lift = on ? -10 : 0,
+            [wx, wy, ww, wh] = MOCK.window;
+        // The window reaches down behind the name pill.
+        const x = f.x + (c.x + wx) * f.s,
+            y = f.y + (c.y + lift + wy) * f.s,
+            w = ww * f.s,
+            h = (wh + 150) * f.s;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.clip();
+        preview(map, x, y, w, h);
+        if (random) {
+            ctx.fillStyle = 'rgba(12,8,32,0.5)';
+            ctx.fillRect(x, y, w, h);
+        } else if (locked) {
+            ctx.fillStyle = 'rgba(8,5,22,0.72)';
+            ctx.fillRect(x, y, w, h);
+        } else if (!on) {
+            ctx.fillStyle = 'rgba(12,8,32,0.3)';
+            ctx.fillRect(x, y, w, h);
+        }
+        ctx.restore();
+        inMock(() => {
+            const cy = c.y + lift;
+            const b = on ? MOCK.on : MOCK.off;
+            piece(on ? 'cardOn' : 'cardOff', [c.x + b[0], cy + b[1], b[2], b[3]], on ? 0.5 : 1.5 + i * 0.3);
+            if (random) arcadeText(ctx, '?', c.x, cy - 10, 300, ['#ffffff', '#ffe08a', '#ff9a2e'], 'center');
+            else if (locked) {
+                drawPadlock(ctx, c.x, cy - 110, 170);
+                if (mapAvailable(map.id)) {
+                    const need = String(stageFor(map.id).trophies);
+                    ctx.font = `60px ${ARCADE}`;
+                    const nw = ctx.measureText(need).width;
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = '#ffe08a';
+                    ctx.fillText(need, c.x + 30, cy + 110);
+                    drawTrophy(ctx, c.x - nw / 2 - 12, cy + 88, 56);
+                }
+            }
+            const name = random
+                ? 'RANDOM'
+                : locked
+                  ? mapAvailable(map.id)
+                      ? 'LOCKED'
+                      : 'UNAVAILABLE'
+                  : map.name.toUpperCase();
+            arcadeText(
+                ctx,
+                name,
+                c.x,
+                cy + MOCK.name + 22,
+                on ? 72 : 66,
+                locked
+                    ? ['#b8b0d8', '#8f86b0', '#6f6790']
+                    : on
+                      ? ['#fff7c2', '#ffd45c', '#ff9a2e']
+                      : ['#ffffff', '#efe6ff', '#cbbcf5'],
+                'center',
+                500,
+            );
+        });
     }
 
     /**

@@ -9,6 +9,81 @@ import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { enter } from '@/render/transition';
+import { PieceAtlas } from './kit';
+import { kitReady, mockFit } from './kit-ui';
+import type { MockFit } from './kit-ui';
+import { SELECT_KIT } from '@/data/select-kit';
+import kitUrl from '@/../assets/ui/select-kit.png';
+import goldUrl from '@/../assets/ui/select-kit-gold.png';
+
+/** The painted fairy select's pieces (cut from its mockup by tools/extract-screen-kit.py). */
+const KIT = new PieceAtlas(kitUrl, goldUrl, SELECT_KIT);
+
+/**
+ * The painted landscape fairy select's layout, in its mockup's 2x pixels: each piece's box (the piece fills it), each
+ * card's portrait window and where the game writes on it, and the roster's medallions.
+ */
+const MOCK = {
+    area: [45, 0, 3505, 1755],
+    title: [680, 0, 2180, 205],
+    cards: [
+        {
+            piece: 'cardL',
+            box: [45, 220, 1075, 1535],
+            window: [
+                [108, 272],
+                [1044, 272],
+                [1044, 1102],
+                [108, 1102],
+            ],
+            tag: [265, 300],
+            mid: 576,
+            labels: 190,
+            bars: [470, 1000],
+        },
+        {
+            piece: 'cardR',
+            box: [2420, 215, 1085, 1535],
+            window: [
+                [2476, 290],
+                [3442, 290],
+                [3442, 1103],
+                [2560, 1103],
+            ],
+            tag: [3268, 305],
+            mid: 2966,
+            labels: 2580,
+            bars: [2860, 3360],
+        },
+    ],
+    // Name, blurb, the four stat rows and the skills line, down a card.
+    rows: { name: 1196, blurb: 1312, stats: [1388, 1458, 1528, 1598], skills: 1678 },
+    time: [1450, 225, 655, 285],
+    digits: [1776, 462],
+    meds: { mid: 1772, dx: 272, y0: 700, dy: 275, r: 104 },
+    ring: [-140, -140, 280, 280],
+    vs: [1290, 1150, 970, 350],
+    prompt: [1140, 1510, 1265, 130],
+    sub: [1295, 1640, 940, 100],
+} as const;
+
+/** How the painted fairy select sits in a widened landscape view `bleed` past each side. */
+function selectFit(bleed: number): MockFit {
+    const [x0, y0, x1, y1] = MOCK.area;
+    return mockFit(C.VIEW_W, C.VIEW_H, bleed, x0, y0, x1, y1, 4);
+}
+
+/** Whether landscape fairy select is drawn from its painted pieces (once they've loaded). */
+const painted = () => KIT.ready() && kitReady();
+
+/** Where roster medallion `i` sits in the painted layout, in its mockup's pixels. */
+function paintedMedallion(i: number): { x: number; y: number; r: number } {
+    const row = Math.floor(i / MED_COLS),
+        inRow = Math.min(MED_COLS, FAIRIES.length - row * MED_COLS),
+        col = i % MED_COLS,
+        m = MOCK.meds;
+    return { x: m.mid + (col - (inRow - 1) / 2) * m.dx, y: m.y0 + row * m.dy, r: m.r };
+}
 
 // Layout, in view units (504 x 320).
 const PANEL_W = 160;
@@ -68,7 +143,13 @@ export function medallionAt(
     i: number,
     layout: Layout = 'wide',
     h: number = C.TALL_H,
+    bleed = 0,
 ): { x: number; y: number; r: number } {
+    if (layout !== 'tall' && painted()) {
+        const f = selectFit(bleed),
+            m = paintedMedallion(i);
+        return { x: f.x + m.x * f.s, y: f.y + m.y * f.s, r: m.r * f.s };
+    }
     if (layout !== 'tall') return designMedallion(i, layout, h);
     const f = tallMenuFit(h);
     const m = designMedallion(i, layout, f.h);
@@ -126,6 +207,10 @@ export class SelectScreen {
                 if (i === 0 || !v.solo)
                     enter(ctx, 'panels', () => this.panel(s, TALL_PANEL_X[i], i === 1, t, g), { dx: i ? 22 : -22 });
             });
+        } else if (painted()) {
+            this.drawPainted(v, t, bleed);
+            ctx.restore();
+            return;
         } else {
             this.h = h;
             this.dy = 0;
@@ -147,6 +232,273 @@ export class SelectScreen {
         enter(ctx, 'bar', () => this.header(v.heading));
         enter(ctx, 'buttons', () => this.centre(v, t), { dy: 10 });
         ctx.restore();
+    }
+
+    // ---- painted (landscape) ------------------------------------------------------
+
+    /**
+     * Landscape fairy select drawn from its painted mockup: the heading banner, each side's card (her portrait in its
+     * window, her tag, name, blurb, stats and skills), the timer, the roster's medallions with the players' cursors,
+     * VS (or a solo run's name), and the two hint bars.
+     */
+    private drawPainted(v: SelectView, t: number, bleed: number): void {
+        const ctx = this.ctx,
+            f = selectFit(bleed);
+        this.bleed = bleed;
+        ctx.save();
+        ctx.translate(-bleed, 0);
+        enter(ctx, 'bg', () => this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
+        ctx.restore();
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.scale(f.s, f.s);
+        /** Draws piece `name` into a box of the mockup, with its glint every so often. */
+        const piece = (name: string, b: readonly number[], phase = 0) => {
+            KIT.draw(ctx, name, b[0], b[1], b[2], b[3]);
+            KIT.glint(ctx, name, b[0], b[1], b[2], b[3], t, phase, 7);
+        };
+        v.sides.forEach((side, i) => {
+            if (i === 0 || !v.solo)
+                enter(ctx, 'panels', () => this.paintedCard(side, i, t, piece), { dx: i ? 22 : -22 });
+        });
+        enter(ctx, 'bar', () => piece('title', MOCK.title, 0.3));
+        enter(ctx, 'buttons', () => this.paintedCentre(v, t, piece), { dy: 10 });
+        ctx.restore();
+    }
+
+    /** One side's painted card, in the mockup's pixels. */
+    private paintedCard(
+        s: SelectSide,
+        i: number,
+        t: number,
+        piece: (name: string, b: readonly number[], phase?: number) => void,
+    ): void {
+        const ctx = this.ctx,
+            c = MOCK.cards[i],
+            R = MOCK.rows;
+        const fy = s.cpu ? FAIRIES[Math.floor(t * 9) % FAIRIES.length] : s.fairy;
+        const hidden = s.cpu === true || s.locked;
+        /** Traces the card's portrait window. */
+        const win = () => {
+            ctx.beginPath();
+            c.window.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.closePath();
+        };
+        const [wx0, wy0] = c.window[0],
+            wx1 = c.window[1][0],
+            wy1 = c.window[2][1],
+            ww = wx1 - wx0,
+            wh = wy1 - wy0;
+        ctx.save();
+        win();
+        ctx.clip();
+        const bg = ctx.createRadialGradient(wx0 + ww / 2, wy0 + wh * 0.45, 40, wx0 + ww / 2, wy0 + wh * 0.45, 800);
+        bg.addColorStop(0, hidden ? '#3a3360' : fy.color);
+        bg.addColorStop(0.55, hidden ? '#1d1840' : shade(fy.color, 0.35));
+        bg.addColorStop(1, '#0d0a24');
+        ctx.fillStyle = bg;
+        ctx.fillRect(wx0, wy0, ww, wh);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        for (let k = 0; k < 9; k++)
+            sparkle(ctx, wx0 + ((k * 330 + t * 80) % ww), wy0 + ((k * 230) % wh), 12 + (k % 3) * 6);
+        if (hidden) ctx.filter = 'brightness(0) opacity(0.8)';
+        const p = fy.portrait;
+        if (p && p.img.complete && p.img.naturalWidth) {
+            const [sx, sy, sw, sh] = p.panel;
+            const k = Math.max(ww / sw, wh / sh);
+            ctx.drawImage(p.img, sx, sy, sw, sh, wx0 + ww / 2 - (sw * k) / 2, wy0, sw * k, sh * k);
+        } else drawFairy(ctx, fy, wx0 + ww / 2, wy0 + wh * 0.5 + Math.sin(t * 2.2) * 18, 24, t, 0, false);
+        ctx.filter = 'none';
+        if (hidden)
+            arcadeText(ctx, '?', wx0 + ww / 2, wy0 + wh * 0.64, 400, ['#ffffff', '#c9b8ff', '#7a5cff'], 'center');
+        ctx.restore();
+        // Once chosen, the window glows in the player's colour.
+        if (s.done) {
+            ctx.save();
+            ctx.strokeStyle = s.color;
+            ctx.lineWidth = 14;
+            ctx.globalAlpha = 0.55 + 0.35 * Math.sin(t * 8);
+            win();
+            ctx.stroke();
+            ctx.restore();
+        }
+        piece(c.piece, c.box, i * 0.9 + 0.5);
+        arcadeText(ctx, s.tag, c.tag[0], c.tag[1] + 26, 72, ['#2a0f2a', '#1b0a24', '#140a1a'], 'center', 200);
+        const off = !fairyAvailable(fy.id);
+        const name = s.cpu ? '? ? ?' : s.locked ? (off ? 'UNAVAILABLE' : 'LOCKED') : fy.name.toUpperCase();
+        arcadeText(
+            ctx,
+            name,
+            c.mid,
+            R.name,
+            name.length > 9 ? 78 : 96,
+            ['#fff6d0', '#ffd45c', '#e88a1c'],
+            'center',
+            820,
+        );
+        ctx.textAlign = 'center';
+        ctx.font = `italic 600 54px ${FONT}`;
+        ctx.fillStyle = s.locked ? '#ffe27a' : '#f6f0ff';
+        const hint = off ? 'Not available right now' : (s.fairy.unlock?.hint ?? '');
+        ctx.fillText(s.cpu ? 'Chooses at random' : s.locked ? hint : fy.blurb, c.mid, R.blurb, 820);
+        const stats: [string, number][] = [
+            ['SPEED', rate(fy.speed, 1.2)],
+            ['BURST', rate(fy.burst, 1.3)],
+            ['CHARGE', rate(1 / fy.charge, 2)],
+            ['DODGE', rate(1 / fy.hitbox, 1 / 0.7)],
+        ];
+        const [b0, b1] = c.bars,
+            bw = (b1 - b0) / 5;
+        stats.forEach(([label, n], r) => {
+            const y = R.stats[r];
+            arcadeText(ctx, label, c.labels, y + 20, 50, ['#ffffff', '#f0e6ff', '#cbbcf5'], 'left');
+            for (let k = 0; k < 5; k++) {
+                const on = !hidden && k < n;
+                ctx.fillStyle = on ? (k >= 4 ? '#ff8a5b' : k >= 3 ? '#ffd45c' : '#5cf07a') : 'rgba(255,255,255,0.1)';
+                slanted(b0 + k * bw, y - 20, bw - 14, 40, 14)(ctx);
+                ctx.fill();
+            }
+        });
+        ctx.font = `italic 600 50px ${FONT}`;
+        ctx.fillStyle = 'rgba(246,240,255,0.85)';
+        ctx.fillText(hidden ? 'Bomb ???' : `Bomb ${fy.bomb.name}  ·  Shot ${fy.chargeName}`, c.mid, R.skills, 860);
+        // READY! stamp once chosen.
+        if (s.done && !s.cpu) {
+            ctx.save();
+            ctx.translate(wx0 + ww / 2, wy0 + wh * 0.74);
+            ctx.rotate(i ? 0.18 : -0.18);
+            const k = 6.2 * (1 + 0.04 * Math.sin(t * 9));
+            ctx.scale(k, k);
+            ctx.fillStyle = 'rgba(10,6,28,0.55)';
+            ctx.fillRect(-62, -17, 124, 30);
+            ctx.strokeStyle = s.color;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-62, -17, 124, 30);
+            arcadeText(ctx, 'READY!', 0, 7, 20, ['#ffffff', '#fff3a0', s.color], 'center');
+            ctx.restore();
+        }
+    }
+
+    /** The painted centre column: the timer, the roster with the cursors, VS, and the hints. */
+    private paintedCentre(
+        v: SelectView,
+        t: number,
+        piece: (name: string, b: readonly number[], phase?: number) => void,
+    ): void {
+        const ctx = this.ctx;
+        if (v.timer !== null) {
+            piece('time', MOCK.time, 1.4);
+            const low = v.timer <= 5,
+                pulse = low ? 1 + 0.12 * Math.max(0, Math.sin(t * 12)) : 1;
+            ctx.save();
+            ctx.translate(MOCK.digits[0], MOCK.digits[1]);
+            ctx.scale(pulse, pulse);
+            arcadeText(
+                ctx,
+                String(Math.max(0, v.timer)).padStart(2, '0'),
+                0,
+                0,
+                150,
+                low ? ['#ffffff', '#ff9a9a', '#ff3d5e'] : ['#ffffff', '#bfe8ff', '#4fb8ff'],
+                'center',
+            );
+            ctx.restore();
+        }
+        v.cards.forEach((c, i) => {
+            const m = paintedMedallion(i);
+            const hovered = v.cursors.some(cu => cu.index === i);
+            const y = m.y + (hovered ? -10 : 0);
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(m.x, y, m.r, 0, Math.PI * 2);
+            const g = ctx.createRadialGradient(m.x, y - 30, 10, m.x, y, m.r);
+            g.addColorStop(0, c.locked ? '#3a3360' : c.fairy.color);
+            g.addColorStop(1, c.locked ? '#120e2c' : shade(c.fairy.color, 0.3));
+            ctx.fillStyle = g;
+            ctx.fill();
+            ctx.clip();
+            const p = c.fairy.portrait;
+            if (c.locked) drawFairy(ctx, c.fairy, m.x, y + 10, 6.6, t, 0, true);
+            else if (p && p.img.complete && p.img.naturalWidth) {
+                const [fx, fy, fr] = p.face;
+                ctx.drawImage(p.img, fx - fr, fy - fr, fr * 2, fr * 2, m.x - m.r, y - m.r, m.r * 2, m.r * 2);
+            } else drawFairy(ctx, c.fairy, m.x, y + 10, 6.6, t + i);
+            if (!hovered) {
+                ctx.fillStyle = 'rgba(10,6,28,0.3)';
+                ctx.fillRect(m.x - m.r, y - m.r, m.r * 2, m.r * 2);
+            }
+            ctx.restore();
+            const [rx, ry, rw, rh] = MOCK.ring;
+            KIT.draw(ctx, 'ring', m.x + rx, y + ry, rw, rh);
+            if (hovered) KIT.glint(ctx, 'ring', m.x + rx, y + ry, rw, rh, t, i * 0.4, 3);
+            if (c.locked) arcadeText(ctx, '?', m.x, y + 30, 90, ['#fff6d0', '#ffd45c', '#e88a1c'], 'center');
+        });
+        // The players' cursors: a spinning dashed ring each (solid once chosen), with a tag.
+        v.cursors.forEach((cu, k) => {
+            const m = paintedMedallion(cu.index);
+            const shared = v.cursors.length > 1 && v.cursors[0].index === v.cursors[1].index;
+            const r = m.r + 34 + (shared && k === 1 ? 22 : 0),
+                y = m.y - 10;
+            ctx.save();
+            ctx.strokeStyle = cu.color;
+            ctx.lineWidth = 14;
+            ctx.shadowColor = cu.color;
+            ctx.shadowBlur = 30;
+            if (!cu.done) {
+                ctx.setLineDash([40, 22]);
+                ctx.lineDashOffset = (k ? 1 : -1) * t * 170;
+            }
+            ctx.beginPath();
+            ctx.arc(m.x, y, r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+            ctx.font = `52px ${ARCADE}`;
+            const w = ctx.measureText(cu.tag).width + 50;
+            const ty = k === 0 ? y - r - 74 + Math.sin(t * 6) * 8 : y + r + 4 - Math.sin(t * 6) * 8;
+            ctx.fillStyle = cu.color;
+            slanted(m.x - w / 2, ty, w, 66, 16)(ctx);
+            ctx.fill();
+            ctx.fillStyle = '#140a26';
+            ctx.textAlign = 'center';
+            ctx.fillText(cu.tag, m.x, ty + 52);
+        });
+        if (v.solo) {
+            // The mode's name in place of VS, with a line (the best run) under it.
+            const [x, y, w, h] = MOCK.vs;
+            arcadeText(ctx, v.solo.title, x + w / 2, y + h * 0.55, 120, ['#ffffff', '#ffd2a8', '#ff8a5c'], 'center', w);
+            ctx.font = `46px ${ARCADE}`;
+            ctx.fillStyle = '#cbbcf5';
+            ctx.textAlign = 'center';
+            ctx.fillText(v.solo.line, x + w / 2, y + h * 0.55 + 80, w);
+        } else {
+            const [x, y, w, h] = MOCK.vs,
+                k = 1 + 0.04 * Math.sin(t * 3);
+            piece('vs', [x + (w * (1 - k)) / 2, y + (h * (1 - k)) / 2, w * k, h * k], 2.2);
+        }
+        if (v.hints[0]) {
+            const [x, y, w, h] = MOCK.prompt;
+            piece('prompt', MOCK.prompt, 3);
+            ctx.globalAlpha = 0.7 + 0.3 * Math.abs(Math.sin(t * 3));
+            arcadeText(
+                ctx,
+                v.hints[0],
+                x + w / 2,
+                y + h / 2 + 20,
+                56,
+                ['#ffffff', '#fff3c9', '#ffd45c'],
+                'center',
+                w - 240,
+            );
+            ctx.globalAlpha = 1;
+        }
+        if (v.hints[1]) {
+            const [x, y, w, h] = MOCK.sub;
+            piece('sub', MOCK.sub, 3.4);
+            ctx.textAlign = 'center';
+            ctx.font = `44px ${ARCADE}`;
+            ctx.fillStyle = '#d8c8ff';
+            ctx.fillText(v.hints[1], x + w / 2, y + h / 2 + 16, w - 160);
+        }
     }
 
     // ---- header ----------------------------------------------------------------

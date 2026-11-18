@@ -600,7 +600,7 @@ export class Game {
     /** The select screen's fairy medallions, with their hit areas for touch. */
     private cards(): SelectCard[] {
         return FAIRIES.map((fairy, i) => {
-            const m = medallionAt(i, this.r.layout, this.r.viewH);
+            const m = medallionAt(i, this.r.layout, this.r.viewH, this.r.viewX);
             return { fairy, locked: !this.isUnlocked(fairy), x: m.x - m.r, y: m.y - m.r, w: m.r * 2, h: m.r * 2 };
         });
     }
@@ -1886,7 +1886,7 @@ export class Game {
         if (this.mapIndex !== was) this.ui('tick');
         const tap = this.input.tap;
         if (tap) {
-            const hit = mapCards(this.r.layout, this.r.viewH).findIndex(
+            const hit = mapCards(this.r.layout, this.r.viewH, this.r.viewX).findIndex(
                 c => tap.x >= c.x && tap.x <= c.x + c.w && tap.y >= c.y && tap.y <= c.y + c.h,
             );
             if (hit >= 0) {

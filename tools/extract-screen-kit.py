@@ -17,7 +17,7 @@ import os
 import sys
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from scipy import ndimage
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -30,7 +30,7 @@ STORED = 0.75
 # fill it from, an (x, y) point whose colour fills it, 'dark' for the
 # middle colour of its darker half, or None to clear it), ('circle', x, y, r) to cut a round
 # hole, ('rrect', x0, y0, x1, y1, r) to cut a rounded window (where the game draws a portrait or a live meadow), or
-# ('keep', x, y, r, rect or None) to keep only the disc round (x, y) and the rect (x0, y0, x1, y1), softly edged (a
+# ('poly', [(x, y), …]) to cut a window of that shape, or ('keep', x, y, r, rect or None) to keep only the disc round (x, y) and the rect (x0, y0, x1, y1), softly edged (a
 # medallion lifted off the tray it sits on).
 
 
@@ -44,6 +44,9 @@ def maps_card(x0, x1):
     """One of the Maps mockup's five monster cards, from x0 to x1: its role kept, the monster and its name wiped."""
     return ('maps', (x0 - 8, 718, x1 + 8, 1150), [(x0 + 24, 795, x1 - 24, 1046, x0 + 20), (x0 + 26, 1060, x1 - 26, 1114, 'dark')])
 
+
+# Mockups whose transparency left a red fringe round their pieces: it's taken off as they're cut.
+DEFRINGE = {'select', 'mapselect'}
 
 # The centres of the Maps tray's seven stage discs (y 1300) and the Characters tray's seven medallions (y 1218).
 MAP_DISCS = [431, 729, 1028, 1330, 1629, 1927, 2230]
@@ -178,6 +181,45 @@ SCREENS = {
         },
         **{f'icon{i}': ('maps', (x0, 1578, x1, 1758), []) for i, (x0, x1) in enumerate(STAGE_ICONS)},
     },
+    'select': {
+        'title': ('select', (680, 0, 2860, 205), []),
+        'cardL': (
+            'select',
+            (45, 220, 1120, 1755),
+            [
+                ('poly', [(108, 345), (412, 345), (412, 272), (1044, 272), (1044, 1102), (108, 1102)]),
+                (165, 245, 370, 322, 155),
+                (300, 1118, 860, 1222, 290),
+                (100, 1248, 1045, 1692, 150),
+            ],
+        ),
+        'cardR': (
+            'select',
+            (2420, 215, 3505, 1750),
+            [
+                ('poly', [(2476, 290), (3122, 290), (3122, 345), (3442, 345), (3442, 1103), (2560, 1103)]),
+                (3180, 250, 3355, 325, 3170),
+                (2680, 1118, 3300, 1222, 2670),
+                (2490, 1248, 3440, 1692, 2540),
+            ],
+        ),
+        'time': ('select', (1450, 225, 2105, 510), [(1630, 322, 1922, 490, 1620)]),
+        'ring': ('select', (1500, 560, 1780, 840), [('circle', 1640, 700, 104), ('keep', 1640, 700, 134, None)]),
+        'vs': ('select', (1290, 1150, 2260, 1500), []),
+        'prompt': ('select', (1140, 1510, 2405, 1640), [(1290, 1535, 2262, 1612, 1280)]),
+        'sub': ('select', (1295, 1640, 2235, 1740), [(1400, 1658, 2160, 1722, 1390)]),
+    },
+    'mapselect': {
+        'title': ('mapselect', (920, 20, 2680, 210), [('unpurple', 920, 90, 1130, 210), ('unpurple', 2470, 90, 2680, 210)]),
+        'trophies': ('mapselect', (3040, 56, 3524, 196), [(3215, 82, 3440, 170, 'dark')]),
+        'cardOn': ('mapselect', (380, 240, 1095, 893), [('rrect', 432, 290, 1050, 727, 26), (520, 742, 965, 838, 500), (432, 727, 456, 862, None), (1026, 727, 1050, 862, None)]),
+        'cardOff': (
+            'mapselect',
+            (1090, 240, 1795, 893),
+            [('rrect', 1131, 292, 1763, 727, 26), (1200, 742, 1700, 838, 1190), (1131, 727, 1155, 862, None), (1739, 727, 1763, 862, None)],
+        ),
+        'hint': ('mapselect', (550, 1566, 3040, 1722), [(720, 1600, 2880, 1690, 705)]),
+    },
 }
 
 
@@ -230,6 +272,19 @@ def main(group):
         piece = sheet[y0:y1, x0:x1].copy()
         keep = None
         for wipe in wipes:
+            if wipe[0] == 'unpurple':
+                # Clears the violet (a strip of a bar running on behind a piece) from a corner, keeping the gold.
+                _k, ux0, uy0, ux1, uy1 = wipe
+                reg = piece[at(uy0) - y0 : at(uy1) - y0, at(ux0) - x0 : at(ux1) - x0]
+                r, g, b = (reg[:, :, k].astype(np.int32) for k in range(3))
+                reg[b > g + 5, 3] = 0
+                continue
+            if wipe[0] == 'poly':
+                # A window of any shape cut right through.
+                mask = Image.new('L', (x1 - x0, y1 - y0), 0)
+                ImageDraw.Draw(mask).polygon([(at(px) - x0, at(py) - y0) for px, py in wipe[1]], fill=255)
+                piece[np.array(mask) > 0, 3] = 0
+                continue
             if wipe[0] == 'rrect':
                 # A rounded window cut right through, where the game draws its own picture under the frame.
                 _k, rx0, ry0, rx1, ry1, rr = wipe
@@ -274,6 +329,10 @@ def main(group):
                 continue
             piece[b - y0 : d - y0, a - x0 : c - x0] = sheet[b:d, at(cx)][:, None, :]
         # Only the piece itself: whatever else the box caught near its edges (a neighbour, a flower) goes.
+        if group in DEFRINGE:
+            # The red the background left round the edges: see-through and far redder than green.
+            r, g, b, a = (piece[:, :, k].astype(np.int32) for k in range(4))
+            piece[(a < 235) & (r > 110) & (r * 10 > g * 16) & (b * 10 < r * 9), 3] = 0
         piece[:, :, 3] = piece[:, :, 3] * own(piece[:, :, 3])
         if keep is not None:
             piece[:, :, 3] = np.round(piece[:, :, 3] * keep).astype(np.uint8)
