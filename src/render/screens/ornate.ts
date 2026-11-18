@@ -365,12 +365,24 @@ export function ornateScreen(
 /** Just the winged heading of `ornateScreen`, for a screen that paints its own background. */
 export function ornateTitle(ctx: CanvasRenderingContext2D, title: string, W: number, t: number, tall: boolean): void {
     if (!title) return;
-    // On a phone the page's Back tab takes the top-left corner, so the heading sits a little right of centre.
-    const cx = tall ? W / 2 + 22 : W / 2,
-        y = tall ? 18 : 14,
-        size = tall ? 10.5 : 15;
+    // Centred. On a phone the page's Back tab takes the top-left corner, so a long heading shrinks until its wings
+    // keep clear of it (and of the same room on the right): a heading `size` high is about its text plus 7.5 sizes.
+    const cx = W / 2,
+        y = tall ? 18 : 14;
+    let size = tall ? 10.5 : 15,
+        wings = 1;
+    if (tall) {
+        // The text keeps its size as long as it can; the wings (about 7.5 sizes for the pair) narrow first.
+        ctx.font = `${size}px ${ARCADE}`;
+        const room = W * 0.5,
+            tw = ctx.measureText(title).width;
+        if (tw > room * 0.7) {
+            size *= (room * 0.7) / tw;
+            wings = 0.4;
+        } else wings = Math.min(1, (room - tw) / (size * 7.5));
+    }
     // The kit's gold wings and divider once its picture has loaded.
-    if (kitReady()) kitTitle(ctx, title, cx, y, size);
+    if (kitReady()) kitTitle(ctx, title, cx, y, size, wings);
     else wingedTitle(ctx, title, cx, y, size, t);
 }
 

@@ -163,27 +163,32 @@ function barSlots(bar: Box, play: Box, pad: number): Box[] {
 function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
     if (layout === 'tall') {
         const W = C.TALL_W;
+        // The sides keep to the screen's edges, however much wider than the design it is (`bleed`).
+        const L = -bleed,
+            R = W + bleed;
         const iy = Math.round(H * 0.33);
         const road = { x: W / 2 - 66, y: iy + 122, w: 132, h: 17 };
-        const bar = { x: 4, y: H - 66, w: W - 8, h: 46 };
-        const play = { x: W / 2 - 46, y: H - 82, w: 92, h: 62 };
+        // The four screens share the bar evenly, PLAY raised above its middle (a phone is too narrow for five
+        // across).
+        const bar = { x: L + 3, y: H - 54, w: R - L - 6, h: 50 };
+        const play = { x: W / 2 - 60, y: bar.y - 44, w: 120, h: 38.5 };
         return {
             play,
             tiles: MODE_TILES.map(m => ({ x: W / 2 + m.x * 0.98, y: H / 2 + 14 + m.y * 0.98, d: m.d * 0.98 })),
-            close: { x: W - 40, y: 44, w: 32, h: 32 },
+            close: { x: R - 40, y: 44, w: 32, h: 32 },
             bar,
-            nav: barSlots(bar, play, 3),
-            plate: { x: 4, y: 3, w: 170, h: 34 },
-            quick: LOBBY_QUICK.map((_, i) => ({ x: 6, y: 46 + i * 32, w: 28, h: 28 })),
+            nav: [0, 1, 2, 3].map(i => ({ x: bar.x + 10 + (i * (bar.w - 20)) / 4, y: bar.y, w: (bar.w - 20) / 4, h: bar.h })),
+            plate: { x: L + 4, y: 3, w: 170, h: 34 },
+            quick: LOBBY_QUICK.map((_, i) => ({ x: L + 6, y: 46 + i * 32, w: 28, h: 28 })),
             road,
             prev: { x: road.x - 26, y: road.y - 3, w: 22, h: 23 },
             next: { x: road.x + road.w + 4, y: road.y - 3, w: 22, h: 23 },
             isle: { x: W / 2 - 100, y: iy - 44, w: 200, h: 140 },
             roadOk: { x: W / 2 - 60, y: H - 54, w: 120, h: 38 },
-            ticker: { x: 8, y: H - 138, w: W - 16, h: 46 },
-            chat: { x: 0, y: 0, w: W, h: H },
-            friends: { x: W - 170, y: 44, w: 162, h: Math.min(300, H - 200) },
-            friendsTab: { x: W - 24, y: 84, w: 24, h: 96 },
+            ticker: { x: L + 8, y: H - 152, w: R - L - 16, h: 46 },
+            chat: { x: L, y: 0, w: R - L, h: H },
+            friends: { x: R - 170, y: 44, w: 162, h: Math.min(300, H - 200) },
+            friendsTab: { x: R - 24, y: 84, w: 24, h: 96 },
             island: { x: W / 2, y: iy, r: 96 },
         };
     }
@@ -225,7 +230,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
 export function lobbyLayout(layout: Layout, h: number = C.TALL_H, bleed = 0): LobbyLayout {
     if (layout !== 'tall') return designLayout(layout, C.VIEW_H, bleed);
     const f = tallMenuFit(h);
-    const d = designLayout(layout, f.h, 0);
+    const d = designLayout(layout, f.h, f.bleed);
     const view = (b: Box) => ({ x: f.x + b.x * f.s, y: b.y * f.s, w: b.w * f.s, h: b.h * f.s });
     return {
         ...d,
@@ -271,7 +276,7 @@ export class LobbyScreen {
             W = C.TALL_W;
             H = f.h;
         }
-        const lay = designLayout(layout, H, tall ? 0 : bleed);
+        const lay = designLayout(layout, H, bleed);
         const theme = mapById(v.map);
         const isle = lay.island;
         // Coming in from another screen, the bars and buttons pop in first, then the night rises out of the dark,
@@ -1625,7 +1630,8 @@ export class LobbyScreen {
             twinkle(ctx, star.x, star.y, b.h * 0.16, t, 1);
             twinkle(ctx, b.x + b.w - (star.x - b.x), star.y, b.h * 0.16, t, 2);
         }
-        for (const dir of kit && !tall ? [] : [-1, 1]) {
+        if (tall) this.phoneBar(b, t);
+        for (const dir of tall || (kit && !tall) ? [] : [-1, 1]) {
             const outer = dir < 0 ? b.x : b.x + b.w,
                 inner = dir < 0 ? p.x + 10 : p.x + p.w - 10;
             /** Trace this half: a point at the outer end, rounded at the inner end, under PLAY's edge. */
@@ -1689,7 +1695,7 @@ export class LobbyScreen {
                 ctx.ellipse(n.x + n.w / 2, n.y + n.h / 2, n.w / 2, n.h / 2 - 3, 0, 0, Math.PI * 2);
                 ctx.fill();
             }
-            if (i === 1 || i === 3) {
+            if (tall ? i > 0 : i === 1 || i === 3) {
                 ctx.fillStyle = 'rgba(233,185,73,0.5)';
                 // Between the second pair it moves with the last, which keeps clear of the bar's end.
                 const dx = kitReady() && !tall && i === 3 ? -14 : 0;
@@ -1706,12 +1712,12 @@ export class LobbyScreen {
                 }
             };
             if (tall) {
-                const rr = 10;
+                const rr = 12.5;
                 orb(n.x + n.w / 2, n.y + rr + 5, rr);
                 ctx.textAlign = 'center';
-                ctx.font = `4.5px ${ARCADE}`;
-                ctx.fillStyle = on ? '#fff7c2' : 'rgba(239,230,255,0.9)';
-                ctx.fillText(it.label, n.x + n.w / 2, n.y + n.h - 6, n.w - 2);
+                ctx.font = `800 7px ${SANS}`;
+                ctx.fillStyle = on ? '#ffe27a' : '#ffffff';
+                ctx.fillText(it.label, n.x + n.w / 2, n.y + n.h - 7, n.w - 4);
                 return;
             }
             const rr = kit ? 11 : 12;
@@ -1725,6 +1731,63 @@ export class LobbyScreen {
             ctx.fillStyle = on ? '#ffe27a' : '#ffffff';
             ctx.fillText(it.label, x0 + rr * 2 + 7, n.y + n.h / 2 + 3.6, n.w - rr * 2 - 14);
         });
+    }
+
+    /**
+     * The bar along the bottom on a phone: one dark violet capsule edged in gold, pointed at both ends with a star
+     * at each point, and a dip of gold light in the middle where PLAY stands over it.
+     */
+    private phoneBar(b: Box, t: number): void {
+        const ctx = this.ctx,
+            tip = 9;
+        /** Traces the bar, `inset` in from its edge. */
+        const shape = (inset: number) => {
+            const y0 = b.y + inset,
+                y1 = b.y + b.h - inset,
+                x0 = b.x + inset,
+                x1 = b.x + b.w - inset,
+                my = b.y + b.h / 2;
+            ctx.beginPath();
+            ctx.moveTo(x0, my);
+            ctx.lineTo(x0 + tip, y0);
+            ctx.lineTo(x1 - tip, y0);
+            ctx.lineTo(x1, my);
+            ctx.lineTo(x1 - tip, y1);
+            ctx.lineTo(x0 + tip, y1);
+            ctx.closePath();
+        };
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur = 10;
+        const g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
+        g.addColorStop(0, 'rgba(60,30,116,0.97)');
+        g.addColorStop(1, 'rgba(20,8,48,0.98)');
+        ctx.fillStyle = g;
+        shape(0);
+        ctx.fill();
+        ctx.restore();
+        // The glow under PLAY.
+        const cx = b.x + b.w / 2,
+            lg = ctx.createRadialGradient(cx, b.y, 2, cx, b.y, 60);
+        lg.addColorStop(0, 'rgba(255,200,90,0.35)');
+        lg.addColorStop(1, 'rgba(255,200,90,0)');
+        ctx.save();
+        shape(0);
+        ctx.clip();
+        ctx.fillStyle = lg;
+        ctx.fillRect(cx - 60, b.y, 120, b.h);
+        ctx.restore();
+        ctx.strokeStyle = goldGradient(ctx, b.y, b.y + b.h);
+        ctx.lineWidth = 1.8;
+        shape(0);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,230,160,0.25)';
+        ctx.lineWidth = 0.7;
+        shape(3.5);
+        ctx.stroke();
+        ctx.fillStyle = '#fff3c0';
+        sparkle(ctx, b.x + 1, b.y + b.h / 2, 3.5 + Math.abs(Math.sin(t * 2)) * 1.3);
+        sparkle(ctx, b.x + b.w - 1, b.y + b.h / 2, 3.5 + Math.abs(Math.sin(t * 2 + 1)) * 1.3);
     }
 
     /**
@@ -1742,17 +1805,14 @@ export class LobbyScreen {
                 ctx.shadowColor = '#ffb43c';
                 ctx.shadowBlur = 16 + 5 * Math.sin(t * 5);
                 ctx.fillStyle = 'rgba(255,180,60,0.5)';
-                const gw = tall ? b.w + 10 : b.w - 4,
-                    gh = tall ? gw / 3.1 : b.h - 4;
-                roundRect(ctx, b.x + (b.w - gw) / 2, b.y + (b.h - gh) / 2 + (tall ? 4 : 0), gw, gh, gh / 2);
+                roundRect(ctx, b.x + 2, b.y + 2, b.w - 4, b.h - 4, b.h / 2 - 2);
                 ctx.fill();
                 ctx.restore();
             }
-            // Kept to the painting's shape: on a phone, wider than the box and shorter, across its middle.
-            const pw = tall ? b.w + 14 : b.w,
-                ph = tall ? pw / 3.1 : b.h,
-                px = b.x + (b.w - pw) / 2,
-                py = b.y + (b.h - ph) / 2 + (tall ? 4 : 0);
+            const pw = b.w,
+                ph = b.h,
+                px = b.x,
+                py = b.y;
             drawKit(ctx, 'play', px, py, pw, ph);
             // Light sweeps across its gold, more often while it has the cursor, and its crest twinkles.
             kitGlint(ctx, 'play', px, py, pw, ph, t, 1, on ? 2.6 : 4);
