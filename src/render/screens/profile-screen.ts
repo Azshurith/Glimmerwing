@@ -12,6 +12,7 @@ import { ARCADE, FONT, SANS } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { enter } from '@/render/transition';
 import { roundRect } from './emblems';
+import { kitCorners, kitDivider, kitPanel, kitPill, kitReady, kitTab } from './kit-ui';
 import {
     crest,
     gem,
@@ -128,7 +129,7 @@ export class ProfileScreen {
         const lay = designLayout(layout, 0, bleed);
         const regionX = tall ? 10 : card.x + card.w + 12,
             regionW = tall ? W - 20 : W + bleed - 12 - regionX;
-        enter(ctx, 'buttons', () => this.tabs(v, lay.tabs), { i: 1 });
+        enter(ctx, 'buttons', () => this.tabs(v, lay.tabs, t), { i: 1 });
         enter(ctx, 'panels', () => {
             if (v.tab === 'history') this.history(v, lay.rows, t, tall, stage);
             else this.record(v, t, tall, regionX, regionW, lay.top);
@@ -166,7 +167,9 @@ export class ProfileScreen {
      */
     private card(v: ProfileView, c: Box, t: number, tall: boolean): void {
         const ctx = this.ctx;
-        ornatePanel(ctx, c, 14, true);
+        const kit = kitReady();
+        if (kit) kitPanel(ctx, c, t, 0.5, true);
+        else ornatePanel(ctx, c, 14, true);
         const fy = FAIRIES[0];
         const pw = tall ? 96 : c.w - 14,
             ph = tall ? c.h - 14 : 120;
@@ -189,18 +192,22 @@ export class ProfileScreen {
         } else drawFairy(ctx, fy, px + pw / 2, py + ph * 0.5, 3.2, t, 0, false);
         ctx.restore();
         goldFrame(ctx, () => roundRect(ctx, px, py, pw, ph, 10), py, py + ph, 1.6);
+        if (kit) kitCorners(ctx, { x: px, y: py, w: pw, h: ph }, Math.min(30, pw * 0.26));
         crest(ctx, px + pw / 2, py + 1, 8, t);
         // The name plaque: across the portrait's foot in landscape, beside the portrait on a phone.
         const nx = tall ? px + pw + 8 : c.x + 8,
             nw = tall ? c.x + c.w - 8 - nx : c.w - 16,
             ny = tall ? c.y + 14 : py + ph - 10;
-        ctx.fillStyle = 'rgba(22,10,50,0.95)';
-        pointed(ctx, nx, ny, nw, 20, 9);
-        ctx.fill();
-        ctx.strokeStyle = goldGradient(ctx, ny, ny + 20);
-        ctx.lineWidth = 1.4;
-        pointed(ctx, nx, ny, nw, 20, 9);
-        ctx.stroke();
+        if (kit) kitPill(ctx, { x: nx, y: ny, w: nw, h: 20 }, 'capsule');
+        else {
+            ctx.fillStyle = 'rgba(22,10,50,0.95)';
+            pointed(ctx, nx, ny, nw, 20, 9);
+            ctx.fill();
+            ctx.strokeStyle = goldGradient(ctx, ny, ny + 20);
+            ctx.lineWidth = 1.4;
+            pointed(ctx, nx, ny, nw, 20, 9);
+            ctx.stroke();
+        }
         ctx.textAlign = 'center';
         ctx.font = `800 10px ${SANS}`;
         ctx.fillStyle = '#ffe9b0';
@@ -217,9 +224,12 @@ export class ProfileScreen {
         ctx.fillText('Sign in with Google: coming soon', nx + nw / 2, sy + 10, nw);
         const ly = tall ? sy + 22 : sy + 20;
         // A divider with a gem, then the Endless top three.
-        ctx.fillStyle = goldGradient(ctx, ly, ly + 2);
-        ctx.fillRect(nx + 10, ly, nw - 20, 0.8);
-        gem(ctx, nx + nw / 2, ly + 0.4, 2.5);
+        if (kit) kitDivider(ctx, nx + nw / 2, ly, nw - 10);
+        else {
+            ctx.fillStyle = goldGradient(ctx, ly, ly + 2);
+            ctx.fillRect(nx + 10, ly, nw - 20, 0.8);
+            gem(ctx, nx + nw / 2, ly + 0.4, 2.5);
+        }
         this.leaders(v, nx + 2, ly + 14, nw - 4, tall);
     }
 
@@ -247,6 +257,7 @@ export class ProfileScreen {
         top.forEach((e, i) => {
             const ry = y + 6 + i * 15,
                 mine = e.playerId === v.me;
+            if (kitReady()) kitPill(ctx, { x, y: ry, w, h: 13 }, 'capsule');
             if (mine) {
                 ctx.fillStyle = 'rgba(255,212,92,0.12)';
                 roundRect(ctx, x, ry, w, 13, 4);
@@ -273,8 +284,16 @@ export class ProfileScreen {
     }
 
     /** The two tabs: gold capsules with an icon each (bars for the record, crossed swords for the history). */
-    private tabs(v: ProfileView, boxes: Box[]): void {
+    private tabs(v: ProfileView, boxes: Box[], t: number): void {
         const ctx = this.ctx;
+        if (kitReady()) {
+            boxes.forEach((b, i) =>
+                kitTab(ctx, b, TABS[i], (i === 1) === (v.tab === 'history'), t, (x, y, ink) =>
+                    tabIcon(ctx, i, x, y, ink),
+                ),
+            );
+            return;
+        }
         boxes.forEach((b, i) => {
             const on = (i === 1) === (v.tab === 'history');
             ctx.save();
@@ -348,7 +367,9 @@ export class ProfileScreen {
         tiles.forEach(([label, value, icon], i) => {
             const x = x0 + (i % cols) * (tw + gap),
                 y = top + Math.floor(i / cols) * (th + gap);
-            ornatePanel(ctx, { x, y, w: label === 'ENDLESS BEST' && cols === 3 ? tw * 1.4 : tw, h: th }, 9);
+            const box = { x, y, w: label === 'ENDLESS BEST' && cols === 3 ? tw * 1.4 : tw, h: th };
+            if (kitReady()) kitPanel(ctx, box, t, i * 0.6);
+            else ornatePanel(ctx, box, 9);
             const r = th / 2 - 5;
             iconOrb(ctx, x + r + 6, y + th / 2, r, '#6a3ab8');
             recordIcon(ctx, icon, x + r + 6, y + th / 2, r * 0.62);
@@ -386,18 +407,23 @@ export class ProfileScreen {
         const rows = Math.ceil(tiles.length / cols);
         const fy = top + rows * (th + gap) + (tall ? 8 : 10);
         const ph = tall ? 46 : 52;
-        ornatePanel(ctx, { x: x0, y: fy + 6, w, h: ph }, 10);
-        ctx.fillStyle = 'rgba(22,10,50,0.95)';
-        pointed(ctx, x0 + 8, fy, 66, 13, 6);
-        ctx.fill();
-        ctx.strokeStyle = goldGradient(ctx, fy, fy + 13);
-        ctx.lineWidth = 1;
-        pointed(ctx, x0 + 8, fy, 66, 13, 6);
-        ctx.stroke();
+        if (kitReady()) {
+            kitPanel(ctx, { x: x0, y: fy + 6, w, h: ph }, t, 3, true);
+            kitPill(ctx, { x: x0 + 8, y: fy - 1, w: 70, h: 15 }, 'capsule');
+        } else {
+            ornatePanel(ctx, { x: x0, y: fy + 6, w, h: ph }, 10);
+            ctx.fillStyle = 'rgba(22,10,50,0.95)';
+            pointed(ctx, x0 + 8, fy, 66, 13, 6);
+            ctx.fill();
+            ctx.strokeStyle = goldGradient(ctx, fy, fy + 13);
+            ctx.lineWidth = 1;
+            pointed(ctx, x0 + 8, fy, 66, 13, 6);
+            ctx.stroke();
+        }
         ctx.textAlign = 'left';
         ctx.font = `6.5px ${ARCADE}`;
         ctx.fillStyle = '#ffd45c';
-        ctx.fillText('FAIRIES', x0 + 20, fy + 9);
+        ctx.fillText('FAIRIES', x0 + 21, fy + 9);
         const next = FAIRIES.find((_, i) => v.locked[i]);
         ctx.textAlign = 'right';
         ctx.font = `italic 600 ${tall ? 7.5 : 8.5}px ${FONT}`;
@@ -473,6 +499,34 @@ export class ProfileScreen {
      * with the map and numbers under it, the result (laurelled when won), and when.
      */
     private row(row: HistoryRow, b: Box, on: boolean, t: number, tall: boolean, stage?: StagePainter): void {
+        if (kitReady()) this.kitRow(b, on, t);
+        else this.plainRow(b, on, t);
+        this.rowContent(row, b, tall, stage);
+    }
+
+    /** A history row's capsule from the kit, lit with a lilac halo when it's the one chosen. */
+    private kitRow(b: Box, on: boolean, t: number): void {
+        const ctx = this.ctx;
+        if (on) {
+            ctx.save();
+            ctx.shadowColor = '#d9a6ff';
+            ctx.shadowBlur = 12 + 4 * Math.sin(t * 5);
+            ctx.fillStyle = 'rgba(200,140,255,0.35)';
+            roundRect(ctx, b.x + 2, b.y + 2, b.w - 4, b.h - 4, (b.h - 4) / 2);
+            ctx.fill();
+            ctx.restore();
+        }
+        kitPill(ctx, b, 'capsule', on ? t : undefined);
+        if (on) {
+            ctx.strokeStyle = 'rgba(240,200,255,0.85)';
+            ctx.lineWidth = 1;
+            roundRect(ctx, b.x + 1, b.y + 1, b.w - 2, b.h - 2, (b.h - 2) / 2);
+            ctx.stroke();
+        }
+    }
+
+    /** A history row's capsule drawn in code, while the kit's picture loads. */
+    private plainRow(b: Box, on: boolean, t: number): void {
         const ctx = this.ctx;
         ctx.save();
         if (on) {
@@ -490,6 +544,11 @@ export class ProfileScreen {
         ctx.lineWidth = on ? 1.6 : 1.1;
         roundRect(ctx, b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1, b.h / 2);
         ctx.stroke();
+    }
+
+    /** What a history row says: its mode, its stage, who flew, the result and when. */
+    private rowContent(row: HistoryRow, b: Box, tall: boolean, stage?: StagePainter): void {
+        const ctx = this.ctx;
         // The mode chip.
         const cw = tall ? 54 : 62;
         ctx.fillStyle = 'rgba(12,6,30,0.7)';
@@ -548,6 +607,25 @@ export class ProfileScreen {
             ctx.fillText(row.local ? 'THIS DEVICE' : row.when, right, b.y + b.h / 2 + 2, dateW + 6);
         }
     }
+}
+
+/** A tab's little picture in `ink`, centred on (x, y): bars for the record (`i` 0), crossed swords for the history. */
+function tabIcon(ctx: CanvasRenderingContext2D, i: number, x: number, y: number, ink: string): void {
+    ctx.fillStyle = ink;
+    ctx.strokeStyle = ink;
+    if (i === 0) {
+        ctx.fillRect(x - 4, y, 2, 4);
+        ctx.fillRect(x - 1, y - 3, 2, 7);
+        ctx.fillRect(x + 2, y - 1, 2, 5);
+        return;
+    }
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(x - 4, y - 4);
+    ctx.lineTo(x + 4, y + 4);
+    ctx.moveTo(x + 4, y - 4);
+    ctx.lineTo(x - 4, y + 4);
+    ctx.stroke();
 }
 
 /** A sprig of laurel, `s` tall, curving out `dir` (−1 left, 1 right) from (x, y): a stem with leaves. */

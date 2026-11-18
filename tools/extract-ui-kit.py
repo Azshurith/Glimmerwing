@@ -2,7 +2,8 @@
 
     python tools/extract-ui-kit.py
 
-Reads assets/source/ui/lobby-kit-vector.png, the UI sheet (the painted kit upscaled 4x, kept at 2x: 3548x1774) on
+Reads assets/source/ui/lobby-kit-vector.png, the UI sheet (the painted kit upscaled 4x, kept at 2x: 3548x1774; the main menu's sheet, with the shared pieces the other
+menu screens use along its foot) on
 near-black. It keys the black away: whatever lies
 inside a piece's bright, closed border is solid, and outside it a glow is as opaque as it is bright, its colour
 brought back up to full strength. It then wipes the sample text off the pieces whose text the game draws itself
@@ -46,8 +47,8 @@ PIECES = {
     'badgeHistory': ((61, 305, 206, 450), [], None),
     'badgeRanking': ((61, 468, 206, 613), [], None),
     'badgeGuide': ((61, 630, 206, 775), [], None),
-    'counterStage': ((2310, 30, 2648, 132), [(2470, 45, 2612, 112)], (2480, 2600)),
-    'counterTrophy': ((2662, 33, 3050, 133), [(2800, 48, 3012, 114)], (2812, 2995)),
+    'counterStage': ((2310, 30, 2648, 132), [(2470, 40, 2605, 116, 'blend')], (2480, 2600)),
+    'counterTrophy': ((2662, 33, 3050, 133), [(2822, 44, 3005, 118, 'blend')], (2812, 2995)),
     'online': ((3146, 30, 3522, 132), [], None),
     'offline': ((3146, 147, 3523, 250), [], None),
     'stage': ((1318, 925, 2162, 1040), [(1356, 952, 1996, 1014)], (1390, 2090)),
@@ -75,6 +76,30 @@ PIECES = {
     'friendRequests': ((1053, 1599, 1186, 1731), [], None),
     'toggleOn': ((2445, 1414, 2590, 1492), [], None),
     'toggleOff': ((2621, 1417, 2761, 1492), [], None),
+    # The shared pieces the other menu screens are built from.
+    'panelPink': ((640, 1409, 1112, 1561), [], None),
+    'pillGold': ((1158, 1409, 1459, 1485), [], (1215, 1400)),
+    'pillGoldLow': ((1158, 1503, 1458, 1577), [], (1215, 1400)),
+    'pillViolet': ((1506, 1412, 1745, 1484), [], (1555, 1695)),
+    'pillVioletLow': ((1505, 1504, 1744, 1577), [], (1555, 1695)),
+    'pillBlue': ((1989, 1418, 2193, 1492), [], (2035, 2145)),
+    'pillLilac': ((2215, 1418, 2412, 1492), [], (2260, 2365)),
+    'arrowLeft': ((1790, 1419, 1848, 1489), [], None, 4),
+    'arrowRight': ((1877, 1419, 1935, 1490), [], None, 4),
+    'checkbox': ((2806, 1414, 2887, 1493), [], None, 4),
+    'checkboxOn': ((2926, 1414, 3006, 1493), [], None, 4),
+    'divider': ((1792, 1514, 3058, 1596), [], None, 4),
+    'crest': ((1751, 1593, 2445, 1727), [], None, 4),
+    'wingLeft': ((1751, 1624, 1955, 1708), [], None, 4),
+    'wingRight': ((2245, 1621, 2445, 1708), [], None, 4),
+    'capsule': ((2522, 1609, 3036, 1717), [], (2600, 2960)),
+    'cornerTL': ((3192, 1404, 3343, 1562), [], None, 4),
+    'cornerTR': ((3379, 1402, 3525, 1561), [], None, 4),
+    'cornerBL': ((3193, 1582, 3343, 1727), [], None, 4),
+    'cornerBR': ((3378, 1582, 3524, 1729), [], None, 4),
+    'sparkViolet': ((1229, 1627, 1316, 1709), [], None, 4),
+    'sparkGold': ((1329, 1626, 1421, 1710), [], None, 4),
+    'sparkBig': ((1558, 1618, 1695, 1719), [], None, 4),
 }
 
 # Shapes forced solid where the key would see through them: the plate's dark card, and the server pills, whose

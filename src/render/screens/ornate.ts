@@ -1,6 +1,7 @@
 // The ornate night look shared by the lobby and the Characters screen: a purple night over a still lake, a great
 // planet rising behind the middle, purple clouds and pines along the horizon, flowers in the corners; and panels,
 // plates and headings framed in gold.
+import { kitReady, kitTitle } from './kit-ui';
 import { arcadeText, sparkle } from '@/render/draw';
 import { ARCADE } from '@/render/theme';
 import { roundRect } from './emblems';
@@ -364,7 +365,12 @@ export function ornateScreen(
 /** Just the winged heading of `ornateScreen`, for a screen that paints its own background. */
 export function ornateTitle(ctx: CanvasRenderingContext2D, title: string, W: number, t: number, tall: boolean): void {
     // On a phone the page's Back tab takes the top-left corner, so the heading sits a little right of centre.
-    wingedTitle(ctx, title, tall ? W / 2 + 22 : W / 2, tall ? 18 : 14, tall ? 10.5 : 15, t);
+    const cx = tall ? W / 2 + 22 : W / 2,
+        y = tall ? 18 : 14,
+        size = tall ? 10.5 : 15;
+    // The kit's gold wings and divider once its picture has loaded.
+    if (kitReady()) kitTitle(ctx, title, cx, y, size);
+    else wingedTitle(ctx, title, cx, y, size, t);
 }
 
 /**
