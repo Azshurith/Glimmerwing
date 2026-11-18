@@ -85,7 +85,12 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
             play,
             prev: { x: play.x - 32, y: playY + 6, w: 28, h: 34 },
             next: { x: play.x + play.w + 4, y: playY + 6, w: 28, h: 34 },
-            nav: LOBBY_NAV.map((_, i) => ({ x: 8 + (i % 2) * (cellW + 8), y: navY + Math.floor(i / 2) * 38, w: cellW, h: 30 })),
+            nav: LOBBY_NAV.map((_, i) => ({
+                x: 8 + (i % 2) * (cellW + 8),
+                y: navY + Math.floor(i / 2) * 38,
+                w: cellW,
+                h: 30,
+            })),
             navCols: 2,
             quick: LOBBY_QUICK.map((_, i) => ({ x: W - 86 + i * 27, y: 44, w: 24, h: 24 })),
             road: { x: W / 2 - 100, y: playY - 26, w: 200, h: 15 },
@@ -468,7 +473,6 @@ export class LobbyScreen {
         }
     }
 
-
     /**
      * The bar across the top: the player's avatar in their frame, name and wins; counters (trophies, stages) on
      * pills; and whether the game server is reached.
@@ -590,9 +594,6 @@ export class LobbyScreen {
         slanted(x + 0.5, y + 0.5, w - 1, h - 1, slant)(ctx);
         ctx.stroke();
     }
-
-
-
 
     /** World chat's latest lines at the bottom left (a tap opens the panel); hidden while the panel's open. */
     private ticker(v: LobbyView, b: Box, t: number): void {
@@ -728,7 +729,6 @@ export class LobbyScreen {
         ctx.fillText('FRIENDS', 0, 2.5);
         ctx.restore();
     }
-
 
     /**
      * The trophy road under the island: the stage you're on and how many are open on the left, and a gold bar of
