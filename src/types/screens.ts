@@ -155,6 +155,8 @@ export interface HistoryRow {
     detail: string;
     /** When it was played. */
     when: string;
+    /** The map it was played on (an id), for its picture. */
+    map: string;
     /** Kept only in this browser (not yet saved to the server). */
     local: boolean;
 }

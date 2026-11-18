@@ -1173,7 +1173,7 @@ export class Game {
             .filter(Boolean)
             .join('  ·  ');
         const when = new Date(e.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toUpperCase();
-        return { ...this.modeTag(e.mode), title, result, resultColor, detail, when, local: e.replay === 'local' };
+        return { ...this.modeTag(e.mode), title, result, resultColor, detail, when, local: e.replay === 'local', map: e.map };
     }
 
     /** The match details screen's view of the chosen game. */
