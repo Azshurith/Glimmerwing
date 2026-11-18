@@ -205,6 +205,8 @@ export class Game {
     private lobbyFocus: LobbyFocus = 'mode';
     private lobbyNav = 0;
     private friendsOpen = false;
+    /** Which of the open stages the lobby's island shows (null: the furthest). */
+    private lobbyStage: number | null = null;
     /** Whether the mode picker is open over the lobby (the PLAY button opens it). */
     private picking = false;
     /**
@@ -1476,8 +1478,15 @@ export class Game {
             this.stepRoad(pr, lay, tap);
             return;
         }
-        // A tap on the island or the road strip under it (or R) opens the trophy road, scrolled to the player.
-        if (pr.has('KeyR') || (tap && !this.chatOpen && (inBox(tap, lay.isle) || inBox(tap, lay.road)))) {
+        // The stage plate's arrows show the other open stages on the island.
+        if (tap && !this.chatOpen && (inBox(tap, lay.prev) || inBox(tap, lay.next))) {
+            this.shiftStage(inBox(tap, lay.prev) ? -1 : 1);
+            return;
+        }
+        // A tap on the island or the stage plate under it (or R, or Enter on the plate) opens the trophy road,
+        // scrolled to the player.
+        const atStage = this.lobbyFocus === 'stage' && ['Enter', 'NumpadEnter', 'Space', 'KeyZ'].some(k => pr.has(k));
+        if (atStage || pr.has('KeyR') || (tap && !this.chatOpen && (inBox(tap, lay.isle) || inBox(tap, lay.road)))) {
             const g = roadGeometry(this.r.layout, this.lobbyH);
             this.roadScroll = Math.max(0, Math.min(g.max, roadAt(this.progress.trophies) - g.anchor * 0.45));
             this.roadVel = 0;
@@ -1497,7 +1506,7 @@ export class Game {
             this.setChatOpen(!this.chatOpen);
             return;
         }
-        if (tap) {
+        if (tap && lay.friendsTab) {
             if (!this.friendsOpen && inBox(tap, lay.friendsTab)) {
                 this.friendsOpen = true;
                 this.ui('tick');
@@ -1514,26 +1523,25 @@ export class Game {
             right = ['ArrowRight', 'KeyD'].some(k => pr.has(k)),
             up = ['ArrowUp', 'KeyW'].some(k => pr.has(k)),
             down = ['ArrowDown', 'KeyS'].some(k => pr.has(k));
-        // The menu is a column down the left in landscape (▲ ▼ move, ▶ back to the play bar) and a 2×2 grid on a
-        // phone (the arrows move, ▲ off the top row back to the play bar); ▲ or ▼ from the play bar goes into it.
-        const cols = lay.navCols,
-            col = this.lobbyNav % cols,
-            row = Math.floor(this.lobbyNav / cols),
-            rows = Math.ceil(nav / cols);
-        if (this.lobbyFocus === 'mode') {
-            if (down || (up && cols === 1) || (left && cols === 1)) this.lobbyFocus = 'nav';
-        } else if (cols === 1) {
-            if (up) this.lobbyNav = Math.max(0, this.lobbyNav - 1);
-            if (down) this.lobbyNav = Math.min(nav - 1, this.lobbyNav + 1);
-            if (right) this.lobbyFocus = 'mode';
+        // Along the bottom bar ◀ ▶ walk Characters, Maps, PLAY, Profile, Settings; ▲ goes up to the stage plate,
+        // where ◀ ▶ show the other open stages, and ▼ comes back down to PLAY.
+        const slot = this.lobbyFocus === 'mode' ? 2 : this.lobbyNav < 2 ? this.lobbyNav : this.lobbyNav + 1;
+        if (this.lobbyFocus === 'stage') {
+            if (left) this.shiftStage(-1);
+            if (right) this.shiftStage(1);
+            if (down) this.lobbyFocus = 'mode';
         } else {
-            if (left && col > 0) this.lobbyNav--;
-            if (right && col < cols - 1 && this.lobbyNav + 1 < nav) this.lobbyNav++;
-            if (down && row < rows - 1) this.lobbyNav = Math.min(nav - 1, this.lobbyNav + cols);
-            if (up) {
-                if (row > 0) this.lobbyNav -= cols;
-                else this.lobbyFocus = 'mode';
+            let to = slot;
+            if (left) to = Math.max(0, slot - 1);
+            if (right) to = Math.min(nav, slot + 1);
+            if (to !== slot) {
+                if (to === 2) this.lobbyFocus = 'mode';
+                else {
+                    this.lobbyFocus = 'nav';
+                    this.lobbyNav = to < 2 ? to : to - 1;
+                }
             }
+            if (up) this.lobbyFocus = 'stage';
         }
         if ([this.lobbyMode, this.lobbyNav, this.lobbyFocus].join() !== was) this.ui('tick');
         // What's picked: the mode (Enter on the picker, or a tap on it), or a screen on the bar.
@@ -1549,7 +1557,7 @@ export class Game {
         }
         if (['Space', 'Enter', 'KeyZ', 'KeyG', 'NumpadEnter'].some(k => pr.has(k))) {
             if (this.lobbyFocus === 'nav') screen = this.lobbyNav;
-            else play = true;
+            else if (this.lobbyFocus === 'mode') play = true;
         }
         const quick = tap ? lay.quick.findIndex(b => inBox(tap, b)) : -1;
         if (quick >= 0) {
@@ -1715,13 +1723,28 @@ export class Game {
         };
     }
 
-    /** The stage behind the lobby: the furthest one open on the trophy road. */
+    /** The stages open on the trophy road, as indices into MAPS. */
+    private get openStages(): number[] {
+        return MAPS.map((_, i) => i).filter(i => this.mapOpen(i));
+    }
+
+    /** Which of the open stages the lobby's island shows: the one picked with the plate's arrows, else the furthest. */
+    private get lobbyStageAt(): number {
+        const n = this.openStages.length;
+        return this.lobbyStage === null ? n - 1 : Math.min(this.lobbyStage, n - 1);
+    }
+
+    /** The stage on the lobby's island (a map id). */
     private get lobbyMap(): string {
-        let best = 0;
-        MAPS.forEach((_, i) => {
-            if (this.mapOpen(i)) best = i;
-        });
-        return MAPS[best].id;
+        return MAPS[this.openStages[this.lobbyStageAt] ?? 0].id;
+    }
+
+    /** Show the next (1) or previous (−1) open stage on the lobby's island, going round. */
+    private shiftStage(d: number): void {
+        const n = this.openStages.length;
+        if (n < 2) return;
+        this.lobbyStage = (this.lobbyStageAt + d + n) % n;
+        this.ui('tick');
     }
 
     /** Move the select-screen cursors and lock in picks from keys, pads and taps. */
@@ -2535,6 +2558,8 @@ export class Game {
                         best: this.bestTrophies,
                         focus: this.lobbyFocus,
                         nav: this.lobbyNav,
+                        stageNo: (this.openStages[this.lobbyStageAt] ?? 0) + 1,
+                        stageAt: this.lobbyStageAt,
                         map: this.lobbyMap,
                         mapName: mapById(this.lobbyMap)?.name ?? '',
                         chat: this.chatLines,

@@ -49,7 +49,7 @@ export interface TitleView {
 }
 
 /** Where the lobby's keyboard cursor is: on the mode picker, or along the bar of screens at the bottom. */
-export type LobbyFocus = 'mode' | 'nav';
+export type LobbyFocus = 'mode' | 'nav' | 'stage';
 
 /** One mode on the lobby's mode picker. */
 export interface LobbyMode {
@@ -85,6 +85,9 @@ export interface LobbyView {
     best: number;
     focus: LobbyFocus;
     nav: number;
+    /** The stage shown on the island: its number on the trophy road, and which of the open ones it is. */
+    stageNo: number;
+    stageAt: number;
     /** The stage behind it all (a map id), and its name. */
     map: string;
     mapName: string;
