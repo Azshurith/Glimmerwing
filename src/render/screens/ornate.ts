@@ -52,7 +52,14 @@ export interface NightShape {
  * four-point ones, the planet with its bands and lit rim, purple clouds drifting along the horizon, dark pines either
  * side, and a still lake below with light shimmering on it.
  */
-export function drawNight(ctx: CanvasRenderingContext2D, t: number, x0: number, w: number, H: number, s: NightShape): void {
+export function drawNight(
+    ctx: CanvasRenderingContext2D,
+    t: number,
+    x0: number,
+    w: number,
+    H: number,
+    s: NightShape,
+): void {
     const nightArt = ARTS[s.art ?? 'castle'];
     if (nightArt && nightReady(s.art ?? 'castle')) {
         // The painting, covering the view (cropped at the sides on a tall screen, keeping the moon in view), with a
@@ -148,7 +155,8 @@ export function drawNight(ctx: CanvasRenderingContext2D, t: number, x0: number, 
         const u = scatter(i, 21);
         const side = i % 2 ? u * 0.36 : 1 - u * 0.36;
         const tx = x0 + side * w;
-        const th = (14 + scatter(i, 22) * 26) * (1 - Math.abs(side - 0.5) * 0.2 - (0.36 - Math.min(side, 1 - side)) * 0.8);
+        const th =
+            (14 + scatter(i, 22) * 26) * (1 - Math.abs(side - 0.5) * 0.2 - (0.36 - Math.min(side, 1 - side)) * 0.8);
         if (th < 6) continue;
         ctx.beginPath();
         ctx.moveTo(tx, hz - th);
@@ -267,7 +275,14 @@ export function gem(ctx: CanvasRenderingContext2D, x: number, y: number, r: numb
  * A heading in gold with a pair of gold wings either side and a swooping gold line under it ending in a star, centred
  * on (cx, y), `size` high.
  */
-export function wingedTitle(ctx: CanvasRenderingContext2D, text: string, cx: number, y: number, size: number, t: number): void {
+export function wingedTitle(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    cx: number,
+    y: number,
+    size: number,
+    t: number,
+): void {
     ctx.font = `${size}px ${ARCADE}`;
     const tw = ctx.measureText(text).width;
     arcadeText(ctx, text, cx, y + size * 0.38, size, ['#fff7d8', '#ffd98a', '#e0a040'], 'center');
@@ -373,7 +388,9 @@ export function keyHints(
     }
     ctx.font = `6px ${ARCADE}`;
     const capW = (k: string) => Math.max(11, ctx.measureText(k).width + 7);
-    const groupW = hints.map(([keys, what]) => keys.reduce((a, k) => a + capW(k) + 2, 0) + 4 + ctx.measureText(what).width);
+    const groupW = hints.map(
+        ([keys, what]) => keys.reduce((a, k) => a + capW(k) + 2, 0) + 4 + ctx.measureText(what).width,
+    );
     const total = groupW.reduce((a, b) => a + b, 0) + (hints.length - 1) * 16;
     let x = cx - total / 2;
     hints.forEach(([keys, what], i) => {
@@ -417,7 +434,14 @@ export function goldFrame(ctx: CanvasRenderingContext2D, trace: () => void, y0: 
 /**
  * A round gold-ringed medallion with a deep glowing middle in `color`, for icons: a skill's, a stat tile's, a map's.
  */
-export function iconOrb(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, on = false): void {
+export function iconOrb(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    r: number,
+    color: string,
+    on = false,
+): void {
     const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 1, x, y, r);
     g.addColorStop(0, color);
     g.addColorStop(0.6, '#2a1260');

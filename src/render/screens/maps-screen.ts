@@ -198,7 +198,8 @@ export class MapsScreen {
         const pips = STAGES.length,
             pip = Math.min(8, (dw - 64) / pips);
         for (let i = 0; i < pips; i++) {
-            ctx.fillStyle = i <= index ? (i >= 5 ? '#ff7a6a' : i >= 3 ? '#ffd45c' : '#6af07a') : 'rgba(255,255,255,0.12)';
+            ctx.fillStyle =
+                i <= index ? (i >= 5 ? '#ff7a6a' : i >= 3 ? '#ffd45c' : '#6af07a') : 'rgba(255,255,255,0.12)';
             ctx.fillRect(dx + 56 + i * pip, dyy + 4.5, pip - 2, 7);
         }
         // The blurb, then the monsters' heading on a small plaque with a gold line running on from it.

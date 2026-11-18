@@ -8,7 +8,17 @@ import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { enter } from '@/render/transition';
 import { roundRect } from './emblems';
-import { crest, goldFrame, goldGradient, iconOrb, keyHints, ornatePanel, ornateScreen, ornateTitle, pointed } from './ornate';
+import {
+    crest,
+    goldFrame,
+    goldGradient,
+    iconOrb,
+    keyHints,
+    ornatePanel,
+    ornateScreen,
+    ornateTitle,
+    pointed,
+} from './ornate';
 
 /** What each charge-shot style does. */
 const SHOT_TEXT: Record<string, string> = {
@@ -279,7 +289,8 @@ export class RosterScreen {
             ctx.drawImage(p.img, sx, sy, sw, sh, a.x + a.w / 2 - (sw * k) / 2, a.y, sw * k, sh * k);
         } else drawFairy(ctx, fy, a.x + a.w / 2, a.y + a.h * 0.46 + Math.sin(t * 2.2) * 3, 4.2, t, 0, false);
         ctx.filter = 'none';
-        if (locked) arcadeText(ctx, '?', a.x + a.w / 2, a.y + a.h * 0.58, 60, ['#ffffff', '#c9b8ff', '#7a5cff'], 'center');
+        if (locked)
+            arcadeText(ctx, '?', a.x + a.w / 2, a.y + a.h * 0.58, 60, ['#ffffff', '#c9b8ff', '#7a5cff'], 'center');
         const fl = ctx.createLinearGradient(0, a.y + a.h - 50, 0, a.y + a.h);
         fl.addColorStop(0, 'rgba(8,5,24,0)');
         fl.addColorStop(1, 'rgba(8,5,24,0.85)');
@@ -312,7 +323,16 @@ export class RosterScreen {
         pointed(ctx, px, py, pw, ph, 10);
         ctx.stroke();
         const name = locked ? 'LOCKED' : fy.name.toUpperCase();
-        arcadeText(ctx, name, a.x + a.w / 2, py + ph / 2 + 5.5, name.length > 9 ? 11 : 14, ['#fff7d8', '#ffd98a', '#e0a040'], 'center', pw - 40);
+        arcadeText(
+            ctx,
+            name,
+            a.x + a.w / 2,
+            py + ph / 2 + 5.5,
+            name.length > 9 ? 11 : 14,
+            ['#fff7d8', '#ffd98a', '#e0a040'],
+            'center',
+            pw - 40,
+        );
         ctx.fillStyle = '#ffe9a0';
         sparkle(ctx, px + 16, py + ph / 2, 3);
         sparkle(ctx, px + pw - 16, py + ph / 2, 3);
@@ -450,7 +470,8 @@ export class RosterScreen {
                 else ctx.fillText(`${text}.`, b.x + b.w * 0.5, ry + rh / 2 + 3, b.w * 0.48);
             }
         });
-        if (!locked && fy.sprite === undefined) drawFairy(ctx, fy, b.x + b.w - 14, b.y - 2 + Math.sin(t * 2.4) * 2, 1.2, t);
+        if (!locked && fy.sprite === undefined)
+            drawFairy(ctx, fy, b.x + b.w - 14, b.y - 2 + Math.sin(t * 2.4) * 2, 1.2, t);
     }
 
     /** The tray the medallions sit in: a long gold-framed capsule with gold arrows at its ends. */

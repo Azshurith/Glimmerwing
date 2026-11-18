@@ -277,7 +277,8 @@ export class LobbyScreen {
         enter(ctx, 'bar', () => this.header(v, lay.plate, t, W, bleed, tall));
         lay.quick.forEach((b, i) => enter(ctx, 'buttons', () => this.quickPill(b, i, t, tall), { box: b, i }));
         enter(ctx, 'panels', () => this.ticker(v, lay.ticker, t), { dx: -22 });
-        if (lay.friendsTab === null || v.friendsOpen) enter(ctx, 'panels', () => this.friends(lay.friends, t), { dx: 22 });
+        if (lay.friendsTab === null || v.friendsOpen)
+            enter(ctx, 'panels', () => this.friends(lay.friends, t), { dx: 22 });
         else {
             const tab = lay.friendsTab;
             enter(ctx, 'buttons', () => this.friendsTab(tab, t), { box: tab, i: 3 });
@@ -549,7 +550,6 @@ export class LobbyScreen {
         }
     }
 
-
     /** Whether the game server is reached: a light and a word, right-aligned at `rx`. */
     private online(v: LobbyView, rx: number, cy: number): void {
         const ctx = this.ctx;
@@ -591,9 +591,6 @@ export class LobbyScreen {
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.stroke();
     }
-
-
-
 
     /** The friends panel: online count, empty places where friends will be, and the buttons that will add them. */
     private friends(b: Box, t: number): void {
@@ -674,8 +671,6 @@ export class LobbyScreen {
         }
     }
 
-
-
     /** A quick icon in the top bar: a small gold-ringed badge with its picture. */
     private quickIcon(b: Box, i: number, t: number): void {
         const ctx = this.ctx;
@@ -724,7 +719,6 @@ export class LobbyScreen {
         }
         ctx.restore();
     }
-
 
     /**
      * The mode picker, over the dimmed lobby: the modes as diamond tiles in a lattice, each its stage painted inside
@@ -889,7 +883,6 @@ export class LobbyScreen {
             ctx.restore();
         }
     }
-
 
     /**
      * The trophy road, over everything: a carpet running up the middle of the screen with a step for every few
@@ -1277,7 +1270,12 @@ export class LobbyScreen {
         ctx.textAlign = 'center';
         ctx.font = `6.5px ${ARCADE}`;
         ctx.fillStyle = '#fff3c9';
-        ctx.fillText(`STAGE ${v.stageNo}/${v.stages[1]}  ·  ${v.mapName.toUpperCase()}`, b.x + b.w / 2, b.y + b.h / 2 + 2.5, b.w - 20);
+        ctx.fillText(
+            `STAGE ${v.stageNo}/${v.stages[1]}  ·  ${v.mapName.toUpperCase()}`,
+            b.x + b.w / 2,
+            b.y + b.h / 2 + 2.5,
+            b.w - 20,
+        );
         for (const [box, dir] of [
             [lay.prev, -1],
             [lay.next, 1],
@@ -1337,7 +1335,12 @@ export class LobbyScreen {
         if (!lines.length) {
             ctx.font = `700 8px ${SANS}`;
             ctx.fillStyle = 'rgba(214,204,250,0.8)';
-            ctx.fillText(v.online ? 'Say hi to everyone online' : 'Chat needs the game server', b.x + 8, b.y + 34, b.w - 16);
+            ctx.fillText(
+                v.online ? 'Say hi to everyone online' : 'Chat needs the game server',
+                b.x + 8,
+                b.y + 34,
+                b.w - 16,
+            );
             return;
         }
         lines.forEach((l, i) => {
@@ -1410,7 +1413,14 @@ export class LobbyScreen {
             const it = LOBBY_NAV[i],
                 on = v.focus === 'nav' && v.nav === i;
             if (on) {
-                const lg = ctx.createRadialGradient(n.x + n.w / 2, n.y + n.h / 2, 2, n.x + n.w / 2, n.y + n.h / 2, n.w * 0.6);
+                const lg = ctx.createRadialGradient(
+                    n.x + n.w / 2,
+                    n.y + n.h / 2,
+                    2,
+                    n.x + n.w / 2,
+                    n.y + n.h / 2,
+                    n.w * 0.6,
+                );
                 lg.addColorStop(0, hexA(it.color, 0.4));
                 lg.addColorStop(1, hexA(it.color, 0));
                 ctx.fillStyle = lg;
@@ -1497,6 +1507,14 @@ export class LobbyScreen {
         gem(ctx, b.x + b.w / 2, b.y - 3, tall ? 5 : 6);
         ctx.fillStyle = '#fff6d8';
         sparkle(ctx, b.x + b.w / 2, b.y - 4, 3 + Math.abs(Math.sin(t * 2.4)) * 2);
-        arcadeText(ctx, 'PLAY', b.x + b.w / 2, b.y + b.h / 2 + (tall ? 6 : 7), tall ? 17 : 21, ['#5a2410', '#3a140a', '#2a0f0a'], 'center');
+        arcadeText(
+            ctx,
+            'PLAY',
+            b.x + b.w / 2,
+            b.y + b.h / 2 + (tall ? 6 : 7),
+            tall ? 17 : 21,
+            ['#5a2410', '#3a140a', '#2a0f0a'],
+            'center',
+        );
     }
 }

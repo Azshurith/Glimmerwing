@@ -12,7 +12,18 @@ import { ARCADE, FONT, SANS } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { enter } from '@/render/transition';
 import { roundRect } from './emblems';
-import { crest, gem, goldFrame, goldGradient, iconOrb, keyHints, ornatePanel, ornateScreen, ornateTitle, pointed } from './ornate';
+import {
+    crest,
+    gem,
+    goldFrame,
+    goldGradient,
+    iconOrb,
+    keyHints,
+    ornatePanel,
+    ornateScreen,
+    ornateTitle,
+    pointed,
+} from './ornate';
 
 /** How far the tall screen's content moves down to sit centred in a view `h` tall. */
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
@@ -86,7 +97,14 @@ export class ProfileScreen {
      * Draw the screen; `bleed` is how far a widened landscape view reaches past each side, and `stage` paints a map's
      * scenery for the history's thumbnails.
      */
-    draw(v: ProfileView, t: number, layout: Layout = 'wide', h: number = C.TALL_H, bleed = 0, stage?: StagePainter): void {
+    draw(
+        v: ProfileView,
+        t: number,
+        layout: Layout = 'wide',
+        h: number = C.TALL_H,
+        bleed = 0,
+        stage?: StagePainter,
+    ): void {
         const ctx = this.ctx;
         const tall = layout === 'tall';
         ctx.save();
@@ -132,7 +150,11 @@ export class ProfileScreen {
                       ],
                 W / 2 + (tall ? 0 : (CARD_W + 12) / 2),
                 tall ? H - 12 : H - 6,
-                v.touch ? (v.tab === 'history' ? 'TAP A GAME FOR ITS DETAILS' : 'TAP MATCH HISTORY FOR YOUR GAMES') : null,
+                v.touch
+                    ? v.tab === 'history'
+                        ? 'TAP A GAME FOR ITS DETAILS'
+                        : 'TAP MATCH HISTORY FOR YOUR GAMES'
+                    : null,
             ),
         );
         ctx.restore();
@@ -186,7 +208,12 @@ export class ProfileScreen {
         ctx.font = `italic 600 7.5px ${FONT}`;
         ctx.fillStyle = 'rgba(239,230,255,0.85)';
         const sy = ny + 32;
-        ctx.fillText(v.synced ? 'Progress is saved on the game server.' : 'Progress is saved in this browser.', nx + nw / 2, sy, nw);
+        ctx.fillText(
+            v.synced ? 'Progress is saved on the game server.' : 'Progress is saved in this browser.',
+            nx + nw / 2,
+            sy,
+            nw,
+        );
         ctx.fillText('Sign in with Google: coming soon', nx + nw / 2, sy + 10, nw);
         const ly = tall ? sy + 22 : sy + 20;
         // A divider with a gem, then the Endless top three.
@@ -209,7 +236,11 @@ export class ProfileScreen {
         if (!top.length) {
             ctx.font = `italic 600 8px ${FONT}`;
             ctx.fillStyle = 'rgba(203,188,245,0.75)';
-            ctx.fillText(v.synced ? 'No runs yet: set the first!' : 'Shown when the server is reached', x + w / 2, y + 16);
+            ctx.fillText(
+                v.synced ? 'No runs yet: set the first!' : 'Shown when the server is reached',
+                x + w / 2,
+                y + 16,
+            );
             return;
         }
         const medals = ['#ffd45c', '#d8dcef', '#e09a5a'];
@@ -328,7 +359,14 @@ export class ProfileScreen {
             ctx.fillText(label, tx, y + 12, tw - (tx - x) - 4);
             arcadeText(ctx, value, tx, y + th - 7, tall ? 13 : 15, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'left');
             // A chip on the right: where the trophy road goes next, or the Endless rank.
-            const chip = label === 'TROPHIES' ? (nextStage ? `${(mapById(nextStage.mapId)?.name ?? '').toUpperCase()} AT ${nextStage.trophies}` : 'ALL STAGES') : label === 'ENDLESS BEST' && v.rank ? `#${v.rank.rank} OF ${v.rank.players}` : '';
+            const chip =
+                label === 'TROPHIES'
+                    ? nextStage
+                        ? `${(mapById(nextStage.mapId)?.name ?? '').toUpperCase()} AT ${nextStage.trophies}`
+                        : 'ALL STAGES'
+                    : label === 'ENDLESS BEST' && v.rank
+                      ? `#${v.rank.rank} OF ${v.rank.players}`
+                      : '';
             if (chip && !tall) {
                 ctx.font = `5px ${ARCADE}`;
                 const cw = ctx.measureText(chip).width + 12;
@@ -364,7 +402,12 @@ export class ProfileScreen {
         ctx.textAlign = 'right';
         ctx.font = `italic 600 ${tall ? 7.5 : 8.5}px ${FONT}`;
         ctx.fillStyle = next ? '#ffe27a' : '#f0e8ff';
-        ctx.fillText(next ? `Next: ${next.unlock?.hint ?? ''} to unlock ${next.name}` : 'Every fairy is unlocked!', x0 + w - 6, fy + 2, w - 90);
+        ctx.fillText(
+            next ? `Next: ${next.unlock?.hint ?? ''} to unlock ${next.name}` : 'Every fairy is unlocked!',
+            x0 + w - 6,
+            fy + 2,
+            w - 90,
+        );
         const n = FAIRIES.length,
             rgap = Math.min(tall ? 32 : 46, (w - 20) / n),
             rr = Math.min(tall ? 12 : 16, rgap / 2 - 2),
