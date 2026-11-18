@@ -54,8 +54,6 @@ STAGE_ICONS = [(30, 205), (225, 398), (405, 582), (608, 772), (783, 978), (978, 
 SCREENS = {
     'profile': {
         'title': ('profile-record', (1146, 2, 2340, 219), []),
-        'tabsRecord': ('profile-record', (1072, 229, 2466, 371), []),
-        'tabsHistory': ('profile-history', (1100, 205, 2360, 350), []),
         'card': (
             'profile-record',
             (134, 90, 1010, 1474),
@@ -272,6 +270,16 @@ def main(group):
         piece = sheet[y0:y1, x0:x1].copy()
         keep = None
         for wipe in wipes:
+            if wipe[0] == 'lum':
+                # An icon lifted off its pill: as opaque as it is dark (on gold) or light (on violet).
+                rgb = piece[:, :, :3].astype(np.float32)
+                lum = rgb @ np.array([0.3, 0.59, 0.11], np.float32)
+                if wipe[1] == 'dark':
+                    k = np.clip((150 - lum) / 90, 0, 1)
+                else:
+                    k = np.clip((lum - 120) / 80, 0, 1) * np.clip((rgb.min(axis=2) - 80) / 60, 0, 1)
+                piece[:, :, 3] = np.round(piece[:, :, 3] * k).astype(np.uint8)
+                continue
             if wipe[0] == 'unpurple':
                 # Clears the violet (a strip of a bar running on behind a piece) from a corner, keeping the gold.
                 _k, ux0, uy0, ux1, uy1 = wipe
@@ -323,6 +331,13 @@ def main(group):
                 dark = reg[lum <= np.percentile(lum, 45)]
                 piece[b - y0 : d - y0, a - x0 : c - x0] = np.median(dark, axis=0).astype(np.uint8)
                 continue
+            if isinstance(cx, tuple) and cx[0] == 'blend':
+                # Each row fades from its colour at one clean column to its colour at the other.
+                left = sheet[b:d, at(cx[1])].astype(np.float32)
+                right = sheet[b:d, at(cx[2])].astype(np.float32)
+                k = np.linspace(0, 1, c - a, dtype=np.float32)[None, :, None]
+                piece[b - y0 : d - y0, a - x0 : c - x0] = np.round(left[:, None] * (1 - k) + right[:, None] * k)
+                continue
             if isinstance(cx, tuple):
                 # One flat colour, from the given point, where no clean column runs through.
                 piece[b - y0 : d - y0, a - x0 : c - x0] = sheet[at(cx[1]), at(cx[0])]
@@ -333,7 +348,8 @@ def main(group):
             # The red the background left round the edges: see-through and far redder than green.
             r, g, b, a = (piece[:, :, k].astype(np.int32) for k in range(4))
             piece[(a < 235) & (r > 110) & (r * 10 > g * 16) & (b * 10 < r * 9), 3] = 0
-        piece[:, :, 3] = piece[:, :, 3] * own(piece[:, :, 3])
+        if not any(w[0] == 'lum' for w in wipes):
+            piece[:, :, 3] = piece[:, :, 3] * own(piece[:, :, 3])
         if keep is not None:
             piece[:, :, 3] = np.round(piece[:, :, 3] * keep).astype(np.uint8)
         cells[name] = piece

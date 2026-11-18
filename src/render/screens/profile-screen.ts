@@ -53,11 +53,10 @@ const MOCK = {
     area: [100, 0, 3545, 1480] as const,
     title: [1146, 2, 1194, 217],
     card: [134, 90, 876, 1384],
-    tabsRecord: [1072, 229, 1394, 142],
-    tabsHistory: [1100, 205, 1260, 145],
+    // The tabs' pills, the same on both tabs (only which is gold changes), and their tap boxes.
     tabs: [
-        [1075, 230, 615, 138],
-        [1700, 230, 760, 138],
+        [1075, 230, 605, 140],
+        [1690, 230, 772, 140],
     ],
     tiles: [
         ['tileWins', 1062, 398, 777, 192, 1347],
@@ -69,9 +68,61 @@ const MOCK = {
         ['tileEndless', 1062, 804, 1029, 181, 1349],
     ] as const,
     fairies: [1056, 995, 2332, 404],
-    row: [1062, 365, 2263, 142],
-    pitch: 139.5,
+    // The history fills the record's area: from the first tiles' top to the fairies' foot, as wide as the tiles
+    // (less the scroll bar); its row pieces were cut 2263 wide, so what's on them spreads by `rw / ROW_W`.
+    row: [1062, 398, 2380, 142],
+    pitch: 143.2,
+    scroll: 3470,
 } as const;
+
+/** A tab's Record icon: three rising bars, `w` wide, left edge at `x`, centred on `cy`, in `ink`. */
+function tabBars(ctx: CanvasRenderingContext2D, x: number, cy: number, w: number, ink: string, on: boolean): void {
+    const bw = w * 0.26,
+        gap = (w - 3 * bw) / 2,
+        base = cy + w * 0.42;
+    [0.55, 0.95, 0.72].forEach((k, i) => {
+        const h = w * k,
+            bx = x + i * (bw + gap);
+        if (!on) {
+            const g = ctx.createLinearGradient(0, base - h, 0, base);
+            g.addColorStop(0, '#ffffff');
+            g.addColorStop(1, '#e6b8d8');
+            ctx.fillStyle = g;
+        } else ctx.fillStyle = ink;
+        roundRect(ctx, bx, base - h, bw, h, 4);
+        ctx.fill();
+    });
+}
+
+/** A tab's Match History icon: two crossed swords, `w` across, centred on (cx, cy), in `ink`. */
+function tabSwords(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number, ink: string, on: boolean): void {
+    for (const dir of [-1, 1]) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(dir * Math.PI * 0.25);
+        const L = w * 0.62;
+        ctx.fillStyle = on ? ink : '#f2e2ff';
+        // The blade, pointed at the top.
+        ctx.beginPath();
+        ctx.moveTo(0, -L);
+        ctx.lineTo(w * 0.07, -L * 0.78);
+        ctx.lineTo(w * 0.07, L * 0.38);
+        ctx.lineTo(-w * 0.07, L * 0.38);
+        ctx.lineTo(-w * 0.07, -L * 0.78);
+        ctx.closePath();
+        ctx.fill();
+        // The guard and the grip.
+        ctx.fillStyle = on ? ink : '#d9a8ff';
+        roundRect(ctx, -w * 0.2, L * 0.36, w * 0.4, w * 0.09, w * 0.04);
+        ctx.fill();
+        roundRect(ctx, -w * 0.05, L * 0.42, w * 0.1, w * 0.24, w * 0.04);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+/** How wide the history's row pieces were cut, in the mockup's pixels. */
+const ROW_W = 2263;
 
 /** Where the landscape Profile's mockup sits in a view widened by `bleed`. */
 function profileFit(bleed: number): MockFit {
@@ -235,9 +286,10 @@ export class ProfileScreen {
         };
         enter(ctx, 'bar', () => piece('title', MOCK.title, 0));
         enter(ctx, 'panels', () => drawPlayerCard(ctx, v, MOCK.card, t), { dx: -22 });
-        enter(ctx, 'buttons', () =>
-            v.tab === 'history' ? piece('tabsHistory', MOCK.tabsHistory, 1) : piece('tabsRecord', MOCK.tabsRecord, 1),
-        );
+        enter(ctx, 'buttons', () => {
+            this.paintedTab(MOCK.tabs[0], 'RECORD', 'record', v.tab !== 'history', t);
+            this.paintedTab(MOCK.tabs[1], 'MATCH HISTORY', 'history', v.tab === 'history', t);
+        });
         enter(ctx, 'panels', () =>
             v.tab === 'history' ? this.paintedHistory(v, t, stage) : this.paintedRecord(v, t, piece),
         );
@@ -358,10 +410,95 @@ export class ProfileScreen {
         ctx.fillText(text, x + w / 2, y + h * 0.64, w - 30);
     }
 
+    /**
+     * One of the two tabs, drawn in code as a vector capsule so both tabs are the very same shape and only their
+     * colours change: a dark outline, a gold rim, a glossy fill (gold when it's the tab showing, deep violet
+     * otherwise) with a highlight across its top, then its icon and label.
+     */
+    private paintedTab(b: readonly number[], label: string, icon: 'record' | 'history', on: boolean, t: number): void {
+        const ctx = this.ctx,
+            [x, y, w, h] = b,
+            r = h / 2;
+        // A soft glow under the chosen tab.
+        if (on) {
+            ctx.save();
+            ctx.shadowColor = 'rgba(255,190,60,0.55)';
+            ctx.shadowBlur = 40 + 8 * Math.sin(t * 3);
+            ctx.fillStyle = 'rgba(255,190,60,0.3)';
+            roundRect(ctx, x, y, w, h, r);
+            ctx.fill();
+            ctx.restore();
+        }
+        // Outline, then the gold rim.
+        ctx.fillStyle = '#1a0a10';
+        roundRect(ctx, x - 6, y - 6, w + 12, h + 12, r + 6);
+        ctx.fill();
+        const rim = ctx.createLinearGradient(0, y, 0, y + h);
+        rim.addColorStop(0, '#fff3b0');
+        rim.addColorStop(0.45, '#f2b53a');
+        rim.addColorStop(1, '#b8640c');
+        ctx.fillStyle = rim;
+        roundRect(ctx, x, y, w, h, r);
+        ctx.fill();
+        // The fill, inset inside the rim.
+        const i = on ? 7 : 8,
+            fill = ctx.createLinearGradient(0, y + i, 0, y + h - i);
+        if (on) {
+            fill.addColorStop(0, '#fff7b8');
+            fill.addColorStop(0.42, '#ffd23e');
+            fill.addColorStop(0.58, '#f9b912');
+            fill.addColorStop(1, '#f6a40a');
+        } else {
+            fill.addColorStop(0, '#4a2486');
+            fill.addColorStop(0.5, '#25103f');
+            fill.addColorStop(1, '#341762');
+        }
+        ctx.fillStyle = fill;
+        roundRect(ctx, x + i, y + i, w - 2 * i, h - 2 * i, r - i);
+        ctx.fill();
+        // The highlight across the top, and on violet a pink sheen along the inner edge.
+        ctx.save();
+        roundRect(ctx, x + i, y + i, w - 2 * i, h - 2 * i, r - i);
+        ctx.clip();
+        const hl = ctx.createLinearGradient(0, y + i, 0, y + h * 0.5);
+        hl.addColorStop(0, on ? 'rgba(255,255,255,0.75)' : 'rgba(255,190,255,0.45)');
+        hl.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = hl;
+        roundRect(ctx, x + i + r * 0.35, y + i + 4, w - 2 * i - r * 0.7, h * 0.32, h * 0.16);
+        ctx.fill();
+        if (!on) {
+            ctx.strokeStyle = 'rgba(255,170,255,0.55)';
+            ctx.lineWidth = 3;
+            roundRect(ctx, x + i + 3, y + i + 3, w - 2 * i - 6, h - 2 * i - 6, r - i - 3);
+            ctx.stroke();
+        }
+        ctx.restore();
+        // Icon and label, centred together.
+        const size = 60,
+            iconW = 78,
+            gap = 26;
+        ctx.font = `900 ${size}px ${SANS}`;
+        const tw = Math.min(ctx.measureText(label).width, w - iconW - gap - 120),
+            x0 = x + (w - iconW - gap - tw) / 2,
+            cy = y + h / 2;
+        const ink = on ? '#2a0f04' : '#ffffff';
+        if (icon === 'record') tabBars(ctx, x0, cy, iconW, ink, on);
+        else tabSwords(ctx, x0 + iconW / 2, cy, iconW, ink, on);
+        ctx.textAlign = 'left';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = on ? 'rgba(255,248,214,0.85)' : 'rgba(20,6,40,0.9)';
+        ctx.strokeText(label, x0 + iconW + gap, cy + size * 0.36, tw);
+        ctx.fillStyle = ink;
+        ctx.fillText(label, x0 + iconW + gap, cy + size * 0.36, tw);
+    }
+
     /** The painted Match History tab: a row per game, newest first, the chosen one glowing, and a scroll bar. */
     private paintedHistory(v: ProfileView, t: number, stage?: StagePainter): void {
         const ctx = this.ctx;
         const [rx, ry, rw, rh] = MOCK.row;
+        /** Where a point `d` across a row piece (as cut, 2263 wide) lands on the wider row. */
+        const at = (d: number) => rx + (d * rw) / ROW_W;
         if (v.message) {
             ctx.textAlign = 'center';
             ctx.font = `italic 600 48px ${FONT}`;
@@ -400,10 +537,10 @@ export class ProfileScreen {
                 ctx.textAlign = 'center';
                 ctx.font = `800 40px ${SANS}`;
                 ctx.fillStyle = row.color;
-                ctx.fillText(row.tag, rx + 180, y + 86, 300);
+                ctx.fillText(row.tag, at(180), y + 86, 300);
             }
             // The stage's picture, in a rounded frame.
-            const tx = rx + 438,
+            const tx = at(438),
                 ty = y + 30,
                 tw = 245,
                 th = 92;
@@ -422,12 +559,12 @@ export class ProfileScreen {
             ctx.textAlign = 'left';
             ctx.font = `700 46px ${FONT}`;
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(row.title, rx + 768, y + 64, 760);
+            ctx.fillText(row.title, at(768), y + 64, 760);
             ctx.font = `italic 600 36px ${FONT}`;
             ctx.fillStyle = 'rgba(224,214,255,0.95)';
-            ctx.fillText(row.detail, rx + 768, y + 106, 760);
+            ctx.fillText(row.detail, at(768), y + 106, 760);
             const win = row.result.startsWith('WIN');
-            const cx = rx + 1640;
+            const cx = at(1640);
             ctx.textAlign = 'center';
             ctx.font = `48px ${ARCADE}`;
             ctx.fillStyle = win ? '#c8f55a' : row.tag === 'ENDLESS' ? '#ffd45c' : row.resultColor;
@@ -445,11 +582,11 @@ export class ProfileScreen {
             ctx.textAlign = 'right';
             ctx.font = `30px ${ARCADE}`;
             ctx.fillStyle = row.local ? '#ffe27a' : '#e2ccff';
-            ctx.fillText(row.local ? 'THIS DEVICE' : row.when, rx + 2150, y + 84, 260);
+            ctx.fillText(row.local ? 'THIS DEVICE' : row.when, at(2150), y + 84, 260);
         });
         // The scroll bar down the right.
         if (v.history.length > n) {
-            const x = 3345,
+            const x = MOCK.scroll,
                 y0 = ry + 5,
                 h = n * MOCK.pitch - 10;
             ctx.fillStyle = 'rgba(20,10,44,0.8)';
