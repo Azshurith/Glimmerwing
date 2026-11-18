@@ -1,10 +1,12 @@
 // The map select screen, after the fairies are picked: a card for each map with its scenery scrolling live inside,
 // and a Random card that flicks through them all. The game keeps which card is chosen (Game.mapIndex).
+import { Backdrop } from '@/render/backdrop';
 import * as C from '@/core/config';
 import { mapAvailable } from '@/data/availability';
 import { MAPS } from '@/data/maps';
 import type { Layout, MapSelectView, MapTheme } from '@/types';
-import { Backdrop } from '@/render/backdrop';
+import { drawCallButton, goldFrame } from './menu-style';
+import { roundRect } from './emblems';
 import { arcadeText } from '@/render/draw';
 import { ARCADE } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
@@ -143,6 +145,9 @@ export class MapScreen {
     ): void {
         const ctx = this.ctx;
         const random = i === 0;
+        // The name capsule's height, and the room above it for a padlock.
+        const ph = Math.min(20, c.h * 0.2),
+            room = c.h - ph - 8;
         // Random flicks through every open map, a second on each.
         const map = random ? this.open[Math.floor(t / 1.1) % this.open.length] : MAPS[i - 1];
         const lift = on ? -3 : 0;
@@ -153,12 +158,12 @@ export class MapScreen {
             ctx.shadowColor = 'rgba(255,214,107,0.8)';
             ctx.shadowBlur = 14;
         }
-        ctx.fillStyle = '#0c0820';
-        ctx.fillRect(x - 2, y - 2, c.w + 4, c.h + 4);
+        ctx.fillStyle = '#22122a';
+        roundRect(ctx, x - 2, y - 2, c.w + 4, c.h + 4, 11);
+        ctx.fill();
         ctx.restore();
         ctx.save();
-        ctx.beginPath();
-        ctx.rect(x, y, c.w, c.h);
+        roundRect(ctx, x, y, c.w, c.h, 9);
         ctx.clip();
         preview(map, x, y, c.w, c.h);
         if (random) {
@@ -177,8 +182,9 @@ export class MapScreen {
         } else if (locked) {
             ctx.fillStyle = 'rgba(8,5,22,0.72)';
             ctx.fillRect(x, y, c.w, c.h);
-            const cy = y + c.h * 0.42;
-            drawPadlock(ctx, x + c.w / 2, cy, Math.min(30, c.w * 0.3));
+            const lock = Math.min(30, c.w * 0.3, room * 0.45);
+            const cy = y + room / 2 - lock * 0.45;
+            drawPadlock(ctx, x + c.w / 2, cy, lock);
             ctx.textAlign = 'center';
             ctx.font = `9px ${ARCADE}`;
             // The trophies the stage needs (none to show for one the server has switched off).
@@ -186,37 +192,38 @@ export class MapScreen {
                 const need = String(stageFor(map.id).trophies);
                 const nw = ctx.measureText(need).width;
                 ctx.fillStyle = '#ffe08a';
-                ctx.fillText(need, x + c.w / 2 + 6, cy + 30);
-                drawTrophy(ctx, x + c.w / 2 - nw / 2 - 2, cy + 26, 10);
+                const ty = cy + lock * 0.55 + 12;
+                ctx.fillText(need, x + c.w / 2 + 6, ty);
+                drawTrophy(ctx, x + c.w / 2 - nw / 2 - 2, ty - 4, 10);
             }
         } else if (!on) {
             ctx.fillStyle = 'rgba(12,8,32,0.35)';
             ctx.fillRect(x, y, c.w, c.h);
         }
-        // The name plate along the bottom.
-        const g = ctx.createLinearGradient(0, y + c.h - 26, 0, y + c.h);
-        g.addColorStop(0, 'rgba(10,6,28,0)');
-        g.addColorStop(1, 'rgba(10,6,28,0.92)');
-        ctx.fillStyle = g;
-        ctx.fillRect(x, y + c.h - 26, c.w, 26);
+        ctx.restore();
+        // The name on a plum capsule across the bottom, like the lobby's buttons.
+        drawCallButton(ctx, { x: x + 5, y: y + c.h - ph - 5, w: c.w - 10, h: ph }, '', on, '#ffd45c', t);
         arcadeText(
             ctx,
             random ? 'RANDOM' : locked ? (mapAvailable(map.id) ? 'LOCKED' : 'UNAVAILABLE') : map.name.toUpperCase(),
             x + c.w / 2,
-            y + c.h - 8,
-            on ? 12 : 11,
+            y + c.h - 5 - ph / 2 + (on ? 4.5 : 4),
+            Math.min(on ? 12 : 11, ph * 0.6),
             locked
                 ? ['#8f86b0', '#6f6790', '#59517a']
                 : on
                   ? ['#fff7c2', '#ffd45c', '#ff9a2e']
                   : ['#ffffff', '#e4dcff', '#b9a8e8'],
             'center',
-            c.w - 8,
+            c.w - 22,
         );
-        ctx.restore();
-        ctx.strokeStyle = on ? '#ffd86b' : 'rgba(201,162,74,0.6)';
-        ctx.lineWidth = on ? 2 : 1;
-        ctx.strokeRect(x, y, c.w, c.h);
+        if (on) goldFrame(ctx, k => roundRect(k, x, y, c.w, c.h, 9), 2.2);
+        else {
+            ctx.strokeStyle = 'rgba(255,214,190,0.2)';
+            ctx.lineWidth = 1;
+            roundRect(ctx, x, y, c.w, c.h, 9);
+            ctx.stroke();
+        }
     }
 }
 

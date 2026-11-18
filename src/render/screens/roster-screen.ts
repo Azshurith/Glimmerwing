@@ -1,12 +1,14 @@
 // The Characters screen: browse the fairies, with each one's portrait, stats, skills and how to unlock her.
+import { Backdrop } from '@/render/backdrop';
 import * as C from '@/core/config';
 import { FAIRIES } from '@/data/characters';
 import type { Fairy, Layout, RosterView } from '@/types';
-import { Backdrop } from '@/render/backdrop';
+import { drawCallButton, drawGem, drawPlate, GOLD_TEXT, goldFrame } from './menu-style';
+import { hexA, roundRect } from './emblems';
 import { drawFairy } from '@/render/entities/fairy';
-import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
+import { arcadeText, shade, sparkle } from '@/render/draw';
 import { drawTopBar } from './top-bar';
-import { ARCADE, FONT } from '@/render/theme';
+import { ARCADE, SANS } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { enter } from '@/render/transition';
 
@@ -182,20 +184,9 @@ export class RosterScreen {
     private previewButton(fy: Fairy, t: number): void {
         const ctx = this.ctx,
             b = PREVIEW_BTN;
-        const shape = slanted(b.x, b.y, b.w, b.h, 5);
-        ctx.save();
-        ctx.shadowColor = fy.color;
-        ctx.shadowBlur = 6 + 4 * Math.sin(t * 3);
-        ctx.fillStyle = 'rgba(12,8,32,0.85)';
-        shape(ctx);
-        ctx.fill();
-        ctx.restore();
-        ctx.strokeStyle = '#fff3c9';
-        ctx.lineWidth = 1.2;
-        shape(ctx);
-        ctx.stroke();
+        drawCallButton(ctx, b, '', true, fy.color, t);
         // A play triangle, then the label.
-        ctx.fillStyle = fy.color;
+        ctx.fillStyle = '#ffe08a';
         ctx.beginPath();
         ctx.moveTo(b.x + 10, b.y + 5);
         ctx.lineTo(b.x + 16, b.y + b.h / 2);
@@ -227,7 +218,8 @@ export class RosterScreen {
     /** The fairy's portrait (or her in-game look, large) in a framed window, with her name on a plate. */
     private art(fy: Fairy, locked: boolean, a: { x: number; y: number; w: number; h: number }, t: number): void {
         const ctx = this.ctx;
-        const win = slanted(a.x, a.y, a.w, a.h, 10);
+        /** Trace the portrait's window: a rounded frame. */
+        const win = (c: CanvasRenderingContext2D) => roundRect(c, a.x, a.y, a.w, a.h, 12);
         ctx.save();
         win(ctx);
         ctx.clip();
@@ -258,34 +250,24 @@ export class RosterScreen {
         ctx.fillStyle = fl;
         ctx.fillRect(a.x - 10, a.y + a.h - 50, a.w + 20, 50);
         ctx.restore();
-        ctx.strokeStyle = locked ? '#8a7aa8' : fy.color;
-        ctx.lineWidth = 2;
+        // A gold frame like the lobby's, with a thin line in her colour inside it.
+        goldFrame(ctx, win, 2.2);
+        ctx.strokeStyle = hexA(locked ? '#8a7aa8' : fy.color, 0.7);
+        ctx.lineWidth = 1;
+        ctx.save();
+        ctx.translate(a.x + a.w / 2, a.y + a.h / 2);
+        ctx.scale((a.w - 6) / a.w, (a.h - 6) / a.h);
+        ctx.translate(-a.x - a.w / 2, -a.y - a.h / 2);
         win(ctx);
+        ctx.restore();
         ctx.stroke();
-        // Nameplate.
+        // Nameplate: a plum capsule across the bottom of the frame, her name in gold.
         const ny = a.y + a.h - 14;
-        const plate = slanted(a.x - 2, ny, a.w + 4, 24, 8);
-        const pg = ctx.createLinearGradient(a.x, 0, a.x + a.w, 0);
-        pg.addColorStop(0, locked ? '#4a3f7a' : fy.color);
-        pg.addColorStop(1, locked ? '#1d1840' : shade(fy.color, 0.3));
-        ctx.fillStyle = pg;
-        plate(ctx);
-        ctx.fill();
-        ctx.strokeStyle = '#fff3c9';
-        ctx.lineWidth = 1.2;
-        plate(ctx);
-        ctx.stroke();
         const name = locked ? 'LOCKED' : fy.name.toUpperCase();
-        arcadeText(
-            ctx,
-            name,
-            a.x + 10,
-            ny + 18,
-            name.length > 9 ? 12 : 15,
-            ['#ffffff', '#fff0c8', '#ffd27a'],
-            'left',
-            a.w - 14,
-        );
+        drawCallButton(ctx, { x: a.x + 8, y: ny, w: a.w - 16, h: 24 }, '', false, fy.color, t);
+        arcadeText(ctx, name, a.x + a.w / 2, ny + 18, name.length > 9 ? 12 : 15, GOLD_TEXT, 'center', a.w - 34);
+        drawGem(ctx, a.x + 18, ny + 12, 3, t);
+        drawGem(ctx, a.x + a.w - 18, ny + 12, 3, t + 1);
     }
 
     /**
@@ -302,9 +284,9 @@ export class RosterScreen {
         const ctx = this.ctx;
         const s = d.w / C.FIELD_W_BASE,
             h = C.FIELD_H_BASE * s;
+        drawPlate(ctx, d.x - 5, d.y - 5, d.w + 10, h + 10, { r: 10 });
         ctx.save();
-        ctx.beginPath();
-        ctx.rect(d.x, d.y, d.w, h);
+        roundRect(ctx, d.x, d.y, d.w, h, 6);
         ctx.clip();
         if (!locked && draw) draw(d.x, d.y, s);
         else {
@@ -325,9 +307,10 @@ export class RosterScreen {
             ctx.fillText(caption.toUpperCase(), d.x + d.w / 2, d.y + h - 8, d.w - 10);
         }
         ctx.restore();
-        ctx.strokeStyle = locked ? '#8a7aa8' : fy.color;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(d.x, d.y, d.w, h);
+        ctx.strokeStyle = hexA(locked ? '#8a7aa8' : fy.color, 0.8);
+        ctx.lineWidth = 1.2;
+        roundRect(ctx, d.x, d.y, d.w, h, 6);
+        ctx.stroke();
     }
 
     /** Her blurb, stats and skills (or how to unlock her). */
@@ -340,8 +323,11 @@ export class RosterScreen {
     ): void {
         const ctx = this.ctx;
         let y = b.y;
+        // A plum panel behind it all, as tall as the stats and four skills.
+        const line = compact ? 38 : 34;
+        drawPlate(ctx, b.x - 10, b.y - 14, b.w + 20, 16 + 2 * 13 + 4 + 24 + 4 * line, { r: 10, alpha: 0.82 });
         ctx.textAlign = 'left';
-        ctx.font = `italic 600 ${compact ? 9 : 10}px ${FONT}`;
+        ctx.font = `600 ${compact ? 9 : 10}px ${SANS}`;
         ctx.fillStyle = locked ? '#ffe27a' : 'rgba(246,240,255,0.9)';
         ctx.fillText(locked ? `To unlock: ${fy.unlock?.hint ?? ''}` : fy.blurb, b.x, y, b.w);
         // Stats, two to a row.
@@ -363,7 +349,7 @@ export class RosterScreen {
             for (let k = 0; k < 5; k++) {
                 const on = !locked && k < n;
                 ctx.fillStyle = on ? (k >= 4 ? '#ff8a5b' : k >= 3 ? '#ffd45c' : '#8ff0a0') : 'rgba(255,255,255,0.1)';
-                slanted(sx + 42 + k * step, sy - 6, bar, 6, 3)(ctx);
+                roundRect(ctx, sx + 42 + k * step, sy - 6, bar, 6, 3);
                 ctx.fill();
             }
         });
@@ -386,21 +372,23 @@ export class RosterScreen {
                   ],
                   ['GUARDIAN', fy.guardian.name, GUARDIAN_TEXT[fy.guardian.pattern] ?? ''],
               ];
-        const line = compact ? 38 : 34;
         skills.forEach(([kind, name, text], i) => {
             const sy = y + 10 + i * line;
             // A small chip in her colour, then the skill's kind, name and what it does.
-            ctx.fillStyle = locked ? '#4a3f7a' : fy.color;
-            slanted(b.x, sy - 8, 6, 10, 2)(ctx);
-            ctx.fill();
+            if (locked) {
+                ctx.fillStyle = '#4a3f7a';
+                ctx.beginPath();
+                ctx.arc(b.x + 3, sy - 3, 3, 0, Math.PI * 2);
+                ctx.fill();
+            } else drawGem(ctx, b.x + 3, sy - 3, 3.5, t + i);
             ctx.font = `6.5px ${ARCADE}`;
-            ctx.fillStyle = '#cbbcf5';
+            ctx.fillStyle = '#f0c9ff';
             ctx.fillText(kind, b.x + 12, sy);
             ctx.font = `${compact ? 9 : 10}px ${ARCADE}`;
             ctx.fillStyle = '#fff3c9';
             ctx.fillText(name, b.x + 12, sy + 11, b.w - 12);
             if (text) {
-                ctx.font = `italic 600 ${compact ? 8 : 8.5}px ${FONT}`;
+                ctx.font = `600 ${compact ? 8 : 8.5}px ${SANS}`;
                 ctx.fillStyle = 'rgba(203,188,245,0.85)';
                 ctx.fillText(text, b.x + 12, sy + 21, b.w - 12);
             }
@@ -437,8 +425,8 @@ export class RosterScreen {
             ctx.fillText('?', m.x, m.y + lift + 4);
         } else drawFairy(ctx, fy, m.x, m.y + lift + 2, 0.75, t);
         ctx.restore();
-        ctx.strokeStyle = on ? '#fff3c9' : '#a8894a';
-        ctx.lineWidth = on ? 2.2 : 1.2;
+        ctx.strokeStyle = on ? '#fff3c9' : 'rgba(233,185,73,0.45)';
+        ctx.lineWidth = on ? 2.2 : 1.4;
         if (on) {
             ctx.save();
             ctx.shadowColor = fy.color;

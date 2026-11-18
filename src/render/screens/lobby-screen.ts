@@ -15,6 +15,7 @@ import { drawTrophy } from '@/render/icons';
 import { ARCADE, SANS } from '@/render/theme';
 import { drawBadge, drawEmblem, hexA, roundRect } from './emblems';
 import { tallMenuFit } from './menu-fit';
+import { drawDuskSky } from './menu-style';
 import { drawMedal } from './profile-screen';
 import { enter } from '@/render/transition';
 
@@ -161,7 +162,7 @@ export class LobbyScreen {
         const theme = mapById(v.map);
         // Coming in from another screen, the bar and buttons pop in first, then the sky and the island rise out of the
         // dark, then the panels slide in (see render/transition.ts).
-        enter(ctx, 'bg', () => this.sky(t, W, H, bleed, lay.island));
+        enter(ctx, 'bg', () => drawDuskSky(ctx, t, W, H, bleed, lay.island.x, lay.island.y + lay.island.r * 0.2));
         if (theme) enter(ctx, 'panels', () => this.island(v.map, theme, lay.island, t, stage), { dx: 0, dy: 14 });
         enter(ctx, 'panels', () => this.stageName(v, lay.island.x, lay.play.y - 10), { dx: 0, dy: 8 });
         enter(ctx, 'bar', () => this.topBar(v, t, W, bleed, tall));
@@ -186,79 +187,6 @@ export class LobbyScreen {
             });
         }
         ctx.restore();
-    }
-
-    /**
-     * The sky: dusk deepening from violet above to a warm glow at the horizon behind the island, a sea of clouds
-     * below it lit pink and gold, drifting slowly, and faint stars at the top.
-     */
-    private sky(t: number, W: number, H: number, b: number, isle: { x: number; y: number; r: number }): void {
-        const ctx = this.ctx;
-        const x0 = -b,
-            w = W + 2 * b;
-        const horizon = isle.y + isle.r * 0.2;
-        const g = ctx.createLinearGradient(0, 0, 0, H);
-        const k = horizon / H;
-        g.addColorStop(0, '#1c0f42');
-        g.addColorStop(k * 0.45, '#4a2470');
-        g.addColorStop(k * 0.85, '#b04a86');
-        g.addColorStop(k, '#ffaf7a');
-        g.addColorStop(Math.min(0.99, k + 0.08), '#d06a8a');
-        g.addColorStop(Math.min(1, k + 0.3), '#5a2c6a');
-        g.addColorStop(1, '#22123c');
-        ctx.fillStyle = g;
-        ctx.fillRect(x0, 0, w, H);
-        // Stars, twinkling in the dark part.
-        for (let i = 0; i < 40; i++) {
-            const sx = x0 + ((i * 131.7) % w),
-                sy = (i * 47.3) % (horizon * 0.5);
-            const a = 0.25 + 0.5 * Math.max(0, Math.sin(t * 1.5 + i * 2.1));
-            ctx.fillStyle = `rgba(255,240,220,${a * (1 - sy / (horizon * 0.5))})`;
-            ctx.fillRect(sx, sy, 1, 1);
-        }
-        // The sun's glow behind the island.
-        const sun = ctx.createRadialGradient(isle.x, horizon, 2, isle.x, horizon, w * 0.45);
-        sun.addColorStop(0, 'rgba(255,230,180,0.75)');
-        sun.addColorStop(0.25, 'rgba(255,170,140,0.35)');
-        sun.addColorStop(1, 'rgba(255,140,160,0)');
-        ctx.fillStyle = sun;
-        ctx.fillRect(x0, 0, w, H);
-        // Far mountains on the horizon, then the sea of clouds in bands, nearer bands bigger and darker.
-        ctx.fillStyle = 'rgba(70,30,90,0.45)';
-        ctx.beginPath();
-        ctx.moveTo(x0, horizon + 4);
-        for (let x = 0; x <= w; x += 14) {
-            const hgt = 6 + 8 * Math.abs(Math.sin(x * 0.031)) + 5 * Math.sin(x * 0.11);
-            ctx.lineTo(x0 + x, horizon + 4 - hgt);
-        }
-        ctx.lineTo(x0 + w, horizon + 10);
-        ctx.lineTo(x0, horizon + 10);
-        ctx.closePath();
-        ctx.fill();
-        const bands = [
-            { y: horizon + 6, r: 16, col: [255, 196, 190], a: 0.5, v: 3 },
-            { y: horizon + 22, r: 22, col: [236, 140, 170], a: 0.45, v: 5 },
-            { y: horizon + 44, r: 30, col: [170, 90, 150], a: 0.5, v: 8 },
-            { y: horizon + 74, r: 40, col: [100, 50, 120], a: 0.55, v: 12 },
-            { y: horizon + 112, r: 52, col: [60, 30, 90], a: 0.6, v: 16 },
-        ];
-        bands.forEach((band, j) => {
-            if (band.y - band.r > H) return;
-            const [r, gg, bb] = band.col;
-            ctx.fillStyle = `rgba(${r},${gg},${bb},${band.a})`;
-            const step = band.r * 1.3;
-            const off = (t * band.v + j * 37) % step;
-            ctx.beginPath();
-            for (let x = x0 - step + off; x < x0 + w + step; x += step) {
-                const wob = Math.sin(x * 0.07 + j) * band.r * 0.18;
-                ctx.moveTo(x + band.r, band.y + wob);
-                ctx.ellipse(x, band.y + wob, band.r, band.r * 0.45, 0, 0, Math.PI * 2);
-            }
-            ctx.fill();
-            // A lit top edge on each band.
-            ctx.fillStyle = `rgba(255,220,200,${0.12 + j * 0.02})`;
-            ctx.fillRect(x0, band.y - band.r * 0.32, w, 1);
-        });
     }
 
     /**

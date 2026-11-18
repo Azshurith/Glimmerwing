@@ -1,12 +1,14 @@
+import { Backdrop } from '@/render/backdrop';
 import * as C from '@/core/config';
 import { fairyAvailable } from '@/data/availability';
 import { FAIRIES } from '@/data/characters';
 import type { Layout, SelectSide, SelectView } from '@/types';
-import { Backdrop } from '@/render/backdrop';
+import { drawCallButton, drawGem, drawPlate, GOLD_TEXT, goldFrame } from './menu-style';
+import { hexA, roundRect } from './emblems';
 import { drawFairy } from '@/render/entities/fairy';
-import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
+import { arcadeText, shade, sparkle } from '@/render/draw';
 import { drawTopBar } from './top-bar';
-import { ARCADE, FONT } from '@/render/theme';
+import { ARCADE, SANS } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { enter } from '@/render/transition';
 
@@ -170,7 +172,11 @@ export class SelectScreen {
         // The CPU's panel spins through the roster until the match starts.
         const fy = s.cpu ? FAIRIES[Math.floor(t * 9) % FAIRIES.length] : s.fairy;
         const hidden = s.cpu === true || s.locked;
-        const art = slanted(x, ay, pw, ah, mirror ? -SLANT : SLANT);
+        /** Trace the art window: a rounded frame. */
+        const art = (c: CanvasRenderingContext2D) => roundRect(c, x, ay, pw, ah, 12);
+        // A plum panel behind her blurb and stats, below the art.
+        const ny = ay + ah - 12;
+        drawPlate(ctx, x - 4, ny + 10, pw + 8, 36 * cz + 8 + 4 * 11 * cz + 13 * cz + 6, { r: 10, alpha: 0.82 });
 
         // Art window: the fairy's colour glow, sparkles, then her portrait (or her in-game look, large).
         ctx.save();
@@ -209,65 +215,52 @@ export class SelectScreen {
         ctx.fillRect(x - SLANT, ay + ah - 50, pw + SLANT * 2, 50);
         ctx.restore();
 
-        // Frame: gold edge, inner dark line, a glow in the player's colour once chosen.
+        // Frame: gold like the lobby's, glowing in the player's colour once chosen, with a line in her colour inside.
         ctx.save();
         if (s.done) {
             ctx.shadowColor = s.color;
             ctx.shadowBlur = 10 + 4 * Math.sin(t * 8);
         }
-        ctx.strokeStyle = s.done ? s.color : '#d9b45a';
-        ctx.lineWidth = 2;
-        art(ctx);
-        ctx.stroke();
+        goldFrame(ctx, art, 2.2);
         ctx.restore();
-        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.strokeStyle = hexA(s.done ? s.color : hidden ? '#8a7aa8' : fy.color, 0.7);
         ctx.lineWidth = 1;
-        slanted(x + 2, ay + 2, pw - 4, ah - 4, mirror ? -SLANT : SLANT)(ctx);
+        roundRect(ctx, x + 3, ay + 3, pw - 6, ah - 6, 9);
         ctx.stroke();
 
-        // Player badge in the top corner.
-        const bx = mirror ? x + pw - 6 : x + 6;
-        ctx.font = `${13 * cz}px ${ARCADE}`;
-        const bw = ctx.measureText(s.tag).width + 14;
+        // Player badge in the top corner: a capsule in the player's colour.
+        ctx.font = `${11 * cz}px ${ARCADE}`;
+        const bw = ctx.measureText(s.tag).width + 18,
+            bh = 15 * cz;
+        const bx = mirror ? x + pw - 8 - bw : x + 8;
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 4;
         ctx.fillStyle = s.color;
-        slanted(mirror ? bx - bw : bx, ay - 6, bw, 16, mirror ? -5 : 5)(ctx);
+        roundRect(ctx, bx, ay - 6, bw, bh, bh / 2);
         ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = '#fff6d8';
+        ctx.lineWidth = 1;
+        roundRect(ctx, bx + 0.5, ay - 5.5, bw - 1, bh - 1, bh / 2);
+        ctx.stroke();
         ctx.fillStyle = '#140a26';
         ctx.textAlign = 'center';
-        ctx.fillText(s.tag, (mirror ? bx - bw : bx) + bw / 2, ay + 6);
+        ctx.fillText(s.tag, bx + bw / 2, ay - 6 + bh / 2 + 4 * cz);
 
-        // Nameplate.
-        const ny = ay + ah - 12;
-        const plate = slanted(x - 2, ny, pw + 4, 24, mirror ? -8 : 8);
-        const pg = ctx.createLinearGradient(x, 0, x + pw, 0);
-        const c0 = hidden ? '#4a3f7a' : fy.color,
-            c1 = hidden ? '#1d1840' : shade(fy.color, 0.3);
-        pg.addColorStop(0, mirror ? c1 : c0);
-        pg.addColorStop(1, mirror ? c0 : c1);
-        ctx.fillStyle = pg;
-        plate(ctx);
-        ctx.fill();
-        ctx.strokeStyle = '#fff3c9';
-        ctx.lineWidth = 1.2;
-        plate(ctx);
-        ctx.stroke();
+        // Nameplate: a plum capsule across the bottom of the frame, her name in gold between two gems.
+        drawCallButton(ctx, { x: x + 8, y: ny, w: pw - 16, h: 24 }, '', false, fy.color, t);
         const off = !fairyAvailable(fy.id);
         const name = s.cpu ? '? ? ?' : s.locked ? (off ? 'UNAVAILABLE' : 'LOCKED') : fy.name.toUpperCase();
-        arcadeText(
-            ctx,
-            name,
-            mirror ? x + pw - 12 : x + 12,
-            ny + 18,
-            (name.length > 9 ? 13 : 16) * cz,
-            ['#ffffff', '#fff0c8', '#ffd27a'],
-            mirror ? 'right' : 'left',
-        );
+        arcadeText(ctx, name, x + pw / 2, ny + 18, (name.length > 9 ? 13 : 16) * cz, GOLD_TEXT, 'center', pw - 44);
+        drawGem(ctx, x + 18, ny + 12, 3, t);
+        drawGem(ctx, x + pw - 18, ny + 12, 3, t + 1);
 
         // Blurb and stats.
         let y = ny + 36 * cz;
         ctx.textAlign = mirror ? 'right' : 'left';
         const tx = mirror ? x + pw - 4 : x + 4;
-        ctx.font = `italic 600 ${9 * cz}px ${FONT}`;
+        ctx.font = `600 ${9 * cz}px ${SANS}`;
         ctx.fillStyle = s.locked ? '#ffe27a' : 'rgba(246,240,255,0.8)';
         const hint = off ? 'Not available right now' : (s.fairy.unlock?.hint ?? '');
         ctx.fillText(s.cpu ? 'Chooses at random' : s.locked ? hint : fy.blurb, tx, y, pw - 8);
@@ -281,19 +274,19 @@ export class SelectScreen {
         for (const [label, n] of stats) {
             y += 11 * cz;
             ctx.font = `${8 * cz}px ${ARCADE}`;
-            ctx.fillStyle = '#cbbcf5';
+            ctx.fillStyle = '#f0c9ff';
             ctx.textAlign = 'left';
             ctx.fillText(label, x + 4, y);
             for (let k = 0; k < 5; k++) {
                 const px = x + (g.compact ? 46 : 62) + k * (g.compact ? 14 : 18);
                 const on = !hidden && k < n;
                 ctx.fillStyle = on ? (k >= 4 ? '#ff8a5b' : k >= 3 ? '#ffd45c' : '#8ff0a0') : 'rgba(255,255,255,0.1)';
-                slanted(px, y - 7 * cz, g.compact ? 11 : 15, 7 * cz, 3)(ctx);
+                roundRect(ctx, px, y - 7 * cz, g.compact ? 11 : 15, 7 * cz, 3.5 * cz);
                 ctx.fill();
             }
         }
         y += 13 * cz;
-        ctx.font = `italic 600 ${9 * cz}px ${FONT}`;
+        ctx.font = `600 ${9 * cz}px ${SANS}`;
         ctx.fillStyle = 'rgba(246,240,255,0.65)';
         ctx.textAlign = 'left';
         ctx.fillText(hidden ? 'Bomb  ???' : `Bomb  ${fy.bomb.name}  ·  Shot  ${fy.chargeName}`, x + 4, y, pw - 8);
@@ -305,11 +298,12 @@ export class SelectScreen {
             ctx.rotate(mirror ? 0.18 : -0.18);
             const k = 1 + 0.04 * Math.sin(t * 9);
             ctx.scale(k * cz, k * cz);
-            ctx.fillStyle = 'rgba(10,6,28,0.55)';
-            ctx.fillRect(-62, -17, 124, 30);
+            ctx.fillStyle = 'rgba(30,14,40,0.7)';
+            roundRect(ctx, -62, -17, 124, 30, 15);
+            ctx.fill();
             ctx.strokeStyle = s.color;
             ctx.lineWidth = 2;
-            ctx.strokeRect(-62, -17, 124, 30);
+            ctx.stroke();
             arcadeText(ctx, 'READY!', 0, 7, 20, ['#ffffff', '#fff3a0', s.color], 'center');
             ctx.restore();
         }
@@ -410,7 +404,7 @@ export class SelectScreen {
             const w = ctx.measureText(cu.tag).width + 8;
             const ty = k === 0 ? m.y - r - 12 + Math.sin(t * 6) * 1.5 : m.y + r - 2 - Math.sin(t * 6) * 1.5;
             ctx.fillStyle = cu.color;
-            slanted(m.x - w / 2, ty, w, 11, 3)(ctx);
+            roundRect(ctx, m.x - w / 2, ty, w, 11, 5.5);
             ctx.fill();
             ctx.fillStyle = '#140a26';
             ctx.textAlign = 'center';

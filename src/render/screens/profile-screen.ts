@@ -1,5 +1,6 @@
 // The Profile screen: who's playing (a guest, until sign-in exists), the Endless top three, and two tabs: their record
 // and unlocks, and their match history (each game opens in full on the match details screen, match-screen.ts).
+import { Backdrop } from '@/render/backdrop';
 import * as C from '@/core/config';
 import { FAIRIES } from '@/data/characters';
 import { mapById } from '@/data/maps';
@@ -7,11 +8,12 @@ import { STAGES } from '@/data/stages';
 import { clock } from '@/render/hud';
 import { drawTrophy } from '@/render/icons';
 import type { Fairy, HistoryRow, Layout, ProfileView } from '@/types';
-import { Backdrop } from '@/render/backdrop';
+import { drawCapsule, drawPlate } from './menu-style';
+import { roundRect } from './emblems';
 import { drawFairy } from '@/render/entities/fairy';
-import { arcadeText, shade, slanted } from '@/render/draw';
+import { arcadeText, shade } from '@/render/draw';
 import { drawTopBar } from './top-bar';
-import { ARCADE, FONT } from '@/render/theme';
+import { ARCADE, SANS } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { enter } from '@/render/transition';
 
@@ -125,7 +127,7 @@ export class ProfileScreen {
                 // A long guest name gets smaller so it stays inside the card.
                 const nameSize = Math.min(18, Math.floor(172 / Math.max(1, name.length)));
                 arcadeText(ctx, name, cx, cy + (tall ? 64 : 70), nameSize, ['#ffffff', '#fff0c8', '#ffd27a'], 'center');
-                ctx.font = `italic 600 9px ${FONT}`;
+                ctx.font = `600 9px ${SANS}`;
                 ctx.fillStyle = 'rgba(203,188,245,0.85)';
                 ctx.fillText(
                     v.synced ? 'Progress is saved on the game server' : 'Progress is saved in this browser',
@@ -140,7 +142,7 @@ export class ProfileScreen {
         );
 
         const lay = designLayout(layout, 0, bleed);
-        enter(ctx, 'buttons', () => this.tabs(v, lay.tabs, '#8fd8ff'), { i: 1 });
+        enter(ctx, 'buttons', () => this.tabs(v, lay.tabs, '#ffd45c'), { i: 1 });
         enter(ctx, 'panels', () => {
             if (v.tab === 'history') this.history(v, lay.rows, t, tall);
             else this.record(v, t, tall, W, regionX, regionW, lay.top);
@@ -198,14 +200,10 @@ export class ProfileScreen {
         tiles.forEach(([label, value], i) => {
             const x = x0 + (i % cols) * (tw + 8),
                 y = y0 + Math.floor(i / cols) * (th + gap);
-            ctx.fillStyle = 'rgba(20,12,48,0.85)';
-            ctx.fillRect(x, y, tw, th);
-            ctx.strokeStyle = 'rgba(201,162,74,0.6)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(x + 0.5, y + 0.5, tw - 1, th - 1);
+            drawPlate(ctx, x, y, tw, th, { r: 6 });
             ctx.textAlign = 'left';
             ctx.font = `6.5px ${ARCADE}`;
-            ctx.fillStyle = '#cbbcf5';
+            ctx.fillStyle = '#f0c9ff';
             ctx.fillText(label, x + 8, y + 12);
             arcadeText(ctx, value, x + 8, y + th - 7, th < 38 ? 14 : 16, ['#ffffff', '#ffe08a', '#ff9a2e'], 'left');
             if (label === 'ENDLESS BEST' && v.rank) {
@@ -263,7 +261,7 @@ export class ProfileScreen {
         });
         const next = FAIRIES.find((_, i) => v.locked[i]);
         ctx.textAlign = 'left';
-        ctx.font = `italic 600 9px ${FONT}`;
+        ctx.font = `600 9px ${SANS}`;
         ctx.fillStyle = next ? '#ffe27a' : 'rgba(203,188,245,0.85)';
         ctx.fillText(
             next ? `Next: ${next.unlock?.hint ?? ''} to unlock ${next.name}` : 'Every fairy is unlocked!',
@@ -276,19 +274,7 @@ export class ProfileScreen {
     /** The two tabs, the one showing lit. */
     private tabs(v: ProfileView, boxes: Box[], color: string): void {
         const ctx = this.ctx;
-        boxes.forEach((b, i) => {
-            const on = (i === 1) === (v.tab === 'history');
-            ctx.fillStyle = on ? color : 'rgba(20,12,48,0.85)';
-            slanted(b.x, b.y, b.w, b.h, 4)(ctx);
-            ctx.fill();
-            ctx.strokeStyle = on ? '#ffffff' : 'rgba(201,162,74,0.6)';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            ctx.textAlign = 'center';
-            ctx.font = `7px ${ARCADE}`;
-            ctx.fillStyle = on ? '#140a26' : '#cbbcf5';
-            ctx.fillText(TABS[i], b.x + b.w / 2, b.y + b.h / 2 + 3.5, b.w - 10);
-        });
+        boxes.forEach((b, i) => drawCapsule(ctx, b, TABS[i], (i === 1) === (v.tab === 'history'), color));
     }
 
     /** The Match History tab: one row per game, newest first, the chosen one lit. */
@@ -297,7 +283,7 @@ export class ProfileScreen {
         if (v.message) {
             const b = boxes[0];
             ctx.textAlign = 'center';
-            ctx.font = `italic 600 10px ${FONT}`;
+            ctx.font = `600 10px ${SANS}`;
             ctx.fillStyle = 'rgba(203,188,245,0.9)';
             v.message.split('\n').forEach((l, i) => ctx.fillText(l, b.x + b.w / 2, b.y + 30 + i * 14, b.w - 10));
         }
@@ -315,21 +301,25 @@ export class ProfileScreen {
     /** One game in the history: its mode's tag, who flew, the result, the map and length, and when. */
     private row(row: HistoryRow, b: Box, on: boolean, t: number, tall: boolean): void {
         const ctx = this.ctx;
-        ctx.save();
+        drawPlate(ctx, b.x, b.y, b.w, b.h, {
+            r: 7,
+            edge: on ? '#ffe9a0' : undefined,
+            glow: on ? row.color : undefined,
+            alpha: on ? 0.97 : 0.88,
+        });
         if (on) {
-            ctx.shadowColor = row.color;
-            ctx.shadowBlur = 10 + 3 * Math.sin(t * 6);
+            // A soft wash of the mode's colour over the chosen row, pulsing.
+            ctx.save();
+            ctx.globalAlpha = 0.1 + 0.05 * Math.sin(t * 5);
+            ctx.fillStyle = row.color;
+            roundRect(ctx, b.x + 1, b.y + 1, b.w - 2, b.h - 2, 6);
+            ctx.fill();
+            ctx.restore();
         }
-        ctx.fillStyle = on ? 'rgba(52,32,104,0.95)' : 'rgba(20,12,48,0.85)';
-        ctx.fillRect(b.x, b.y, b.w, b.h);
-        ctx.restore();
-        ctx.strokeStyle = on ? row.color : 'rgba(201,162,74,0.5)';
-        ctx.lineWidth = on ? 1.5 : 1;
-        ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
         const tagW = tall ? 62 : 54,
             tagH = tall ? 13 : 11;
         ctx.fillStyle = row.color;
-        slanted(b.x + 5, b.y + 4, tagW, tagH, 3)(ctx);
+        roundRect(ctx, b.x + 5, b.y + 4, tagW, tagH, tagH / 2);
         ctx.fill();
         ctx.font = `${tall ? 6 : 5.5}px ${ARCADE}`;
         ctx.fillStyle = '#140a26';
@@ -343,12 +333,12 @@ export class ProfileScreen {
         ctx.fillText(row.result, right, b.y + (tall ? 15 : 13));
         const resultW = ctx.measureText(row.result).width;
         ctx.textAlign = 'left';
-        ctx.font = `600 ${tall ? 10 : 9}px ${FONT}`;
+        ctx.font = `600 ${tall ? 10 : 9}px ${SANS}`;
         ctx.fillStyle = on ? '#fff7c2' : '#f2ecff';
         const tx = b.x + tagW + 11;
         ctx.fillText(row.title, tx, b.y + (tall ? 15 : 13), right - resultW - 8 - tx);
         // The second line: the map, length and trophies, and when.
-        ctx.font = `italic 600 ${tall ? 8.5 : 8}px ${FONT}`;
+        ctx.font = `600 ${tall ? 8.5 : 8}px ${SANS}`;
         ctx.fillStyle = 'rgba(203,188,245,0.85)';
         const ly = b.y + (tall ? 32 : 23);
         ctx.fillText(row.detail, tall ? b.x + 8 : tx, ly, b.w - 90);
@@ -373,7 +363,7 @@ export class ProfileScreen {
         ctx.stroke();
         const top = v.leaders.slice(0, 3);
         if (!top.length) {
-            ctx.font = `italic 600 9px ${FONT}`;
+            ctx.font = `600 9px ${SANS}`;
             ctx.fillStyle = 'rgba(203,188,245,0.7)';
             ctx.fillText(v.synced ? 'No runs yet: set the first!' : 'Shown when the server is reached', x, y + 18);
             return;
@@ -385,7 +375,7 @@ export class ProfileScreen {
             ctx.fillStyle = mine ? '#ffe27a' : i === 0 ? '#ffd27a' : '#e8e0ff';
             ctx.textAlign = 'left';
             ctx.fillText(`${i + 1}`, x, ly);
-            ctx.font = `600 9px ${FONT}`;
+            ctx.font = `600 9px ${SANS}`;
             ctx.fillText(e.name, x + 12, ly, w - 60);
             ctx.textAlign = 'right';
             ctx.font = `7px ${ARCADE}`;
@@ -395,15 +385,7 @@ export class ProfileScreen {
 
     /** The player card's frame in landscape: a dark panel with a gold edge, like the record's tiles. */
     private panel(x: number, y: number, w: number, h: number): void {
-        const ctx = this.ctx;
-        const g = ctx.createLinearGradient(0, y, 0, y + h);
-        g.addColorStop(0, 'rgba(40,26,88,0.85)');
-        g.addColorStop(1, 'rgba(16,10,40,0.85)');
-        ctx.fillStyle = g;
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = 'rgba(201,162,74,0.6)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+        drawPlate(this.ctx, x, y, w, h, { r: 10, gold: true });
     }
 
     /** A round avatar: Stella's portrait face if it's loaded, else her in-game look. */

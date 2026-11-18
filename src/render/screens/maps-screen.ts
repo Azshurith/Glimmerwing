@@ -1,14 +1,16 @@
 // The Maps screen (main menu): each stage's map with its trophy requirement, how its formations fly, its five
 // monsters by role, and a live demo meadow on the map running its real formations (see game/map-preview.ts).
+import { Backdrop } from '@/render/backdrop';
 import * as C from '@/core/config';
 import { MAPS } from '@/data/maps';
 import { monstersFor } from '@/data/monsters';
 import { STAGES, stageFor } from '@/data/stages';
 import type { Layout, MapTheme, MapsView, MonsterKind, MonsterSheet } from '@/types';
-import { Backdrop } from '@/render/backdrop';
+import { drawPlate, GOLD_TEXT } from './menu-style';
+import { hexA, roundRect } from './emblems';
 import { arcadeText } from '@/render/draw';
 import { drawTrophy } from '@/render/icons';
-import { ARCADE, FONT } from '@/render/theme';
+import { ARCADE, SANS } from '@/render/theme';
 import { drawPadlock } from './map-screen';
 import { tallMenuFit } from './menu-fit';
 import type { DemoDraw } from './roster-screen';
@@ -139,9 +141,12 @@ export class MapsScreen {
     ): void {
         const ctx = this.ctx;
         const stage = stageFor(map.id);
+        // A plum panel behind the details and the monsters.
+        const sheetH = monstersFor(map.id) ? (tall ? 0 : 10) + tile + 16 : 0;
+        drawPlate(ctx, b.x - 10, b.y - 26, b.w + 20, 58 + 34 + sheetH, { r: 10, alpha: 0.82 });
         const cx = tall ? b.x + b.w / 2 : b.x;
         const align = tall ? 'center' : 'left';
-        arcadeText(ctx, map.name.toUpperCase(), cx, b.y, tall ? 20 : 24, ['#ffffff', '#fff0c8', '#ffd27a'], align);
+        arcadeText(ctx, map.name.toUpperCase(), cx, b.y, tall ? 20 : 24, GOLD_TEXT, align);
         // Stage number, and open or what opens it.
         ctx.textAlign = align;
         ctx.font = `7px ${ARCADE}`;
@@ -154,7 +159,7 @@ export class MapsScreen {
             const sw = ctx.measureText(status).width;
             drawTrophy(ctx, tall ? cx + sw / 2 + 8 : cx + sw + 8, b.y + 13, 8);
         }
-        ctx.font = `italic 600 ${tall ? 9 : 10}px ${FONT}`;
+        ctx.font = `600 ${tall ? 9 : 10}px ${SANS}`;
         ctx.fillStyle = '#e4dcff';
         ctx.fillText(stage.blurb, cx, b.y + 32, b.w);
         // How hard: a pip per stage along the road.
@@ -169,7 +174,8 @@ export class MapsScreen {
         for (let i = 0; i < pips; i++) {
             ctx.fillStyle =
                 i <= index ? (i >= 5 ? '#ff7a6a' : i >= 3 ? '#ffd45c' : '#8ff0a0') : 'rgba(255,255,255,0.14)';
-            ctx.fillRect(px0 + 46 + i * pw, py - 3, pw - 3, 6);
+            roundRect(ctx, px0 + 46 + i * pw, py - 3, pw - 3, 6, 3);
+            ctx.fill();
         }
         // The monsters, each with its part in the formations.
         const sheet = monstersFor(map.id);
@@ -200,11 +206,7 @@ export class MapsScreen {
     ): void {
         const ctx = this.ctx;
         const h = w + 16;
-        ctx.fillStyle = 'rgba(20,12,48,0.85)';
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = 'rgba(201,162,74,0.55)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+        drawPlate(ctx, x, y, w, h, { r: 7 });
         if (s.img.complete && s.img.naturalWidth) {
             const c = (t * 0.5) % 4;
             const frame = c < 0.4 ? 6 : c > 3.6 ? 7 : 5;
@@ -226,7 +228,7 @@ export class MapsScreen {
         ctx.font = `5.5px ${ARCADE}`;
         ctx.fillStyle = '#ffe08a';
         ctx.fillText(role, x + w / 2, y + 9, w - 4);
-        ctx.font = `600 ${w > 50 ? 7.5 : 6.5}px ${FONT}`;
+        ctx.font = `600 ${w > 50 ? 7.5 : 6.5}px ${SANS}`;
         ctx.fillStyle = '#ffffff';
         ctx.fillText(s.names[kind] ?? kind, x + w / 2, y + h - 5, w - 4);
     }
@@ -236,9 +238,9 @@ export class MapsScreen {
         const ctx = this.ctx;
         const s = d.w / C.FIELD_W_BASE,
             h = C.FIELD_H_BASE * s;
+        drawPlate(ctx, d.x - 5, d.y - 5, d.w + 10, h + 10, { r: 10 });
         ctx.save();
-        ctx.beginPath();
-        ctx.rect(d.x, d.y, d.w, h);
+        roundRect(ctx, d.x, d.y, d.w, h, 6);
         ctx.clip();
         if (draw) draw(d.x, d.y, s);
         else {
@@ -257,9 +259,10 @@ export class MapsScreen {
             ctx.fillText(caption.toUpperCase(), d.x + d.w / 2, d.y + h - 8, d.w - 10);
         }
         ctx.restore();
-        ctx.strokeStyle = map.cone[0];
-        ctx.lineWidth = 2;
-        ctx.strokeRect(d.x, d.y, d.w, h);
+        ctx.strokeStyle = hexA(map.cone[0], 0.8);
+        ctx.lineWidth = 1.2;
+        roundRect(ctx, d.x, d.y, d.w, h, 6);
+        ctx.stroke();
     }
 
     /** A map's medallion: its colours and its slime, padlocked while the stage is locked, gold-ringed when chosen. */
@@ -303,7 +306,7 @@ export class MapsScreen {
         }
         ctx.restore();
         if (locked) drawPadlock(ctx, m.x, m.y - r * 0.3, r * 0.9);
-        ctx.strokeStyle = on ? '#ffd86b' : locked ? '#5a4f7a' : '#a8894a';
+        ctx.strokeStyle = on ? '#fff3c9' : locked ? '#5a4f7a' : 'rgba(233,185,73,0.45)';
         ctx.lineWidth = on ? 2 + Math.sin(t * 6) * 0.4 : 1.2;
         ctx.beginPath();
         ctx.arc(m.x, m.y, r, 0, Math.PI * 2);

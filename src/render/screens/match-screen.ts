@@ -2,14 +2,15 @@
 // both fairies, the score and its numbers, with buttons to watch its replay and copy its share link; Scoreboard has
 // each side's numbers side by side and the rounds; Graphs has the match over time (who was ahead, hearts, pops and
 // attacks sent), with its big moments marked. The Scoreboard and Graphs come from playing the replay through.
+import { Backdrop } from '@/render/backdrop';
 import * as C from '@/core/config';
 import { fairyById } from '@/data/characters';
 import type { Fairy, HighlightKind, Layout, MatchInfoView, MatchStats, MatchTab, SideStats } from '@/types';
-import { Backdrop } from '@/render/backdrop';
+import { drawCallButton, drawCapsule, drawPlate } from './menu-style';
 import { arcadeText, slanted } from '@/render/draw';
 import { clock } from '@/render/hud';
 import { drawTopBar } from './top-bar';
-import { ARCADE, FONT } from '@/render/theme';
+import { ARCADE, SANS } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { drawMedal } from './profile-screen';
 import { enter } from '@/render/transition';
@@ -187,24 +188,14 @@ export class MatchScreen {
 
     /** A tab: lit in `colour` when it's the one showing. */
     private tab(b: Box, text: string, on: boolean, colour: string, size = 7): void {
-        const ctx = this.ctx;
-        ctx.fillStyle = on ? colour : 'rgba(20,12,48,0.85)';
-        slanted(b.x, b.y, b.w, b.h, 4)(ctx);
-        ctx.fill();
-        ctx.strokeStyle = on ? '#ffffff' : 'rgba(201,162,74,0.6)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.textAlign = 'center';
-        ctx.font = `${size}px ${ARCADE}`;
-        ctx.fillStyle = on ? '#140a26' : '#cbbcf5';
-        ctx.fillText(text, b.x + b.w / 2, b.y + b.h / 2 + size / 2, b.w - 10);
+        drawCapsule(this.ctx, b, text, on, colour, size);
     }
 
     /** In place of the Scoreboard or Graphs: why they aren't there yet (loading, or no replay to work them out). */
     private waiting(v: MatchInfoView, W: number, tall: boolean): void {
         const ctx = this.ctx;
         ctx.textAlign = 'center';
-        ctx.font = `italic 600 10px ${FONT}`;
+        ctx.font = `600 10px ${SANS}`;
         ctx.fillStyle = 'rgba(203,188,245,0.9)';
         v.statsNote.split('\n').forEach((l, i) => ctx.fillText(l, W / 2, (tall ? 200 : 140) + i * 14, W - 30));
     }
@@ -231,7 +222,7 @@ export class MatchScreen {
         ctx.fillStyle = '#140a26';
         ctx.fillText(v.tag, mid, tagY + 9.5, tagW - 8);
         arcadeText(ctx, v.banner, mid, tagY + (tall ? 40 : 34), 22, v.won ? gold : blue, 'center');
-        ctx.font = `italic 600 9px ${FONT}`;
+        ctx.font = `600 9px ${SANS}`;
         ctx.fillStyle = 'rgba(203,188,245,0.85)';
         ctx.fillText(v.when, mid, tagY + (tall ? 54 : 47));
 
@@ -278,7 +269,7 @@ export class MatchScreen {
         const noteY = lay.copy.y + lay.copy.h + (tall ? 18 : 14);
         if (v.note) arcadeText(ctx, v.note, mid, noteY, 8, gold, 'center');
         else if (!v.hasReplay) {
-            ctx.font = `italic 600 9px ${FONT}`;
+            ctx.font = `600 9px ${SANS}`;
             ctx.fillStyle = 'rgba(203,188,245,0.8)';
             ctx.fillText('No replay was saved for this game', mid, noteY);
         }
@@ -392,7 +383,7 @@ export class MatchScreen {
         });
         if (!s.exact) {
             ctx.textAlign = 'center';
-            ctx.font = `italic 600 8.5px ${FONT}`;
+            ctx.font = `600 8.5px ${SANS}`;
             ctx.fillStyle = 'rgba(255,226,122,0.85)';
             const y = tall ? roundsY + 6 + n * (rh + 4) + 14 : roundsY + 58;
             ctx.fillText(
@@ -409,7 +400,7 @@ export class MatchScreen {
         const ctx = this.ctx;
         drawMedal(ctx, fairyById(s.fairies[side]), x, y, 14, t);
         ctx.textAlign = 'left';
-        ctx.font = `600 10px ${FONT}`;
+        ctx.font = `600 10px ${SANS}`;
         ctx.fillStyle = '#fff7c2';
         ctx.fillText(v.names[side], x + 20, y - 1, 86);
         ctx.font = `6px ${ARCADE}`;
@@ -513,7 +504,7 @@ export class MatchScreen {
         this.key(key, W / 2, p.y + p.h + 22, graph === 'ADVANTAGE');
         if (!s.exact) {
             ctx.textAlign = 'right';
-            ctx.font = `italic 600 8px ${FONT}`;
+            ctx.font = `600 8px ${SANS}`;
             ctx.fillStyle = 'rgba(255,226,122,0.85)';
             ctx.fillText('Recorded on another version: may be a little off', p.x + p.w, p.y - 4);
         }
@@ -614,12 +605,7 @@ export class MatchScreen {
 
     /** A dark panel with a gold edge (or `edge`). */
     private panel(x: number, y: number, w: number, h: number, edge?: string): void {
-        const ctx = this.ctx;
-        ctx.fillStyle = 'rgba(20,12,48,0.85)';
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = edge ?? 'rgba(201,162,74,0.6)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+        drawPlate(this.ctx, x, y, w, h, { r: 8, edge });
     }
 
     /** A fairy's medal with her name under it, and a small YOU or RIVAL over it. */
@@ -628,7 +614,7 @@ export class MatchScreen {
         drawMedal(ctx, fy, x, y, r, t);
         this.label(who, x, y - r - 6);
         ctx.textAlign = 'center';
-        ctx.font = `600 11px ${FONT}`;
+        ctx.font = `600 11px ${SANS}`;
         ctx.fillStyle = '#fff7c2';
         ctx.fillText(fy.name, x, y + r + 15);
     }
@@ -644,23 +630,6 @@ export class MatchScreen {
 
     /** A button: lit in its colour, or dim when there's nothing to do. */
     private button(b: Box, text: string, on: boolean, color: string, t: number): void {
-        const ctx = this.ctx;
-        ctx.save();
-        if (on) {
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 8 + 3 * Math.sin(t * 5);
-        }
-        ctx.fillStyle = on ? color : 'rgba(40,30,70,0.85)';
-        slanted(b.x, b.y, b.w, b.h, 5)(ctx);
-        ctx.fill();
-        ctx.restore();
-        ctx.strokeStyle = on ? '#ffffff' : 'rgba(120,100,160,0.7)';
-        ctx.lineWidth = 1;
-        slanted(b.x, b.y, b.w, b.h, 5)(ctx);
-        ctx.stroke();
-        ctx.textAlign = 'center';
-        ctx.font = `8px ${ARCADE}`;
-        ctx.fillStyle = on ? '#140a26' : 'rgba(203,188,245,0.5)';
-        ctx.fillText(text, b.x + b.w / 2, b.y + b.h / 2 + 4, b.w - 10);
+        drawCallButton(this.ctx, b, text, on, color, t);
     }
 }
