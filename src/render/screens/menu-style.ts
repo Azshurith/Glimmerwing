@@ -145,7 +145,7 @@ export function drawPlate(
     roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, r);
     ctx.stroke();
     if (strong && w > 16 && h > 16) {
-        ctx.strokeStyle = hexA(o.edge && o.edge.startsWith('#') ? o.edge : GOLD, 0.3);
+        ctx.strokeStyle = hexA(o.edge?.startsWith('#') ? o.edge : GOLD, 0.3);
         ctx.lineWidth = 0.6;
         roundRect(ctx, x + 3, y + 3, w - 6, h - 6, Math.max(1, r - 3));
         ctx.stroke();
@@ -269,7 +269,11 @@ export function drawGem(ctx: CanvasRenderingContext2D, x: number, y: number, r: 
 }
 
 /** Stroke the shape `trace` draws with a gold rim `width` wide and a pale highlight running along it. */
-export function goldFrame(ctx: CanvasRenderingContext2D, trace: (c: CanvasRenderingContext2D) => void, width = 2): void {
+export function goldFrame(
+    ctx: CanvasRenderingContext2D,
+    trace: (c: CanvasRenderingContext2D) => void,
+    width = 2,
+): void {
     ctx.save();
     trace(ctx);
     ctx.strokeStyle = GOLD;
