@@ -1107,6 +1107,42 @@
                 color: #3a1408;
                 background: linear-gradient(180deg, #fff3b0, #ffc93c 55%, #d87a10);
             }
+            /* Back, as in the menus' mockups: a rounded gold-edged capsule. The lobby has none (its player plate
+               takes the corner; Esc goes back to the title). */
+            .screen:is(
+                    [data-phase='select'],
+                    [data-phase='mapselect'],
+                    [data-phase='roster'],
+                    [data-phase='profile'],
+                    [data-phase='maps'],
+                    [data-phase='settings'],
+                    [data-phase='matchinfo']
+                )
+                .tb-menu {
+                --sl: 0px;
+                padding: 0 1.05em 0 0.9em;
+                clip-path: none;
+                border-radius: 999px;
+                box-shadow: 0 0 10px rgba(255, 190, 90, 0.35);
+            }
+            .screen:is(
+                    [data-phase='select'],
+                    [data-phase='mapselect'],
+                    [data-phase='roster'],
+                    [data-phase='profile'],
+                    [data-phase='maps'],
+                    [data-phase='settings'],
+                    [data-phase='matchinfo']
+                )
+                .tb-menu::before {
+                clip-path: none;
+                border-radius: 999px;
+                inset: 2px;
+                background: linear-gradient(180deg, #3a1e70, #1e0e46 60%, #140830);
+            }
+            .screen[data-phase='modes'] .tb-menu {
+                display: none !important;
+            }
             /* Controls: whose keys, then a key table. */
             .set-schemes {
                 display: flex;

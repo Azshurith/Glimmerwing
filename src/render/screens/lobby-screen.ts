@@ -162,7 +162,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
             close: { x: W - 40, y: 44, w: 32, h: 32 },
             bar,
             nav: barSlots(bar, play, 3),
-            plate: { x: 76, y: 3, w: 132, h: 32 },
+            plate: { x: 4, y: 3, w: 170, h: 34 },
             quick: LOBBY_QUICK.map((_, i) => ({ x: 6, y: 46 + i * 32, w: 28, h: 28 })),
             road,
             prev: { x: road.x - 26, y: road.y - 3, w: 22, h: 23 },
@@ -192,8 +192,8 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
         close: { x: R - 34, y: 34, w: 28, h: 28 },
         bar,
         nav: barSlots(bar, play, 10),
-        plate: { x: L + 76, y: 3, w: compact ? 126 : 146, h: 36 },
-        quick: LOBBY_QUICK.map((_, i) => ({ x: L, y: 48 + i * 28, w: 78, h: 22 })),
+        plate: { x: L - 2, y: 2, w: compact ? 160 : 176, h: 40 },
+        quick: LOBBY_QUICK.map((_, i) => ({ x: L + 2, y: 50 + i * 29, w: 80, h: 23 })),
         road,
         prev: { x: road.x - 24, y: road.y - 3, w: 20, h: 23 },
         next: { x: road.x + road.w + 4, y: road.y - 3, w: 20, h: 23 },
@@ -1143,107 +1143,166 @@ export class LobbyScreen {
     }
 
     /**
-     * The player's plate at the top left (after the page's Back tab): their avatar in its frame, their name and wins,
-     * on a dark plate with a sweeping gold underline; and at the top right the counters (stages open, trophies) on
-     * pointed plates and whether the server is reached.
+     * The player's plate in the top-left corner: their avatar in an ornate gold ring (a curl either side, a star under
+     * it), their name large and their wins under it, over a sweeping gold underline that curls up at its end; and at
+     * the top right the counters (stages open, trophies) on slanted plates and the server's light on a capsule.
      */
     private header(v: LobbyView, b: Box, t: number, W: number, bleed: number, tall: boolean): void {
         const ctx = this.ctx;
-        const r = tall ? 13 : 15;
-        const ax = b.x + r + 2,
+        const r = tall ? 14 : 16;
+        const ax = b.x + r + 6,
             ay = b.y + b.h / 2;
-        const g = ctx.createLinearGradient(b.x, 0, b.x + b.w, 0);
-        g.addColorStop(0, 'rgba(30,14,64,0.9)');
-        g.addColorStop(1, 'rgba(30,14,64,0)');
+        // A soft dark band behind the name, fading out to the right.
+        const g = ctx.createLinearGradient(ax, 0, b.x + b.w, 0);
+        g.addColorStop(0, 'rgba(24,10,56,0.85)');
+        g.addColorStop(1, 'rgba(24,10,56,0)');
         ctx.fillStyle = g;
-        ctx.fillRect(b.x, b.y + 3, b.w, b.h - 6);
-        // The gold underline, sweeping up at its end.
-        ctx.strokeStyle = goldGradient(ctx, b.y, b.y + b.h);
-        ctx.lineWidth = 1.2;
+        roundRect(ctx, ax, ay - r + 2, b.w - (ax - b.x), r * 2 - 4, r - 2);
+        ctx.fill();
+        // The underline: from under the avatar out along the plate, curling up at its end.
+        const uy = ay + r - 1;
+        ctx.strokeStyle = goldGradient(ctx, uy - 10, uy + 2);
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.moveTo(ax, b.y + b.h - 2);
-        ctx.lineTo(b.x + b.w - 20, b.y + b.h - 2);
-        ctx.quadraticCurveTo(b.x + b.w - 4, b.y + b.h - 3, b.x + b.w, b.y + b.h - 12);
+        ctx.moveTo(ax, uy);
+        ctx.lineTo(b.x + b.w - 26, uy);
+        ctx.bezierCurveTo(b.x + b.w - 12, uy, b.x + b.w - 6, uy - 4, b.x + b.w, uy - 12);
         ctx.stroke();
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(ax + 6, uy + 2.5);
+        ctx.lineTo(b.x + b.w - 34, uy + 2.5);
+        ctx.stroke();
+        // The ornate ring: curls out either side, a thick gold ring, a star hanging under it.
+        ctx.strokeStyle = goldGradient(ctx, ay - r, ay + r);
+        ctx.lineWidth = 1.2;
+        for (const dir of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(ax + dir * (r + 2), ay - r * 0.6);
+            ctx.quadraticCurveTo(ax + dir * (r + 9), ay - r * 1.1, ax + dir * (r + 5), ay - r * 1.25);
+            ctx.stroke();
+        }
         this.framedAvatar(v.fairy, v.frame, ax, ay, r, t);
+        ctx.strokeStyle = goldGradient(ctx, ay - r, ay + r);
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(ax, ay, r + 3, 0, Math.PI * 2);
+        ctx.stroke();
+        gem(ctx, ax, ay + r + 4, 3.4);
+        ctx.fillStyle = '#fff6d8';
+        sparkle(ctx, ax, ay + r + 4, 2 + Math.abs(Math.sin(t * 2)) * 1.2);
+        const tx = ax + r + 9;
         ctx.textAlign = 'left';
-        ctx.font = `800 ${tall ? 9.5 : 10.5}px ${SANS}`;
+        ctx.font = `800 ${tall ? 11 : 13}px ${SANS}`;
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(v.name, ax + r + 7, ay - 1, b.w - r * 2 - 14);
+        ctx.fillText(v.name, tx, ay - 1, b.w - (tx - b.x) - 10);
         ctx.font = `${tall ? 5 : 5.5}px ${ARCADE}`;
-        ctx.fillStyle = '#ffe08a';
-        ctx.fillText(`${v.wins} WINS`, ax + r + 7, ay + 9);
+        ctx.fillStyle = '#ffd45c';
+        sparkle(ctx, tx + 2, ay + 7, 2);
+        ctx.fillText(`${v.wins} WINS`, tx + 7, ay + 9);
         // Counters at the top right: on a phone just the server light; in landscape stages, trophies and the light.
         const right = W + bleed - 8;
         if (tall) {
             this.online(v, right - 2, 14);
             return;
         }
-        ctx.font = `6.5px ${ARCADE}`;
-        const onW = ctx.measureText(v.online ? 'ONLINE' : 'OFFLINE').width + 22;
-        const pills: { text: string; icon: (x: number, y: number) => void }[] = [
-            {
-                text: `${v.stages[0]}/${v.stages[1]}`,
-                icon: (x, y) => {
-                    ctx.fillStyle = '#8ff0a0';
-                    sparkle(ctx, x, y, 4.5);
-                },
-            },
-            { text: String(v.trophies), icon: (x, y) => drawTrophy(ctx, x, y + 0.5, 6) },
-        ];
+        ctx.font = `7px ${ARCADE}`;
+        const onW = ctx.measureText(v.online ? 'ONLINE' : 'OFFLINE').width + 26;
         let x = right - onW;
-        this.counterPlate(x, 8, onW, 15);
-        ctx.fillStyle = v.online ? '#8ff0a0' : '#a99fc8';
+        ctx.fillStyle = 'rgba(16,6,40,0.9)';
+        roundRect(ctx, x, 7, onW, 17, 8.5);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,230,160,0.35)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = v.online ? '#5ef08a' : '#a99fc8';
         ctx.beginPath();
-        ctx.arc(x + 11, 15.5, 2.6, 0, Math.PI * 2);
+        ctx.arc(x + 11, 15.5, 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.textAlign = 'left';
-        ctx.fillText(v.online ? 'ONLINE' : 'OFFLINE', x + 17, 18);
-        for (const p of pills.reverse()) {
-            const w = ctx.measureText(p.text).width + 30;
-            x -= w + 4;
-            this.counterPlate(x, 8, w, 15);
-            p.icon(x + 12, 15.5);
+        ctx.fillStyle = v.online ? '#8ff0a0' : '#cbbcf5';
+        ctx.fillText(v.online ? 'ONLINE' : 'OFFLINE', x + 18, 18.5);
+        const pills: { text: string; icon: (x: number, y: number) => void }[] = [
+            { text: String(v.trophies), icon: (px, py) => drawTrophy(ctx, px, py + 0.5, 6.5) },
+            {
+                text: `${v.stages[0]}/${v.stages[1]}`,
+                icon: (px, py) => {
+                    ctx.fillStyle = '#5ef08a';
+                    sparkle(ctx, px, py, 5);
+                },
+            },
+        ];
+        for (const p of pills) {
+            const w = ctx.measureText(p.text).width + 34;
+            x -= w + 6;
+            this.counterPlate(x, 7, w, 17);
+            p.icon(x + 15, 15.5);
             ctx.fillStyle = '#fff3c9';
             ctx.textAlign = 'left';
-            ctx.fillText(p.text, x + 20, 18);
+            ctx.fillText(p.text, x + 24, 18.5);
         }
     }
 
     /** A counter's plate: dark, slanted, in a gold edge. */
     private counterPlate(x: number, y: number, w: number, h: number): void {
         const ctx = this.ctx;
-        ctx.fillStyle = 'rgba(22,10,50,0.88)';
-        slanted(x, y, w, h, 4)(ctx);
+        ctx.fillStyle = 'rgba(16,6,40,0.9)';
+        slanted(x, y, w, h, 6)(ctx);
         ctx.fill();
         ctx.strokeStyle = goldGradient(ctx, y, y + h);
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.3;
         ctx.stroke();
     }
 
     /**
-     * A quick button: a round gold-ringed badge with its picture, and (in landscape) its name on a dark plate
-     * running out from it to a point.
+     * A quick button: a round gold-ringed badge with its picture and (in landscape) its name on a dark plate running
+     * out from under it, rounded at the badge and coming to a chevron point at its far end, framed in gold.
      */
     private quickPill(b: Box, i: number, t: number, tall: boolean): void {
         const ctx = this.ctx;
         const q = LOBBY_QUICK[i];
-        const r = b.h / 2 + (tall ? 0 : 1),
+        const r = b.h / 2 + (tall ? 0 : 2),
             cx = b.x + r,
             cy = b.y + b.h / 2;
         if (!tall) {
-            ctx.fillStyle = 'rgba(22,10,50,0.88)';
-            pointed(ctx, cx, b.y + 2, b.w - r + 6, b.h - 4, 6);
+            const x0 = cx,
+                x1 = b.x + b.w,
+                y0 = b.y + 1,
+                y1 = b.y + b.h - 1,
+                tip = 7;
+            /** Trace the plate: square under the badge, a chevron at the far end, its corners softened. */
+            const plate = () => {
+                ctx.beginPath();
+                ctx.moveTo(x0, y0);
+                ctx.lineTo(x1 - tip - 2, y0);
+                ctx.quadraticCurveTo(x1 - tip, y0, x1 - tip + 1, y0 + 1.5);
+                ctx.lineTo(x1, cy);
+                ctx.lineTo(x1 - tip + 1, y1 - 1.5);
+                ctx.quadraticCurveTo(x1 - tip, y1, x1 - tip - 2, y1);
+                ctx.lineTo(x0, y1);
+                ctx.closePath();
+            };
+            const g = ctx.createLinearGradient(0, y0, 0, y1);
+            g.addColorStop(0, 'rgba(56,28,108,0.95)');
+            g.addColorStop(1, 'rgba(20,8,48,0.95)');
+            ctx.fillStyle = g;
+            plate();
             ctx.fill();
-            ctx.strokeStyle = goldGradient(ctx, b.y, b.y + b.h);
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = goldGradient(ctx, y0, y1);
+            ctx.lineWidth = 1.4;
+            plate();
             ctx.stroke();
             ctx.textAlign = 'center';
-            ctx.font = `6.5px ${ARCADE}`;
+            ctx.font = `7px ${ARCADE}`;
             ctx.fillStyle = '#fff3c9';
-            ctx.fillText(q.label, cx + r + (b.w - 2 * r) / 2, cy + 2.5, b.w - 2 * r - 6);
+            ctx.fillText(q.label, (x0 + r + x1 - tip) / 2, cy + 2.6, x1 - tip - x0 - r - 4);
         }
         this.quickIcon({ x: cx - r, y: cy - r, w: r * 2, h: r * 2 }, i, t);
+        ctx.strokeStyle = goldGradient(ctx, cy - r, cy + r);
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r - 0.5, 0, Math.PI * 2);
+        ctx.stroke();
     }
 
     /**
@@ -1283,14 +1342,16 @@ export class LobbyScreen {
             const k = Math.max(0, Math.sin(t * 4)) * (on ? 1.6 : 0.8) * dir;
             const ax = box.x + box.w / 2 + dir * 5 + k,
                 ay = box.y + box.h / 2;
-            ctx.fillStyle = goldGradient(ctx, ay - 8, ay + 8);
+            ctx.fillStyle = goldGradient(ctx, ay - 10, ay + 10);
             ctx.beginPath();
-            ctx.moveTo(ax, ay);
-            ctx.lineTo(ax - dir * 10, ay - 8);
-            ctx.lineTo(ax - dir * 7, ay);
-            ctx.lineTo(ax - dir * 10, ay + 8);
+            ctx.moveTo(ax + dir * 2, ay);
+            ctx.lineTo(ax - dir * 11, ay - 10);
+            ctx.lineTo(ax - dir * 11, ay + 10);
             ctx.closePath();
             ctx.fill();
+            ctx.strokeStyle = 'rgba(80,40,10,0.6)';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
         }
         const n = v.stages[0],
             gap = 7;
@@ -1372,84 +1433,95 @@ export class LobbyScreen {
     }
 
     /**
-     * The bar along the bottom: a long dark plate with pointed, flourished ends in a gold frame, holding Characters
-     * and Maps, a gap for PLAY, then Profile and Settings; each a gold-ringed badge with its emblem and its name, a
-     * thin gold line between them, the one with the cursor lit in its colour.
+     * The bar along the bottom, in two halves either side of PLAY: each a dark plate framed in gold, coming to a point
+     * with a star at its outer end and rounded where it meets PLAY, a curl of gold rising off its outer end. Each half
+     * holds two screens, a gold-ringed badge with its emblem and its name, a thin gold line between them, the one with
+     * the cursor lit in its colour.
      */
     private bottomBar(v: LobbyView, lay: LobbyLayout, t: number, tall: boolean): void {
         const ctx = this.ctx;
         const b = lay.bar,
-            tip = tall ? 8 : 16;
-        ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.6)';
-        ctx.shadowBlur = 10;
-        const g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
-        g.addColorStop(0, 'rgba(56,28,108,0.95)');
-        g.addColorStop(1, 'rgba(20,8,48,0.97)');
-        ctx.fillStyle = g;
-        pointed(ctx, b.x, b.y, b.w, b.h, tip);
-        ctx.fill();
-        ctx.restore();
-        ctx.strokeStyle = goldGradient(ctx, b.y, b.y + b.h);
-        ctx.lineWidth = 1.8;
-        pointed(ctx, b.x, b.y, b.w, b.h, tip);
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,230,160,0.25)';
-        ctx.lineWidth = 0.7;
-        pointed(ctx, b.x + 4, b.y + 3, b.w - 8, b.h - 6, tip - 2);
-        ctx.stroke();
-        // A flourish out from each pointed end.
+            p = lay.play,
+            tip = tall ? 9 : 18,
+            r = b.h / 2;
         for (const dir of [-1, 1]) {
-            const ex = dir < 0 ? b.x : b.x + b.w;
-            gem(ctx, ex - dir * 2, b.y + b.h / 2, 3);
+            const outer = dir < 0 ? b.x : b.x + b.w,
+                inner = dir < 0 ? p.x + 10 : p.x + p.w - 10;
+            /** Trace this half: a point at the outer end, rounded at the inner end, under PLAY's edge. */
+            const half = (inset: number) => {
+                const y0 = b.y + inset,
+                    y1 = b.y + b.h - inset,
+                    o = outer - dir * inset,
+                    rr = r - inset;
+                ctx.beginPath();
+                ctx.moveTo(o, b.y + b.h / 2);
+                ctx.lineTo(o - dir * tip, y0);
+                ctx.lineTo(inner - dir * rr, y0);
+                ctx.arc(inner - dir * rr, b.y + b.h / 2, rr, -Math.PI / 2, Math.PI / 2, dir < 0);
+                ctx.lineTo(o - dir * tip, y1);
+                ctx.closePath();
+            };
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.6)';
+            ctx.shadowBlur = 10;
+            const g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
+            g.addColorStop(0, 'rgba(60,30,116,0.96)');
+            g.addColorStop(1, 'rgba(20,8,48,0.97)');
+            ctx.fillStyle = g;
+            half(0);
+            ctx.fill();
+            ctx.restore();
             ctx.strokeStyle = goldGradient(ctx, b.y, b.y + b.h);
+            ctx.lineWidth = 1.8;
+            half(0);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(255,230,160,0.25)';
+            ctx.lineWidth = 0.7;
+            half(3.5);
+            ctx.stroke();
+            // A star at the point, and a curl of gold rising off the outer end.
+            ctx.fillStyle = '#fff3c0';
+            sparkle(ctx, outer + dir * 2, b.y + b.h / 2, 4 + Math.abs(Math.sin(t * 2 + dir)) * 1.5);
+            ctx.strokeStyle = goldGradient(ctx, b.y - 10, b.y);
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(ex - dir * tip, b.y);
-            ctx.quadraticCurveTo(ex - dir * tip * 2.4, b.y - 8, ex - dir * tip * 4, b.y - 4);
+            ctx.moveTo(outer - dir * tip * 1.4, b.y - 1);
+            ctx.quadraticCurveTo(outer - dir * tip * 3, b.y - 9, outer - dir * tip * 5, b.y - 6);
             ctx.stroke();
         }
         lay.nav.forEach((n, i) => {
             const it = LOBBY_NAV[i],
                 on = v.focus === 'nav' && v.nav === i;
             if (on) {
-                const lg = ctx.createRadialGradient(
-                    n.x + n.w / 2,
-                    n.y + n.h / 2,
-                    2,
-                    n.x + n.w / 2,
-                    n.y + n.h / 2,
-                    n.w * 0.6,
-                );
+                const lg = ctx.createRadialGradient(n.x + n.w / 2, n.y + n.h / 2, 2, n.x + n.w / 2, n.y + n.h / 2, n.w * 0.6);
                 lg.addColorStop(0, hexA(it.color, 0.4));
                 lg.addColorStop(1, hexA(it.color, 0));
                 ctx.fillStyle = lg;
-                ctx.fillRect(n.x, n.y + 2, n.w, n.h - 4);
+                ctx.fillRect(n.x, n.y + 3, n.w, n.h - 6);
             }
-            // The thin gold line between the two of a side.
             if (i === 1 || i === 3) {
-                ctx.fillStyle = 'rgba(233,185,73,0.45)';
+                ctx.fillStyle = 'rgba(233,185,73,0.5)';
                 ctx.fillRect(n.x, n.y + n.h * 0.25, 1, n.h * 0.5);
             }
             if (tall) {
-                const r = 10;
-                drawBadge(ctx, it.color, n.x + n.w / 2, n.y + r + 5, r, on, t);
-                drawEmblem(ctx, it.action, n.x + n.w / 2, n.y + r + 5, r / 34, t, on);
+                const rr = 10;
+                drawBadge(ctx, it.color, n.x + n.w / 2, n.y + rr + 5, rr, on, t);
+                drawEmblem(ctx, it.action, n.x + n.w / 2, n.y + rr + 5, rr / 34, t, on);
                 ctx.textAlign = 'center';
                 ctx.font = `4.5px ${ARCADE}`;
                 ctx.fillStyle = on ? '#fff7c2' : 'rgba(239,230,255,0.9)';
                 ctx.fillText(it.label, n.x + n.w / 2, n.y + n.h - 6, n.w - 2);
                 return;
             }
-            const r = 11;
-            ctx.font = `8px ${ARCADE}`;
-            const lw = Math.min(n.w - r * 2 - 14, ctx.measureText(it.label).width);
-            const x0 = n.x + n.w / 2 - (lw + r * 2 + 7) / 2;
-            drawBadge(ctx, it.color, x0 + r, n.y + n.h / 2, r, on, t);
-            drawEmblem(ctx, it.action, x0 + r, n.y + n.h / 2, r / 34, t, on);
+            const rr = 12;
+            ctx.font = `8.5px ${ARCADE}`;
+            const lw = Math.min(n.w - rr * 2 - 14, ctx.measureText(it.label).width);
+            const x0 = n.x + n.w / 2 - (lw + rr * 2 + 7) / 2;
+            drawBadge(ctx, it.color, x0 + rr, n.y + n.h / 2, rr, on, t);
+            drawEmblem(ctx, it.action, x0 + rr, n.y + n.h / 2, rr / 34, t, on);
             ctx.textAlign = 'left';
-            ctx.fillStyle = on ? '#fff7c2' : '#f3ecff';
-            ctx.fillText(it.label, x0 + r * 2 + 7, n.y + n.h / 2 + 3, n.w - r * 2 - 14);
+            ctx.fillStyle = on ? '#fff7c2' : '#ffffff';
+            ctx.fillText(it.label, x0 + rr * 2 + 7, n.y + n.h / 2 + 3.2, n.w - rr * 2 - 14);
         });
     }
 
@@ -1504,9 +1576,24 @@ export class LobbyScreen {
             wing(ctx, wx, wy, b.h * (tall ? 0.36 : 0.34), dir, '#fff8e0');
             ctx.restore();
         }
-        gem(ctx, b.x + b.w / 2, b.y - 3, tall ? 5 : 6);
+        // The crest: a gold four-pointed star standing on the frame's top, a sparkle at its heart.
+        const sx = b.x + b.w / 2,
+            sy = b.y - 4,
+            sr = tall ? 9 : 11;
+        ctx.fillStyle = goldGradient(ctx, sy - sr, sy + sr);
+        ctx.beginPath();
+        for (let k = 0; k < 8; k++) {
+            const a = (k * Math.PI) / 4 - Math.PI / 2,
+                rr = k % 2 ? sr * 0.3 : k === 0 ? sr * 1.15 : sr * 0.85;
+            ctx.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(90,40,10,0.6)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
         ctx.fillStyle = '#fff6d8';
-        sparkle(ctx, b.x + b.w / 2, b.y - 4, 3 + Math.abs(Math.sin(t * 2.4)) * 2);
+        sparkle(ctx, sx, sy, 2 + Math.abs(Math.sin(t * 2.4)) * 1.5);
         arcadeText(
             ctx,
             'PLAY',
