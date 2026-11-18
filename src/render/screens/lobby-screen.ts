@@ -800,35 +800,105 @@ export class LobbyScreen {
             ctx.fillStyle = '#ffb3b3';
             ctx.fillText(m.ribbon === 'Coming soon' ? 'COMING SOON' : 'SWITCHED OFF', b.x + b.w / 2, b.y + b.h + 9);
         }
-        // The arrows: gold chevrons in a diamond, nudging outward now and then.
-        const nudge = Math.max(0, Math.sin(t * 3)) * 1.8;
-        for (const [box, dir] of [
-            [lay.prev, -1],
-            [lay.next, 1],
-        ] as const) {
-            const cx = box.x + box.w / 2 + dir * nudge,
-                cy = box.y + box.h / 2,
-                d = Math.min(box.w, box.h) / 2 - 2,
-                k = d / 10;
-            ctx.fillStyle = 'rgba(30,12,50,0.75)';
+        this.modeArrow(lay.prev, -1, on, t);
+        this.modeArrow(lay.next, 1, on, t);
+    }
+
+    /**
+     * One of the arrows beside the mode button: a dart-shaped arrowhead with a notched back, in the button's plum and
+     * framed in gold, with a jewel at its heart and a trail of fading chevrons behind it that march outward. It leans
+     * out now and then, and glows while the mode button has the cursor.
+     */
+    private modeArrow(box: Box, dir: -1 | 1, on: boolean, t: number): void {
+        const ctx = this.ctx;
+        const s = Math.min(box.w / 34, box.h / 36);
+        const lean = Math.max(0, Math.sin(t * 3)) ** 2 * 2.2;
+        ctx.save();
+        ctx.translate(box.x + box.w / 2 + dir * (3 * s + lean), box.y + box.h / 2);
+        ctx.scale(dir * s, s);
+        // The trail: two chevrons tucked behind the head, fading out and marching toward it.
+        const march = (t * 1.6) % 1;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        for (let i = 0; i < 2; i++) {
+            const x = -9 - (i + 1 - march) * 4;
+            const a = (1 - (i + 1 - march) / 2) * (on ? 0.8 : 0.55);
+            ctx.strokeStyle = `rgba(255,224,150,${a.toFixed(3)})`;
+            ctx.lineWidth = 1.6;
             ctx.beginPath();
-            ctx.moveTo(cx, cy - d);
-            ctx.lineTo(cx + d, cy);
-            ctx.lineTo(cx, cy + d);
-            ctx.lineTo(cx - d, cy);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = GOLD;
-            ctx.lineWidth = 1.2;
-            ctx.stroke();
-            ctx.strokeStyle = '#ffe9a0';
-            ctx.lineWidth = 2 * k;
-            ctx.beginPath();
-            ctx.moveTo(cx - dir * 2.5 * k, cy - 4.5 * k);
-            ctx.lineTo(cx + dir * 2.5 * k, cy);
-            ctx.lineTo(cx - dir * 2.5 * k, cy + 4.5 * k);
+            ctx.moveTo(x - 2.5, -5);
+            ctx.lineTo(x + 1, 0);
+            ctx.lineTo(x - 2.5, 5);
             ctx.stroke();
         }
+        /** Trace the arrowhead: its tip pointing out, its back notched. */
+        const head = () => {
+            ctx.beginPath();
+            ctx.moveTo(15, 0);
+            ctx.quadraticCurveTo(4, -6, -11, -15);
+            ctx.lineTo(-5, 0);
+            ctx.lineTo(-11, 15);
+            ctx.quadraticCurveTo(4, 6, 15, 0);
+            ctx.closePath();
+        };
+        ctx.save();
+        if (on) {
+            ctx.shadowColor = '#ffd45c';
+            ctx.shadowBlur = 8 + 3 * Math.sin(t * 4);
+        } else {
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetY = 1.5;
+        }
+        const g = ctx.createLinearGradient(0, -15, 0, 15);
+        g.addColorStop(0, '#7a4a78');
+        g.addColorStop(0.5, '#3e2246');
+        g.addColorStop(1, '#1e0f28');
+        ctx.fillStyle = g;
+        head();
+        ctx.fill();
+        ctx.restore();
+        // A sheen over the upper half, and the gold rim.
+        ctx.save();
+        head();
+        ctx.clip();
+        const sheen = ctx.createLinearGradient(0, -15, 0, 0);
+        sheen.addColorStop(0, 'rgba(255,255,255,0.28)');
+        sheen.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = sheen;
+        ctx.fillRect(-12, -15, 28, 15);
+        ctx.restore();
+        const rim = ctx.createLinearGradient(0, -15, 0, 15);
+        rim.addColorStop(0, '#fff2c0');
+        rim.addColorStop(0.45, on ? '#ffe08a' : GOLD);
+        rim.addColorStop(1, '#a0701e');
+        ctx.strokeStyle = rim;
+        ctx.lineWidth = on ? 1.8 : 1.4;
+        head();
+        ctx.stroke();
+        // A thin inner line along the top edge.
+        ctx.strokeStyle = 'rgba(255,236,190,0.45)';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(11, -1.2);
+        ctx.quadraticCurveTo(2, -5.6, -7.5, -11);
+        ctx.stroke();
+        // The jewel, twinkling.
+        const pulse = 0.5 + 0.5 * Math.sin(t * 3 + dir);
+        const jg = ctx.createRadialGradient(2.2, -0.8, 0.2, 3, 0, 3.6);
+        jg.addColorStop(0, '#ffffff');
+        jg.addColorStop(0.35, '#ffd6f4');
+        jg.addColorStop(1, '#c04fa8');
+        ctx.fillStyle = jg;
+        ctx.beginPath();
+        ctx.arc(3, 0, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+        ctx.globalAlpha = 0.35 + 0.5 * pulse;
+        sparkle(ctx, 1.8, -1.2, 1.6 + pulse);
+        ctx.restore();
     }
 
     /** World chat's latest lines at the bottom left (a tap opens the panel); hidden while the panel's open. */
