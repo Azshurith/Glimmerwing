@@ -1440,7 +1440,7 @@ export class Game {
             this.rosterIndex = (this.rosterIndex + 1) % n;
         const tap = this.input.tap;
         if (tap) {
-            const hit = rosterMedallions(this.r.layout, this.r.viewH).findIndex(
+            const hit = rosterMedallions(this.r.layout, this.r.viewH, this.r.viewX).findIndex(
                 m => Math.hypot(tap.x - m.x, tap.y - m.y) <= m.r + 6,
             );
             if (hit >= 0) this.rosterIndex = hit;

@@ -6,6 +6,12 @@ import { drawFairy } from '@/render/entities/fairy';
 import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
+import { PieceAtlas } from './kit';
+import { kitReady, mockFit } from './kit-ui';
+import type { MockFit } from './kit-ui';
+import { ROSTER_KIT } from '@/data/roster-kit';
+import kitUrl from '@/../assets/ui/roster-kit.png';
+import goldUrl from '@/../assets/ui/roster-kit-gold.png';
 import { enter } from '@/render/transition';
 import { roundRect } from './emblems';
 import {
@@ -59,6 +65,137 @@ const GUARDIAN_TEXT: Record<string, string> = {
 
 /** A 1-5 rating for a stat, from its multiplier and the value that earns five. */
 const rate = (v: number, max: number) => Math.max(1, Math.min(5, Math.round(1 + (4 * (v - 0.7)) / (max - 0.7))));
+
+/** Her four stats as (name, 1-5 rating, icon). */
+function statsOf(fy: Fairy): [string, number, string][] {
+    return [
+        ['SPEED', rate(fy.speed, 1.2), 'speed'],
+        ['CHARGE', rate(1 / fy.charge, 2), 'charge'],
+        ['BURST', rate(fy.burst, 1.3), 'burst'],
+        ['DODGE', rate(1 / fy.hitbox, 1 / 0.7), 'dodge'],
+    ];
+}
+
+/** Her four skills as (kind, name, what it does, colour); a locked fairy's are hidden. */
+function skillsOf(fy: Fairy, locked: boolean): [string, string, string, string][] {
+    if (locked)
+        return [
+            ['SHOT', '???', '', '#9a7aff'],
+            ['BOMB', '???', '', '#ffb43c'],
+            ['EXTRA ATTACK', '???', '', '#ff7ad0'],
+            ['GUARDIAN', '???', '', '#c07af0'],
+        ];
+    return [
+        ['SHOT', fy.chargeName, fy.skillText?.shot ?? SHOT_TEXT[fy.chargeStyle] ?? '', '#9a7aff'],
+        ['BOMB', fy.bomb.name, fy.skillText?.bomb ?? BOMB_TEXT[fy.bomb.style] ?? '', '#ffb43c'],
+        [
+            'EXTRA ATTACK',
+            fy.extra.name,
+            `${fy.extra.count} that ${EXTRA_TEXT[fy.extra.flight] ?? 'fly at the rival'}`,
+            '#ff7ad0',
+        ],
+        ['GUARDIAN', fy.guardian.name, GUARDIAN_TEXT[fy.guardian.pattern] ?? '', '#c07af0'],
+    ];
+}
+
+/** The painted Characters screen's pieces (cut from its mockup by tools/extract-screen-kit.py). */
+const KIT = new PieceAtlas(kitUrl, goldUrl, ROSTER_KIT);
+
+/**
+ * The painted landscape Characters screen's layout, in its mockup's 2x pixels: each piece's box (the piece fills it),
+ * the portrait's window, where the stat bars and the skills' text go, the demo's room, and the medallions' centres.
+ */
+const MOCK = {
+    area: [150, 0, 3523, 1350],
+    title: [846, 0, 1852, 232],
+    portrait: [150, 110, 812, 1108],
+    window: [192, 222, 724, 818],
+    name: [556, 1138],
+    blurb: [1004, 290],
+    statsL: [980, 326, 748, 182],
+    statsR: [1753, 326, 754, 182],
+    // Each panel's bars: where the five start, how wide they all are, and the two rows' middles.
+    bars: [
+        [1275, 392],
+        [2054, 392],
+    ],
+    barRows: [379, 457],
+    skills: [521, 661, 801, 941],
+    skillX: [1000, 1506, 136],
+    // The demo frame: its middle across, its top, its height, and how far in its window starts (sides, top, foot).
+    demo: [3021, 218, 912, 36, 23, 37],
+    tray: [900, 1095, 1800, 255],
+    meds: { x0: 1200, gap: 195.7, y: 1218 },
+} as const;
+
+/** How the painted Characters screen sits in a widened landscape view `bleed` past each side. */
+function rosterFit(bleed: number): MockFit {
+    const [x0, y0, x1, y1] = MOCK.area;
+    return mockFit(C.VIEW_W, C.VIEW_H, bleed, x0, y0, x1, y1);
+}
+
+/** Whether landscape Characters is drawn from its painted pieces (once they've loaded). */
+const painted = () => KIT.ready() && kitReady();
+
+/** A painted demo frame and its window, in a mockup's pixels. */
+export interface PaintedDemo {
+    /** The frame's box. */
+    frame: { x: number; y: number; w: number; h: number };
+    /** The window inside it, in the meadow's shape. */
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+/**
+ * A painted demo frame `height` tall from `top`, centred on `cx`, narrowed to the meadow's shape: its window starts
+ * `side` in from each side, `head` from the top and `foot` from the bottom.
+ */
+export function paintedDemo(spec: readonly number[]): PaintedDemo {
+    const [cx, top, height, side, head, foot] = spec;
+    const h = height - head - foot,
+        w = (h * C.FIELD_W_BASE) / C.FIELD_H_BASE;
+    return { frame: { x: cx - w / 2 - side, y: top, w: w + side * 2, h: height }, x: cx - w / 2, y: top + head, w, h };
+}
+
+/**
+ * Draws a painted demo's live meadow into its window, in view units under `fit` (before its frame goes over it), with
+ * `caption` across its foot; with no meadow to show the window stays dark, with a question mark.
+ */
+export function drawDemoMeadow(
+    ctx: CanvasRenderingContext2D,
+    fit: MockFit,
+    d: PaintedDemo,
+    draw: DemoDraw | null,
+    caption: string,
+): void {
+    const x = fit.x + d.x * fit.s,
+        y = fit.y + d.y * fit.s,
+        w = d.w * fit.s,
+        h = d.h * fit.s;
+    ctx.save();
+    roundRect(ctx, x, y, w, h, 5);
+    ctx.clip();
+    if (draw) draw(x, y, w / C.FIELD_W_BASE);
+    else {
+        ctx.fillStyle = '#120d2c';
+        ctx.fillRect(x, y, w, h);
+        arcadeText(ctx, '?', x + w / 2, y + h * 0.55, 40, ['#ffffff', '#c9b8ff', '#7a5cff'], 'center');
+    }
+    if (draw && caption) {
+        const g = ctx.createLinearGradient(0, y + h - 30, 0, y + h);
+        g.addColorStop(0, 'rgba(8,5,24,0)');
+        g.addColorStop(1, 'rgba(8,5,24,0.9)');
+        ctx.fillStyle = g;
+        ctx.fillRect(x, y + h - 30, w, 30);
+        ctx.textAlign = 'right';
+        ctx.font = `7px ${ARCADE}`;
+        ctx.fillStyle = '#fff3c9';
+        ctx.fillText(caption.toUpperCase(), x + w - 7, y + h - 8, w - 14);
+    }
+    ctx.restore();
+}
 
 /** Where things go in each layout, in its design units. */
 const LAYOUT = {
@@ -128,7 +265,16 @@ function designMedallions(layout: Layout, dy = 0): { x: number; y: number; r: nu
 }
 
 /** The medallions in view units, for a layout and view height: the tap targets. */
-export function rosterMedallions(layout: Layout, h: number = C.TALL_H): { x: number; y: number; r: number }[] {
+export function rosterMedallions(
+    layout: Layout,
+    h: number = C.TALL_H,
+    bleed = 0,
+): { x: number; y: number; r: number }[] {
+    if (layout !== 'tall' && painted()) {
+        const f = rosterFit(bleed),
+            m = MOCK.meds;
+        return FAIRIES.map((_, i) => ({ x: f.x + (m.x0 + i * m.gap) * f.s, y: f.y + m.y * f.s, r: 80 * f.s }));
+    }
     if (layout !== 'tall') return designMedallions('wide');
     const f = tallMenuFit(h);
     return designMedallions('tall', tallShift(f.h)).map(m => ({ x: f.x + m.x * f.s, y: m.y * f.s, r: m.r * f.s }));
@@ -183,6 +329,11 @@ export class RosterScreen {
         }
         const L = LAYOUT[layout];
         const tall = layout === 'tall';
+        if (!tall && painted()) {
+            this.drawPainted(v, t, bleed, demo);
+            ctx.restore();
+            return;
+        }
         enter(ctx, 'bg', () => ornateScreen(ctx, t, L.W, H, bleed, '', tall));
         enter(ctx, 'bar', () => ornateTitle(ctx, 'CHARACTERS', L.W, t, tall));
         const fy = FAIRIES[v.index],
@@ -214,6 +365,172 @@ export class RosterScreen {
         );
         if (layout === 'tall' && v.demoOpen && !locked) this.popup(fy, v, H, demo);
         ctx.restore();
+    }
+
+    /**
+     * Landscape Characters drawn from its painted mockup: the heading, her portrait in its crested frame with her name
+     * on the plaque, her blurb, the two stat panels with her bars, her four skills, the live demo in its frame (fitted
+     * to the meadow's shape), and the fairies' medallions along the tray, the one in view ringed and glowing.
+     */
+    private drawPainted(v: RosterView, t: number, bleed: number, draw?: DemoDraw): void {
+        const ctx = this.ctx,
+            f = rosterFit(bleed),
+            fy = FAIRIES[v.index],
+            locked = v.locked[v.index];
+        enter(ctx, 'bg', () => ornateScreen(ctx, t, C.VIEW_W, C.VIEW_H, bleed, '', false));
+        // The live meadow first, in view units, so the frame drawn over it covers its edges.
+        const d = paintedDemo(MOCK.demo);
+        enter(ctx, 'panels', () => drawDemoMeadow(ctx, f, d, locked ? null : (draw ?? null), v.caption), { dx: 22 });
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.scale(f.s, f.s);
+        /** Draws piece `name` into a box of the mockup, with its glint every so often. */
+        const piece = (name: string, b: readonly number[], phase = 0) => {
+            KIT.draw(ctx, name, b[0], b[1], b[2], b[3]);
+            KIT.glint(ctx, name, b[0], b[1], b[2], b[3], t, phase, 7);
+        };
+        enter(ctx, 'bar', () => piece('title', MOCK.title, 0.2));
+        enter(ctx, 'panels', () => this.paintedPortrait(fy, locked, t, piece), { dx: -22 });
+        enter(
+            ctx,
+            'panels',
+            () => {
+                const b = d.frame;
+                KIT.draw9(ctx, 'demo', b.x, b.y, b.w, b.h, 70, 1 / 0.75);
+                KIT.glint9(ctx, 'demo', b.x, b.y, b.w, b.h, 70, 1 / 0.75, t, 2.4);
+            },
+            { dx: 22 },
+        );
+        enter(ctx, 'panels', () => this.paintedInfo(fy, locked, t, piece), { dx: 0, dy: 10 });
+        enter(ctx, 'buttons', () => piece('tray', MOCK.tray, 1.2));
+        const m = MOCK.meds;
+        FAIRIES.forEach((other, i) =>
+            enter(
+                ctx,
+                'buttons',
+                () => this.paintedMedallion(other, v.locked[i], m.x0 + i * m.gap, m.y, i === v.index, t),
+                { i },
+            ),
+        );
+        ctx.restore();
+        enter(ctx, 'hint', () =>
+            keyHints(
+                ctx,
+                [
+                    [['◀', '▶'], 'BROWSE'],
+                    [['ESC'], 'BACK'],
+                ],
+                C.VIEW_W / 2,
+                C.VIEW_H - 9,
+                v.touch ? 'TAP A FAIRY  ·  ◀ BACK' : null,
+            ),
+        );
+    }
+
+    /** Her portrait (or her in-game look, large) in the painted frame's window, then the frame, then her name. */
+    private paintedPortrait(
+        fy: Fairy,
+        locked: boolean,
+        t: number,
+        piece: (name: string, b: readonly number[], phase?: number) => void,
+    ): void {
+        const ctx = this.ctx,
+            [x, y, w, h] = MOCK.window;
+        ctx.save();
+        roundRect(ctx, x, y, w, h + 60, 60);
+        ctx.clip();
+        const bg = ctx.createRadialGradient(x + w / 2, y + h * 0.45, 40, x + w / 2, y + h * 0.45, 900);
+        bg.addColorStop(0, locked ? '#3a3360' : fy.color);
+        bg.addColorStop(0.55, locked ? '#1d1840' : shade(fy.color, 0.35));
+        bg.addColorStop(1, '#0d0a24');
+        ctx.fillStyle = bg;
+        ctx.fillRect(x, y, w, h + 60);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        for (let i = 0; i < 9; i++) sparkle(ctx, x + ((i * 330 + t * 80) % w), y + ((i * 230) % h), 12 + (i % 3) * 6);
+        if (locked) ctx.filter = 'brightness(0) opacity(0.8)';
+        const p = fy.portrait;
+        if (p && p.img.complete && p.img.naturalWidth) {
+            const [sx, sy, sw, sh] = p.panel;
+            const k = Math.max(w / sw, (h + 60) / sh);
+            ctx.drawImage(p.img, sx, sy, sw, sh, x + w / 2 - (sw * k) / 2, y, sw * k, sh * k);
+        } else drawFairy(ctx, fy, x + w / 2, y + h * 0.46 + Math.sin(t * 2.2) * 18, 26, t, 0, false);
+        ctx.filter = 'none';
+        if (locked) arcadeText(ctx, '?', x + w / 2, y + h * 0.58, 360, ['#ffffff', '#c9b8ff', '#7a5cff'], 'center');
+        ctx.restore();
+        piece('portrait', MOCK.portrait, 0.8);
+        const name = locked ? 'LOCKED' : fy.name.toUpperCase();
+        arcadeText(ctx, name, MOCK.name[0], MOCK.name[1] + 26, 78, ['#fff7d8', '#ffd98a', '#e0a040'], 'center', 380);
+    }
+
+    /** Her blurb, the stat panels with her bars, and her four skills on their painted rows. */
+    private paintedInfo(
+        fy: Fairy,
+        locked: boolean,
+        t: number,
+        piece: (name: string, b: readonly number[], phase?: number) => void,
+    ): void {
+        const ctx = this.ctx;
+        ctx.textAlign = 'left';
+        ctx.font = `italic 600 50px ${FONT}`;
+        ctx.fillStyle = locked ? '#ffe27a' : '#f6f0ff';
+        const [bx, by] = MOCK.blurb;
+        ctx.fillText(locked ? `To unlock: ${fy.unlock?.hint ?? ''}` : `${fy.blurb}.`, bx, by, 1500);
+        piece('statsL', MOCK.statsL, 1.6);
+        piece('statsR', MOCK.statsR, 2.1);
+        const stats = statsOf(fy);
+        stats.forEach(([, n], i) => {
+            const [x0, w] = MOCK.bars[i >> 1],
+                y = MOCK.barRows[i & 1],
+                bw = w / 5;
+            for (let k = 0; k < 5; k++) {
+                const on = !locked && k < n;
+                ctx.fillStyle = on ? '#6af07a' : 'rgba(255,255,255,0.1)';
+                slanted(x0 + k * bw, y - 17, bw - 12, 34, 12)(ctx);
+                ctx.fill();
+                if (on) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+                    slanted(x0 + k * bw + 4, y - 15, bw - 20, 9, 4)(ctx);
+                    ctx.fill();
+                }
+            }
+        });
+        const [sx, sw, sh] = MOCK.skillX;
+        skillsOf(fy, locked).forEach(([, name, text], i) => {
+            const y = MOCK.skills[i];
+            piece(`skill${i}`, [sx, y - 6, sw, sh], 2.6 + i * 0.4);
+            arcadeText(ctx, name.toUpperCase(), 1224, y + 104, 48, ['#fff3c0', '#ffd45c', '#e08a1c'], 'left', 480);
+            if (text) {
+                ctx.textAlign = 'left';
+                ctx.font = `italic 600 38px ${FONT}`;
+                ctx.fillStyle = 'rgba(239,230,255,0.9)';
+                ctx.fillText(`${text}.`, 1735, y + 76, 720);
+            }
+        });
+        void t;
+    }
+
+    /** One fairy's medallion on the painted tray: her colour and her look in a gold ring, glowing when she's in view. */
+    private paintedMedallion(fy: Fairy, locked: boolean, x: number, y: number, on: boolean, t: number): void {
+        const ctx = this.ctx,
+            r = on ? 80 : 66,
+            lift = on ? Math.sin(t * 4) * 4 : 0;
+        y += lift;
+        ctx.save();
+        const g = ctx.createRadialGradient(x, y - 20, 8, x, y, r);
+        g.addColorStop(0, locked ? '#3a3360' : fy.color);
+        g.addColorStop(1, locked ? '#141030' : shade(fy.color, 0.3));
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.clip();
+        if (locked) arcadeText(ctx, '?', x, y + 22, 64, ['#fff6d0', '#ffd45c', '#e88a1c'], 'center');
+        else drawFairy(ctx, fy, x, y + 10, on ? 4.6 : 3.8, t);
+        ctx.restore();
+        if (on) {
+            KIT.draw(ctx, 'medOn', x - 120, y - 122, 240, 240);
+            KIT.glint(ctx, 'medOn', x - 120, y - 122, 240, 240, t, 0.5, 4);
+        } else KIT.draw(ctx, 'medOff', x - 90, y - 90, 180, 180);
     }
 
     /** The PREVIEW button in the corner of her portrait (phones only), glowing gently. */
@@ -395,12 +712,7 @@ export class RosterScreen {
         ctx.fillStyle = locked ? '#ffe27a' : '#f6f0ff';
         ctx.fillText(locked ? `To unlock: ${fy.unlock?.hint ?? ''}` : `${fy.blurb}.`, b.x + 2, b.y + 4, b.w);
         // Stats: two panels side by side, two stats each.
-        const stats: [string, number, string][] = [
-            ['SPEED', rate(fy.speed, 1.2), 'speed'],
-            ['CHARGE', rate(1 / fy.charge, 2), 'charge'],
-            ['BURST', rate(fy.burst, 1.3), 'burst'],
-            ['DODGE', rate(1 / fy.hitbox, 1 / 0.7), 'dodge'],
-        ];
+        const stats = statsOf(fy);
         const pw = (b.w - 6) / 2,
             ph = 30,
             py = b.y + 12;
@@ -425,24 +737,7 @@ export class RosterScreen {
             }
         }
         // Skills.
-        const skills: [string, string, string, string][] = locked
-            ? [
-                  ['SHOT', '???', '', '#9a7aff'],
-                  ['BOMB', '???', '', '#ffb43c'],
-                  ['EXTRA ATTACK', '???', '', '#ff7ad0'],
-                  ['GUARDIAN', '???', '', '#c07af0'],
-              ]
-            : [
-                  ['SHOT', fy.chargeName, fy.skillText?.shot ?? SHOT_TEXT[fy.chargeStyle] ?? '', '#9a7aff'],
-                  ['BOMB', fy.bomb.name, fy.skillText?.bomb ?? BOMB_TEXT[fy.bomb.style] ?? '', '#ffb43c'],
-                  [
-                      'EXTRA ATTACK',
-                      fy.extra.name,
-                      `${fy.extra.count} that ${EXTRA_TEXT[fy.extra.flight] ?? 'fly at the rival'}`,
-                      '#ff7ad0',
-                  ],
-                  ['GUARDIAN', fy.guardian.name, GUARDIAN_TEXT[fy.guardian.pattern] ?? '', '#c07af0'],
-              ];
+        const skills = skillsOf(fy, locked);
         const rh = compact ? 34 : 29,
             gap = compact ? 5 : 4;
         skills.forEach(([kind, name, text, color], i) => {

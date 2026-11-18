@@ -28,8 +28,26 @@ STORED = 0.75
 
 # group: {piece: (source, body (x0, y0, x1, y1), wipes)}, all at 2x; a wipe is (x0, y0, x1, y1, the clean column x to
 # fill it from, an (x, y) point whose colour fills it, 'dark' for the
-# middle colour of its darker half, or None to clear it), or ('circle', x, y, r) to cut a round
-# hole.
+# middle colour of its darker half, or None to clear it), ('circle', x, y, r) to cut a round
+# hole, ('rrect', x0, y0, x1, y1, r) to cut a rounded window (where the game draws a portrait or a live meadow), or
+# ('keep', x, y, r, rect or None) to keep only the disc round (x, y) and the rect (x0, y0, x1, y1), softly edged (a
+# medallion lifted off the tray it sits on).
+
+
+def roster_skill(y):
+    """One of the Characters mockup's four skill rows, its top at `y`: its orb and kind kept, its name and what it
+    does wiped."""
+    return ('roster', (1000, y - 6, 2506, y + 130), [(1212, y + 52, 1720, y + 117, 1200), (1720, y + 12, 2455, y + 117, 1700)])
+
+
+def maps_card(x0, x1):
+    """One of the Maps mockup's five monster cards, from x0 to x1: its role kept, the monster and its name wiped."""
+    return ('maps', (x0 - 8, 718, x1 + 8, 1150), [(x0 + 24, 795, x1 - 24, 1046, x0 + 20), (x0 + 26, 1060, x1 - 26, 1114, 'dark')])
+
+
+# The centres of the Maps tray's seven stage discs (y 1300) and the Characters tray's seven medallions (y 1218).
+MAP_DISCS = [431, 729, 1028, 1330, 1629, 1927, 2230]
+STAGE_ICONS = [(30, 205), (225, 398), (405, 582), (608, 772), (783, 978), (978, 1170), (1182, 1362)]
 SCREENS = {
     'profile': {
         'title': ('profile-record', (1146, 2, 2340, 219), []),
@@ -114,6 +132,52 @@ SCREENS = {
         'chart': ('match-graphs', (160, 525, 3520, 1315), [(205, 560, 3475, 1285, None)]),
         'hintBar': ('match-graphs', (960, 1570, 2620, 1715), [(1060, 1610, 2530, 1690, 1030)]),
     },
+    'roster': {
+        'title': ('roster', (846, 0, 2698, 232), []),
+        'portrait': ('roster', (150, 110, 962, 1218), [('rrect', 192, 222, 916, 1040, 60), (360, 1075, 730, 1165, 350)]),
+        'statsL': ('roster', (980, 326, 1728, 508), [(1262, 350, 1690, 488, 1252)]),
+        'statsR': ('roster', (1753, 326, 2507, 508), [(2040, 350, 2470, 488, 2028)]),
+        'skill0': roster_skill(521),
+        'skill1': roster_skill(661),
+        'skill2': roster_skill(801),
+        'skill3': roster_skill(941),
+        'demo': ('roster', (2520, 218, 3523, 1130), [('rrect', 2556, 241, 3487, 1093, 50)]),
+        'tray': ('roster', (900, 1095, 2700, 1350), [(1085, 1095, 2520, 1345, 1497)]),
+        'medOn': ('roster', (1080, 1100, 1320, 1340), [('circle', 1200, 1222, 78), ('keep', 1200, 1222, 116, None)]),
+        'medOff': ('roster', (1311, 1127, 1491, 1307), [('circle', 1401, 1217, 64), ('keep', 1401, 1217, 84, None)]),
+    },
+    'maps': {
+        'title': ('maps', (436, 20, 2083, 240), []),
+        'plate': (
+            'maps',
+            (30, 232, 1100, 500),
+            [('circle', 244, 365, 90), (392, 290, 985, 392, 385), (416, 422, 900, 474, 405)],
+        ),
+        'difficulty': ('maps', (1110, 333, 1822, 454), [(1415, 368, 1765, 422, 1400)]),
+        'monsters': ('maps', (78, 588, 1787, 697), []),
+        'card0': maps_card(53, 396),
+        'card1': maps_card(416, 753),
+        'card2': maps_card(777, 1110),
+        'card3': maps_card(1136, 1469),
+        'card4': maps_card(1493, 1812),
+        'preview': ('maps', (1830, 240, 2625, 1160), [('rrect', 1866, 276, 2588, 1124, 50)]),
+        'tray': ('maps', (60, 1170, 2600, 1470), [(300, 1170, 2345, 1465, 580)]),
+        'medOn': (
+            'maps',
+            (220, 1165, 645, 1448),
+            [('circle', 431, 1300, 93), (290, 1378, 572, 1424, 'dark'), ('keep', 431, 1300, 122, (280, 1358, 582, 1438))],
+        ),
+        'medOff': (
+            'maps',
+            (590, 1180, 870, 1440),
+            [('circle', 729, 1300, 88), (640, 1380, 818, 1424, 'dark'), ('keep', 729, 1300, 104, (634, 1362, 824, 1434))],
+        ),
+        **{
+            f'disc{i}': ('maps', (cx - 92, 1208, cx + 92, 1392), [('keep', cx, 1300, 86, None), (cx - 92, 1362, cx + 92, 1392, None)])
+            for i, cx in enumerate(MAP_DISCS)
+        },
+        **{f'icon{i}': ('maps', (x0, 1578, x1, 1758), []) for i, (x0, x1) in enumerate(STAGE_ICONS)},
+    },
 }
 
 
@@ -164,7 +228,28 @@ def main(group):
         sheet = sheets[src]
         x0, y0, x1, y1 = map(at, body)
         piece = sheet[y0:y1, x0:x1].copy()
+        keep = None
         for wipe in wipes:
+            if wipe[0] == 'rrect':
+                # A rounded window cut right through, where the game draws its own picture under the frame.
+                _k, rx0, ry0, rx1, ry1, rr = wipe
+                yy, xx = np.mgrid[0 : y1 - y0, 0 : x1 - x0]
+                ax0, ay0, ax1, ay1, ar = at(rx0) - x0, at(ry0) - y0, at(rx1) - x0, at(ry1) - y0, at(rr)
+                dx = np.maximum(np.maximum(ax0 + ar - xx, xx - (ax1 - ar)), 0)
+                dy = np.maximum(np.maximum(ay0 + ar - yy, yy - (ay1 - ar)), 0)
+                piece[(dx**2 + dy**2 <= ar**2) & (xx >= ax0) & (xx < ax1) & (yy >= ay0) & (yy < ay1), 3] = 0
+                continue
+            if wipe[0] == 'keep':
+                # Only the disc (and a rect under it), fading out over a few pixels, so it lifts off what's round it.
+                _k, kx, ky, kr, rect = wipe
+                yy, xx = np.mgrid[0 : y1 - y0, 0 : x1 - x0].astype(np.float32)
+                d = np.sqrt((xx - (at(kx) - x0)) ** 2 + (yy - (at(ky) - y0)) ** 2) - at(kr)
+                if rect:
+                    qx0, qy0, qx1, qy1 = at(rect[0]) - x0, at(rect[1]) - y0, at(rect[2]) - x0, at(rect[3]) - y0
+                    rd = np.maximum(np.maximum(qx0 - xx, xx - qx1), np.maximum(qy0 - yy, yy - qy1))
+                    d = np.minimum(d, rd)
+                keep = np.clip(1 - d / 6, 0, 1)
+                continue
             if wipe[0] == 'circle':
                 # A round hole, where the game draws its own picture under the piece.
                 _k, ccx, ccy, cr = wipe
@@ -190,6 +275,8 @@ def main(group):
             piece[b - y0 : d - y0, a - x0 : c - x0] = sheet[b:d, at(cx)][:, None, :]
         # Only the piece itself: whatever else the box caught near its edges (a neighbour, a flower) goes.
         piece[:, :, 3] = piece[:, :, 3] * own(piece[:, :, 3])
+        if keep is not None:
+            piece[:, :, 3] = np.round(piece[:, :, 3] * keep).astype(np.uint8)
         cells[name] = piece
     width = max(2048, max(c.shape[1] for c in cells.values()))
     order = sorted(cells, key=lambda n: -cells[n].shape[0])
