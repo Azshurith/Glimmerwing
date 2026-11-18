@@ -609,8 +609,7 @@ export class LobbyScreen {
         if (kit) {
             drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.4);
             kitGlint9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.4, t, 2.5);
-        }
-        else ornatePanel(ctx, b, 8);
+        } else ornatePanel(ctx, b, 8);
         // Online count and the switch beside it.
         ctx.textAlign = 'left';
         ctx.font = `6px ${ARCADE}`;
@@ -1469,8 +1468,7 @@ export class LobbyScreen {
         if (kit) {
             drawKit(ctx, 'stage', b.x, b.y, b.w, b.h);
             kitGlint(ctx, 'stage', b.x, b.y, b.w, b.h, t, 3, 5);
-        }
-        else {
+        } else {
             ctx.strokeStyle = on ? '#ffe9a0' : goldGradient(ctx, b.y, b.y + b.h);
             ctx.lineWidth = on ? 1.6 : 1.2;
             pointed(ctx, b.x, b.y, b.w, b.h, 8);
@@ -1533,8 +1531,7 @@ export class LobbyScreen {
         if (kitReady()) {
             drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.38);
             kitGlint9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.38, t, 4);
-        }
-        else ornatePanel(ctx, b, 7);
+        } else ornatePanel(ctx, b, 7);
         const tg = ctx.createLinearGradient(0, b.y + 5, 0, b.y + 16);
         tg.addColorStop(0, '#8fd8ff');
         tg.addColorStop(1, '#3a7ad8');
