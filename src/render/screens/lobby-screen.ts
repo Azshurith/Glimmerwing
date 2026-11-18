@@ -19,7 +19,7 @@ import { drawMedal } from './profile-screen';
 import { enter } from '@/render/transition';
 import { STAGES } from '@/data/stages';
 import { drawPadlock } from './map-screen';
-import { drawFlowers, drawNight, gem, goldGradient, ornatePanel, pointed, wing } from './ornate';
+import { drawFlowers, drawNight, goldGradient, ornatePanel, pointed, wing } from './ornate';
 
 /** A box, in design or view units. */
 export interface Box {
@@ -1149,57 +1149,86 @@ export class LobbyScreen {
      */
     private header(v: LobbyView, b: Box, t: number, W: number, bleed: number, tall: boolean): void {
         const ctx = this.ctx;
-        const r = tall ? 14 : 16;
-        const ax = b.x + r + 6,
+        const r = tall ? 13 : 15;
+        const ax = b.x + r + 7,
             ay = b.y + b.h / 2;
-        // A soft dark band behind the name, fading out to the right.
-        const g = ctx.createLinearGradient(ax, 0, b.x + b.w, 0);
-        g.addColorStop(0, 'rgba(24,10,56,0.85)');
-        g.addColorStop(1, 'rgba(24,10,56,0)');
+        // The plate: a dark violet card with rounded corners and a soft lilac edge, running from behind the avatar.
+        const px = ax,
+            py = b.y + 3,
+            pw = b.x + b.w - px,
+            ph = b.h - 6;
+        const g = ctx.createLinearGradient(0, py, 0, py + ph);
+        g.addColorStop(0, 'rgba(46,22,92,0.94)');
+        g.addColorStop(1, 'rgba(20,8,46,0.94)');
         ctx.fillStyle = g;
-        roundRect(ctx, ax, ay - r + 2, b.w - (ax - b.x), r * 2 - 4, r - 2);
+        roundRect(ctx, px, py, pw, ph, 7);
         ctx.fill();
-        // The underline: from under the avatar out along the plate, curling up at its end.
-        const uy = ay + r - 1;
-        ctx.strokeStyle = goldGradient(ctx, uy - 10, uy + 2);
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(ax, uy);
-        ctx.lineTo(b.x + b.w - 26, uy);
-        ctx.bezierCurveTo(b.x + b.w - 12, uy, b.x + b.w - 6, uy - 4, b.x + b.w, uy - 12);
+        ctx.strokeStyle = 'rgba(176,146,255,0.5)';
+        ctx.lineWidth = 1;
         ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.beginPath();
+        ctx.moveTo(px + 7, py + 1.5);
+        ctx.lineTo(px + pw - 7, py + 1.5);
+        ctx.stroke();
+        // Sparkles in its top-right corner.
+        const tw = 0.6 + Math.abs(Math.sin(t * 1.7)) * 0.4;
+        ctx.fillStyle = `rgba(255,236,190,${0.75 * tw})`;
+        sparkle(ctx, px + pw - 12, py + 9, 3.6 * tw + 1);
+        ctx.fillStyle = 'rgba(255,236,190,0.5)';
+        sparkle(ctx, px + pw - 22, py + 5, 1.6);
+        sparkle(ctx, px + pw - 6, py + ph - 9, 1.4);
+        // The swoosh: a gold crescent from above the avatar round its left and under it, sweeping off along the plate's
+        // foot and thinning to a point.
+        const by = py + ph - 1.5;
+        const tip = px + pw * 0.62;
+        ctx.fillStyle = goldGradient(ctx, ay - r - 6, by + 2);
+        ctx.beginPath();
+        ctx.arc(ax - 1, ay + 0.5, r + 7.5, -2.45, Math.PI / 2 + 0.25, true);
+        ctx.bezierCurveTo(ax + r, by + 3, tip - 30, by + 1, tip, by - 1);
+        ctx.bezierCurveTo(tip - 30, by - 0.5, ax + r, by + 0.5, ax + 4, ay + r + 3.2);
+        ctx.arc(ax + 1.2, ay + 0.6, r + 3.2, Math.PI / 2 + 0.05, -2.45, false);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = goldGradient(ctx, by - 4, by + 2);
         ctx.lineWidth = 0.6;
         ctx.beginPath();
-        ctx.moveTo(ax + 6, uy + 2.5);
-        ctx.lineTo(b.x + b.w - 34, uy + 2.5);
+        ctx.moveTo(tip - 20, by + 1.2);
+        ctx.quadraticCurveTo(tip + 30, by + 0.5, px + pw - 14, by - 4);
         ctx.stroke();
-        // The ornate ring: curls out either side, a thick gold ring, a star hanging under it.
-        ctx.strokeStyle = goldGradient(ctx, ay - r, ay + r);
-        ctx.lineWidth = 1.2;
-        for (const dir of [-1, 1]) {
-            ctx.beginPath();
-            ctx.moveTo(ax + dir * (r + 2), ay - r * 0.6);
-            ctx.quadraticCurveTo(ax + dir * (r + 9), ay - r * 1.1, ax + dir * (r + 5), ay - r * 1.25);
-            ctx.stroke();
-        }
+        const sa = -2.45;
+        ctx.fillStyle = '#fff3c9';
+        const sr = 2.4 + Math.abs(Math.sin(t * 2)) * 1.2;
+        sparkle(ctx, ax - 1 + Math.cos(sa) * (r + 6.5), ay + 0.5 + Math.sin(sa) * (r + 6.5), sr);
+        // The avatar in its gold ring.
         this.framedAvatar(v.fairy, v.frame, ax, ay, r, t);
         ctx.strokeStyle = goldGradient(ctx, ay - r, ay + r);
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.arc(ax, ay, r + 1.6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(70,40,10,0.6)';
+        ctx.lineWidth = 0.6;
         ctx.beginPath();
         ctx.arc(ax, ay, r + 3, 0, Math.PI * 2);
         ctx.stroke();
-        gem(ctx, ax, ay + r + 4, 3.4);
-        ctx.fillStyle = '#fff6d8';
-        sparkle(ctx, ax, ay + r + 4, 2 + Math.abs(Math.sin(t * 2)) * 1.2);
+        // Name, then the stage reached in gold, a divider and the wins.
         const tx = ax + r + 9;
         ctx.textAlign = 'left';
         ctx.font = `800 ${tall ? 11 : 13}px ${SANS}`;
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(v.name, tx, ay - 1, b.w - (tx - b.x) - 10);
-        ctx.font = `${tall ? 5 : 5.5}px ${ARCADE}`;
+        ctx.fillText(v.name, tx, ay - 1, b.w - (tx - b.x) - 14);
+        const ly = ay + (tall ? 9 : 10);
+        ctx.font = `800 ${tall ? 7 : 8}px ${SANS}`;
         ctx.fillStyle = '#ffd45c';
-        sparkle(ctx, tx + 2, ay + 7, 2);
-        ctx.fillText(`${v.wins} WINS`, tx + 7, ay + 9);
+        sparkle(ctx, tx + 2.5, ly - 3, 2.6);
+        const lv = `Stage ${v.stages[0]}`;
+        ctx.fillText(lv, tx + 7, ly);
+        const dx = tx + 7 + ctx.measureText(lv).width + 6;
+        ctx.fillStyle = 'rgba(220,200,255,0.45)';
+        ctx.fillRect(dx, ly - 7, 0.8, 8);
+        ctx.fillStyle = '#e8e0ff';
+        ctx.fillText(`${v.wins} WINS`, dx + 6, ly);
         // Counters at the top right: on a phone just the server light; in landscape stages, trophies and the light.
         const right = W + bleed - 8;
         if (tall) {
