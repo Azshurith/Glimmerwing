@@ -97,14 +97,23 @@ export function kitButton(
  * A screen's heading, centred on (cx, y): its name in big gold letters between the kit's two gold wings, the kit's
  * starred divider under it.
  */
-export function kitTitle(ctx: CanvasRenderingContext2D, text: string, cx: number, y: number, size: number): void {
+export function kitTitle(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    cx: number,
+    y: number,
+    size: number,
+    wings = 1,
+): void {
     ctx.font = `${size}px ${ARCADE}`;
     arcadeText(ctx, text, cx, y + size * 0.38, size, ['#fff6d0', '#ffd45c', '#e88a1c'], 'center');
     const tw = ctx.measureText(text).width;
-    const wh = size * 1.25,
-        ww = (wh * 204) / 84;
-    drawKit(ctx, 'wingLeft', cx - tw / 2 - ww - size * 0.7, y - wh * 0.55, ww, wh);
-    drawKit(ctx, 'wingRight', cx + tw / 2 + size * 0.7, y - wh * 0.55, ww, wh);
+    // `wings` below 1 draws them smaller and closer, for a long heading on a narrow screen.
+    const wh = size * 1.25 * Math.max(0.4, wings),
+        ww = (wh * 204) / 84,
+        gap = size * 0.7 * Math.max(0.4, wings);
+    drawKit(ctx, 'wingLeft', cx - tw / 2 - ww - gap, y - wh * 0.55, ww, wh);
+    drawKit(ctx, 'wingRight', cx + tw / 2 + gap, y - wh * 0.55, ww, wh);
     kitDivider(ctx, cx, y + size * 0.78, tw + ww * 1.6);
 }
 
