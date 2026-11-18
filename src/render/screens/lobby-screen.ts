@@ -196,7 +196,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
         isle = compact ? 80 : 90;
     const road = { x: W / 2 - 64, y: 208, w: 128, h: 17 };
     const bar = { x: L + 14, y: 262, w: R - L - 28, h: 38 };
-    const play = { x: W / 2 - 61, y: 260, w: 122, h: 43 };
+    const play = { x: W / 2 - 63, y: 261, w: 126, h: 40 };
     return {
         play,
         tiles: MODE_TILES.map(m => ({ x: W / 2 + m.x * 1.1, y: 194 + m.y * 1.1, d: m.d * 1.1 })),
@@ -1737,20 +1737,20 @@ export class LobbyScreen {
                 ctx.shadowBlur = 16 + 5 * Math.sin(t * 5);
                 ctx.fillStyle = 'rgba(255,180,60,0.5)';
                 const gw = tall ? b.w + 10 : b.w - 4,
-                    gh = tall ? gw / 2.85 : b.h - 4;
+                    gh = tall ? gw / 3.1 : b.h - 4;
                 roundRect(ctx, b.x + (b.w - gw) / 2, b.y + (b.h - gh) / 2 + (tall ? 4 : 0), gw, gh, gh / 2);
                 ctx.fill();
                 ctx.restore();
             }
             // Kept to the painting's shape: on a phone, wider than the box and shorter, across its middle.
             const pw = tall ? b.w + 14 : b.w,
-                ph = tall ? pw / 2.85 : b.h,
+                ph = tall ? pw / 3.1 : b.h,
                 px = b.x + (b.w - pw) / 2,
                 py = b.y + (b.h - ph) / 2 + (tall ? 4 : 0);
             drawKit(ctx, 'play', px, py, pw, ph);
             // Light sweeps across its gold, more often while it has the cursor, and its crest twinkles.
             kitGlint(ctx, 'play', px, py, pw, ph, t, 1, on ? 2.6 : 4);
-            const crest = kitPoint('play', 350, -2, px, py, pw, ph);
+            const crest = kitPoint('play', 314, -30, px, py, pw, ph);
             twinkle(ctx, crest.x, crest.y, ph * 0.18, t, 0.3);
             return;
         }

@@ -31,8 +31,12 @@ TS = os.path.join(ROOT, 'src', 'data', 'lobby-kit.ts')
 # How far a piece's glow reaches past its body.
 GLOW = 10
 
-# name: body (x0, y0, x1, y1), wipes [(x0, y0, x1, y1, sample x, sample y)], stretch (x0, x1). The crop is the body
-# plus GLOW all round. A wipe fills its box with the colour at its sample point, the plate's flat inside.
+# The sheet's padding, wider than any piece's margin.
+PAD = 100
+
+# name: body (x0, y0, x1, y1), wipes [(x0, y0, x1, y1, sample x, sample y)], stretch (x0, x1) and, if given, the
+# margin round the body to keep (GLOW if not). PLAY's body is its gold face, its frame and crest standing out round it.
+# The crop is the body plus the margin all round. A wipe fills its box with the colour at its sample point, the plate's flat inside.
 PIECES = {
     'name': ((30, 15, 930, 285), [(330, 62, 760, 205, 600, 50)], (340, 740)),
     'quickHistory': ((60, 303, 585, 452), [], None),
@@ -48,7 +52,7 @@ PIECES = {
     'stage': ((1318, 925, 2162, 1040), [(1356, 952, 1996, 1014, 1900, 960)], (1390, 2090)),
     'arrow': ((1160, 926, 1243, 1037), [], None),
     'bar': ((146, 1158, 1300, 1352), [(300, 1182, 1252, 1328, 820, 1300)], (500, 1100)),
-    'play': ((1402, 1122, 2150, 1385), [], None),
+    'play': ((1438, 1148, 2118, 1366), [], None, 84),
     'panel': ((25, 1407, 590, 1560), [], None),
     'orbCharacters': ((46, 1596, 189, 1731), [], None),
     'orbMaps': ((218, 1596, 359, 1731), [], None),
@@ -76,10 +80,13 @@ MASKS = {
     'badgeRanking': [('ellipse', (57, 464, 210, 617), 0)],
     'badgeGuide': [('ellipse', (57, 626, 210, 779), 0)],
     'play': [
-        ('round', (1394, 1114, 2158, 1393), 136),
-        ('poly', (1752, 1078, 1838, 1128, 1838, 1170, 1752, 1188, 1666, 1170, 1666, 1128), 0),
+        ('round', (1386, 1098, 2164, 1398), 150),
+        ('poly', (1752, 1078, 1866, 1112, 1866, 1182, 1752, 1196, 1638, 1182, 1638, 1112), 0),
     ],
 }
+
+# Pieces that sit over the bar on the sheet and drop its violet from round them.
+NO_PURPLE = {'play'}
 
 # Circles (centre and radius) in pieces whose insides the glint leaves alone: the sample face in the plate's ring,
 # which the game covers with the player's avatar.
@@ -139,20 +146,26 @@ def gold_mask(rgba):
 def main():
     src = Image.open(SRC).convert('RGB')
     src = src.resize((src.width // 2, src.height // 2), Image.LANCZOS)
-    # Padded by GLOW all round, so pieces at the sheet's edge still get their full margin: sheet[y + GLOW, x + GLOW]
+    # Padded by PAD all round, so pieces at the sheet's edge still get their full margin: sheet[y + PAD, x + PAD]
     # is the sheet's (x, y).
-    sheet = np.pad(key(np.array(src)), ((GLOW, GLOW), (GLOW, GLOW), (0, 0)))
+    sheet = np.pad(key(np.array(src)), ((PAD, PAD), (PAD, PAD), (0, 0)))
     cells = {}
-    for name, (body, wipes, _stretch) in PIECES.items():
-        x0, y0 = body[0] - GLOW, body[1] - GLOW
-        x1, y1 = body[2] + GLOW, body[3] + GLOW
-        piece = sheet[y0 + GLOW : y1 + GLOW, x0 + GLOW : x1 + GLOW].copy()
+    for name, (body, wipes, _stretch, *rest) in PIECES.items():
+        m = rest[0] if rest else GLOW
+        x0, y0 = body[0] - m, body[1] - m
+        x1, y1 = body[2] + m, body[3] + m
+        piece = sheet[y0 + PAD : y1 + PAD, x0 + PAD : x1 + PAD].copy()
         for wx0, wy0, wx1, wy1, sx, sy in wipes:
-            piece[wy0 - y0 : wy1 - y0, wx0 - x0 : wx1 - x0] = sheet[sy + GLOW, sx + GLOW]
+            piece[wy0 - y0 : wy1 - y0, wx0 - x0 : wx1 - x0] = sheet[sy + PAD, sx + PAD]
         if name in MASKS:
             m = shapes((x1 - x0, y1 - y0), (x0, y0), MASKS[name]).filter(ImageFilter.GaussianBlur(2))
             keep = np.array(m, np.float32) / 255
             piece[:, :, 3] = np.round(piece[:, :, 3] * keep).astype(np.uint8)
+        if name in NO_PURPLE:
+            # The bar's violet showing round the button on the sheet goes.
+            p = piece.astype(np.int32)
+            violet = (p[:, :, 2] > p[:, :, 0] + 10) & (p[:, :, 2] > p[:, :, 1] + 10)
+            piece[violet, 3] = 0
         cells[name] = piece
     # Shelf-pack the pieces, tallest first.
     width = 2048
@@ -176,18 +189,19 @@ def main():
     for name, (cx, cy, r) in NO_GLINT.items():
         ax, ay = spots[name]
         bx, by = PIECES[name][0][:2]
-        ox, oy = ax + cx - (bx - GLOW), ay + cy - (by - GLOW)
+        m = PIECES[name][3] if len(PIECES[name]) > 3 else GLOW
+        ox, oy = ax + cx - (bx - m), ay + cy - (by - m)
         gold[(xx - ox) ** 2 + (yy - oy) ** 2 < r * r, 3] = 0
     Image.fromarray(gold).save(GOLD, optimize=True)
     layout = {}
-    for name, (body, _wipes, stretch) in PIECES.items():
+    for name, (body, _wipes, stretch, *rest) in PIECES.items():
+        m = rest[0] if rest else GLOW
         ax, ay = spots[name]
         h, w = cells[name].shape[:2]
-        entry = {'x': ax, 'y': ay, 'w': w, 'h': h, 'bx': GLOW, 'by': GLOW,
-                 'bw': body[2] - body[0], 'bh': body[3] - body[1]}
+        entry = {'x': ax, 'y': ay, 'w': w, 'h': h, 'bx': m, 'by': m, 'bw': body[2] - body[0], 'bh': body[3] - body[1]}
         if stretch:
-            entry['s0'] = stretch[0] - (body[0] - GLOW)
-            entry['s1'] = stretch[1] - (body[0] - GLOW)
+            entry['s0'] = stretch[0] - (body[0] - m)
+            entry['s1'] = stretch[1] - (body[0] - m)
         layout[name] = entry
     with open(TS, 'w') as f:
         f.write('// Generated by tools/extract-ui-kit.py from assets/source/ui/lobby-kit-vector.png: don\'t hand-edit.\n')
