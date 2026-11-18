@@ -163,7 +163,10 @@ export class MatchScreen {
         else if (v.tab === 'scoreboard') enter(ctx, 'panels', () => this.scoreboard(v, stats, t, tall, W, bleed));
         else {
             lay.graphs.forEach((b, i) =>
-                enter(ctx, 'buttons', () => this.tab(b, GRAPHS[i], i === v.graph, '#c9b8ff', t, 6), { box: b, i: i + 3 }),
+                enter(ctx, 'buttons', () => this.tab(b, GRAPHS[i], i === v.graph, '#c9b8ff', t, 6), {
+                    box: b,
+                    i: i + 3,
+                }),
             );
             enter(ctx, 'panels', () => this.graph(v, stats, tall, W, bleed));
         }
