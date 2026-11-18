@@ -19,7 +19,7 @@ import { drawMedal } from './profile-screen';
 import { enter } from '@/render/transition';
 import { STAGES } from '@/data/stages';
 import { drawPadlock } from './map-screen';
-import { drawKit, drawKit9, kitReady } from './kit';
+import { drawKit, drawKit9, kitGlint, kitGlint9, kitPoint, kitReady, twinkle } from './kit';
 import type { KitName } from './kit';
 import { drawFlowers, drawNight, goldGradient, ornatePanel, pointed, wing } from './ornate';
 
@@ -606,7 +606,10 @@ export class LobbyScreen {
     private friends(b: Box, t: number): void {
         const ctx = this.ctx;
         const kit = kitReady();
-        if (kit) drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.4);
+        if (kit) {
+            drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.4);
+            kitGlint9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.4, t, 2.5);
+        }
         else ornatePanel(ctx, b, 8);
         // Online count and the switch beside it.
         ctx.textAlign = 'left';
@@ -1316,6 +1319,10 @@ export class LobbyScreen {
     private kitHeader(v: LobbyView, b: Box, t: number): void {
         const ctx = this.ctx;
         drawKit(ctx, 'name', b.x, b.y, b.w, b.h);
+        kitGlint(ctx, 'name', b.x, b.y, b.w, b.h, t, 0, 6);
+        // The painted star at the card's corner twinkles.
+        const star = kitPoint('name', 419, 12, b.x, b.y, b.w, b.h);
+        twinkle(ctx, star.x, star.y, b.h * 0.13, t, 0);
         // Placed by the painting: its body is 133 sheet pixels high, the ring's middle 88, 62 into it.
         const s = b.h / 133;
         const ax = b.x + 88 * s,
@@ -1348,6 +1355,7 @@ export class LobbyScreen {
         const onW = (h * 180) / 48;
         let x = right - onW;
         drawKit(ctx, pill, x, y, onW, h);
+        kitGlint(ctx, pill, x, y, onW, h, t, 2.2, 6);
         if (v.online) {
             // The light breathes.
             ctx.fillStyle = `rgba(120,255,150,${0.25 + 0.2 * Math.sin(t * 3)})`;
@@ -1361,14 +1369,15 @@ export class LobbyScreen {
             ['counterTrophy', String(v.trophies), 95, 32],
             ['counterStage', `${v.stages[0]}/${v.stages[1]}`, 81, 22],
         ];
-        for (const [name, text, head, tail] of plates) {
+        plates.forEach(([name, text, head, tail], i) => {
             const k = h / 48;
             const w = Math.max(text.length * 6, ctx.measureText(text).width) + (head + tail) * k + 4;
             x -= w + 5;
             drawKit(ctx, name, x, y, w, h);
+            kitGlint(ctx, name, x, y, w, h, t, 1.4 + i * 0.5, 6);
             ctx.fillStyle = '#ffffff';
             ctx.fillText(text, x + head * k + 2, y + h / 2 + 3.2);
-        }
+        });
     }
 
     /** A counter's plate: dark, slanted, in a gold edge. */
@@ -1392,6 +1401,7 @@ export class LobbyScreen {
         if (kitReady()) {
             const key = q.label.charAt(0) + q.label.slice(1).toLowerCase();
             drawKit(ctx, (tall ? 'badge' : 'quick') + key, b.x, b.y, b.w, b.h);
+            kitGlint(ctx, (tall ? 'badge' : 'quick') + key, b.x, b.y, b.w, b.h, t, i * 0.35, 5);
             return;
         }
         const r = b.h / 2 + (tall ? 0 : 2),
@@ -1456,7 +1466,10 @@ export class LobbyScreen {
         pointed(ctx, b.x, b.y, b.w, b.h, 8);
         ctx.fill();
         ctx.restore();
-        if (kit) drawKit(ctx, 'stage', b.x, b.y, b.w, b.h);
+        if (kit) {
+            drawKit(ctx, 'stage', b.x, b.y, b.w, b.h);
+            kitGlint(ctx, 'stage', b.x, b.y, b.w, b.h, t, 3, 5);
+        }
         else {
             ctx.strokeStyle = on ? '#ffe9a0' : goldGradient(ctx, b.y, b.y + b.h);
             ctx.lineWidth = on ? 1.6 : 1.2;
@@ -1481,6 +1494,7 @@ export class LobbyScreen {
                 ay = box.y + box.h / 2;
             if (kit) {
                 drawKit(ctx, 'arrow', ax - (dir < 0 ? 2 : 13), ay - 10, 15, 21, dir > 0);
+                kitGlint(ctx, 'arrow', ax - (dir < 0 ? 2 : 13), ay - 10, 15, 21, t, dir < 0 ? 3.6 : 3.8, 5, dir > 0);
                 continue;
             }
             ctx.fillStyle = goldGradient(ctx, ay - 10, ay + 10);
@@ -1516,7 +1530,10 @@ export class LobbyScreen {
     private ticker(v: LobbyView, b: Box, t: number): void {
         if (v.chatOpen) return;
         const ctx = this.ctx;
-        if (kitReady()) drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.38);
+        if (kitReady()) {
+            drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.38);
+            kitGlint9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.38, t, 4);
+        }
         else ornatePanel(ctx, b, 7);
         const tg = ctx.createLinearGradient(0, b.y + 5, 0, b.y + 16);
         tg.addColorStop(0, '#8fd8ff');
@@ -1594,8 +1611,17 @@ export class LobbyScreen {
             kit = kitReady();
         // In landscape the kit's painted halves, the right one mirrored; on a phone the bar is too short for them.
         if (kit && !tall) {
-            drawKit(ctx, 'bar', b.x, b.y, p.x + 14 - b.x, b.h);
-            drawKit(ctx, 'bar', p.x + p.w - 14, b.y, b.x + b.w - (p.x + p.w - 14), b.h, true);
+            const lw = p.x + 14 - b.x,
+                rx = p.x + p.w - 14,
+                rw = b.x + b.w - rx;
+            drawKit(ctx, 'bar', b.x, b.y, lw, b.h);
+            drawKit(ctx, 'bar', rx, b.y, rw, b.h, true);
+            kitGlint(ctx, 'bar', b.x, b.y, lw, b.h, t, 0, 6);
+            kitGlint(ctx, 'bar', rx, b.y, rw, b.h, t, 0.6, 6, true);
+            // The painted stars at the bar's points twinkle.
+            const star = kitPoint('bar', 40, 57, b.x, b.y, lw, b.h);
+            twinkle(ctx, star.x, star.y, b.h * 0.16, t, 1);
+            twinkle(ctx, b.x + b.w - (star.x - b.x), star.y, b.h * 0.16, t, 2);
         }
         for (const dir of kit && !tall ? [] : [-1, 1]) {
             const outer = dir < 0 ? b.x : b.x + b.w,
@@ -1669,6 +1695,7 @@ export class LobbyScreen {
                 if (kit) {
                     const k = on ? 1.08 + 0.03 * Math.sin(t * 5) : 1;
                     drawKit(ctx, NAV_ORBS[it.action], x - rr * k, y - rr * k, rr * 2 * k, rr * 2 * k);
+                    kitGlint(ctx, NAV_ORBS[it.action], x - rr * k, y - rr * k, rr * 2 * k, rr * 2 * k, t, i * 0.7, 5);
                 } else {
                     drawBadge(ctx, it.color, x, y, rr, on, t);
                     drawEmblem(ctx, it.action, x, y, rr / 34, t, on);
@@ -1723,17 +1750,10 @@ export class LobbyScreen {
                 px = b.x + (b.w - pw) / 2,
                 py = b.y + (b.h - ph) / 2 + (tall ? 4 : 0);
             drawKit(ctx, 'play', px, py, pw, ph);
-            ctx.save();
-            roundRect(ctx, px + 3, py + 3, pw - 6, ph - 6, ph / 2 - 3);
-            ctx.clip();
-            const sweep = ((t % 2.6) / 2.6) * (pw + 120) - 60;
-            const sg = ctx.createLinearGradient(px + sweep - 16, 0, px + sweep + 16, 0);
-            sg.addColorStop(0, 'rgba(255,255,255,0)');
-            sg.addColorStop(0.5, `rgba(255,255,255,${on ? 0.4 : 0.25})`);
-            sg.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = sg;
-            ctx.fillRect(px, py, pw, ph);
-            ctx.restore();
+            // Light sweeps across its gold, more often while it has the cursor, and its crest twinkles.
+            kitGlint(ctx, 'play', px, py, pw, ph, t, 1, on ? 2.6 : 4);
+            const crest = kitPoint('play', 166, 2, px, py, pw, ph);
+            twinkle(ctx, crest.x, crest.y, ph * 0.18, t, 0.3);
             return;
         }
         // A frame of dark gold round the capsule, like a setting.

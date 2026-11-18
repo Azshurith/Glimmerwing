@@ -6,7 +6,8 @@ Reads assets/source/ui/lobby-kit.png (the painted sheet, transparent), wipes the
 text the game draws itself (blending across it from the clean inside either side), and writes
 assets/ui/lobby-kit.png with src/data/lobby-kit.ts, the atlas's layout: per piece its cell in the atlas, its body
 (the solid shape inside the glow, relative to the cell) and, for pieces stretched along their length, where the
-stretchable middle starts and ends.
+stretchable middle starts and ends. It also writes assets/ui/lobby-kit-gold.png, the same atlas with only its gold
+(in white, as opaque as each pixel is gold), which the glints light up.
 """
 
 import json
@@ -18,6 +19,7 @@ from PIL import Image, ImageDraw, ImageFilter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'assets', 'source', 'ui', 'lobby-kit.png')
 OUT = os.path.join(ROOT, 'assets', 'ui', 'lobby-kit.png')
+GOLD = os.path.join(ROOT, 'assets', 'ui', 'lobby-kit-gold.png')
 TS = os.path.join(ROOT, 'src', 'data', 'lobby-kit.ts')
 
 GLOW = 7
@@ -64,6 +66,9 @@ MASKS = {
     ],
 }
 
+# Circles (sheet pixels: centre and radius) in pieces whose insides the glint leaves alone.
+NO_GLINT = {'name': (105, 75, 45)}
+
 
 def mask_for(name, crop):
     """An alpha mask (0-1) keeping only the piece's own shapes, or None for a piece that needs none."""
@@ -84,6 +89,25 @@ def mask_for(name, crop):
             d.ellipse(box, fill=255)
     m = m.filter(ImageFilter.GaussianBlur(2))
     return np.array(m, np.float32) / 255
+
+
+def gold_mask(rgba):
+    """The gold of a piece as a white picture whose alpha is how gold each pixel is (bright, warm, opaque), for the
+    glint that runs along the trim."""
+    rgb = rgba[:, :, :3].astype(np.float32) / 255
+    mx = rgb.max(axis=2)
+    mn = rgb.min(axis=2)
+    sat = np.where(mx > 0, (mx - mn) / np.maximum(mx, 1e-6), 0)
+    r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    warm = np.clip((r - b) * 2.2, 0, 1) * np.clip((g - b) * 3, 0, 1)
+    bright = np.clip((mx - 0.5) / 0.35, 0, 1)
+    pale = np.clip((mn - 0.8) / 0.15, 0, 1)  # near-white highlights on the gold
+    k = np.maximum(warm * bright * np.clip(sat * 2, 0, 1), pale * bright)
+    k = k * (rgba[:, :, 3].astype(np.float32) / 255)
+    out = np.zeros_like(rgba)
+    out[:, :, :3] = 255
+    out[:, :, 3] = np.round(np.clip(k, 0, 1) * 255).astype(np.uint8)
+    return out
 
 
 def main():
@@ -120,6 +144,14 @@ def main():
         h, w = cells[name].shape[:2]
         atlas[ay : ay + h, ax : ax + w] = cells[name]
     Image.fromarray(atlas).save(OUT, optimize=True)
+    gold = gold_mask(atlas)
+    # The sample face in the plate's ring isn't gold: the game draws the player's avatar over it.
+    for name, (cx, cy, r) in NO_GLINT.items():
+        ax, ay = spots[name]
+        x0, y0 = PIECES[name][0][:2]
+        yy, xx = np.mgrid[0 : gold.shape[0], 0 : gold.shape[1]]
+        gold[(xx - (ax + cx - x0)) ** 2 + (yy - (ay + cy - y0)) ** 2 < r * r, 3] = 0
+    Image.fromarray(gold).save(GOLD, optimize=True)
     layout = {}
     for name, (crop, body, _wipes, stretch) in PIECES.items():
         ax, ay = spots[name]
