@@ -177,7 +177,12 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
             tiles: MODE_TILES.map(m => ({ x: W / 2 + m.x * 0.98, y: H / 2 + 14 + m.y * 0.98, d: m.d * 0.98 })),
             close: { x: R - 40, y: 44, w: 32, h: 32 },
             bar,
-            nav: [0, 1, 2, 3].map(i => ({ x: bar.x + 10 + (i * (bar.w - 20)) / 4, y: bar.y, w: (bar.w - 20) / 4, h: bar.h })),
+            nav: [0, 1, 2, 3].map(i => ({
+                x: bar.x + 10 + (i * (bar.w - 20)) / 4,
+                y: bar.y,
+                w: (bar.w - 20) / 4,
+                h: bar.h,
+            })),
             plate: { x: L + 4, y: 3, w: 170, h: 34 },
             quick: LOBBY_QUICK.map((_, i) => ({ x: L + 6, y: 46 + i * 32, w: 28, h: 28 })),
             road,
@@ -185,7 +190,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
             next: { x: road.x + road.w + 4, y: road.y - 3, w: 22, h: 23 },
             isle: { x: W / 2 - 100, y: iy - 44, w: 200, h: 140 },
             roadOk: { x: W / 2 - 60, y: H - 54, w: 120, h: 38 },
-            ticker: { x: L + 8, y: H - 152, w: R - L - 16, h: 46 },
+            ticker: { x: L + 8, y: H - 162, w: R - L - 16, h: 46 },
             chat: { x: L, y: 0, w: R - L, h: H },
             friends: { x: R - 170, y: 44, w: 162, h: Math.min(300, H - 200) },
             friendsTab: { x: R - 24, y: 84, w: 24, h: 96 },
@@ -1813,9 +1818,23 @@ export class LobbyScreen {
                 ph = b.h,
                 px = b.x,
                 py = b.y;
+            // The painting's side scrolls were cut where the bar's halves meet it; in landscape the bar covers that,
+            // but on a phone PLAY stands on its own, so it's kept to its rounded frame and crest (in the piece's
+            // pixels, where the face is 680 by 218 at (84, 84)).
+            ctx.save();
+            if (tall) {
+                const k = pw / 680,
+                    fx = px - 84 * k,
+                    fy = py - 84 * k;
+                ctx.beginPath();
+                roundRect(ctx, fx + 54 * k, fy + 60 * k, 732 * k, 264 * k, 132 * k);
+                ctx.rect(fx + 320 * k, fy + 10 * k, 210 * k, 120 * k);
+                ctx.clip();
+            }
             drawKit(ctx, 'play', px, py, pw, ph);
             // Light sweeps across its gold, more often while it has the cursor, and its crest twinkles.
             kitGlint(ctx, 'play', px, py, pw, ph, t, 1, on ? 2.6 : 4);
+            ctx.restore();
             const crest = kitPoint('play', 314, -30, px, py, pw, ph);
             twinkle(ctx, crest.x, crest.y, ph * 0.18, t, 0.3);
             return;
