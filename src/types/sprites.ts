@@ -79,3 +79,20 @@ export interface MonsterSheet {
     /** Each monster's display name, for the Maps screen. */
     names: Partial<Record<MonsterKind, string>>;
 }
+
+/**
+ * One piece of a painted UI kit's atlas: its cell in the atlas, its body (the solid shape inside its glow, relative to
+ * the cell), and for a piece that stretches along its length, the stretchable middle's columns (relative to the cell).
+ */
+export interface KitPiece {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    bx: number;
+    by: number;
+    bw: number;
+    bh: number;
+    s0?: number;
+    s1?: number;
+}

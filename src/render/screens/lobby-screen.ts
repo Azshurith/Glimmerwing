@@ -19,6 +19,8 @@ import { drawMedal } from './profile-screen';
 import { enter } from '@/render/transition';
 import { STAGES } from '@/data/stages';
 import { drawPadlock } from './map-screen';
+import { drawKit, drawKit9, kitReady } from './kit';
+import type { KitName } from './kit';
 import { drawFlowers, drawNight, goldGradient, ornatePanel, pointed, wing } from './ornate';
 
 /** A box, in design or view units. */
@@ -36,6 +38,14 @@ export const LOBBY_NAV: { action: TitleAction; label: string; sub: string; color
     { action: 'profile', label: 'PROFILE', sub: 'Record, history, ranking', color: '#8fd8ff' },
     { action: 'settings', label: 'SETTINGS', sub: 'Sound, display, keys', color: '#c9b8ff' },
 ];
+
+/** The painted orb of each bar button (from the lobby kit). */
+const NAV_ORBS: Record<string, KitName> = {
+    characters: 'orbCharacters',
+    maps: 'orbMaps',
+    profile: 'orbProfile',
+    settings: 'orbSettings',
+};
 
 /** The quick buttons under the player's plate: the match history and the ranking (both on Profile), and the guide. */
 export const LOBBY_QUICK = [
@@ -185,7 +195,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
         isle = compact ? 80 : 90;
     const road = { x: W / 2 - 64, y: 208, w: 128, h: 17 };
     const bar = { x: L + 14, y: 262, w: R - L - 28, h: 38 };
-    const play = { x: W / 2 - 60, y: 250, w: 120, h: 54 };
+    const play = { x: W / 2 - 63, y: 261, w: 126, h: 40 };
     return {
         play,
         tiles: MODE_TILES.map(m => ({ x: W / 2 + m.x * 1.1, y: 194 + m.y * 1.1, d: m.d * 1.1 })),
@@ -595,19 +605,24 @@ export class LobbyScreen {
     /** The friends panel: online count, empty places where friends will be, and the buttons that will add them. */
     private friends(b: Box, t: number): void {
         const ctx = this.ctx;
-        ornatePanel(ctx, b, 8);
+        const kit = kitReady();
+        if (kit) drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.4);
+        else ornatePanel(ctx, b, 8);
         // Online count and the switch beside it.
         ctx.textAlign = 'left';
         ctx.font = `6px ${ARCADE}`;
         ctx.fillStyle = '#cbbcf5';
         ctx.fillText('ONLINE 0/0', b.x + 10, b.y + 12);
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        roundRect(ctx, b.x + 58, b.y + 6, 16, 8, 4);
-        ctx.fill();
-        ctx.fillStyle = '#8ff0a0';
-        ctx.beginPath();
-        ctx.arc(b.x + 70, b.y + 10, 3, 0, Math.PI * 2);
-        ctx.fill();
+        if (kit) drawKit(ctx, 'toggleOn', b.x + b.w - 30, b.y + 5.5, 19, 9.5);
+        else {
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            roundRect(ctx, b.x + 58, b.y + 6, 16, 8, 4);
+            ctx.fill();
+            ctx.fillStyle = '#8ff0a0';
+            ctx.beginPath();
+            ctx.arc(b.x + 70, b.y + 10, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
         // Friend rows, empty for now.
         const rows = Math.max(3, Math.min(5, Math.floor((b.h - 80) / 32)));
         for (let i = 0; i < rows; i++) {
@@ -644,7 +659,12 @@ export class LobbyScreen {
         const by = b.y + b.h - 16;
         ctx.fillStyle = 'rgba(214,204,250,0.12)';
         ctx.fillRect(b.x + 6, by - 8, b.w - 12, 0.6);
-        [0, 1, 2].forEach(i => this.person(b.x + b.w * (0.2 + i * 0.3), by, i));
+        const icons: KitName[] = ['friendProfile', 'friendAdd', 'friendRequests'];
+        [0, 1, 2].forEach(i => {
+            const x = b.x + b.w * (0.2 + i * 0.3);
+            if (kit) drawKit(ctx, icons[i], x - 8, by - 8, 16, 16);
+            else this.person(x, by, i);
+        });
     }
 
     /** A small person icon for the friends panel's buttons: with a friend, with a plus, or with a letter. */
@@ -1149,6 +1169,11 @@ export class LobbyScreen {
      */
     private header(v: LobbyView, b: Box, t: number, W: number, bleed: number, tall: boolean): void {
         const ctx = this.ctx;
+        if (kitReady()) {
+            this.kitHeader(v, b, t);
+            this.counters(v, t, W, bleed, tall);
+            return;
+        }
         const r = tall ? 13 : 15;
         const ax = b.x + r + 7,
             ay = b.y + b.h / 2;
@@ -1229,10 +1254,22 @@ export class LobbyScreen {
         ctx.fillRect(dx, ly - 7, 0.8, 8);
         ctx.fillStyle = '#e8e0ff';
         ctx.fillText(`${v.wins} WINS`, dx + 6, ly);
-        // Counters at the top right: on a phone just the server light; in landscape stages, trophies and the light.
+        this.counters(v, t, W, bleed, tall);
+    }
+
+    /**
+     * The counters at the top right: on a phone just the server light; in landscape the stages open, the trophies
+     * and the server light, on the kit's painted plates once it has loaded.
+     */
+    private counters(v: LobbyView, t: number, W: number, bleed: number, tall: boolean): void {
+        const ctx = this.ctx;
         const right = W + bleed - 8;
         if (tall) {
             this.online(v, right - 2, 14);
+            return;
+        }
+        if (kitReady()) {
+            this.kitCounters(v, right, t);
             return;
         }
         ctx.font = `7px ${ARCADE}`;
@@ -1272,6 +1309,68 @@ export class LobbyScreen {
         }
     }
 
+    /**
+     * The player's plate on the kit's painting: the gold-ringed avatar with its swoosh, the violet card stretched to
+     * the box, then the name, and the stage reached in gold, a divider and the wins.
+     */
+    private kitHeader(v: LobbyView, b: Box, t: number): void {
+        const ctx = this.ctx;
+        drawKit(ctx, 'name', b.x, b.y, b.w, b.h);
+        // Placed by the painting: its body is 133 sheet pixels high, the ring's middle 88, 62 into it.
+        const s = b.h / 133;
+        const ax = b.x + 88 * s,
+            ay = b.y + 62 * s;
+        this.framedAvatar(v.fairy, v.frame, ax, ay, 40 * s, t);
+        const tx = b.x + 163 * s,
+            maxW = b.x + b.w - tx - 24 * s;
+        ctx.textAlign = 'left';
+        ctx.font = `800 ${Math.round(38 * s)}px ${SANS}`;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(v.name, tx, b.y + 52 * s, maxW);
+        const ly = b.y + 92 * s;
+        ctx.font = `800 ${Math.round(25 * s * 10) / 10}px ${SANS}`;
+        ctx.fillStyle = '#ffd45c';
+        const lv = `Stage ${v.stages[0]}`;
+        ctx.fillText(lv, tx, ly);
+        const dx = tx + ctx.measureText(lv).width + 10 * s;
+        ctx.fillStyle = 'rgba(232,224,255,0.75)';
+        ctx.fillRect(dx, ly - 22 * s, 0.8, 26 * s);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`${v.wins} WINS`, dx + 10 * s, ly, b.x + b.w - dx - 30 * s);
+    }
+
+    /** The counters at the top right on the kit's plates: the stages open, the trophies, and the server light. */
+    private kitCounters(v: LobbyView, right: number, t: number): void {
+        const ctx = this.ctx;
+        const h = 17,
+            y = 7;
+        const pill = v.online ? 'online' : 'offline';
+        const onW = (h * 180) / 48;
+        let x = right - onW;
+        drawKit(ctx, pill, x, y, onW, h);
+        if (v.online) {
+            // The light breathes.
+            ctx.fillStyle = `rgba(120,255,150,${0.25 + 0.2 * Math.sin(t * 3)})`;
+            ctx.beginPath();
+            ctx.arc(x + (h * 31) / 48, y + h / 2, 4.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.font = `800 9px ${SANS}`;
+        ctx.textAlign = 'left';
+        const plates: [KitName, string, number, number][] = [
+            ['counterTrophy', String(v.trophies), 95, 32],
+            ['counterStage', `${v.stages[0]}/${v.stages[1]}`, 81, 22],
+        ];
+        for (const [name, text, head, tail] of plates) {
+            const k = h / 48;
+            const w = Math.max(text.length * 6, ctx.measureText(text).width) + (head + tail) * k + 4;
+            x -= w + 5;
+            drawKit(ctx, name, x, y, w, h);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(text, x + head * k + 2, y + h / 2 + 3.2);
+        }
+    }
+
     /** A counter's plate: dark, slanted, in a gold edge. */
     private counterPlate(x: number, y: number, w: number, h: number): void {
         const ctx = this.ctx;
@@ -1290,6 +1389,11 @@ export class LobbyScreen {
     private quickPill(b: Box, i: number, t: number, tall: boolean): void {
         const ctx = this.ctx;
         const q = LOBBY_QUICK[i];
+        if (kitReady()) {
+            const key = q.label.charAt(0) + q.label.slice(1).toLowerCase();
+            drawKit(ctx, (tall ? 'badge' : 'quick') + key, b.x, b.y, b.w, b.h);
+            return;
+        }
         const r = b.h / 2 + (tall ? 0 : 2),
             cx = b.x + r,
             cy = b.y + b.h / 2;
@@ -1341,7 +1445,8 @@ export class LobbyScreen {
     private stagePlate(v: LobbyView, lay: LobbyLayout, t: number): void {
         const ctx = this.ctx;
         const b = lay.road,
-            on = v.focus === 'stage';
+            on = v.focus === 'stage',
+            kit = kitReady();
         ctx.save();
         if (on) {
             ctx.shadowColor = '#ffb43c';
@@ -1351,13 +1456,16 @@ export class LobbyScreen {
         pointed(ctx, b.x, b.y, b.w, b.h, 8);
         ctx.fill();
         ctx.restore();
-        ctx.strokeStyle = on ? '#ffe9a0' : goldGradient(ctx, b.y, b.y + b.h);
-        ctx.lineWidth = on ? 1.6 : 1.2;
-        pointed(ctx, b.x, b.y, b.w, b.h, 8);
-        ctx.stroke();
+        if (kit) drawKit(ctx, 'stage', b.x, b.y, b.w, b.h);
+        else {
+            ctx.strokeStyle = on ? '#ffe9a0' : goldGradient(ctx, b.y, b.y + b.h);
+            ctx.lineWidth = on ? 1.6 : 1.2;
+            pointed(ctx, b.x, b.y, b.w, b.h, 8);
+            ctx.stroke();
+        }
         ctx.textAlign = 'center';
-        ctx.font = `6.5px ${ARCADE}`;
-        ctx.fillStyle = '#fff3c9';
+        ctx.font = kit ? `800 8px ${SANS}` : `6.5px ${ARCADE}`;
+        ctx.fillStyle = kit ? '#ffffff' : '#fff3c9';
         ctx.fillText(
             `STAGE ${v.stageNo}/${v.stages[1]}  ·  ${v.mapName.toUpperCase()}`,
             b.x + b.w / 2,
@@ -1371,6 +1479,10 @@ export class LobbyScreen {
             const k = Math.max(0, Math.sin(t * 4)) * (on ? 1.6 : 0.8) * dir;
             const ax = box.x + box.w / 2 + dir * 5 + k,
                 ay = box.y + box.h / 2;
+            if (kit) {
+                drawKit(ctx, 'arrow', ax - (dir < 0 ? 2 : 13), ay - 10, 15, 21, dir > 0);
+                continue;
+            }
             ctx.fillStyle = goldGradient(ctx, ay - 10, ay + 10);
             ctx.beginPath();
             ctx.moveTo(ax + dir * 2, ay);
@@ -1404,7 +1516,8 @@ export class LobbyScreen {
     private ticker(v: LobbyView, b: Box, t: number): void {
         if (v.chatOpen) return;
         const ctx = this.ctx;
-        ornatePanel(ctx, b, 7);
+        if (kitReady()) drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.38);
+        else ornatePanel(ctx, b, 7);
         const tg = ctx.createLinearGradient(0, b.y + 5, 0, b.y + 16);
         tg.addColorStop(0, '#8fd8ff');
         tg.addColorStop(1, '#3a7ad8');
@@ -1449,8 +1562,13 @@ export class LobbyScreen {
     /** On a phone, the tab on the right edge that pulls the friends panel out. */
     private friendsTab(b: Box, t: number): void {
         const ctx = this.ctx;
-        ornatePanel(ctx, { x: b.x, y: b.y, w: b.w + 10, h: b.h }, 6);
-        this.person(b.x + b.w / 2 + 1, b.y + 14, 0);
+        if (kitReady()) {
+            drawKit9(ctx, 'panel', b.x, b.y, b.w + 10, b.h, 18, 0.3);
+            drawKit(ctx, 'friendProfile', b.x + b.w / 2 - 6, b.y + 7, 14, 14);
+        } else {
+            ornatePanel(ctx, { x: b.x, y: b.y, w: b.w + 10, h: b.h }, 6);
+            this.person(b.x + b.w / 2 + 1, b.y + 14, 0);
+        }
         ctx.save();
         ctx.translate(b.x + b.w / 2 + 2, b.y + b.h / 2 + 8);
         ctx.rotate(-Math.PI / 2);
@@ -1472,8 +1590,14 @@ export class LobbyScreen {
         const b = lay.bar,
             p = lay.play,
             tip = tall ? 9 : 18,
-            r = b.h / 2;
-        for (const dir of [-1, 1]) {
+            r = b.h / 2,
+            kit = kitReady();
+        // In landscape the kit's painted halves, the right one mirrored; on a phone the bar is too short for them.
+        if (kit && !tall) {
+            drawKit(ctx, 'bar', b.x, b.y, p.x + 14 - b.x, b.h);
+            drawKit(ctx, 'bar', p.x + p.w - 14, b.y, b.x + b.w - (p.x + p.w - 14), b.h, true);
+        }
+        for (const dir of kit && !tall ? [] : [-1, 1]) {
             const outer = dir < 0 ? b.x : b.x + b.w,
                 inner = dir < 0 ? p.x + 10 : p.x + p.w - 10;
             /** Trace this half: a point at the outer end, rounded at the inner end, under PLAY's edge. */
@@ -1533,31 +1657,42 @@ export class LobbyScreen {
                 lg.addColorStop(0, hexA(it.color, 0.4));
                 lg.addColorStop(1, hexA(it.color, 0));
                 ctx.fillStyle = lg;
-                ctx.fillRect(n.x, n.y + 3, n.w, n.h - 6);
+                ctx.beginPath();
+                ctx.ellipse(n.x + n.w / 2, n.y + n.h / 2, n.w / 2, n.h / 2 - 3, 0, 0, Math.PI * 2);
+                ctx.fill();
             }
             if (i === 1 || i === 3) {
                 ctx.fillStyle = 'rgba(233,185,73,0.5)';
                 ctx.fillRect(n.x, n.y + n.h * 0.25, 1, n.h * 0.5);
             }
+            const orb = (x: number, y: number, rr: number) => {
+                if (kit) {
+                    const k = on ? 1.08 + 0.03 * Math.sin(t * 5) : 1;
+                    drawKit(ctx, NAV_ORBS[it.action], x - rr * k, y - rr * k, rr * 2 * k, rr * 2 * k);
+                } else {
+                    drawBadge(ctx, it.color, x, y, rr, on, t);
+                    drawEmblem(ctx, it.action, x, y, rr / 34, t, on);
+                }
+            };
             if (tall) {
                 const rr = 10;
-                drawBadge(ctx, it.color, n.x + n.w / 2, n.y + rr + 5, rr, on, t);
-                drawEmblem(ctx, it.action, n.x + n.w / 2, n.y + rr + 5, rr / 34, t, on);
+                orb(n.x + n.w / 2, n.y + rr + 5, rr);
                 ctx.textAlign = 'center';
                 ctx.font = `4.5px ${ARCADE}`;
                 ctx.fillStyle = on ? '#fff7c2' : 'rgba(239,230,255,0.9)';
                 ctx.fillText(it.label, n.x + n.w / 2, n.y + n.h - 6, n.w - 2);
                 return;
             }
-            const rr = 12;
-            ctx.font = `8.5px ${ARCADE}`;
+            const rr = kit ? 11.5 : 12;
+            ctx.font = kit ? `800 9px ${SANS}` : `8.5px ${ARCADE}`;
             const lw = Math.min(n.w - rr * 2 - 14, ctx.measureText(it.label).width);
-            const x0 = n.x + n.w / 2 - (lw + rr * 2 + 7) / 2;
-            drawBadge(ctx, it.color, x0 + rr, n.y + n.h / 2, rr, on, t);
-            drawEmblem(ctx, it.action, x0 + rr, n.y + n.h / 2, rr / 34, t, on);
+            // On the kit's bar the last keeps clear of its pointed end.
+            const nudge = kit && i === lay.nav.length - 1 ? -7 : 0;
+            const x0 = n.x + n.w / 2 - (lw + rr * 2 + 7) / 2 + nudge;
+            orb(x0 + rr, n.y + n.h / 2, rr);
             ctx.textAlign = 'left';
-            ctx.fillStyle = on ? '#fff7c2' : '#ffffff';
-            ctx.fillText(it.label, x0 + rr * 2 + 7, n.y + n.h / 2 + 3.2, n.w - rr * 2 - 14);
+            ctx.fillStyle = on ? '#ffe27a' : '#ffffff';
+            ctx.fillText(it.label, x0 + rr * 2 + 7, n.y + n.h / 2 + 3.6, n.w - rr * 2 - 14);
         });
     }
 
@@ -1569,6 +1704,38 @@ export class LobbyScreen {
         const ctx = this.ctx;
         const on = v.focus === 'mode';
         const r = b.h / 2;
+        if (kitReady()) {
+            // The painted button, glowing while it has the cursor, a light sweeping over it now and then.
+            if (on) {
+                ctx.save();
+                ctx.shadowColor = '#ffb43c';
+                ctx.shadowBlur = 16 + 5 * Math.sin(t * 5);
+                ctx.fillStyle = 'rgba(255,180,60,0.5)';
+                const gw = tall ? b.w + 10 : b.w - 4,
+                    gh = tall ? gw / 3.1 : b.h - 4;
+                roundRect(ctx, b.x + (b.w - gw) / 2, b.y + (b.h - gh) / 2 + (tall ? 4 : 0), gw, gh, gh / 2);
+                ctx.fill();
+                ctx.restore();
+            }
+            // Kept to the painting's shape: on a phone, wider than the box and shorter, across its middle.
+            const pw = tall ? b.w + 14 : b.w,
+                ph = tall ? pw / 3.1 : b.h,
+                px = b.x + (b.w - pw) / 2,
+                py = b.y + (b.h - ph) / 2 + (tall ? 4 : 0);
+            drawKit(ctx, 'play', px, py, pw, ph);
+            ctx.save();
+            roundRect(ctx, px + 3, py + 3, pw - 6, ph - 6, ph / 2 - 3);
+            ctx.clip();
+            const sweep = ((t % 2.6) / 2.6) * (pw + 120) - 60;
+            const sg = ctx.createLinearGradient(px + sweep - 16, 0, px + sweep + 16, 0);
+            sg.addColorStop(0, 'rgba(255,255,255,0)');
+            sg.addColorStop(0.5, `rgba(255,255,255,${on ? 0.4 : 0.25})`);
+            sg.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = sg;
+            ctx.fillRect(px, py, pw, ph);
+            ctx.restore();
+            return;
+        }
         // A frame of dark gold round the capsule, like a setting.
         ctx.save();
         ctx.shadowColor = on ? '#ffb43c' : 'rgba(0,0,0,0.6)';
