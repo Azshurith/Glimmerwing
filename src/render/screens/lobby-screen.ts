@@ -196,13 +196,16 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
         isle = compact ? 80 : 90;
     const road = { x: W / 2 - 64, y: 208, w: 128, h: 17 };
     const bar = { x: L + 14, y: 262, w: R - L - 28, h: 38 };
-    const play = { x: W / 2 - 61, y: 260, w: 122, h: 43 };
+    // PLAY's gold face, sized and placed as on the UI kit's sheet, where the bar's halves end flush against it: the
+    // sheet's bar is 194 pixels high, the face 680 by 218 and 10 above the bar's top.
+    const k = bar.h / 194;
+    const play = { x: W / 2 - 340 * k, y: bar.y - 10 * k, w: 680 * k, h: 218 * k };
     return {
         play,
         tiles: MODE_TILES.map(m => ({ x: W / 2 + m.x * 1.1, y: 194 + m.y * 1.1, d: m.d * 1.1 })),
         close: { x: R - 34, y: 34, w: 28, h: 28 },
         bar,
-        nav: barSlots(bar, play, 10),
+        nav: barSlots(bar, play, compact ? 18 : 26),
         plate: { x: L - 2, y: 2, w: compact ? 160 : 176, h: 40 },
         quick: LOBBY_QUICK.map((_, i) => ({ x: L + 2, y: 50 + i * 29, w: 80, h: 23 })),
         road,
@@ -1607,17 +1610,18 @@ export class LobbyScreen {
             tip = tall ? 9 : 18,
             r = b.h / 2,
             kit = kitReady();
-        // In landscape the kit's painted halves, the right one mirrored; on a phone the bar is too short for them.
+        // In landscape the kit's halves, flush against PLAY's face as on the sheet; on a phone the bar is too short
+        // for them.
         if (kit && !tall) {
-            const lw = p.x + 14 - b.x,
-                rx = p.x + p.w - 14,
+            const lw = p.x - b.x,
+                rx = p.x + p.w,
                 rw = b.x + b.w - rx;
-            drawKit(ctx, 'bar', b.x, b.y, lw, b.h);
-            drawKit(ctx, 'bar', rx, b.y, rw, b.h, true);
-            kitGlint(ctx, 'bar', b.x, b.y, lw, b.h, t, 0, 6);
-            kitGlint(ctx, 'bar', rx, b.y, rw, b.h, t, 0.6, 6, true);
+            drawKit(ctx, 'barLeft', b.x, b.y, lw, b.h);
+            drawKit(ctx, 'barRight', rx, b.y, rw, b.h);
+            kitGlint(ctx, 'barLeft', b.x, b.y, lw, b.h, t, 0, 6);
+            kitGlint(ctx, 'barRight', rx, b.y, rw, b.h, t, 0.6, 6);
             // The painted stars at the bar's points twinkle.
-            const star = kitPoint('bar', 17, 97, b.x, b.y, lw, b.h);
+            const star = kitPoint('barLeft', 110, 105, b.x, b.y, lw, b.h);
             twinkle(ctx, star.x, star.y, b.h * 0.16, t, 1);
             twinkle(ctx, b.x + b.w - (star.x - b.x), star.y, b.h * 0.16, t, 2);
         }
@@ -1687,7 +1691,9 @@ export class LobbyScreen {
             }
             if (i === 1 || i === 3) {
                 ctx.fillStyle = 'rgba(233,185,73,0.5)';
-                ctx.fillRect(n.x, n.y + n.h * 0.25, 1, n.h * 0.5);
+                // Between the second pair it moves with the last, which keeps clear of the bar's end.
+                const dx = kitReady() && !tall && i === 3 ? -14 : 0;
+                ctx.fillRect(n.x + dx, n.y + n.h * 0.25, 1, n.h * 0.5);
             }
             const orb = (x: number, y: number, rr: number) => {
                 if (kit) {
@@ -1708,11 +1714,11 @@ export class LobbyScreen {
                 ctx.fillText(it.label, n.x + n.w / 2, n.y + n.h - 6, n.w - 2);
                 return;
             }
-            const rr = kit ? 11.5 : 12;
-            ctx.font = kit ? `800 9px ${SANS}` : `8.5px ${ARCADE}`;
+            const rr = kit ? 11 : 12;
+            ctx.font = kit ? `800 8px ${SANS}` : `8.5px ${ARCADE}`;
             const lw = Math.min(n.w - rr * 2 - 14, ctx.measureText(it.label).width);
-            // On the kit's bar the last keeps clear of its pointed end.
-            const nudge = kit && i === lay.nav.length - 1 ? -7 : 0;
+            // The last keeps clear of the star at the bar's pointed end.
+            const nudge = kit && i === lay.nav.length - 1 ? -9 : 0;
             const x0 = n.x + n.w / 2 - (lw + rr * 2 + 7) / 2 + nudge;
             orb(x0 + rr, n.y + n.h / 2, rr);
             ctx.textAlign = 'left';
@@ -1737,20 +1743,20 @@ export class LobbyScreen {
                 ctx.shadowBlur = 16 + 5 * Math.sin(t * 5);
                 ctx.fillStyle = 'rgba(255,180,60,0.5)';
                 const gw = tall ? b.w + 10 : b.w - 4,
-                    gh = tall ? gw / 2.85 : b.h - 4;
+                    gh = tall ? gw / 3.1 : b.h - 4;
                 roundRect(ctx, b.x + (b.w - gw) / 2, b.y + (b.h - gh) / 2 + (tall ? 4 : 0), gw, gh, gh / 2);
                 ctx.fill();
                 ctx.restore();
             }
             // Kept to the painting's shape: on a phone, wider than the box and shorter, across its middle.
             const pw = tall ? b.w + 14 : b.w,
-                ph = tall ? pw / 2.85 : b.h,
+                ph = tall ? pw / 3.1 : b.h,
                 px = b.x + (b.w - pw) / 2,
                 py = b.y + (b.h - ph) / 2 + (tall ? 4 : 0);
             drawKit(ctx, 'play', px, py, pw, ph);
             // Light sweeps across its gold, more often while it has the cursor, and its crest twinkles.
             kitGlint(ctx, 'play', px, py, pw, ph, t, 1, on ? 2.6 : 4);
-            const crest = kitPoint('play', 350, -2, px, py, pw, ph);
+            const crest = kitPoint('play', 314, -30, px, py, pw, ph);
             twinkle(ctx, crest.x, crest.y, ph * 0.18, t, 0.3);
             return;
         }

@@ -4,7 +4,7 @@ import type { KitPiece } from '@/types';
 /** Where each of the lobby kit's pieces sits in `assets/ui/lobby-kit.png`, and its body inside it. */
 export const LOBBY_KIT: Record<string, KitPiece> = {
     name: {
-        x: 0,
+        x: 850,
         y: 0,
         w: 920,
         h: 290,
@@ -17,7 +17,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     quickHistory: {
         x: 0,
-        y: 508,
+        y: 820,
         w: 545,
         h: 169,
         bx: 10,
@@ -27,7 +27,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     quickRanking: {
         x: 547,
-        y: 508,
+        y: 820,
         w: 545,
         h: 169,
         bx: 10,
@@ -37,7 +37,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     quickGuide: {
         x: 1094,
-        y: 508,
+        y: 820,
         w: 546,
         h: 169,
         bx: 10,
@@ -47,7 +47,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     badgeHistory: {
         x: 1642,
-        y: 508,
+        y: 820,
         w: 165,
         h: 165,
         bx: 10,
@@ -57,7 +57,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     badgeRanking: {
         x: 1809,
-        y: 508,
+        y: 820,
         w: 165,
         h: 165,
         bx: 10,
@@ -67,7 +67,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     badgeGuide: {
         x: 0,
-        y: 679,
+        y: 991,
         w: 165,
         h: 165,
         bx: 10,
@@ -77,7 +77,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     counterStage: {
         x: 1370,
-        y: 846,
+        y: 1158,
         w: 358,
         h: 122,
         bx: 10,
@@ -89,7 +89,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     counterTrophy: {
         x: 398,
-        y: 983,
+        y: 1295,
         w: 408,
         h: 120,
         bx: 10,
@@ -101,7 +101,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     online: {
         x: 0,
-        y: 983,
+        y: 1295,
         w: 396,
         h: 122,
         bx: 10,
@@ -111,7 +111,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     offline: {
         x: 971,
-        y: 846,
+        y: 1158,
         w: 397,
         h: 123,
         bx: 10,
@@ -121,7 +121,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     stage: {
         x: 0,
-        y: 846,
+        y: 1158,
         w: 864,
         h: 135,
         bx: 10,
@@ -133,7 +133,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     arrow: {
         x: 866,
-        y: 846,
+        y: 1158,
         w: 103,
         h: 131,
         bx: 10,
@@ -141,31 +141,43 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
         bw: 83,
         bh: 111,
     },
-    bar: {
+    barLeft: {
         x: 0,
-        y: 292,
-        w: 1174,
+        y: 388,
+        w: 1302,
         h: 214,
         bx: 10,
         by: 10,
-        bw: 1154,
+        bw: 1292,
         bh: 194,
-        s0: 364,
-        s1: 964,
+        s0: 384,
+        s1: 984,
+    },
+    barRight: {
+        x: 0,
+        y: 604,
+        w: 1291,
+        h: 214,
+        bx: 0,
+        by: 10,
+        bw: 1281,
+        bh: 194,
+        s0: 312,
+        s1: 932,
     },
     play: {
-        x: 922,
+        x: 0,
         y: 0,
-        w: 768,
-        h: 283,
-        bx: 10,
-        by: 10,
-        bw: 748,
-        bh: 263,
+        w: 848,
+        h: 386,
+        bx: 84,
+        by: 84,
+        bw: 680,
+        bh: 218,
     },
     panel: {
-        x: 1176,
-        y: 292,
+        x: 1293,
+        y: 604,
         w: 585,
         h: 173,
         bx: 10,
@@ -175,7 +187,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     orbCharacters: {
         x: 167,
-        y: 679,
+        y: 991,
         w: 163,
         h: 155,
         bx: 10,
@@ -185,7 +197,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     orbMaps: {
         x: 332,
-        y: 679,
+        y: 991,
         w: 161,
         h: 155,
         bx: 10,
@@ -195,7 +207,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     orbProfile: {
         x: 495,
-        y: 679,
+        y: 991,
         w: 159,
         h: 155,
         bx: 10,
@@ -205,7 +217,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     orbSettings: {
         x: 656,
-        y: 679,
+        y: 991,
         w: 162,
         h: 155,
         bx: 10,
@@ -215,7 +227,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     friendProfile: {
         x: 975,
-        y: 679,
+        y: 991,
         w: 154,
         h: 151,
         bx: 10,
@@ -225,7 +237,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     friendAdd: {
         x: 1131,
-        y: 679,
+        y: 991,
         w: 153,
         h: 151,
         bx: 10,
@@ -235,7 +247,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     friendRequests: {
         x: 820,
-        y: 679,
+        y: 991,
         w: 153,
         h: 152,
         bx: 10,
@@ -245,7 +257,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     toggleOn: {
         x: 808,
-        y: 983,
+        y: 1295,
         w: 165,
         h: 98,
         bx: 10,
@@ -255,7 +267,7 @@ export const LOBBY_KIT: Record<string, KitPiece> = {
     },
     toggleOff: {
         x: 975,
-        y: 983,
+        y: 1295,
         w: 160,
         h: 95,
         bx: 10,
