@@ -195,7 +195,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
         isle = compact ? 80 : 90;
     const road = { x: W / 2 - 64, y: 208, w: 128, h: 17 };
     const bar = { x: L + 14, y: 262, w: R - L - 28, h: 38 };
-    const play = { x: W / 2 - 60, y: 250, w: 120, h: 54 };
+    const play = { x: W / 2 - 63, y: 261, w: 126, h: 40 };
     return {
         play,
         tiles: MODE_TILES.map(m => ({ x: W / 2 + m.x * 1.1, y: 194 + m.y * 1.1, d: m.d * 1.1 })),
