@@ -19,6 +19,7 @@ import { drawMedal } from './profile-screen';
 import { enter } from '@/render/transition';
 import { STAGES } from '@/data/stages';
 import { drawPadlock } from './map-screen';
+import { LOBBY_KIT } from '@/data/lobby-kit';
 import { drawKit, drawKit9, kitGlint, kitGlint9, kitPoint, kitReady, twinkle } from './kit';
 import type { KitName } from './kit';
 import { drawFlowers, drawNight, goldGradient, ornatePanel, pointed, wing } from './ornate';
@@ -195,7 +196,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
         isle = compact ? 80 : 90;
     const road = { x: W / 2 - 64, y: 208, w: 128, h: 17 };
     const bar = { x: L + 14, y: 262, w: R - L - 28, h: 38 };
-    const play = { x: W / 2 - 63, y: 261, w: 126, h: 40 };
+    const play = { x: W / 2 - 61, y: 260, w: 122, h: 43 };
     return {
         play,
         tiles: MODE_TILES.map(m => ({ x: W / 2 + m.x * 1.1, y: 194 + m.y * 1.1, d: m.d * 1.1 })),
@@ -607,8 +608,8 @@ export class LobbyScreen {
         const ctx = this.ctx;
         const kit = kitReady();
         if (kit) {
-            drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.4);
-            kitGlint9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.4, t, 2.5);
+            drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 36, 0.2);
+            kitGlint9(ctx, 'panel', b.x, b.y, b.w, b.h, 36, 0.2, t, 2.5);
         } else ornatePanel(ctx, b, 8);
         // Online count and the switch beside it.
         ctx.textAlign = 'left';
@@ -1320,29 +1321,29 @@ export class LobbyScreen {
         drawKit(ctx, 'name', b.x, b.y, b.w, b.h);
         kitGlint(ctx, 'name', b.x, b.y, b.w, b.h, t, 0, 6);
         // The painted star at the card's corner twinkles.
-        const star = kitPoint('name', 419, 12, b.x, b.y, b.w, b.h);
+        const star = kitPoint('name', 818, 37, b.x, b.y, b.w, b.h);
         twinkle(ctx, star.x, star.y, b.h * 0.13, t, 0);
-        // Placed by the painting: its body is 133 sheet pixels high, the ring's middle 88, 62 into it.
-        const s = b.h / 133;
-        const ax = b.x + 88 * s,
-            ay = b.y + 62 * s;
-        this.framedAvatar(v.fairy, v.frame, ax, ay, 40 * s, t);
-        const tx = b.x + 163 * s,
-            maxW = b.x + b.w - tx - 24 * s;
+        // Placed by the sheet: its body is 270 sheet pixels high, the ring's middle 175, 125 into it.
+        const s = b.h / 270;
+        const ax = b.x + 175 * s,
+            ay = b.y + 125 * s;
+        this.framedAvatar(v.fairy, v.frame, ax, ay, 80 * s, t);
+        const tx = b.x + 300 * s,
+            maxW = b.x + b.w - tx - 50 * s;
         ctx.textAlign = 'left';
-        ctx.font = `800 ${Math.round(38 * s)}px ${SANS}`;
+        ctx.font = `800 ${Math.round(70 * s)}px ${SANS}`;
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(v.name, tx, b.y + 52 * s, maxW);
-        const ly = b.y + 92 * s;
-        ctx.font = `800 ${Math.round(25 * s * 10) / 10}px ${SANS}`;
+        ctx.fillText(v.name, tx, b.y + 108 * s, maxW);
+        const ly = b.y + 178 * s;
+        ctx.font = `800 ${Math.round(46 * s * 10) / 10}px ${SANS}`;
         ctx.fillStyle = '#ffd45c';
         const lv = `Stage ${v.stages[0]}`;
         ctx.fillText(lv, tx, ly);
-        const dx = tx + ctx.measureText(lv).width + 10 * s;
+        const dx = tx + ctx.measureText(lv).width + 18 * s;
         ctx.fillStyle = 'rgba(232,224,255,0.75)';
-        ctx.fillRect(dx, ly - 22 * s, 0.8, 26 * s);
+        ctx.fillRect(dx, ly - 40 * s, 0.8, 48 * s);
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(`${v.wins} WINS`, dx + 10 * s, ly, b.x + b.w - dx - 30 * s);
+        ctx.fillText(`${v.wins} WINS`, dx + 18 * s, ly, b.x + b.w - dx - 60 * s);
     }
 
     /** The counters at the top right on the kit's plates: the stages open, the trophies, and the server light. */
@@ -1351,7 +1352,7 @@ export class LobbyScreen {
         const h = 17,
             y = 7;
         const pill = v.online ? 'online' : 'offline';
-        const onW = (h * 180) / 48;
+        const onW = (h * LOBBY_KIT[pill].bw) / LOBBY_KIT[pill].bh;
         let x = right - onW;
         drawKit(ctx, pill, x, y, onW, h);
         kitGlint(ctx, pill, x, y, onW, h, t, 2.2, 6);
@@ -1359,17 +1360,17 @@ export class LobbyScreen {
             // The light breathes.
             ctx.fillStyle = `rgba(120,255,150,${0.25 + 0.2 * Math.sin(t * 3)})`;
             ctx.beginPath();
-            ctx.arc(x + (h * 31) / 48, y + h / 2, 4.5, 0, Math.PI * 2);
+            ctx.arc(x + (h * 54) / 102, y + h / 2, 4.5, 0, Math.PI * 2);
             ctx.fill();
         }
         ctx.font = `800 9px ${SANS}`;
         ctx.textAlign = 'left';
         const plates: [KitName, string, number, number][] = [
-            ['counterTrophy', String(v.trophies), 95, 32],
-            ['counterStage', `${v.stages[0]}/${v.stages[1]}`, 81, 22],
+            ['counterTrophy', String(v.trophies), 150, 55],
+            ['counterStage', `${v.stages[0]}/${v.stages[1]}`, 170, 48],
         ];
         plates.forEach(([name, text, head, tail], i) => {
-            const k = h / 48;
+            const k = h / LOBBY_KIT[name].bh;
             const w = Math.max(text.length * 6, ctx.measureText(text).width) + (head + tail) * k + 4;
             x -= w + 5;
             drawKit(ctx, name, x, y, w, h);
@@ -1529,8 +1530,8 @@ export class LobbyScreen {
         if (v.chatOpen) return;
         const ctx = this.ctx;
         if (kitReady()) {
-            drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.38);
-            kitGlint9(ctx, 'panel', b.x, b.y, b.w, b.h, 18, 0.38, t, 4);
+            drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 36, 0.19);
+            kitGlint9(ctx, 'panel', b.x, b.y, b.w, b.h, 36, 0.19, t, 4);
         } else ornatePanel(ctx, b, 7);
         const tg = ctx.createLinearGradient(0, b.y + 5, 0, b.y + 16);
         tg.addColorStop(0, '#8fd8ff');
@@ -1577,7 +1578,7 @@ export class LobbyScreen {
     private friendsTab(b: Box, t: number): void {
         const ctx = this.ctx;
         if (kitReady()) {
-            drawKit9(ctx, 'panel', b.x, b.y, b.w + 10, b.h, 18, 0.3);
+            drawKit9(ctx, 'panel', b.x, b.y, b.w + 10, b.h, 36, 0.15);
             drawKit(ctx, 'friendProfile', b.x + b.w / 2 - 6, b.y + 7, 14, 14);
         } else {
             ornatePanel(ctx, { x: b.x, y: b.y, w: b.w + 10, h: b.h }, 6);
@@ -1616,7 +1617,7 @@ export class LobbyScreen {
             kitGlint(ctx, 'bar', b.x, b.y, lw, b.h, t, 0, 6);
             kitGlint(ctx, 'bar', rx, b.y, rw, b.h, t, 0.6, 6, true);
             // The painted stars at the bar's points twinkle.
-            const star = kitPoint('bar', 40, 57, b.x, b.y, lw, b.h);
+            const star = kitPoint('bar', 17, 97, b.x, b.y, lw, b.h);
             twinkle(ctx, star.x, star.y, b.h * 0.16, t, 1);
             twinkle(ctx, b.x + b.w - (star.x - b.x), star.y, b.h * 0.16, t, 2);
         }
@@ -1736,20 +1737,20 @@ export class LobbyScreen {
                 ctx.shadowBlur = 16 + 5 * Math.sin(t * 5);
                 ctx.fillStyle = 'rgba(255,180,60,0.5)';
                 const gw = tall ? b.w + 10 : b.w - 4,
-                    gh = tall ? gw / 3.1 : b.h - 4;
+                    gh = tall ? gw / 2.85 : b.h - 4;
                 roundRect(ctx, b.x + (b.w - gw) / 2, b.y + (b.h - gh) / 2 + (tall ? 4 : 0), gw, gh, gh / 2);
                 ctx.fill();
                 ctx.restore();
             }
             // Kept to the painting's shape: on a phone, wider than the box and shorter, across its middle.
             const pw = tall ? b.w + 14 : b.w,
-                ph = tall ? pw / 3.1 : b.h,
+                ph = tall ? pw / 2.85 : b.h,
                 px = b.x + (b.w - pw) / 2,
                 py = b.y + (b.h - ph) / 2 + (tall ? 4 : 0);
             drawKit(ctx, 'play', px, py, pw, ph);
             // Light sweeps across its gold, more often while it has the cursor, and its crest twinkles.
             kitGlint(ctx, 'play', px, py, pw, ph, t, 1, on ? 2.6 : 4);
-            const crest = kitPoint('play', 166, 2, px, py, pw, ph);
+            const crest = kitPoint('play', 350, -2, px, py, pw, ph);
             twinkle(ctx, crest.x, crest.y, ph * 0.18, t, 0.3);
             return;
         }

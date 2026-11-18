@@ -1,13 +1,18 @@
-"""Cut the lobby's UI pieces out of the painted kit sheet into one atlas.
+"""Cut the lobby's UI pieces out of the vector UI sheet into one atlas.
 
     python tools/extract-ui-kit.py
 
-Reads assets/source/ui/lobby-kit.png (the painted sheet, transparent), wipes the sample text off the pieces whose
-text the game draws itself (blending across it from the clean inside either side), and writes
-assets/ui/lobby-kit.png with src/data/lobby-kit.ts, the atlas's layout: per piece its cell in the atlas, its body
-(the solid shape inside the glow, relative to the cell) and, for pieces stretched along their length, where the
-stretchable middle starts and ends. It also writes assets/ui/lobby-kit-gold.png, the same atlas with only its gold
-(in white, as opaque as each pixel is gold), which the glints light up.
+Reads assets/source/ui/lobby-kit-vector.png, the vector UI sheet (traced from the painted kit at 4x) rendered at its
+full 7096x3548 on near-black, and works at half that (2x the painted sheet). It keys the black away: whatever lies
+inside a piece's bright, closed border is solid, and outside it a glow is as opaque as it is bright, its colour
+brought back up to full strength. It then wipes the sample text off the pieces whose text the game draws itself
+(filling it with the flat colour of the plate's inside), and writes assets/ui/lobby-kit.png with
+src/data/lobby-kit.ts, the atlas's layout: per piece its cell in the atlas, its body (the solid shape inside the
+glow, relative to the cell) and, for pieces stretched along their length, where the stretchable middle starts and
+ends. It also writes assets/ui/lobby-kit-gold.png, the same atlas with only its gold (in white, as opaque as each
+pixel is gold), which the glints light up.
+
+All coordinates below are pixels of the sheet at 2x (3548x1774).
 """
 
 import json
@@ -15,69 +20,78 @@ import os
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
+from scipy import ndimage
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, 'assets', 'source', 'ui', 'lobby-kit.png')
+SRC = os.path.join(ROOT, 'assets', 'source', 'ui', 'lobby-kit-vector.png')
 OUT = os.path.join(ROOT, 'assets', 'ui', 'lobby-kit.png')
 GOLD = os.path.join(ROOT, 'assets', 'ui', 'lobby-kit-gold.png')
 TS = os.path.join(ROOT, 'src', 'data', 'lobby-kit.ts')
 
-GLOW = 7
+# How far a piece's glow reaches past its body.
+GLOW = 10
 
-# name: crop (x0, y0, x1, y1), body (x0, y0, x1, y1), wipes [(x0, y0, x1, y1)], stretch (x0, x1)
-# All in sheet pixels. PLAY's body is its gold capsule, under the crest.
+# name: body (x0, y0, x1, y1), wipes [(x0, y0, x1, y1, sample x, sample y)], stretch (x0, x1). The crop is the body
+# plus GLOW all round. A wipe fills its box with the colour at its sample point, the plate's flat inside.
 PIECES = {
-    'name': ((6, 4, 472, 152), (17, 13, 464, 146), [(166, 24, 384, 106)], (200, 380)),
-    'quickHistory': ((26, 151, 288, 232), (33, 158, 281, 228), [], None),
-    'quickRanking': ((26, 231, 288, 312), (33, 238, 281, 308), [], None),
-    'quickGuide': ((26, 311, 288, 392), (33, 318, 280, 388), [], None),
-    'badgeHistory': ((26, 151, 112, 235), (33, 158, 105, 229), [], None),
-    'badgeRanking': ((26, 231, 112, 315), (33, 238, 105, 309), [], None),
-    'badgeGuide': ((26, 311, 112, 395), (33, 318, 105, 389), [], None),
-    'counterStage': ((1153, 12, 1328, 72), (1159, 18, 1322, 66), [(1234, 22, 1300, 62)], (1240, 1296)),
-    'counterTrophy': ((1327, 12, 1534, 72), (1333, 18, 1528, 66), [(1422, 22, 1500, 62)], (1428, 1496)),
-    'online': ((1571, 11, 1763, 70), (1577, 17, 1757, 65), [], None),
-    'offline': ((1574, 73, 1764, 133), (1580, 79, 1758, 127), [], None),
-    'stage': ((662, 468, 1078, 532), (668, 472, 1072, 528), [(704, 478, 1036, 522)], (720, 1020)),
-    'arrow': ((584, 465, 632, 529), (589, 469, 627, 524), [], None),
-    'bar': ((89, 572, 706, 696), (95, 580, 706, 690), [(170, 594, 652, 676)], (200, 640)),
-    'play': ((698, 552, 1068, 708), (716, 586, 1052, 694), [], None),
-    'panel': ((23, 704, 304, 791), (29, 710, 298, 785), [], None),
-    'orbCharacters': ((24, 800, 101, 874), (30, 806, 95, 868), [], None),
-    'orbMaps': ((111, 800, 185, 874), (117, 806, 179, 868), [], None),
-    'orbProfile': ((195, 800, 269, 874), (201, 806, 263, 868), [], None),
-    'orbSettings': ((279, 800, 353, 874), (285, 806, 347, 868), [], None),
-    'friendProfile': ((368, 803, 436, 871), (374, 809, 430, 865), [], None),
-    'friendAdd': ((445, 803, 512, 871), (451, 809, 506, 865), [], None),
-    'friendRequests': ((523, 803, 589, 871), (529, 809, 583, 865), [], None),
-    'toggleOn': ((1215, 710, 1294, 756), (1221, 716, 1288, 750), [], None),
-    'toggleOff': ((1302, 710, 1379, 756), (1308, 716, 1373, 750), [], None),
+    'name': ((30, 15, 930, 285), [(330, 62, 760, 205, 600, 50)], (340, 740)),
+    'quickHistory': ((60, 303, 585, 452), [], None),
+    'quickRanking': ((60, 466, 585, 615), [], None),
+    'quickGuide': ((60, 628, 586, 777), [], None),
+    'badgeHistory': ((61, 305, 206, 450), [], None),
+    'badgeRanking': ((61, 468, 206, 613), [], None),
+    'badgeGuide': ((61, 630, 206, 775), [], None),
+    'counterStage': ((2310, 30, 2648, 132), [(2470, 45, 2612, 112, 2460, 60)], (2480, 2600)),
+    'counterTrophy': ((2662, 33, 3050, 133), [(2800, 48, 3012, 114, 2795, 60)], (2812, 2995)),
+    'online': ((3146, 30, 3522, 132), [], None),
+    'offline': ((3146, 147, 3523, 250), [], None),
+    'stage': ((1318, 925, 2162, 1040), [(1356, 952, 1996, 1014, 1900, 960)], (1390, 2090)),
+    'arrow': ((1160, 926, 1243, 1037), [], None),
+    'bar': ((146, 1158, 1300, 1352), [(300, 1182, 1252, 1328, 820, 1300)], (500, 1100)),
+    'play': ((1402, 1122, 2150, 1385), [], None),
+    'panel': ((25, 1407, 590, 1560), [], None),
+    'orbCharacters': ((46, 1596, 189, 1731), [], None),
+    'orbMaps': ((218, 1596, 359, 1731), [], None),
+    'orbProfile': ((388, 1596, 527, 1731), [], None),
+    'orbSettings': ((557, 1596, 699, 1731), [], None),
+    'friendProfile': ((733, 1600, 867, 1731), [], None),
+    'friendAdd': ((894, 1600, 1027, 1731), [], None),
+    'friendRequests': ((1053, 1599, 1186, 1731), [], None),
+    'toggleOn': ((2445, 1414, 2590, 1492), [], None),
+    'toggleOff': ((2621, 1417, 2761, 1492), [], None),
 }
 
-# Pieces that overlap others on the sheet keep only their own shape: rounded boxes, ellipses and polygons
-# (sheet pixels), feathered at the edge.
+# Shapes forced solid where the key would see through them: the plate's dark card, and the server pills, whose
+# borders don't quite close.
+SOLID = [
+    ('poly', (250, 40, 845, 40, 905, 110, 870, 205, 780, 226, 250, 228), 0),
+    ('round', (3150, 33, 3518, 129), 48),
+    ('round', (3150, 150, 3519, 247), 48),
+]
+
+# Pieces that overlap others on the sheet keep only their own shape: rounded boxes, ellipses and polygons,
+# feathered at the edge.
 MASKS = {
-    'badgeHistory': [('ellipse', (31, 156, 107, 231), 0)],
-    'badgeRanking': [('ellipse', (31, 236, 107, 311), 0)],
-    'badgeGuide': [('ellipse', (31, 316, 107, 391), 0)],
+    'badgeHistory': [('ellipse', (57, 301, 210, 454), 0)],
+    'badgeRanking': [('ellipse', (57, 464, 210, 617), 0)],
+    'badgeGuide': [('ellipse', (57, 626, 210, 779), 0)],
     'play': [
-        ('round', (704, 576, 1064, 704), 64),
-        ('poly', (880, 553, 925, 583, 925, 600, 880, 620, 838, 600, 838, 583), 0),
+        ('round', (1394, 1114, 2158, 1393), 136),
+        ('poly', (1752, 1078, 1838, 1128, 1838, 1170, 1752, 1188, 1666, 1170, 1666, 1128), 0),
     ],
 }
 
-# Circles (sheet pixels: centre and radius) in pieces whose insides the glint leaves alone.
-NO_GLINT = {'name': (105, 75, 45)}
+# Circles (centre and radius) in pieces whose insides the glint leaves alone: the sample face in the plate's ring,
+# which the game covers with the player's avatar.
+NO_GLINT = {'name': (205, 140, 90)}
 
 
-def mask_for(name, crop):
-    """An alpha mask (0-1) keeping only the piece's own shapes, or None for a piece that needs none."""
-    if name not in MASKS:
-        return None
-    x0, y0, x1, y1 = crop
-    m = Image.new('L', (x1 - x0, y1 - y0), 0)
+def shapes(size, origin, items):
+    """A greyscale picture of the given shapes, filled white, over the box at `origin` of `size`."""
+    x0, y0 = origin
+    m = Image.new('L', size, 0)
     d = ImageDraw.Draw(m)
-    for kind, pts, r in MASKS[name]:
+    for kind, pts, r in items:
         if kind == 'poly':
             d.polygon([(pts[i] - x0, pts[i + 1] - y0) for i in range(0, len(pts), 2)], fill=255)
             continue
@@ -87,8 +101,20 @@ def mask_for(name, crop):
             d.rounded_rectangle(box, r, fill=255)
         else:
             d.ellipse(box, fill=255)
-    m = m.filter(ImageFilter.GaussianBlur(2))
-    return np.array(m, np.float32) / 255
+    return m
+
+
+def key(rgb):
+    """Keys the near-black away: solid inside each bright closed border (and the SOLID shapes), elsewhere as opaque as
+    it is bright, its colour divided back up. Returns the RGBA sheet."""
+    a = rgb.astype(np.float32)
+    mx = a.max(axis=2)
+    solid = ndimage.binary_fill_holes(mx > 150)
+    solid |= np.array(shapes((rgb.shape[1], rgb.shape[0]), (0, 0), SOLID)) > 0
+    solid = ndimage.binary_dilation(solid, iterations=1)
+    alpha = np.where(solid, 1.0, np.clip((mx - 10) / 110, 0, 1))
+    col = np.where(solid[:, :, None], a, np.clip(a / np.maximum(alpha[:, :, None], 1e-3), 0, 255))
+    return np.dstack([col, alpha * 255]).round().astype(np.uint8)
 
 
 def gold_mask(rgba):
@@ -111,24 +137,25 @@ def gold_mask(rgba):
 
 
 def main():
-    sheet = np.array(Image.open(SRC).convert('RGBA'))
+    src = Image.open(SRC).convert('RGB')
+    src = src.resize((src.width // 2, src.height // 2), Image.LANCZOS)
+    # Padded by GLOW all round, so pieces at the sheet's edge still get their full margin: sheet[y + GLOW, x + GLOW]
+    # is the sheet's (x, y).
+    sheet = np.pad(key(np.array(src)), ((GLOW, GLOW), (GLOW, GLOW), (0, 0)))
     cells = {}
-    for name, (crop, _body, wipes, _stretch) in PIECES.items():
-        x0, y0, x1, y1 = crop
-        piece = sheet[y0:y1, x0:x1].copy()
-        for wx0, wy0, wx1, wy1 in wipes:
-            # Blend from the clean column just left of the text to the one just right of it, row by row.
-            a = sheet[wy0:wy1, wx0 - 1].astype(np.float32)
-            b = sheet[wy0:wy1, wx1].astype(np.float32)
-            k = np.linspace(0, 1, wx1 - wx0, dtype=np.float32)[None, :, None]
-            fill = a[:, None, :] * (1 - k) + b[:, None, :] * k
-            piece[wy0 - y0 : wy1 - y0, wx0 - x0 : wx1 - x0] = np.round(fill).astype(np.uint8)
-        keep = mask_for(name, crop)
-        if keep is not None:
+    for name, (body, wipes, _stretch) in PIECES.items():
+        x0, y0 = body[0] - GLOW, body[1] - GLOW
+        x1, y1 = body[2] + GLOW, body[3] + GLOW
+        piece = sheet[y0 + GLOW : y1 + GLOW, x0 + GLOW : x1 + GLOW].copy()
+        for wx0, wy0, wx1, wy1, sx, sy in wipes:
+            piece[wy0 - y0 : wy1 - y0, wx0 - x0 : wx1 - x0] = sheet[sy + GLOW, sx + GLOW]
+        if name in MASKS:
+            m = shapes((x1 - x0, y1 - y0), (x0, y0), MASKS[name]).filter(ImageFilter.GaussianBlur(2))
+            keep = np.array(m, np.float32) / 255
             piece[:, :, 3] = np.round(piece[:, :, 3] * keep).astype(np.uint8)
         cells[name] = piece
     # Shelf-pack the pieces, tallest first.
-    width = 1024
+    width = 2048
     order = sorted(cells, key=lambda n: -cells[n].shape[0])
     x = y = shelf = 0
     spots = {}
@@ -145,26 +172,25 @@ def main():
         atlas[ay : ay + h, ax : ax + w] = cells[name]
     Image.fromarray(atlas).save(OUT, optimize=True)
     gold = gold_mask(atlas)
-    # The sample face in the plate's ring isn't gold: the game draws the player's avatar over it.
+    yy, xx = np.mgrid[0 : gold.shape[0], 0 : gold.shape[1]]
     for name, (cx, cy, r) in NO_GLINT.items():
         ax, ay = spots[name]
-        x0, y0 = PIECES[name][0][:2]
-        yy, xx = np.mgrid[0 : gold.shape[0], 0 : gold.shape[1]]
-        gold[(xx - (ax + cx - x0)) ** 2 + (yy - (ay + cy - y0)) ** 2 < r * r, 3] = 0
+        bx, by = PIECES[name][0][:2]
+        ox, oy = ax + cx - (bx - GLOW), ay + cy - (by - GLOW)
+        gold[(xx - ox) ** 2 + (yy - oy) ** 2 < r * r, 3] = 0
     Image.fromarray(gold).save(GOLD, optimize=True)
     layout = {}
-    for name, (crop, body, _wipes, stretch) in PIECES.items():
+    for name, (body, _wipes, stretch) in PIECES.items():
         ax, ay = spots[name]
         h, w = cells[name].shape[:2]
-        entry = {'x': ax, 'y': ay, 'w': w, 'h': h,
-                 'bx': body[0] - crop[0], 'by': body[1] - crop[1],
+        entry = {'x': ax, 'y': ay, 'w': w, 'h': h, 'bx': GLOW, 'by': GLOW,
                  'bw': body[2] - body[0], 'bh': body[3] - body[1]}
         if stretch:
-            entry['s0'] = stretch[0] - crop[0]
-            entry['s1'] = stretch[1] - crop[0]
+            entry['s0'] = stretch[0] - (body[0] - GLOW)
+            entry['s1'] = stretch[1] - (body[0] - GLOW)
         layout[name] = entry
     with open(TS, 'w') as f:
-        f.write('// Generated by tools/extract-ui-kit.py from assets/source/ui/lobby-kit.png: don\'t hand-edit.\n')
+        f.write('// Generated by tools/extract-ui-kit.py from assets/source/ui/lobby-kit-vector.png: don\'t hand-edit.\n')
         f.write("import type { KitPiece } from '@/types';\n\n")
         f.write('/** Where each of the lobby kit\'s pieces sits in `assets/ui/lobby-kit.png`, ')
         f.write('and its body inside it. */\n')
