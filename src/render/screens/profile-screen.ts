@@ -940,7 +940,12 @@ function tabIcon(ctx: CanvasRenderingContext2D, i: number, x: number, y: number,
  * name on its plate, where progress is kept, and the Endless top three. Laid out in the card's own mockup pixels, so
  * it scales to any box; used by Profile and the match details in landscape once the Profile's pieces have loaded.
  */
-export function drawPlayerCard(ctx: CanvasRenderingContext2D, card: PlayerCard, box: readonly number[], t: number): void {
+export function drawPlayerCard(
+    ctx: CanvasRenderingContext2D,
+    card: PlayerCard,
+    box: readonly number[],
+    t: number,
+): void {
     const [bx, by, bw, bh] = box;
     const [cx0, cy0, cw, ch] = MOCK.card;
     KIT.draw(ctx, 'card', bx, by, bw, bh);

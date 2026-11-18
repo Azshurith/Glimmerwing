@@ -461,11 +461,7 @@ export class MatchScreen {
             ctx.font = `800 40px ${SANS}`;
             ctx.fillStyle = '#ffffff';
             ctx.fillText(solo ? 'RUN' : `ROUND ${i + 1}  •  ${clock(r.seconds)}`, x + w / 2, R.y + 80, w - 120);
-            const line = solo
-                ? `SURVIVED ${clock(r.seconds)}`
-                : who === null
-                  ? 'NO WINNER'
-                  : `${v.labels[who]} WON`;
+            const line = solo ? `SURVIVED ${clock(r.seconds)}` : who === null ? 'NO WINNER' : `${v.labels[who]} WON`;
             arcadeText(
                 ctx,
                 line,
