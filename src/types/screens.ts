@@ -75,8 +75,10 @@ export interface LobbyView {
     /** Stages open on the trophy road, of all of them; and the next one, with the trophies toward it. */
     stages: [number, number];
     next: { map: string; name: string; have: number; need: number } | null;
-    /** The mode on the picker, and where the cursor is. */
+    /** The mode on the picker, which of how many it is, and where the cursor is. */
     mode: LobbyMode;
+    modeIndex: number;
+    modeCount: number;
     focus: LobbyFocus;
     nav: number;
     /** The stage behind it all (a map id), and its name. */
@@ -85,7 +87,7 @@ export interface LobbyView {
     /** The latest World chat lines for the ticker, and whether the chat panel is open. */
     chat: { name: string; body: string }[];
     chatOpen: boolean;
-    /** On a phone, whether the friends panel is pulled out. */
+    /** Whether the friends panel is pulled out. */
     friendsOpen: boolean;
 }
 

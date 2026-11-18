@@ -1,10 +1,11 @@
-// The lobby, the game's main menu, laid out like an arena game's home screen. A sunset sky over a sea of clouds,
-// with the stage you've reached floating in the middle as an island (its scenery on top, cliffs below, a slow
-// swirl in the clouds under it) and the mode button under the island: ◀ ▶ change the mode, Enter or a tap plays
-// it. The player's plate and counters run across the top; quick buttons and a card for the next stage on the
-// trophy road sit at the top left, World chat's latest lines at the bottom left (a tap opens the chat panel, the
-// page's #chat), friends down the right, and the other screens (Characters, Maps, Profile, Settings) on a bar
-// along the bottom. On a phone held upright the friends panel tucks into a tab on the right edge.
+// The lobby, the game's main menu, in the arcade style of the title screen: the night sky of the menu screens with
+// the stage you've reached floating in it as an island (its scenery on top, cliffs below) over a strip showing the
+// trophy road to the next stage, and under it the play bar: a gold bar like the title's chosen button, the mode's
+// emblem on a spinning coin, its name and what it is, dots for the modes; ◀ ▶ change the mode, Enter or a tap
+// plays it. The other screens (Characters, Maps, Profile, Settings) are a stack of the title's slanted bars down
+// the left (a 2×2 grid on a phone), the chosen one gold with the bouncing pointer. The player's plate, counters and
+// quick icons (History, Ranking, Guide) run across the top; World chat's latest lines sit at the bottom left (a tap
+// opens the chat panel, the page's #chat), and friends pull out from a tab on the right edge.
 import * as C from '@/core/config';
 import { fairyById } from '@/data/characters';
 import { frameById } from '@/data/looks';
@@ -28,42 +29,43 @@ export interface Box {
     h: number;
 }
 
-/** The screens on the bar along the bottom, in order. */
-export const LOBBY_NAV: { action: TitleAction; label: string; color: string }[] = [
-    { action: 'characters', label: 'CHARACTERS', color: '#ff9ac8' },
-    { action: 'maps', label: 'MAPS', color: '#8ff0a0' },
-    { action: 'profile', label: 'PROFILE', color: '#8fd8ff' },
-    { action: 'settings', label: 'SETTINGS', color: '#c9b8ff' },
+/** The other screens, in the menu's order. */
+export const LOBBY_NAV: { action: TitleAction; label: string; sub: string; color: string }[] = [
+    { action: 'characters', label: 'CHARACTERS', sub: 'Meet the fairies', color: '#ff9ac8' },
+    { action: 'maps', label: 'MAPS', sub: 'Stages and their monsters', color: '#8ff0a0' },
+    { action: 'profile', label: 'PROFILE', sub: 'Record, history, ranking', color: '#8fd8ff' },
+    { action: 'settings', label: 'SETTINGS', sub: 'Sound, display, keys', color: '#c9b8ff' },
 ];
 
-/** The quick buttons at the top left: the match history and the ranking (both on Profile), and the guide. */
+/** The quick icons in the top bar: the match history and the ranking (both on Profile), and the guide. */
 export const LOBBY_QUICK = [
     { id: 'history', label: 'HISTORY', color: '#ffb35c' },
     { id: 'ranking', label: 'RANKING', color: '#ffd45c' },
     { id: 'guide', label: 'GUIDE', color: '#c9b8ff' },
 ] as const;
 
-const GOLD_TEXT: [string, string, string] = ['#ffffff', '#ffe08a', '#ff9a2e'];
-
 /** Paints a map's scenery over a rectangle, in the current transform. */
 type StagePainter = (map: string, x: number, y: number, w: number, h: number) => void;
 
 /** Where everything on the lobby sits. */
 export interface LobbyLayout {
-    /** The mode button, and its arrows. */
+    /** The play bar, and its arrows. */
     play: Box;
     prev: Box;
     next: Box;
+    /** The other screens' bars: a column down the left in landscape, a 2×2 grid on a phone. */
     nav: Box[];
+    navCols: number;
+    /** The quick icons (History, Ranking, Guide). */
     quick: Box[];
-    /** The next stage's card (none on a phone). */
-    card: Box | null;
+    /** The trophy road strip under the island. */
+    road: Box;
     /** World chat's ticker (a tap opens the panel), and where the panel opens: the whole height, at the left. */
     ticker: Box;
     chat: Box;
-    /** The friends panel, and on a phone the tab on the right edge that pulls it out. */
+    /** The friends panel, and the tab on the right edge that pulls it out. */
     friends: Box;
-    friendsTab: Box | null;
+    friendsTab: Box;
     /** The island: the centre of its top and how wide it is. */
     island: { x: number; y: number; r: number };
 }
@@ -75,42 +77,48 @@ export interface LobbyLayout {
 function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
     if (layout === 'tall') {
         const W = C.TALL_W,
-            playY = H - 178;
+            playY = H - 218,
+            navY = H - 132,
+            cellW = (W - 24) / 2;
+        const play = { x: W / 2 - 96, y: playY, w: 192, h: 46 };
         return {
-            play: { x: W / 2 - 98, y: playY, w: 196, h: 46 },
-            prev: { x: W / 2 - 131, y: playY + 3, w: 32, h: 40 },
-            next: { x: W / 2 + 99, y: playY + 3, w: 32, h: 40 },
-            nav: LOBBY_NAV.map((_, i) => ({ x: 4 + i * ((W - 8) / 4), y: H - 64, w: (W - 8) / 4, h: 60 })),
-            quick: LOBBY_QUICK.map((_, i) => ({ x: 6 + i * 52, y: 42, w: 48, h: 50 })),
-            card: null,
-            ticker: { x: 8, y: H - 120, w: W - 16, h: 48 },
+            play,
+            prev: { x: play.x - 32, y: playY + 6, w: 28, h: 34 },
+            next: { x: play.x + play.w + 4, y: playY + 6, w: 28, h: 34 },
+            nav: LOBBY_NAV.map((_, i) => ({ x: 8 + (i % 2) * (cellW + 8), y: navY + Math.floor(i / 2) * 38, w: cellW, h: 30 })),
+            navCols: 2,
+            quick: LOBBY_QUICK.map((_, i) => ({ x: W - 86 + i * 27, y: 44, w: 24, h: 24 })),
+            road: { x: W / 2 - 100, y: playY - 26, w: 200, h: 15 },
+            ticker: { x: 8, y: H - 56, w: W - 16, h: 48 },
             chat: { x: 0, y: 0, w: W, h: H },
-            friends: { x: W - 166, y: 44, w: 160, h: playY - 56 },
-            friendsTab: { x: W - 28, y: 112, w: 28, h: 110 },
-            island: { x: W / 2, y: (96 + playY) / 2 - 40, r: 100 },
+            friends: { x: W - 170, y: 44, w: 162, h: playY - 56 },
+            friendsTab: { x: W - 24, y: 82, w: 24, h: 96 },
+            island: { x: W / 2, y: (76 + playY) / 2 - 46, r: 98 },
         };
     }
     const W = C.VIEW_W,
         L = -bleed + 6,
         R = W + bleed - 6;
-    // On a screen no wider than the usual view (a small or squarer window), the sides and the island draw in so
-    // nothing overlaps; on a wider one they spread out.
+    // On a screen no wider than the usual view (a small or squarer window) the menu and the island draw in a little.
     const compact = bleed < 40;
-    const side = compact ? 108 : 124,
-        playW = compact ? 168 : 190,
-        isle = compact ? 90 : 102;
+    const menuW = compact ? 138 : 156,
+        isle = compact ? 84 : 94;
+    // The island and the play bar sit in the middle of the room right of the menu.
+    const mid = Math.max(W / 2, (L + menuW + 14 + R - 26) / 2);
+    const play = { x: mid - 104, y: 230, w: 208, h: 44 };
     return {
-        play: { x: W / 2 - playW / 2, y: 224, w: playW, h: 38 },
-        prev: { x: W / 2 - playW / 2 - 37, y: 225, w: 34, h: 36 },
-        next: { x: W / 2 + playW / 2 + 3, y: 225, w: 34, h: 36 },
-        nav: LOBBY_NAV.map((_, i) => ({ x: L + (i * (R - L)) / 4, y: 278, w: (R - L) / 4, h: 42 })),
-        quick: LOBBY_QUICK.map((_, i) => ({ x: L + i * (compact ? 42 : 47), y: 30, w: compact ? 40 : 45, h: 46 })),
-        card: { x: L, y: 82, w: compact ? 122 : 137, h: 62 },
-        ticker: { x: L, y: 226, w: Math.max(96, Math.min(150, W / 2 - playW / 2 - 42 - L)), h: 46 },
+        play,
+        prev: { x: play.x - 32, y: play.y + 6, w: 28, h: 32 },
+        next: { x: play.x + play.w + 4, y: play.y + 6, w: 28, h: 32 },
+        nav: LOBBY_NAV.map((_, i) => ({ x: L, y: 44 + i * 44, w: menuW, h: 36 })),
+        navCols: 1,
+        quick: LOBBY_QUICK.map((_, i) => ({ x: R - 226 + i * 25, y: 3, w: 21, h: 21 })),
+        road: { x: mid - 104, y: 207, w: 208, h: 15 },
+        ticker: { x: L, y: 234, w: menuW, h: 70 },
         chat: { x: -bleed, y: 0, w: Math.max(210, Math.min(280, W / 2 - 108 + bleed)), h: C.VIEW_H },
-        friends: { x: R - side, y: 30, w: side, h: 240 },
-        friendsTab: null,
-        island: { x: W / 2, y: 108, r: isle },
+        friends: { x: R - 168, y: 32, w: 162, h: 272 },
+        friendsTab: { x: R - 18, y: 70, w: 24, h: 100 },
+        island: { x: mid, y: 96, r: isle },
     };
 }
 
@@ -127,11 +135,11 @@ export function lobbyLayout(layout: Layout, h: number = C.TALL_H, bleed = 0): Lo
         next: view(d.next),
         nav: d.nav.map(view),
         quick: d.quick.map(view),
-        card: d.card && view(d.card),
+        road: view(d.road),
         ticker: view(d.ticker),
         chat: view(d.chat),
         friends: view(d.friends),
-        friendsTab: d.friendsTab && view(d.friendsTab),
+        friendsTab: view(d.friendsTab),
     };
 }
 
@@ -175,26 +183,34 @@ export class LobbyScreen {
             ctx.restore();
         });
         if (theme) enter(ctx, 'panels', () => this.island(v.map, theme, lay.island, t, stage), { dx: 0, dy: 14 });
-        enter(ctx, 'panels', () => this.stageName(v, lay.island.x, lay.play.y - 10), { dx: 0, dy: 8 });
+        enter(ctx, 'panels', () => this.road(v, lay.road, t), { dx: 0, dy: 8 });
         enter(ctx, 'bar', () => this.topBar(v, t, W, bleed, tall));
-        lay.quick.forEach((b, i) => enter(ctx, 'buttons', () => this.quick(b, i, t), { box: b, i }));
-        const card = lay.card;
-        if (card && v.next) enter(ctx, 'panels', () => this.card(v, card, t, stage), { dx: -22 });
-        enter(ctx, 'buttons', () => this.modeButton(v, lay, t), { box: lay.play, i: 2 });
+        lay.quick.forEach((b, i) => enter(ctx, 'buttons', () => this.quickIcon(b, i, t), { box: b, i }));
+        enter(ctx, 'buttons', () => this.playBar(v, lay, t, tall), { box: lay.play, i: 2 });
+        lay.nav.forEach((b, i) => enter(ctx, 'buttons', () => this.menuBar(v, b, i, t, tall), { i: i + 1, dy: 8 }));
         enter(ctx, 'panels', () => this.ticker(v, lay.ticker, t), { dx: -22 });
-        if (!tall || v.friendsOpen) enter(ctx, 'panels', () => this.friends(lay.friends, t), { dx: 22 });
-        if (lay.friendsTab && !v.friendsOpen) {
-            const tab = lay.friendsTab;
-            enter(ctx, 'buttons', () => this.friendsTab(tab, t), { box: tab, i: 3 });
-        }
-        enter(ctx, 'buttons', () => this.nav(v, lay.nav, t, W, bleed, tall), { i: 1, dy: 10 });
-        if (!v.touch && !v.chatOpen && !v.mode.off) {
+        if (v.friendsOpen) enter(ctx, 'panels', () => this.friends(lay.friends, t), { dx: 22 });
+        else enter(ctx, 'buttons', () => this.friendsTab(lay.friendsTab, t), { box: lay.friendsTab, i: 3 });
+        if (!v.chatOpen) {
             enter(ctx, 'hint', () => {
-                ctx.textAlign = 'center';
-                ctx.font = `5px ${ARCADE}`;
-                ctx.fillStyle = 'rgba(255,236,220,0.75)';
-                const y = lay.play.y + lay.play.h + (tall ? 10 : 9);
-                ctx.fillText('◀ ▶ MODE  ·  ENTER PLAY  ·  ▼ MENU  ·  T CHAT', lay.island.x, y, tall ? W - 20 : 230);
+                const y = lay.play.y + lay.play.h + (tall ? 20 : 19);
+                // Blinking like the title's PRESS START while the play bar has the cursor.
+                if (v.focus === 'mode' && !v.mode.off && Math.floor(t * 2.2) % 2 === 0)
+                    arcadeText(
+                        ctx,
+                        v.touch ? 'TAP TO PLAY' : 'PRESS START',
+                        lay.island.x,
+                        y,
+                        tall ? 8 : 9,
+                        ['#ffffff', '#fff3a0', '#ffb43c'],
+                        'center',
+                    );
+                if (!v.touch && !tall) {
+                    ctx.textAlign = 'center';
+                    ctx.font = `5px ${ARCADE}`;
+                    ctx.fillStyle = 'rgba(203,188,245,0.7)';
+                    ctx.fillText('◀ ▶ MODE  ·  ▲ ▼ MENU  ·  ENTER PLAY  ·  T CHAT', lay.island.x, y + 11, 230);
+                }
             });
         }
         ctx.restore();
@@ -452,22 +468,6 @@ export class LobbyScreen {
         }
     }
 
-    /** The stage's name on a banner between the island and the mode button. */
-    private stageName(v: LobbyView, cx: number, y: number): void {
-        const ctx = this.ctx;
-        ctx.font = `5.5px ${ARCADE}`;
-        const text = `STAGE ${v.stages[0]}/${v.stages[1]}  ·  ${v.mapName.toUpperCase()}`;
-        const w = ctx.measureText(text).width + 22;
-        ctx.fillStyle = 'rgba(20,12,48,0.85)';
-        slanted(cx - w / 2, y - 7, w, 11, 4)(ctx);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(201,162,74,0.6)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#cbbcf5';
-        ctx.fillText(text, cx, y + 1);
-    }
 
     /**
      * The bar across the top: the player's avatar in their frame, name and wins; counters (trophies, stages) on
@@ -591,217 +591,8 @@ export class LobbyScreen {
         ctx.stroke();
     }
 
-    /** A quick button at the top left: a gold-ringed round button with its picture, and its name under it. */
-    private quick(b: Box, i: number, t: number): void {
-        const ctx = this.ctx;
-        const q = LOBBY_QUICK[i];
-        const r = Math.min(b.w, b.h) * 0.34,
-            cx = b.x + b.w / 2,
-            cy = b.y + r + 3;
-        drawBadge(ctx, q.color, cx, cy, r, false, t);
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.scale(r / 12, r / 12);
-        ctx.strokeStyle = '#fff6dc';
-        ctx.fillStyle = '#fff6dc';
-        ctx.lineWidth = 1.4;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        if (q.id === 'history') {
-            // A clock face with a back-turning arrow.
-            ctx.beginPath();
-            ctx.arc(0, 0, 6, -Math.PI * 0.8, Math.PI * 1.1);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(-5.8, -4.3);
-            ctx.lineTo(-6.2, -1.1);
-            ctx.lineTo(-3.1, -1.9);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(0, -3.4);
-            ctx.lineTo(0, 0);
-            ctx.lineTo(2.5, 1.7);
-            ctx.stroke();
-        } else if (q.id === 'ranking') {
-            // A podium.
-            ctx.globalAlpha = 0.35;
-            ctx.fillRect(-7, -1, 4.5, 6);
-            ctx.fillRect(-2.2, -5, 4.4, 10);
-            ctx.fillRect(2.6, 1, 4.5, 4);
-            ctx.globalAlpha = 1;
-            ctx.strokeRect(-7, -1, 4.5, 6);
-            ctx.strokeRect(-2.2, -5, 4.4, 10);
-            ctx.strokeRect(2.6, 1, 4.5, 4);
-        } else {
-            ctx.textAlign = 'center';
-            ctx.font = `10px ${ARCADE}`;
-            ctx.fillText('?', 0, 4);
-        }
-        ctx.restore();
-        ctx.textAlign = 'center';
-        ctx.font = `5.5px ${ARCADE}`;
-        ctx.fillStyle = '#fff3c9';
-        ctx.fillText(q.label, cx, b.y + b.h - 2, b.w + 4);
-    }
 
-    /** The next stage on the trophy road: its scenery in a card, its name, and a bar of trophies toward it. */
-    private card(v: LobbyView, b: Box, t: number, stage: StagePainter): void {
-        const ctx = this.ctx;
-        const n = v.next!;
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(b.x, b.y, b.w, b.h);
-        ctx.clip();
-        stage(n.map, b.x, b.y, b.w, b.h);
-        const shade = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
-        shade.addColorStop(0, 'rgba(20,8,40,0.1)');
-        shade.addColorStop(1, 'rgba(20,8,40,0.85)');
-        ctx.fillStyle = shade;
-        ctx.fillRect(b.x, b.y, b.w, b.h);
-        ctx.restore();
-        ctx.strokeStyle = 'rgba(201,162,74,0.6)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
-        // A ribbon in the corner.
-        ctx.fillStyle = '#ff5a8a';
-        slanted(b.x + b.w - 52, b.y + 4, 48, 10, 3)(ctx);
-        ctx.fill();
-        ctx.textAlign = 'center';
-        ctx.font = `5px ${ARCADE}`;
-        ctx.fillStyle = '#fff';
-        ctx.fillText('NEXT STAGE', b.x + b.w - 28, b.y + 11);
-        arcadeText(ctx, n.name.toUpperCase(), b.x + 7, b.y + b.h - 18, 10, GOLD_TEXT, 'left', b.w - 14);
-        // The bar toward it.
-        const bx = b.x + 7,
-            bw = b.w - 14,
-            by = b.y + b.h - 11;
-        const k = Math.max(0, Math.min(1, n.have / n.need));
-        ctx.fillStyle = 'rgba(255,255,255,0.1)';
-        slanted(bx, by, bw, 5, 2)(ctx);
-        ctx.fill();
-        const fill = ctx.createLinearGradient(bx, 0, bx + bw, 0);
-        fill.addColorStop(0, '#ffd45c');
-        fill.addColorStop(1, '#ff8a5c');
-        ctx.fillStyle = fill;
-        slanted(bx, by, Math.max(5, bw * k), 5, 2)(ctx);
-        ctx.fill();
-        ctx.fillStyle = `rgba(255,255,255,${0.25 + 0.2 * Math.sin(t * 3)})`;
-        ctx.fillRect(bx + 2, by + 1, Math.max(0, bw * k - 4), 1);
-        ctx.textAlign = 'right';
-        ctx.font = `5px ${ARCADE}`;
-        ctx.fillStyle = '#fff3c9';
-        ctx.fillText(`${n.have}/${n.need}`, b.x + b.w - 7, b.y + b.h - 18);
-    }
 
-    /**
-     * The mode button under the island: a slanted navy slab in a gold edge like the other screens' buttons, glowing
-     * while it has the cursor, with the mode's emblem and name, between two gold arrows.
-     */
-    private modeButton(v: LobbyView, lay: LobbyLayout, t: number): void {
-        const ctx = this.ctx;
-        const m = v.mode,
-            b = lay.play,
-            on = v.focus === 'mode';
-        const slab = slanted(b.x, b.y, b.w, b.h, 10);
-        ctx.save();
-        if (on && !m.off) {
-            ctx.shadowColor = '#ffd86b';
-            ctx.shadowBlur = 10 + 4 * Math.sin(t * 5);
-        }
-        const g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
-        g.addColorStop(0, on ? 'rgba(58,40,120,0.95)' : 'rgba(40,26,88,0.9)');
-        g.addColorStop(1, on ? 'rgba(24,14,58,0.95)' : 'rgba(16,10,40,0.9)');
-        ctx.fillStyle = g;
-        slab(ctx);
-        ctx.fill();
-        ctx.restore();
-        // A light sweeping across now and then.
-        ctx.save();
-        slab(ctx);
-        ctx.clip();
-        const sweep = ((t % 3) / 3) * (b.w + 100) - 50;
-        const sg = ctx.createLinearGradient(b.x + sweep - 24, 0, b.x + sweep + 24, 0);
-        sg.addColorStop(0, 'rgba(255,240,200,0)');
-        sg.addColorStop(0.5, 'rgba(255,240,200,0.16)');
-        sg.addColorStop(1, 'rgba(255,240,200,0)');
-        ctx.fillStyle = sg;
-        ctx.fillRect(b.x, b.y, b.w, b.h);
-        ctx.restore();
-        ctx.strokeStyle = on ? '#ffd86b' : 'rgba(201,162,74,0.8)';
-        ctx.lineWidth = on ? 2 + Math.sin(t * 6) * 0.3 : 1.4;
-        slab(ctx);
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-        ctx.lineWidth = 1;
-        slanted(b.x + 3, b.y + 3, b.w - 6, b.h - 6, 9)(ctx);
-        ctx.stroke();
-        // Emblem and name, centred together.
-        const size = Math.round(b.h * 0.36);
-        ctx.font = `${size}px ${ARCADE}`;
-        const tw = Math.min(b.w - 52, ctx.measureText(m.label).width);
-        const x0 = b.x + b.w / 2 - (tw + 26) / 2;
-        ctx.save();
-        if (m.off) {
-            ctx.filter = 'grayscale(1)';
-            ctx.globalAlpha = 0.6;
-        }
-        drawEmblem(ctx, m.action, x0 + 9, b.y + b.h / 2, b.h / 110, t, false);
-        ctx.restore();
-        const ink: [string, string, string] = m.off ? ['#ffffff', '#d6d0e6', '#8a80aa'] : GOLD_TEXT;
-        arcadeText(ctx, m.label, x0 + 26, b.y + b.h / 2 + size * 0.38, size, ink, 'left', b.w - 52);
-        if (m.off) {
-            ctx.textAlign = 'center';
-            ctx.font = `5px ${ARCADE}`;
-            ctx.fillStyle = '#ffb3b3';
-            ctx.fillText(m.ribbon === 'Coming soon' ? 'COMING SOON' : 'SWITCHED OFF', b.x + b.w / 2, b.y + b.h + 9);
-        }
-        // The arrows: gold arcade triangles, nudging outward now and then.
-        const nudge = Math.max(0, Math.sin(t * 3)) * 1.8;
-        for (const [box, dir] of [
-            [lay.prev, -1],
-            [lay.next, 1],
-        ] as const) {
-            const cx = box.x + box.w / 2 + dir * nudge,
-                cy = box.y + box.h / 2,
-                k = Math.min(box.w, box.h) / 36;
-            /** Trace the arrow, pointing outward. */
-            const tri = () => {
-                ctx.beginPath();
-                ctx.moveTo(cx + dir * 11 * k, cy);
-                ctx.lineTo(cx - dir * 7 * k, cy - 12 * k);
-                ctx.lineTo(cx - dir * 7 * k, cy + 12 * k);
-                ctx.closePath();
-            };
-            ctx.save();
-            if (on) {
-                ctx.shadowColor = '#ffd86b';
-                ctx.shadowBlur = 6;
-            }
-            const ag = ctx.createLinearGradient(0, cy - 12 * k, 0, cy + 12 * k);
-            ag.addColorStop(0, '#fff7c2');
-            ag.addColorStop(0.5, '#ffd45c');
-            ag.addColorStop(1, '#ff9a2e');
-            ctx.fillStyle = ag;
-            tri();
-            ctx.fill();
-            ctx.restore();
-            ctx.strokeStyle = '#140a26';
-            ctx.lineWidth = 1.4;
-            ctx.lineJoin = 'round';
-            tri();
-            ctx.stroke();
-            // A second, fainter arrow behind it.
-            ctx.globalAlpha = 0.35 + 0.25 * Math.sin(t * 4);
-            ctx.fillStyle = '#ffd45c';
-            ctx.beginPath();
-            ctx.moveTo(cx - dir * 9 * k, cy);
-            ctx.lineTo(cx - dir * 15 * k, cy - 7 * k);
-            ctx.lineTo(cx - dir * 15 * k, cy + 7 * k);
-            ctx.closePath();
-            ctx.fill();
-            ctx.globalAlpha = 1;
-        }
-    }
 
     /** World chat's latest lines at the bottom left (a tap opens the panel); hidden while the panel's open. */
     private ticker(v: LobbyView, b: Box, t: number): void {
@@ -938,52 +729,303 @@ export class LobbyScreen {
         ctx.restore();
     }
 
-    /** The bar of other screens along the bottom: each its emblem and name side by side; the chosen one lit. */
-    private nav(v: LobbyView, boxes: Box[], t: number, W: number, bleed: number, tall: boolean): void {
+
+    /**
+     * The trophy road under the island: the stage you're on and how many are open on the left, and a gold bar of
+     * trophies toward the next stage on the right (or ALL STAGES OPEN).
+     */
+    private road(v: LobbyView, b: Box, t: number): void {
         const ctx = this.ctx;
-        const y = boxes[0].y,
-            h = boxes[0].h;
-        // The top bar's twin: dark, under a gold line.
-        const g = ctx.createLinearGradient(0, y - 4, 0, y + h);
-        g.addColorStop(0, 'rgba(10,6,28,0.6)');
-        g.addColorStop(1, 'rgba(10,6,28,0.95)');
-        ctx.fillStyle = g;
-        ctx.fillRect(-bleed, y - 4, W + 2 * bleed, h + 40);
-        ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(-bleed, y - 5, W + 2 * bleed, 1);
-        ctx.fillStyle = 'rgba(255,230,160,0.25)';
-        ctx.fillRect(-bleed, y - 6, W + 2 * bleed, 1);
-        boxes.forEach((b, i) => {
-            const n = LOBBY_NAV[i],
-                on = v.focus === 'nav' && v.nav === i;
-            if (on) {
-                const lg = ctx.createRadialGradient(b.x + b.w / 2, b.y + b.h, 2, b.x + b.w / 2, b.y + b.h, b.w * 0.6);
-                lg.addColorStop(0, hexA(n.color, 0.45));
-                lg.addColorStop(1, hexA(n.color, 0));
-                ctx.fillStyle = lg;
-                ctx.fillRect(b.x, b.y, b.w, b.h);
-                ctx.fillStyle = n.color;
-                slanted(b.x + b.w * 0.2, b.y + b.h - 3, b.w * 0.6, 2.5, 1.5)(ctx);
-                ctx.fill();
-            }
-            const r = tall ? 16 : 11;
-            if (tall) {
-                drawBadge(ctx, n.color, b.x + b.w / 2, b.y + r + 5, r, on, t);
-                drawEmblem(ctx, n.action, b.x + b.w / 2, b.y + r + 5, r / 34, t, on);
-                ctx.textAlign = 'center';
-                ctx.font = `6px ${ARCADE}`;
-                ctx.fillStyle = on ? '#fff7c2' : 'rgba(239,230,255,0.85)';
-                ctx.fillText(n.label, b.x + b.w / 2, b.y + b.h - 8, b.w - 4);
-                return;
-            }
-            ctx.font = `7px ${ARCADE}`;
-            const lw = ctx.measureText(n.label).width;
-            const x0 = b.x + b.w / 2 - (lw + r * 2 + 6) / 2;
-            drawBadge(ctx, n.color, x0 + r, b.y + b.h / 2, r, on, t);
-            drawEmblem(ctx, n.action, x0 + r, b.y + b.h / 2, r / 34, t, on);
-            ctx.textAlign = 'left';
-            ctx.fillStyle = on ? '#fff7c2' : 'rgba(239,230,255,0.85)';
-            ctx.fillText(n.label, x0 + r * 2 + 6, b.y + b.h / 2 + 2.5);
-        });
+        ctx.fillStyle = 'rgba(20,12,48,0.85)';
+        slanted(b.x, b.y, b.w, b.h, 5)(ctx);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(201,162,74,0.6)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        const cy = b.y + b.h / 2;
+        ctx.textAlign = 'left';
+        ctx.font = `5.5px ${ARCADE}`;
+        ctx.fillStyle = '#fff3c9';
+        const here = `${v.mapName.toUpperCase()}  ${v.stages[0]}/${v.stages[1]}`;
+        ctx.fillText(here, b.x + 9, cy + 2.2, b.w * 0.42);
+        const n = v.next;
+        const bx = b.x + b.w * 0.47,
+            bw = b.w * 0.5 - 8;
+        if (!n) {
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#ffe08a';
+            ctx.fillText('ALL STAGES OPEN', b.x + b.w - 9, cy + 2.2);
+            return;
+        }
+        // The bar toward the next stage, its name and count over it.
+        const k = Math.max(0, Math.min(1, n.have / n.need));
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        slanted(bx, cy + 1, bw, 3.5, 1.5)(ctx);
+        ctx.fill();
+        const fill = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+        fill.addColorStop(0, '#ffd45c');
+        fill.addColorStop(1, '#ff8a5c');
+        ctx.fillStyle = fill;
+        slanted(bx, cy + 1, Math.max(3, bw * k), 3.5, 1.5)(ctx);
+        ctx.fill();
+        ctx.font = `4.5px ${ARCADE}`;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = `rgba(255,224,138,${0.75 + 0.25 * Math.sin(t * 3)})`;
+        ctx.fillText(`NEXT ${n.name.toUpperCase()}`, bx, cy - 1.5, bw * 0.6);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#cbbcf5';
+        ctx.fillText(`${n.have}/${n.need}`, bx + bw, cy - 1.5);
+        drawTrophy(ctx, bx + bw + 4, cy + 2.5, 4);
+    }
+
+    /** A quick icon in the top bar: a small gold-ringed badge with its picture. */
+    private quickIcon(b: Box, i: number, t: number): void {
+        const ctx = this.ctx;
+        const q = LOBBY_QUICK[i];
+        const r = Math.min(b.w, b.h) / 2 - 1,
+            cx = b.x + b.w / 2,
+            cy = b.y + b.h / 2;
+        drawBadge(ctx, q.color, cx, cy, r, false, t);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(r / 12, r / 12);
+        ctx.strokeStyle = '#fff6dc';
+        ctx.fillStyle = '#fff6dc';
+        ctx.lineWidth = 1.6;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        if (q.id === 'history') {
+            // A clock face with a back-turning arrow.
+            ctx.beginPath();
+            ctx.arc(0, 0, 6, -Math.PI * 0.8, Math.PI * 1.1);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(-5.8, -4.3);
+            ctx.lineTo(-6.2, -1.1);
+            ctx.lineTo(-3.1, -1.9);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(0, -3.4);
+            ctx.lineTo(0, 0);
+            ctx.lineTo(2.5, 1.7);
+            ctx.stroke();
+        } else if (q.id === 'ranking') {
+            // A podium.
+            ctx.globalAlpha = 0.35;
+            ctx.fillRect(-7, -1, 4.5, 6);
+            ctx.fillRect(-2.2, -5, 4.4, 10);
+            ctx.fillRect(2.6, 1, 4.5, 4);
+            ctx.globalAlpha = 1;
+            ctx.strokeRect(-7, -1, 4.5, 6);
+            ctx.strokeRect(-2.2, -5, 4.4, 10);
+            ctx.strokeRect(2.6, 1, 4.5, 4);
+        } else {
+            ctx.textAlign = 'center';
+            ctx.font = `11px ${ARCADE}`;
+            ctx.fillText('?', 0, 4);
+        }
+        ctx.restore();
+    }
+
+    /**
+     * The play bar: a slanted bar like the title screen's chosen button (gold while it has the cursor, navy in a
+     * gold edge otherwise) with the mode's emblem on a coin spinning in a burst of light at its left, the mode's name
+     * and what it is, dots for the modes under it, and the title's bouncing gold pointers either side to change it.
+     */
+    private playBar(v: LobbyView, lay: LobbyLayout, t: number, tall: boolean): void {
+        const ctx = this.ctx;
+        const m = v.mode,
+            b = lay.play,
+            on = v.focus === 'mode';
+        const lit = on && !m.off;
+        const bar = slanted(b.x, b.y, b.w, b.h, 12);
+        ctx.save();
+        if (m.off) {
+            ctx.filter = 'grayscale(1)';
+            ctx.globalAlpha = on ? 0.8 : 0.6;
+        }
+        ctx.save();
+        if (lit) {
+            ctx.shadowColor = '#ffb43c';
+            ctx.shadowBlur = 14 + 4 * Math.sin(t * 6);
+            const g = ctx.createLinearGradient(b.x, 0, b.x + b.w, 0);
+            g.addColorStop(0, '#fff0a8');
+            g.addColorStop(0.5, '#ffd45c');
+            g.addColorStop(1, '#ff9a2e');
+            ctx.fillStyle = g;
+        } else ctx.fillStyle = 'rgba(20,12,48,0.88)';
+        bar(ctx);
+        ctx.fill();
+        ctx.restore();
+        // A light sweeping across the gold now and then.
+        if (lit) {
+            ctx.save();
+            bar(ctx);
+            ctx.clip();
+            const sweep = ((t % 2.6) / 2.6) * (b.w + 120) - 60;
+            const sg = ctx.createLinearGradient(b.x + sweep - 18, 0, b.x + sweep + 18, 0);
+            sg.addColorStop(0, 'rgba(255,255,255,0)');
+            sg.addColorStop(0.5, 'rgba(255,255,255,0.55)');
+            sg.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = sg;
+            ctx.fillRect(b.x, b.y, b.w, b.h);
+            ctx.restore();
+        }
+        ctx.strokeStyle = lit ? '#fffbe0' : 'rgba(201,162,74,0.8)';
+        ctx.lineWidth = lit ? 1.6 : 1.2;
+        bar(ctx);
+        ctx.stroke();
+        // The coin: a burst of light turning behind it, a gold rim, the mode's colour and emblem inside.
+        const cr = b.h * 0.62,
+            cx = b.x + cr + 2,
+            cy = b.y + b.h / 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(t * 0.7);
+        ctx.fillStyle = hexA(m.color, lit ? 0.38 : 0.22);
+        for (let i = 0; i < 10; i++) {
+            ctx.rotate((Math.PI * 2) / 10);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(-3, -cr * 1.65);
+            ctx.lineTo(3, -cr * 1.65);
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.restore();
+        // The coin turns: squashed sideways by how far round it is.
+        const spin = 0.82 + 0.18 * Math.cos(t * 1.6);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(spin, 1);
+        const rim = ctx.createLinearGradient(0, -cr, 0, cr);
+        rim.addColorStop(0, '#fff3b0');
+        rim.addColorStop(0.5, '#e9b949');
+        rim.addColorStop(1, '#9a6a1a');
+        ctx.fillStyle = rim;
+        ctx.beginPath();
+        ctx.arc(0, 0, cr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#2a0f2e';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        const face = ctx.createRadialGradient(-cr * 0.3, -cr * 0.35, 1, 0, 0, cr * 0.8);
+        face.addColorStop(0, hexA(m.color, 1));
+        face.addColorStop(1, '#1d1040');
+        ctx.fillStyle = face;
+        ctx.beginPath();
+        ctx.arc(0, 0, cr * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        drawEmblem(ctx, m.action, cx, cy, (cr * 0.8) / 30, t, lit);
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        sparkle(ctx, cx - cr * 0.45, cy - cr * 0.5, 2 + Math.abs(Math.sin(t * 2.4)) * 1.6);
+        // The mode's name and what it is.
+        const tx = cx + cr + 8,
+            room = b.x + b.w - 16 - tx;
+        ctx.textAlign = 'left';
+        ctx.font = `${tall ? 15 : 15}px ${ARCADE}`;
+        ctx.fillStyle = lit ? '#2a0f2e' : '#fff3c9';
+        ctx.fillText(m.label, tx, b.y + b.h / 2 + 1, room);
+        ctx.font = `700 ${tall ? 7.5 : 7.5}px ${SANS}`;
+        ctx.fillStyle = lit ? 'rgba(70,25,20,0.85)' : 'rgba(203,188,245,0.8)';
+        const sub = m.off ? (m.ribbon === 'Coming soon' ? 'Coming soon' : 'Switched off right now') : m.sub;
+        ctx.fillText(sub, tx, b.y + b.h / 2 + 12, room);
+        ctx.restore();
+        // A dot for each mode, the one in view lit in its colour.
+        const n = v.modeCount,
+            gap = 7,
+            dy = b.y + b.h + 7;
+        for (let i = 0; i < n; i++) {
+            const x = lay.island.x - ((n - 1) * gap) / 2 + i * gap;
+            const here = i === v.modeIndex;
+            ctx.fillStyle = here ? m.color : 'rgba(203,188,245,0.3)';
+            ctx.beginPath();
+            ctx.arc(x, dy, here ? 2.2 : 1.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        // The title's bouncing gold pointers, either side.
+        for (const [box, dir] of [
+            [lay.prev, -1],
+            [lay.next, 1],
+        ] as const) {
+            const bounce = Math.max(0, Math.sin(t * 6)) * 2.5 * dir;
+            const ax = box.x + box.w / 2 + dir * 4 + bounce,
+                ay = box.y + box.h / 2;
+            ctx.fillStyle = '#ffd45c';
+            ctx.strokeStyle = '#2a0f2e';
+            ctx.lineWidth = 1.5;
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(ax - dir * 10, ay - 8);
+            ctx.lineTo(ax - dir * 10, ay + 8);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.fill();
+        }
+    }
+
+    /**
+     * One of the other screens, as the title's slanted bar: its name and a line on what it holds, gold and slid out
+     * with the bouncing pointer while it has the cursor.
+     */
+    private menuBar(v: LobbyView, b: Box, i: number, t: number, tall: boolean): void {
+        const ctx = this.ctx;
+        const n = LOBBY_NAV[i],
+            on = v.focus === 'nav' && v.nav === i;
+        const x = b.x + (on && !tall ? 8 : 0),
+            y = b.y + (on && tall ? -2 : 0);
+        const bar = slanted(x, y, b.w, b.h, tall ? 7 : 10);
+        ctx.save();
+        if (on) {
+            ctx.shadowColor = '#ffb43c';
+            ctx.shadowBlur = 14 + 4 * Math.sin(t * 6);
+            const g = ctx.createLinearGradient(x, 0, x + b.w, 0);
+            g.addColorStop(0, '#fff0a8');
+            g.addColorStop(0.5, '#ffd45c');
+            g.addColorStop(1, '#ff9a2e');
+            ctx.fillStyle = g;
+        } else ctx.fillStyle = 'rgba(20,12,48,0.82)';
+        bar(ctx);
+        ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = on ? '#fffbe0' : 'rgba(201,162,74,0.7)';
+        ctx.lineWidth = on ? 1.6 : 1;
+        bar(ctx);
+        ctx.stroke();
+        // A tick of the screen's own colour at the start of the bar.
+        ctx.fillStyle = on ? '#2a0f2e' : n.color;
+        slanted(x + (tall ? 6 : 9), y + b.h / 2 - (tall ? 5 : 7), 3, tall ? 10 : 14, 1.5)(ctx);
+        ctx.fill();
+        ctx.textAlign = 'left';
+        const tx = x + (tall ? 14 : 18);
+        if (tall) {
+            ctx.font = `${on ? 8.5 : 8}px ${ARCADE}`;
+            ctx.fillStyle = on ? '#2a0f2e' : '#fff3c9';
+            ctx.fillText(n.label, tx, y + b.h / 2 + 3, b.w - 22);
+            return;
+        }
+        ctx.font = `${on ? 11 : 10}px ${ARCADE}`;
+        ctx.fillStyle = on ? '#2a0f2e' : '#fff3c9';
+        ctx.fillText(n.label, tx, y + 16, b.w - 30);
+        ctx.font = `700 7px ${SANS}`;
+        ctx.fillStyle = on ? 'rgba(70,25,20,0.85)' : 'rgba(203,188,245,0.7)';
+        ctx.fillText(n.sub, tx, y + 27, b.w - 30);
+        if (on) {
+            // The title's bouncing pointer, pointing back at the bar from its right.
+            const ax = x + b.w + 6 + Math.sin(t * 9) * 2.5,
+                ay = y + b.h / 2;
+            ctx.fillStyle = '#ffd45c';
+            ctx.strokeStyle = '#2a0f2e';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(ax + 9, ay - 7);
+            ctx.lineTo(ax + 9, ay + 7);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.fill();
+        }
     }
 }

@@ -198,7 +198,7 @@ export class Game {
     private titleIndex = 1;
     /**
      * The lobby: the mode on its picker (an index into LOBBY_MODES, VS CPU to begin with), where the keyboard
-     * cursor is, the screen chosen on the bar along the bottom, and on a phone whether the friends panel is out.
+     * cursor is, the screen chosen in the menu, and whether the friends panel is out.
      */
     private lobbyMode = 1;
     private lobbyFocus: LobbyFocus = 'mode';
@@ -1469,7 +1469,7 @@ export class Game {
             this.setChatOpen(!this.chatOpen);
             return;
         }
-        if (tap && lay.friendsTab) {
+        if (tap) {
             if (!this.friendsOpen && inBox(tap, lay.friendsTab)) {
                 this.friendsOpen = true;
                 this.ui('tick');
@@ -1483,15 +1483,31 @@ export class Game {
         }
         const was = [this.lobbyMode, this.lobbyNav, this.lobbyFocus].join();
         const left = ['ArrowLeft', 'KeyA'].some(k => pr.has(k)),
-            right = ['ArrowRight', 'KeyD'].some(k => pr.has(k));
-        if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.lobbyFocus = 'nav';
-        if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.lobbyFocus = 'mode';
+            right = ['ArrowRight', 'KeyD'].some(k => pr.has(k)),
+            up = ['ArrowUp', 'KeyW'].some(k => pr.has(k)),
+            down = ['ArrowDown', 'KeyS'].some(k => pr.has(k));
+        // The menu is a column down the left in landscape (▲ ▼ move, ▶ back to the play bar) and a 2×2 grid on a
+        // phone (the arrows move, ▲ off the top row back to the play bar); ▲ or ▼ from the play bar goes into it.
+        const cols = lay.navCols,
+            col = this.lobbyNav % cols,
+            row = Math.floor(this.lobbyNav / cols),
+            rows = Math.ceil(nav / cols);
         if (this.lobbyFocus === 'mode') {
             if (left) this.lobbyMode = (this.lobbyMode + n - 1) % n;
             if (right) this.lobbyMode = (this.lobbyMode + 1) % n;
+            if (down || (up && cols === 1)) this.lobbyFocus = 'nav';
+        } else if (cols === 1) {
+            if (up) this.lobbyNav = Math.max(0, this.lobbyNav - 1);
+            if (down) this.lobbyNav = Math.min(nav - 1, this.lobbyNav + 1);
+            if (right) this.lobbyFocus = 'mode';
         } else {
-            if (left) this.lobbyNav = (this.lobbyNav + nav - 1) % nav;
-            if (right) this.lobbyNav = (this.lobbyNav + 1) % nav;
+            if (left && col > 0) this.lobbyNav--;
+            if (right && col < cols - 1 && this.lobbyNav + 1 < nav) this.lobbyNav++;
+            if (down && row < rows - 1) this.lobbyNav = Math.min(nav - 1, this.lobbyNav + cols);
+            if (up) {
+                if (row > 0) this.lobbyNav -= cols;
+                else this.lobbyFocus = 'mode';
+            }
         }
         if (tap && inBox(tap, lay.prev)) {
             this.lobbyMode = (this.lobbyMode + n - 1) % n;
@@ -2392,6 +2408,8 @@ export class Game {
                         stages: [MAPS.filter((_, i) => this.mapOpen(i)).length, MAPS.length],
                         next: this.nextStage,
                         mode: this.lobbyModes[this.lobbyMode],
+                        modeIndex: this.lobbyMode,
+                        modeCount: this.lobbyModes.length,
                         focus: this.lobbyFocus,
                         nav: this.lobbyNav,
                         map: this.lobbyMap,
