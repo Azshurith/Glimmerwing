@@ -15,6 +15,8 @@ import { drawTrophy } from '@/render/icons';
 import { ARCADE, SANS } from '@/render/theme';
 import { drawBadge, drawEmblem, hexA, roundRect } from './emblems';
 import { tallMenuFit } from './menu-fit';
+import { TOP_BAR_H } from './top-bar';
+import { Backdrop } from '@/render/backdrop';
 import { drawMedal } from './profile-screen';
 import { enter } from '@/render/transition';
 
@@ -41,8 +43,6 @@ export const LOBBY_QUICK = [
     { id: 'guide', label: 'GUIDE', color: '#c9b8ff' },
 ] as const;
 
-/** Gold, for frames and lettering. */
-const GOLD = '#e9b949';
 const GOLD_TEXT: [string, string, string] = ['#ffffff', '#ffe08a', '#ff9a2e'];
 
 /** Paints a map's scenery over a rectangle, in the current transform. */
@@ -137,7 +137,13 @@ export function lobbyLayout(layout: Layout, h: number = C.TALL_H, bleed = 0): Lo
 
 /** The lobby. */
 export class LobbyScreen {
-    constructor(private ctx: CanvasRenderingContext2D) {}
+    /** The night sky the other menu screens share. */
+    private backdrop: Backdrop;
+
+    /** Draw on `ctx`. */
+    constructor(private ctx: CanvasRenderingContext2D) {
+        this.backdrop = new Backdrop(ctx);
+    }
 
     /**
      * Draw the lobby. `stage` paints a map's scenery over a rectangle; `bleed` is how far a widened landscape view
@@ -161,7 +167,13 @@ export class LobbyScreen {
         const theme = mapById(v.map);
         // Coming in from another screen, the bar and buttons pop in first, then the sky and the island rise out of the
         // dark, then the panels slide in (see render/transition.ts).
-        enter(ctx, 'bg', () => this.sky(t, W, H, bleed, lay.island));
+        enter(ctx, 'bg', () => {
+            // The night sky of the other menu screens, its light rays turning from behind the island.
+            ctx.save();
+            ctx.translate(-bleed, 0);
+            this.backdrop.draw(t, lay.island.x + bleed, lay.island.y, W + 2 * bleed, H);
+            ctx.restore();
+        });
         if (theme) enter(ctx, 'panels', () => this.island(v.map, theme, lay.island, t, stage), { dx: 0, dy: 14 });
         enter(ctx, 'panels', () => this.stageName(v, lay.island.x, lay.play.y - 10), { dx: 0, dy: 8 });
         enter(ctx, 'bar', () => this.topBar(v, t, W, bleed, tall));
@@ -189,79 +201,6 @@ export class LobbyScreen {
     }
 
     /**
-     * The sky: dusk deepening from violet above to a warm glow at the horizon behind the island, a sea of clouds
-     * below it lit pink and gold, drifting slowly, and faint stars at the top.
-     */
-    private sky(t: number, W: number, H: number, b: number, isle: { x: number; y: number; r: number }): void {
-        const ctx = this.ctx;
-        const x0 = -b,
-            w = W + 2 * b;
-        const horizon = isle.y + isle.r * 0.2;
-        const g = ctx.createLinearGradient(0, 0, 0, H);
-        const k = horizon / H;
-        g.addColorStop(0, '#1c0f42');
-        g.addColorStop(k * 0.45, '#4a2470');
-        g.addColorStop(k * 0.85, '#b04a86');
-        g.addColorStop(k, '#ffaf7a');
-        g.addColorStop(Math.min(0.99, k + 0.08), '#d06a8a');
-        g.addColorStop(Math.min(1, k + 0.3), '#5a2c6a');
-        g.addColorStop(1, '#22123c');
-        ctx.fillStyle = g;
-        ctx.fillRect(x0, 0, w, H);
-        // Stars, twinkling in the dark part.
-        for (let i = 0; i < 40; i++) {
-            const sx = x0 + ((i * 131.7) % w),
-                sy = (i * 47.3) % (horizon * 0.5);
-            const a = 0.25 + 0.5 * Math.max(0, Math.sin(t * 1.5 + i * 2.1));
-            ctx.fillStyle = `rgba(255,240,220,${a * (1 - sy / (horizon * 0.5))})`;
-            ctx.fillRect(sx, sy, 1, 1);
-        }
-        // The sun's glow behind the island.
-        const sun = ctx.createRadialGradient(isle.x, horizon, 2, isle.x, horizon, w * 0.45);
-        sun.addColorStop(0, 'rgba(255,230,180,0.75)');
-        sun.addColorStop(0.25, 'rgba(255,170,140,0.35)');
-        sun.addColorStop(1, 'rgba(255,140,160,0)');
-        ctx.fillStyle = sun;
-        ctx.fillRect(x0, 0, w, H);
-        // Far mountains on the horizon, then the sea of clouds in bands, nearer bands bigger and darker.
-        ctx.fillStyle = 'rgba(70,30,90,0.45)';
-        ctx.beginPath();
-        ctx.moveTo(x0, horizon + 4);
-        for (let x = 0; x <= w; x += 14) {
-            const hgt = 6 + 8 * Math.abs(Math.sin(x * 0.031)) + 5 * Math.sin(x * 0.11);
-            ctx.lineTo(x0 + x, horizon + 4 - hgt);
-        }
-        ctx.lineTo(x0 + w, horizon + 10);
-        ctx.lineTo(x0, horizon + 10);
-        ctx.closePath();
-        ctx.fill();
-        const bands = [
-            { y: horizon + 6, r: 16, col: [255, 196, 190], a: 0.5, v: 3 },
-            { y: horizon + 22, r: 22, col: [236, 140, 170], a: 0.45, v: 5 },
-            { y: horizon + 44, r: 30, col: [170, 90, 150], a: 0.5, v: 8 },
-            { y: horizon + 74, r: 40, col: [100, 50, 120], a: 0.55, v: 12 },
-            { y: horizon + 112, r: 52, col: [60, 30, 90], a: 0.6, v: 16 },
-        ];
-        bands.forEach((band, j) => {
-            if (band.y - band.r > H) return;
-            const [r, gg, bb] = band.col;
-            ctx.fillStyle = `rgba(${r},${gg},${bb},${band.a})`;
-            const step = band.r * 1.3;
-            const off = (t * band.v + j * 37) % step;
-            ctx.beginPath();
-            for (let x = x0 - step + off; x < x0 + w + step; x += step) {
-                const wob = Math.sin(x * 0.07 + j) * band.r * 0.18;
-                ctx.moveTo(x + band.r, band.y + wob);
-                ctx.ellipse(x, band.y + wob, band.r, band.r * 0.45, 0, 0, Math.PI * 2);
-            }
-            ctx.fill();
-            // A lit top edge on each band.
-            ctx.fillStyle = `rgba(255,220,200,${0.12 + j * 0.02})`;
-            ctx.fillRect(x0, band.y - band.r * 0.32, w, 1);
-        });
-    }
-
-    /**
      * The stage as a floating island: a swirl in the clouds below it, cliffs in the map's colours hanging under an
      * oval top that shows the map's own scenery (squashed, as if seen at an angle), a lit rim, a waterfall over
      * the front, and little rocks floating round it.
@@ -285,7 +224,7 @@ export class LobbyScreen {
         ctx.save();
         const sy = isle.y + depth + 26;
         for (let i = 0; i < 4; i++) {
-            ctx.strokeStyle = `rgba(255,210,230,${0.22 - i * 0.04})`;
+            ctx.strokeStyle = `rgba(201,162,74,${0.3 - i * 0.06})`;
             ctx.lineWidth = 1.4;
             ctx.setLineDash([18 + i * 6, 10]);
             ctx.lineDashOffset = (i % 2 ? 1 : -1) * t * (14 - i * 2);
@@ -295,8 +234,8 @@ export class LobbyScreen {
         }
         ctx.setLineDash([]);
         const pool = ctx.createRadialGradient(cx, sy, 2, cx, sy, rx * 0.9);
-        pool.addColorStop(0, 'rgba(40,10,60,0.55)');
-        pool.addColorStop(1, 'rgba(40,10,60,0)');
+        pool.addColorStop(0, 'rgba(120,90,220,0.22)');
+        pool.addColorStop(1, 'rgba(120,90,220,0)');
         ctx.fillStyle = pool;
         ctx.beginPath();
         ctx.ellipse(cx, sy, rx * 0.9, rx * 0.22, 0, 0, Math.PI * 2);
@@ -519,14 +458,14 @@ export class LobbyScreen {
         ctx.font = `5.5px ${ARCADE}`;
         const text = `STAGE ${v.stages[0]}/${v.stages[1]}  ·  ${v.mapName.toUpperCase()}`;
         const w = ctx.measureText(text).width + 22;
-        ctx.fillStyle = 'rgba(30,12,50,0.7)';
+        ctx.fillStyle = 'rgba(20,12,48,0.85)';
         slanted(cx - w / 2, y - 7, w, 11, 4)(ctx);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(233,185,73,0.6)';
-        ctx.lineWidth = 0.8;
+        ctx.strokeStyle = 'rgba(201,162,74,0.6)';
+        ctx.lineWidth = 1;
         ctx.stroke();
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffe9c8';
+        ctx.fillStyle = '#cbbcf5';
         ctx.fillText(text, cx, y + 1);
     }
 
@@ -536,12 +475,17 @@ export class LobbyScreen {
      */
     private topBar(v: LobbyView, t: number, W: number, bleed: number, tall: boolean): void {
         const ctx = this.ctx;
-        const h = tall ? 36 : 26;
-        const g = ctx.createLinearGradient(0, 0, 0, h + 8);
-        g.addColorStop(0, 'rgba(20,10,44,0.85)');
-        g.addColorStop(1, 'rgba(20,10,44,0)');
+        const h = tall ? TOP_BAR_H.tall : TOP_BAR_H.wide;
+        // The same bar as the other menu screens': dark, over a gold line.
+        const g = ctx.createLinearGradient(0, 0, 0, h + 1);
+        g.addColorStop(0, 'rgba(10,6,28,0.95)');
+        g.addColorStop(1, 'rgba(10,6,28,0.6)');
         ctx.fillStyle = g;
-        ctx.fillRect(-bleed, 0, W + 2 * bleed, h + 8);
+        ctx.fillRect(-bleed, 0, W + 2 * bleed, h);
+        ctx.fillStyle = '#c9a24a';
+        ctx.fillRect(-bleed, h, W + 2 * bleed, 1);
+        ctx.fillStyle = 'rgba(255,230,160,0.25)';
+        ctx.fillRect(-bleed, h + 1, W + 2 * bleed, 1);
         // The page's Back tab sits in the top-left corner, so the player starts after it.
         const x = tall ? 90 : -bleed + 84,
             cy = h / 2,
@@ -552,7 +496,7 @@ export class LobbyScreen {
         ctx.fillStyle = '#ffffff';
         ctx.fillText(v.name, x + r + 6, cy - 1, tall ? 96 : 104);
         ctx.font = `5px ${ARCADE}`;
-        ctx.fillStyle = '#ffb3d9';
+        ctx.fillStyle = '#cbbcf5';
         ctx.fillText(`${v.wins} WINS`, x + r + 6, cy + 8);
         if (tall) {
             this.online(v, W + bleed - 10, cy);
@@ -621,14 +565,29 @@ export class LobbyScreen {
         ctx.stroke();
     }
 
-    /** A dark rounded pill with a thin gold edge. */
+    /** A dark slanted plate with a thin gold edge, like the other menu screens' tabs. */
     private pill(x: number, y: number, w: number, h: number): void {
         const ctx = this.ctx;
-        ctx.fillStyle = 'rgba(10,4,26,0.72)';
-        roundRect(ctx, x, y, w, h, h / 2);
+        ctx.fillStyle = 'rgba(20,12,48,0.85)';
+        slanted(x, y, w, h, 3)(ctx);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(233,185,73,0.55)';
+        ctx.strokeStyle = 'rgba(201,162,74,0.6)';
         ctx.lineWidth = 0.8;
+        ctx.stroke();
+    }
+
+    /** A panel like the other menu screens': navy, darkening downward, in a thin gold edge, slanted by `slant`. */
+    private panel(x: number, y: number, w: number, h: number, slant = 0): void {
+        const ctx = this.ctx;
+        const g = ctx.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, 'rgba(40,26,88,0.85)');
+        g.addColorStop(1, 'rgba(16,10,40,0.85)');
+        ctx.fillStyle = g;
+        slanted(x, y, w, h, slant)(ctx);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(201,162,74,0.6)';
+        ctx.lineWidth = 1;
+        slanted(x + 0.5, y + 0.5, w - 1, h - 1, slant)(ctx);
         ctx.stroke();
     }
 
@@ -690,7 +649,8 @@ export class LobbyScreen {
         const ctx = this.ctx;
         const n = v.next!;
         ctx.save();
-        roundRect(ctx, b.x, b.y, b.w, b.h, 6);
+        ctx.beginPath();
+        ctx.rect(b.x, b.y, b.w, b.h);
         ctx.clip();
         stage(n.map, b.x, b.y, b.w, b.h);
         const shade = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
@@ -699,10 +659,9 @@ export class LobbyScreen {
         ctx.fillStyle = shade;
         ctx.fillRect(b.x, b.y, b.w, b.h);
         ctx.restore();
-        ctx.strokeStyle = GOLD;
+        ctx.strokeStyle = 'rgba(201,162,74,0.6)';
         ctx.lineWidth = 1;
-        roundRect(ctx, b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1, 6);
-        ctx.stroke();
+        ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
         // A ribbon in the corner.
         ctx.fillStyle = '#ff5a8a';
         slanted(b.x + b.w - 52, b.y + 4, 48, 10, 3)(ctx);
@@ -717,14 +676,14 @@ export class LobbyScreen {
             bw = b.w - 14,
             by = b.y + b.h - 11;
         const k = Math.max(0, Math.min(1, n.have / n.need));
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        roundRect(ctx, bx, by, bw, 5, 2.5);
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        slanted(bx, by, bw, 5, 2)(ctx);
         ctx.fill();
         const fill = ctx.createLinearGradient(bx, 0, bx + bw, 0);
         fill.addColorStop(0, '#ffd45c');
         fill.addColorStop(1, '#ff8a5c');
         ctx.fillStyle = fill;
-        roundRect(ctx, bx, by, Math.max(5, bw * k), 5, 2.5);
+        slanted(bx, by, Math.max(5, bw * k), 5, 2)(ctx);
         ctx.fill();
         ctx.fillStyle = `rgba(255,255,255,${0.25 + 0.2 * Math.sin(t * 3)})`;
         ctx.fillRect(bx + 2, by + 1, Math.max(0, bw * k - 4), 1);
@@ -735,50 +694,46 @@ export class LobbyScreen {
     }
 
     /**
-     * The mode button under the island: a dark slab in a gold frame with the mode's emblem and name, a light
-     * sweeping across now and then, between two gold arrows.
+     * The mode button under the island: a slanted navy slab in a gold edge like the other screens' buttons, glowing
+     * while it has the cursor, with the mode's emblem and name, between two gold arrows.
      */
     private modeButton(v: LobbyView, lay: LobbyLayout, t: number): void {
         const ctx = this.ctx;
         const m = v.mode,
             b = lay.play,
             on = v.focus === 'mode';
+        const slab = slanted(b.x, b.y, b.w, b.h, 10);
         ctx.save();
         if (on && !m.off) {
-            ctx.shadowColor = '#ffd45c';
-            ctx.shadowBlur = 12 + 4 * Math.sin(t * 4);
+            ctx.shadowColor = '#ffd86b';
+            ctx.shadowBlur = 10 + 4 * Math.sin(t * 5);
         }
         const g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
-        g.addColorStop(0, '#5a3a5a');
-        g.addColorStop(0.5, '#3a2040');
-        g.addColorStop(1, '#22122a');
+        g.addColorStop(0, on ? 'rgba(58,40,120,0.95)' : 'rgba(40,26,88,0.9)');
+        g.addColorStop(1, on ? 'rgba(24,14,58,0.95)' : 'rgba(16,10,40,0.9)');
         ctx.fillStyle = g;
-        roundRect(ctx, b.x, b.y, b.w, b.h, b.h / 2);
+        slab(ctx);
         ctx.fill();
         ctx.restore();
+        // A light sweeping across now and then.
         ctx.save();
-        roundRect(ctx, b.x, b.y, b.w, b.h, b.h / 2);
+        slab(ctx);
         ctx.clip();
         const sweep = ((t % 3) / 3) * (b.w + 100) - 50;
         const sg = ctx.createLinearGradient(b.x + sweep - 24, 0, b.x + sweep + 24, 0);
         sg.addColorStop(0, 'rgba(255,240,200,0)');
-        sg.addColorStop(0.5, 'rgba(255,240,200,0.22)');
+        sg.addColorStop(0.5, 'rgba(255,240,200,0.16)');
         sg.addColorStop(1, 'rgba(255,240,200,0)');
         ctx.fillStyle = sg;
         ctx.fillRect(b.x, b.y, b.w, b.h);
-        const sheen = ctx.createLinearGradient(0, b.y, 0, b.y + b.h / 2);
-        sheen.addColorStop(0, 'rgba(255,255,255,0.18)');
-        sheen.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = sheen;
-        ctx.fillRect(b.x, b.y, b.w, b.h / 2);
         ctx.restore();
-        ctx.strokeStyle = on ? '#ffe9a0' : GOLD;
-        ctx.lineWidth = on ? 1.8 : 1.3;
-        roundRect(ctx, b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1, b.h / 2);
+        ctx.strokeStyle = on ? '#ffd86b' : 'rgba(201,162,74,0.8)';
+        ctx.lineWidth = on ? 2 + Math.sin(t * 6) * 0.3 : 1.4;
+        slab(ctx);
         ctx.stroke();
-        ctx.strokeStyle = 'rgba(233,185,73,0.4)';
-        ctx.lineWidth = 0.7;
-        roundRect(ctx, b.x + 3, b.y + 3, b.w - 6, b.h - 6, b.h / 2 - 3);
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.lineWidth = 1;
+        slanted(b.x + 3, b.y + 3, b.w - 6, b.h - 6, 9)(ctx);
         ctx.stroke();
         // Emblem and name, centred together.
         const size = Math.round(b.h * 0.36);
@@ -800,7 +755,7 @@ export class LobbyScreen {
             ctx.fillStyle = '#ffb3b3';
             ctx.fillText(m.ribbon === 'Coming soon' ? 'COMING SOON' : 'SWITCHED OFF', b.x + b.w / 2, b.y + b.h + 9);
         }
-        // The arrows: gold chevrons in a diamond, nudging outward now and then.
+        // The arrows: gold arcade triangles, nudging outward now and then.
         const nudge = Math.max(0, Math.sin(t * 3)) * 1.8;
         for (const [box, dir] of [
             [lay.prev, -1],
@@ -808,26 +763,43 @@ export class LobbyScreen {
         ] as const) {
             const cx = box.x + box.w / 2 + dir * nudge,
                 cy = box.y + box.h / 2,
-                d = Math.min(box.w, box.h) / 2 - 2,
-                k = d / 10;
-            ctx.fillStyle = 'rgba(30,12,50,0.75)';
+                k = Math.min(box.w, box.h) / 36;
+            /** Trace the arrow, pointing outward. */
+            const tri = () => {
+                ctx.beginPath();
+                ctx.moveTo(cx + dir * 11 * k, cy);
+                ctx.lineTo(cx - dir * 7 * k, cy - 12 * k);
+                ctx.lineTo(cx - dir * 7 * k, cy + 12 * k);
+                ctx.closePath();
+            };
+            ctx.save();
+            if (on) {
+                ctx.shadowColor = '#ffd86b';
+                ctx.shadowBlur = 6;
+            }
+            const ag = ctx.createLinearGradient(0, cy - 12 * k, 0, cy + 12 * k);
+            ag.addColorStop(0, '#fff7c2');
+            ag.addColorStop(0.5, '#ffd45c');
+            ag.addColorStop(1, '#ff9a2e');
+            ctx.fillStyle = ag;
+            tri();
+            ctx.fill();
+            ctx.restore();
+            ctx.strokeStyle = '#140a26';
+            ctx.lineWidth = 1.4;
+            ctx.lineJoin = 'round';
+            tri();
+            ctx.stroke();
+            // A second, fainter arrow behind it.
+            ctx.globalAlpha = 0.35 + 0.25 * Math.sin(t * 4);
+            ctx.fillStyle = '#ffd45c';
             ctx.beginPath();
-            ctx.moveTo(cx, cy - d);
-            ctx.lineTo(cx + d, cy);
-            ctx.lineTo(cx, cy + d);
-            ctx.lineTo(cx - d, cy);
+            ctx.moveTo(cx - dir * 9 * k, cy);
+            ctx.lineTo(cx - dir * 15 * k, cy - 7 * k);
+            ctx.lineTo(cx - dir * 15 * k, cy + 7 * k);
             ctx.closePath();
             ctx.fill();
-            ctx.strokeStyle = GOLD;
-            ctx.lineWidth = 1.2;
-            ctx.stroke();
-            ctx.strokeStyle = '#ffe9a0';
-            ctx.lineWidth = 2 * k;
-            ctx.beginPath();
-            ctx.moveTo(cx - dir * 2.5 * k, cy - 4.5 * k);
-            ctx.lineTo(cx + dir * 2.5 * k, cy);
-            ctx.lineTo(cx - dir * 2.5 * k, cy + 4.5 * k);
-            ctx.stroke();
+            ctx.globalAlpha = 1;
         }
     }
 
@@ -835,18 +807,13 @@ export class LobbyScreen {
     private ticker(v: LobbyView, b: Box, t: number): void {
         if (v.chatOpen) return;
         const ctx = this.ctx;
-        const g = ctx.createLinearGradient(b.x, 0, b.x + b.w, 0);
-        g.addColorStop(0, 'rgba(14,8,36,0.85)');
-        g.addColorStop(1, 'rgba(14,8,36,0.2)');
-        ctx.fillStyle = g;
-        roundRect(ctx, b.x, b.y, b.w, b.h, 5);
-        ctx.fill();
-        // The channel's tag: a blue pill.
+        this.panel(b.x, b.y, b.w, b.h);
+        // The channel's tag: a blue tab.
         const tg = ctx.createLinearGradient(0, b.y + 4, 0, b.y + 13);
         tg.addColorStop(0, '#8fd8ff');
         tg.addColorStop(1, '#3a7ad8');
         ctx.fillStyle = tg;
-        roundRect(ctx, b.x + 4, b.y + 4, 36, 11, 5.5);
+        slanted(b.x + 4, b.y + 4, 36, 11, 3)(ctx);
         ctx.fill();
         ctx.textAlign = 'center';
         ctx.font = `5.5px ${ARCADE}`;
@@ -880,18 +847,12 @@ export class LobbyScreen {
     /** The friends panel: online count, empty places where friends will be, and the buttons that will add them. */
     private friends(b: Box, t: number): void {
         const ctx = this.ctx;
-        const g = ctx.createLinearGradient(b.x, 0, b.x + b.w, 0);
-        g.addColorStop(0, 'rgba(14,8,36,0.25)');
-        g.addColorStop(0.3, 'rgba(14,8,36,0.75)');
-        g.addColorStop(1, 'rgba(14,8,36,0.85)');
-        ctx.fillStyle = g;
-        roundRect(ctx, b.x, b.y, b.w, b.h, 6);
-        ctx.fill();
+        this.panel(b.x, b.y, b.w, b.h);
         // Online count and the switch beside it.
         ctx.textAlign = 'left';
-        ctx.font = `700 8px ${SANS}`;
-        ctx.fillStyle = '#efe6ff';
-        ctx.fillText('online 0/0', b.x + 10, b.y + 12);
+        ctx.font = `6px ${ARCADE}`;
+        ctx.fillStyle = '#cbbcf5';
+        ctx.fillText('ONLINE 0/0', b.x + 10, b.y + 12);
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         roundRect(ctx, b.x + 58, b.y + 6, 16, 8, 4);
         ctx.fill();
@@ -965,15 +926,7 @@ export class LobbyScreen {
     /** On a phone, the tab on the right edge that pulls the friends panel out. */
     private friendsTab(b: Box, t: number): void {
         const ctx = this.ctx;
-        const g = ctx.createLinearGradient(b.x, 0, b.x + b.w, 0);
-        g.addColorStop(0, '#4a2a6a');
-        g.addColorStop(1, '#1c0e30');
-        ctx.fillStyle = g;
-        roundRect(ctx, b.x, b.y, b.w + 8, b.h, 6);
-        ctx.fill();
-        ctx.strokeStyle = GOLD;
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        this.panel(b.x, b.y, b.w + 8, b.h);
         this.person(b.x + b.w / 2 + 1, b.y + 14, 0);
         ctx.save();
         ctx.translate(b.x + b.w / 2 + 2, b.y + b.h / 2 + 8);
@@ -990,12 +943,16 @@ export class LobbyScreen {
         const ctx = this.ctx;
         const y = boxes[0].y,
             h = boxes[0].h;
-        const g = ctx.createLinearGradient(0, y - 6, 0, y + h);
-        g.addColorStop(0, 'rgba(20,10,44,0)');
-        g.addColorStop(0.35, 'rgba(20,10,44,0.82)');
-        g.addColorStop(1, 'rgba(10,4,26,0.95)');
+        // The top bar's twin: dark, under a gold line.
+        const g = ctx.createLinearGradient(0, y - 4, 0, y + h);
+        g.addColorStop(0, 'rgba(10,6,28,0.6)');
+        g.addColorStop(1, 'rgba(10,6,28,0.95)');
         ctx.fillStyle = g;
-        ctx.fillRect(-bleed, y - 6, W + 2 * bleed, h + 40);
+        ctx.fillRect(-bleed, y - 4, W + 2 * bleed, h + 40);
+        ctx.fillStyle = '#c9a24a';
+        ctx.fillRect(-bleed, y - 5, W + 2 * bleed, 1);
+        ctx.fillStyle = 'rgba(255,230,160,0.25)';
+        ctx.fillRect(-bleed, y - 6, W + 2 * bleed, 1);
         boxes.forEach((b, i) => {
             const n = LOBBY_NAV[i],
                 on = v.focus === 'nav' && v.nav === i;
@@ -1006,7 +963,8 @@ export class LobbyScreen {
                 ctx.fillStyle = lg;
                 ctx.fillRect(b.x, b.y, b.w, b.h);
                 ctx.fillStyle = n.color;
-                ctx.fillRect(b.x + b.w * 0.25, b.y + b.h - 2, b.w * 0.5, 1.5);
+                slanted(b.x + b.w * 0.2, b.y + b.h - 3, b.w * 0.6, 2.5, 1.5)(ctx);
+                ctx.fill();
             }
             const r = tall ? 16 : 11;
             if (tall) {
