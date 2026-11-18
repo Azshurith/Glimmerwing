@@ -1,37 +1,33 @@
-// The Settings screen's canvas side: the menu sky and the heading bar. The settings themselves are the page's own
-// panel (#settings in index.template.html, see page/settings-panel.ts), laid over everything below the bar.
+// The Settings screen's canvas side: the menus' painted night and the winged heading. The settings themselves are the
+// page's own panel (#settings in index.template.html, see page/settings-panel.ts), laid over everything below it.
 import * as C from '@/core/config';
 import type { Layout } from '@/types';
-import { Backdrop } from '@/render/backdrop';
-import { drawTopBar } from './top-bar';
 import { tallMenuFit } from './menu-fit';
+import { ornateScreen, ornateTitle } from './ornate';
 import { enter } from '@/render/transition';
 
 /** The Settings screen behind the page's panel. */
 export class SettingsScreen {
-    private backdrop: Backdrop;
+    /** Draw on `ctx`. */
+    constructor(private ctx: CanvasRenderingContext2D) {}
 
-    constructor(private ctx: CanvasRenderingContext2D) {
-        this.backdrop = new Backdrop(ctx);
-    }
-
-    /** Draw the sky and the heading bar; `bleed` is how far a widened landscape view reaches past each side. */
+    /** Draw the night and the heading; `bleed` is how far a widened landscape view reaches past each side. */
     draw(t: number, layout: Layout = 'wide', h: number = C.TALL_H, bleed = 0): void {
         const ctx = this.ctx;
+        const tall = layout === 'tall';
         ctx.save();
-        if (layout === 'tall') {
+        let W: number = C.VIEW_W,
+            H: number = C.VIEW_H;
+        if (tall) {
             const f = tallMenuFit(h);
-            enter(ctx, 'bg', () => this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h));
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
-            enter(ctx, 'bar', () => drawTopBar(ctx, 'SETTINGS', C.TALL_W, f.bleed, true, 16));
-        } else {
-            ctx.save();
-            ctx.translate(-bleed, 0);
-            enter(ctx, 'bg', () => this.backdrop.draw(t, C.VIEW_W / 2 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
-            ctx.restore();
-            enter(ctx, 'bar', () => drawTopBar(ctx, 'SETTINGS', C.VIEW_W, bleed, false, 16));
+            bleed = f.bleed;
+            W = C.TALL_W;
+            H = f.h;
         }
+        enter(ctx, 'bg', () => ornateScreen(ctx, t, W, H, bleed, '', tall));
+        enter(ctx, 'bar', () => ornateTitle(ctx, 'SETTINGS', W, t, tall));
         ctx.restore();
     }
 }

@@ -518,7 +518,16 @@ export class Renderer {
 
     /** The Profile screen (see profile-screen.ts). */
     profile(v: ProfileView, time: number): void {
-        this.profileScreen.draw(v, time, this.layout, this.viewH, this.viewX);
+        const ctx = this.ctx;
+        this.profileScreen.draw(v, time, this.layout, this.viewH, this.viewX, (map, x, y, w, h) => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, y, w, h);
+            ctx.clip();
+            ctx.translate(x, y);
+            this.scenery.draw(ctx, 4242, 40, time, w, h, mapById(map) ?? undefined);
+            ctx.restore();
+        });
     }
 
     /** The match details screen (see match-screen.ts). */

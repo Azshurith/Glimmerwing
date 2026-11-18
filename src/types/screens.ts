@@ -49,7 +49,7 @@ export interface TitleView {
 }
 
 /** Where the lobby's keyboard cursor is: on the mode picker, or along the bar of screens at the bottom. */
-export type LobbyFocus = 'mode' | 'nav';
+export type LobbyFocus = 'mode' | 'nav' | 'stage';
 
 /** One mode on the lobby's mode picker. */
 export interface LobbyMode {
@@ -75,17 +75,26 @@ export interface LobbyView {
     /** Stages open on the trophy road, of all of them; and the next one, with the trophies toward it. */
     stages: [number, number];
     next: { map: string; name: string; have: number; need: number } | null;
-    /** The mode on the picker, and where the cursor is. */
-    mode: LobbyMode;
+    /** Every mode, whether the mode picker is open, the mode with its cursor, and where the lobby's cursor is. */
+    modes: LobbyMode[];
+    picking: boolean;
+    pick: number;
+    /** Whether the trophy road is open, how far up it's scrolled (design units), and the best trophies ever. */
+    roadOpen: boolean;
+    roadScroll: number;
+    best: number;
     focus: LobbyFocus;
     nav: number;
+    /** The stage shown on the island: its number on the trophy road, and which of the open ones it is. */
+    stageNo: number;
+    stageAt: number;
     /** The stage behind it all (a map id), and its name. */
     map: string;
     mapName: string;
     /** The latest World chat lines for the ticker, and whether the chat panel is open. */
     chat: { name: string; body: string }[];
     chatOpen: boolean;
-    /** On a phone, whether the friends panel is pulled out. */
+    /** Whether the friends panel is pulled out. */
     friendsOpen: boolean;
 }
 
@@ -146,6 +155,8 @@ export interface HistoryRow {
     detail: string;
     /** When it was played. */
     when: string;
+    /** The map it was played on (an id), for its picture. */
+    map: string;
     /** Kept only in this browser (not yet saved to the server). */
     local: boolean;
 }
