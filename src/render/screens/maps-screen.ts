@@ -10,6 +10,14 @@ import { ARCADE, FONT } from '@/render/theme';
 import { drawPadlock } from './map-screen';
 import { tallMenuFit } from './menu-fit';
 import type { DemoDraw } from './roster-screen';
+import { drawDemoMeadow, paintedDemo } from './roster-screen';
+import { PieceAtlas } from './kit';
+import { kitReady, mockFit } from './kit-ui';
+import type { MockFit } from './kit-ui';
+import { MAPS_KIT } from '@/data/maps-kit';
+import kitUrl from '@/../assets/ui/maps-kit.png';
+import goldUrl from '@/../assets/ui/maps-kit-gold.png';
+import { arcadeText } from '@/render/draw';
 import { enter } from '@/render/transition';
 import { roundRect } from './emblems';
 import { gem, goldFrame, goldGradient, keyHints, ornatePanel, ornateScreen, ornateTitle, pointed } from './ornate';
@@ -47,10 +55,54 @@ function designMedallions(layout: Layout, dy = 0, bleed = 0): { x: number; y: nu
 
 /** The medallions in view units, for a layout, view height and widened-view bleed: the tap targets. */
 export function mapsMedallions(layout: Layout, h: number = C.TALL_H, bleed = 0): { x: number; y: number; r: number }[] {
+    if (layout !== 'tall' && painted()) {
+        const f = mapsFit(bleed);
+        return MOCK.discs.x.map(x => ({ x: f.x + x * f.s, y: f.y + MOCK.discs.y * f.s, r: 110 * f.s }));
+    }
     if (layout !== 'tall') return designMedallions('wide', 0, bleed);
     const f = tallMenuFit(h);
     return designMedallions('tall', tallShift(f.h)).map(m => ({ x: f.x + m.x * f.s, y: m.y * f.s, r: m.r * f.s }));
 }
+
+/** The painted Maps screen's pieces (cut from its mockup by tools/extract-screen-kit.py). */
+const KIT = new PieceAtlas(kitUrl, goldUrl, MAPS_KIT);
+
+/**
+ * The painted landscape Maps screen's layout, in its mockup's 2x pixels: each piece's box (the piece fills it), the
+ * emblem's circle, where the game writes the name, the place on the road, the blurb and the monsters' names, the
+ * difficulty's pips, the five cards, the demo's room, and the stage discs' centres.
+ */
+const MOCK = {
+    area: [30, 20, 2625, 1470],
+    title: [436, 20, 1647, 220],
+    plate: [30, 232, 1070, 268],
+    emblem: [244, 365, 90],
+    name: [400, 372],
+    sub: [657, 460],
+    difficulty: [1110, 333, 712, 121],
+    pips: [1424, 375, 46.6, 40],
+    blurb: [70, 552],
+    monsters: [78, 588, 1709, 109],
+    cards: [
+        [53, 396],
+        [416, 753],
+        [777, 1110],
+        [1136, 1469],
+        [1493, 1812],
+    ],
+    demo: [2227, 240, 920, 36, 36, 36],
+    tray: [60, 1170, 2540, 300],
+    discs: { x: [431, 729, 1028, 1330, 1629, 1927, 2230], y: 1300 },
+} as const;
+
+/** How the painted Maps screen sits in a widened landscape view `bleed` past each side. */
+function mapsFit(bleed: number): MockFit {
+    const [x0, y0, x1, y1] = MOCK.area;
+    return mockFit(C.VIEW_W, C.VIEW_H, bleed, x0, y0, x1, y1);
+}
+
+/** Whether landscape Maps is drawn from its painted pieces (once they've loaded). */
+const painted = () => KIT.ready() && kitReady();
 
 /** Space between the monster tiles on a wide screen. */
 const TILE_GAP = 6;
@@ -85,6 +137,11 @@ export class MapsScreen {
             dy = tallShift(f.h);
         }
         const L = LAYOUT[layout];
+        if (!tall && painted()) {
+            this.drawPainted(v, t, bleed, demo);
+            ctx.restore();
+            return;
+        }
         enter(ctx, 'bg', () => ornateScreen(ctx, t, L.W, H, bleed, '', tall));
         enter(ctx, 'bar', () => ornateTitle(ctx, 'MAPS', L.W, t, tall));
         const map = MAPS[v.index],
@@ -131,6 +188,183 @@ export class MapsScreen {
             ),
         );
         ctx.restore();
+    }
+
+    /**
+     * Landscape Maps drawn from its painted mockup: the heading; the stage plate with its icon, name and place on the
+     * trophy road; how hard it is; the blurb; the five monsters on their cards; the live demo in its frame (fitted to
+     * the meadow's shape); and the stages' discs along the tray, the one in view in a glowing ring.
+     */
+    private drawPainted(v: MapsView, t: number, bleed: number, draw?: DemoDraw): void {
+        const ctx = this.ctx,
+            f = mapsFit(bleed),
+            map = MAPS[v.index],
+            locked = v.locked[v.index],
+            stage = stageFor(map.id);
+        enter(ctx, 'bg', () => ornateScreen(ctx, t, C.VIEW_W, C.VIEW_H, bleed, '', false));
+        const d = paintedDemo(MOCK.demo);
+        enter(ctx, 'panels', () => drawDemoMeadow(ctx, f, d, draw ?? null, v.caption), { dx: 22 });
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.scale(f.s, f.s);
+        /** Draws piece `name` into a box of the mockup, with its glint every so often. */
+        const piece = (name: string, b: readonly number[], phase = 0) => {
+            KIT.draw(ctx, name, b[0], b[1], b[2], b[3]);
+            KIT.glint(ctx, name, b[0], b[1], b[2], b[3], t, phase, 7);
+        };
+        enter(ctx, 'bar', () => piece('title', MOCK.title, 0.2));
+        enter(
+            ctx,
+            'panels',
+            () => {
+                const b = d.frame;
+                KIT.draw9(ctx, 'preview', b.x, b.y, b.w, b.h, 70, 1 / 0.75);
+                KIT.glint9(ctx, 'preview', b.x, b.y, b.w, b.h, 70, 1 / 0.75, t, 2.4);
+            },
+            { dx: 22 },
+        );
+        enter(ctx, 'panels', () => this.paintedInfo(map, v.index, locked, stage, t, piece), { dx: -22 });
+        enter(ctx, 'buttons', () => piece('tray', MOCK.tray, 1.2));
+        MAPS.forEach((m, i) =>
+            enter(ctx, 'buttons', () => this.paintedDisc(m, i, v.locked[i], i === v.index, t), { i }),
+        );
+        ctx.restore();
+        enter(ctx, 'hint', () =>
+            keyHints(
+                ctx,
+                [
+                    [['◀', '▶'], 'BROWSE'],
+                    [['ESC'], 'BACK'],
+                ],
+                C.VIEW_W / 2,
+                C.VIEW_H - 9,
+                v.touch ? 'TAP A MAP  ·  ◀ BACK' : null,
+            ),
+        );
+    }
+
+    /** The painted stage plate, difficulty, blurb and monster cards, with the game's own words and pictures on them. */
+    private paintedInfo(
+        map: MapTheme,
+        index: number,
+        locked: boolean,
+        stage: { trophies: number; blurb: string },
+        t: number,
+        piece: (name: string, b: readonly number[], phase?: number) => void,
+    ): void {
+        const ctx = this.ctx;
+        // The emblem: the stage's icon on its sky, inside the plate's ring.
+        const [ex, ey, er] = MOCK.emblem;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(ex, ey, er + 2, 0, Math.PI * 2);
+        const sky = ctx.createLinearGradient(0, ey - er, 0, ey + er);
+        sky.addColorStop(0, map.sky[1]);
+        sky.addColorStop(1, map.sky[0]);
+        ctx.fillStyle = sky;
+        ctx.fill();
+        ctx.clip();
+        const icon = MAPS_KIT[`icon${index}`];
+        if (icon) {
+            const k = (er * 1.55) / Math.max(icon.w, icon.h);
+            const w = icon.w * k,
+                h = icon.h * k;
+            KIT.draw(ctx, `icon${index}`, ex - w / 2, ey - h / 2 + Math.sin(t * 2) * 3, w, h);
+        }
+        ctx.restore();
+        piece('plate', MOCK.plate, 0.6);
+        const [nx, ny] = MOCK.name;
+        ctx.textAlign = 'left';
+        ctx.font = `italic 700 104px ${FONT}`;
+        const ng = ctx.createLinearGradient(0, ny - 80, 0, ny + 10);
+        ng.addColorStop(0, '#fff7d8');
+        ng.addColorStop(0.6, '#ffd45c');
+        ng.addColorStop(1, '#e08a1c');
+        ctx.fillStyle = ng;
+        ctx.fillText(map.name.toUpperCase(), nx, ny, 560);
+        // Its place on the trophy road, and whether it's open.
+        const [sx, sy] = MOCK.sub;
+        ctx.font = `36px ${ARCADE}`;
+        const st = `STAGE ${index + 1} OF ${STAGES.length}  ·  `,
+            tail = locked ? `${stage.trophies}` : 'OPEN',
+            tw = ctx.measureText(st).width + ctx.measureText(tail).width + (locked ? 40 : 0);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#fff3c9';
+        ctx.fillText(st, sx - tw / 2, sy);
+        const tx = sx - tw / 2 + ctx.measureText(st).width;
+        ctx.fillStyle = locked ? '#ffb0b0' : '#8ff0a0';
+        if (locked) {
+            drawTrophy(ctx, tx + 14, sy - 12, 22);
+            ctx.fillText(tail, tx + 40, sy);
+        } else ctx.fillText(tail, tx, sy);
+        // How hard: a pip per stage, lit up to this one.
+        piece('difficulty', MOCK.difficulty, 1.1);
+        const [px, py, pw, ph] = MOCK.pips;
+        for (let i = 0; i < STAGES.length; i++) {
+            ctx.fillStyle =
+                i <= index ? (i >= 5 ? '#ff7a6a' : i >= 3 ? '#ffd45c' : '#6af07a') : 'rgba(255,255,255,0.12)';
+            ctx.fillRect(px + i * pw, py, pw - 8, ph);
+        }
+        const [bx, by] = MOCK.blurb;
+        ctx.textAlign = 'left';
+        ctx.font = `italic 600 48px ${FONT}`;
+        ctx.fillStyle = '#f0e8ff';
+        ctx.fillText(`${stage.blurb}.`, bx, by, 1740);
+        piece('monsters', MOCK.monsters, 1.7);
+        const sheet = monstersFor(map.id);
+        MOCK.cards.forEach(([x0, x1], i) => {
+            piece(`card${i}`, [x0 - 8, 718, x1 - x0 + 16, 432], 2 + i * 0.35);
+            if (!sheet) return;
+            const kind = ROLES[i][1](sheet),
+                cx = (x0 + x1) / 2;
+            if (sheet.img.complete && sheet.img.naturalWidth) {
+                const c = ((t + i * 0.7) * 0.5) % 4;
+                const frame = c < 0.4 ? 6 : c > 3.6 ? 7 : 5;
+                const s = 300,
+                    bob = Math.sin((t + i * 0.7) * 3) * 6;
+                ctx.drawImage(
+                    sheet.img,
+                    frame * sheet.cell,
+                    (sheet.rows[kind] ?? 0) * sheet.cell,
+                    sheet.cell,
+                    sheet.cell,
+                    cx - s / 2,
+                    920 - s / 2 + bob,
+                    s,
+                    s,
+                );
+            }
+            ctx.textAlign = 'center';
+            ctx.font = `700 38px ${FONT}`;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(sheet.names[kind] ?? kind, cx, 1100, x1 - x0 - 60);
+        });
+    }
+
+    /** One stage's painted disc on the tray: its picture in a gold ring (glowing when it's in view), and its name. */
+    private paintedDisc(map: MapTheme, i: number, locked: boolean, on: boolean, t: number): void {
+        const ctx = this.ctx,
+            cx = MOCK.discs.x[i],
+            cy = MOCK.discs.y,
+            k = on ? 1.1 : 1;
+        if (locked) ctx.filter = 'grayscale(0.7) brightness(0.55)';
+        KIT.draw(ctx, `disc${i}`, cx - 92 * k, cy - 92 * k, 184 * k, 184 * k);
+        ctx.filter = 'none';
+        if (locked) drawPadlock(ctx, cx, cy - 22, 70);
+        if (on) {
+            KIT.draw(ctx, 'medOn', cx - 211, cy - 135, 425, 283);
+            KIT.glint(ctx, 'medOn', cx - 211, cy - 135, 425, 283, t, 0.4, 4);
+        } else KIT.draw(ctx, 'medOff', cx - 139, cy - 120, 280, 260);
+        arcadeText(
+            ctx,
+            map.name.toUpperCase(),
+            cx,
+            cy + 113,
+            30,
+            on ? ['#fff6d0', '#ffd45c', '#e88a1c'] : ['#ffffff', '#efe6ff', '#c9b8ff'],
+            'center',
+            on ? 250 : 170,
+        );
     }
 
     /**

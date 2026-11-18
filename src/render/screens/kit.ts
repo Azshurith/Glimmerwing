@@ -281,6 +281,50 @@ export class PieceAtlas {
         blit(ctx, { img: this.img, x: p.x, y: p.y }, p, x, y, w, h, false);
     }
 
+    /**
+     * Draws piece `name` into the box in nine slices: its corners, `corner` atlas pixels square, kept at `scale` (the
+     * box's units per atlas pixel), its edges and middle stretched, so a frame fits a box of another shape.
+     */
+    draw9(
+        ctx: CanvasRenderingContext2D,
+        name: string,
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+        corner: number,
+        scale: number,
+    ): void {
+        const p = this.layout[name];
+        if (!p || !this.ready()) return;
+        blit9(ctx, { img: this.img, x: p.x, y: p.y }, p, x, y, w, h, corner, scale);
+    }
+
+    /** The glint over a piece drawn with `draw9` into the same box. */
+    glint9(
+        ctx: CanvasRenderingContext2D,
+        name: string,
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+        corner: number,
+        scale: number,
+        t: number,
+        phase: number,
+        period = 7,
+    ): void {
+        const p = this.layout[name];
+        const at = sweep(t, phase, period);
+        if (!p || at === null || !this.ready()) return;
+        const src = glintCell(p, at, this.gold);
+        if (!src) return;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        blit9(ctx, src, p, x, y, w, h, corner, scale);
+        ctx.restore();
+    }
+
     /** A band of light sweeping across piece `name`'s gold every `period` seconds, `phase` seconds into its cycle. */
     glint(
         ctx: CanvasRenderingContext2D,
