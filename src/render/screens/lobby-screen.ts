@@ -267,6 +267,7 @@ export class LobbyScreen {
             drawNight(ctx, t, -bleed - 2, W + 2 * bleed + 4, H, {
                 planet: { x: isle.x + isle.r * 0.15, y: isle.y - isle.r * 0.42, r: isle.r * 0.72 },
                 horizon,
+                art: 'lake',
             });
             drawFlowers(ctx, -bleed + 14, H - 14, tall ? 0.9 : 1.1, t, 0);
             drawFlowers(ctx, W + bleed - 14, H - 14, tall ? 0.9 : 1.1, t, 3);

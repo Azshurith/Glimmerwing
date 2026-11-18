@@ -4,6 +4,26 @@
 import { arcadeText, sparkle } from '@/render/draw';
 import { ARCADE } from '@/render/theme';
 import { roundRect } from './emblems';
+import lakeUrl from '@/../assets/backgrounds/lobby-lake.jpg';
+import nightUrl from '@/../assets/backgrounds/menu-night.jpg';
+
+/** Which painted night: the lake under the planet (the lobby), or the castle on its cliff (the other menu screens). */
+export type NightArt = 'lake' | 'castle';
+
+/** The painted nights (assets/backgrounds; their sources in assets/source/backgrounds). */
+const ARTS: Record<NightArt, HTMLImageElement | null> = { lake: null, castle: null };
+if (typeof Image !== 'undefined') {
+    ARTS.lake = new Image();
+    ARTS.lake.src = lakeUrl;
+    ARTS.castle = new Image();
+    ARTS.castle.src = nightUrl;
+}
+
+/** Whether a painted night has loaded (until then the night is drawn in code). */
+export function nightReady(art: NightArt = 'castle'): boolean {
+    const im = ARTS[art];
+    return !!im && im.complete && im.naturalWidth > 0;
+}
 
 /** A box, in design units. */
 interface Rect {
@@ -23,6 +43,8 @@ const scatter = (i: number, k: number) => {
 export interface NightShape {
     planet: { x: number; y: number; r: number };
     horizon: number;
+    /** The painting to show once it's loaded. */
+    art?: NightArt;
 }
 
 /**
@@ -31,6 +53,25 @@ export interface NightShape {
  * side, and a still lake below with light shimmering on it.
  */
 export function drawNight(ctx: CanvasRenderingContext2D, t: number, x0: number, w: number, H: number, s: NightShape): void {
+    const nightArt = ARTS[s.art ?? 'castle'];
+    if (nightArt && nightReady(s.art ?? 'castle')) {
+        // The painting, covering the view (cropped at the sides on a tall screen, keeping the moon in view), with a
+        // few stars twinkling over it.
+        const iw = nightArt.naturalWidth,
+            ih = nightArt.naturalHeight;
+        const k = Math.max(w / iw, H / ih);
+        const dw = iw * k,
+            dh = ih * k;
+        const dx = x0 + (w - dw) * (dw > w * 1.5 && s.art !== 'lake' ? 0.78 : 0.5);
+        ctx.drawImage(nightArt, dx, (H - dh) / 2, dw, dh);
+        ctx.fillStyle = '#fff6e0';
+        for (let i = 0; i < 10; i++) {
+            ctx.globalAlpha = Math.max(0, Math.sin(t * (0.8 + scatter(i, 5)) + i * 2)) * 0.9;
+            sparkle(ctx, x0 + scatter(i, 6) * w, 10 + scatter(i, 7) * H * 0.5, 1.5 + scatter(i, 8) * 2);
+        }
+        ctx.globalAlpha = 1;
+        return;
+    }
     const hz = s.horizon;
     const sky = ctx.createLinearGradient(0, 0, 0, hz);
     sky.addColorStop(0, '#0b0520');
@@ -132,8 +173,12 @@ export function drawNight(ctx: CanvasRenderingContext2D, t: number, x0: number, 
     }
 }
 
-/** A cluster of purple flowers (five-petalled, a pale heart each) around (x, y), `k` their size, swaying a little. */
+/**
+ * A cluster of purple flowers (five-petalled, a pale heart each) around (x, y), `k` their size, swaying a little; the
+ * painted night has its own, so none over it.
+ */
 export function drawFlowers(ctx: CanvasRenderingContext2D, x: number, y: number, k: number, t: number, seed = 0): void {
+    if (nightReady('lake') && nightReady('castle')) return;
     for (let i = 0; i < 6; i++) {
         const fx = x + (scatter(i, 41 + seed) - 0.5) * 40 * k,
             fy = y + (scatter(i, 42 + seed) - 0.5) * 26 * k,
@@ -276,4 +321,112 @@ export function crest(ctx: CanvasRenderingContext2D, cx: number, y: number, s: n
     ctx.fill();
     ctx.fillStyle = '#fff6d8';
     sparkle(ctx, cx, y - s * 0.15, s * 0.35 + Math.abs(Math.sin(t * 2.2)) * s * 0.15);
+}
+
+/**
+ * A menu screen's backdrop and heading in this look, filling `W` (reaching `bleed` past each side) by `H`: the night
+ * with its planet rising at the top right over the horizon low down, flowers in the bottom corners, and the screen's
+ * name as a winged gold heading at the top.
+ */
+export function ornateScreen(
+    ctx: CanvasRenderingContext2D,
+    t: number,
+    W: number,
+    H: number,
+    bleed: number,
+    title: string,
+    tall: boolean,
+): void {
+    drawNight(ctx, t, -bleed - 2, W + 2 * bleed + 4, H, {
+        planet: { x: W + bleed - (tall ? 40 : 70), y: tall ? 52 : 30, r: tall ? 34 : 46 },
+        horizon: H * (tall ? 0.86 : 0.8),
+    });
+    drawFlowers(ctx, -bleed + 12, H - 12, tall ? 0.8 : 1, t, 0);
+    drawFlowers(ctx, W + bleed - 12, H - 12, tall ? 0.8 : 1, t, 3);
+    ornateTitle(ctx, title, W, t, tall);
+}
+
+/** Just the winged heading of `ornateScreen`, for a screen that paints its own background. */
+export function ornateTitle(ctx: CanvasRenderingContext2D, title: string, W: number, t: number, tall: boolean): void {
+    // On a phone the page's Back tab takes the top-left corner, so the heading sits a little right of centre.
+    wingedTitle(ctx, title, tall ? W / 2 + 22 : W / 2, tall ? 18 : 14, tall ? 10.5 : 15, t);
+}
+
+/**
+ * The key hints along the bottom of a menu screen, centred on (cx, y): each key drawn as a little gold-edged keycap,
+ * then what it does, the groups split by thin gold lines. On a touchscreen `touch` is shown instead, plain.
+ */
+export function keyHints(
+    ctx: CanvasRenderingContext2D,
+    hints: [string[], string][],
+    cx: number,
+    y: number,
+    touch: string | null,
+): void {
+    ctx.textBaseline = 'alphabetic';
+    if (touch !== null) {
+        ctx.textAlign = 'center';
+        ctx.font = `6px ${ARCADE}`;
+        ctx.fillStyle = 'rgba(203,188,245,0.8)';
+        ctx.fillText(touch, cx, y + 2.5);
+        return;
+    }
+    ctx.font = `6px ${ARCADE}`;
+    const capW = (k: string) => Math.max(11, ctx.measureText(k).width + 7);
+    const groupW = hints.map(([keys, what]) => keys.reduce((a, k) => a + capW(k) + 2, 0) + 4 + ctx.measureText(what).width);
+    const total = groupW.reduce((a, b) => a + b, 0) + (hints.length - 1) * 16;
+    let x = cx - total / 2;
+    hints.forEach(([keys, what], i) => {
+        for (const k of keys) {
+            const w = capW(k);
+            ctx.fillStyle = 'rgba(22,10,50,0.9)';
+            roundRect(ctx, x, y - 6, w, 11, 2.5);
+            ctx.fill();
+            ctx.strokeStyle = goldGradient(ctx, y - 6, y + 5);
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#fff3c9';
+            ctx.fillText(k, x + w / 2, y + 2);
+            x += w + 2;
+        }
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'rgba(239,230,255,0.85)';
+        ctx.fillText(what, x + 3, y + 2);
+        x += 4 + ctx.measureText(what).width;
+        if (i < hints.length - 1) {
+            ctx.fillStyle = 'rgba(233,185,73,0.5)';
+            ctx.fillRect(x + 7.5, y - 5, 0.8, 9);
+            x += 16;
+        }
+    });
+}
+
+/** A gold frame round `trace`'s shape, `width` thick, glowing softly, with a fainter line just inside it. */
+export function goldFrame(ctx: CanvasRenderingContext2D, trace: () => void, y0: number, y1: number, width = 2.2): void {
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,190,90,0.55)';
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = goldGradient(ctx, y0, y1);
+    ctx.lineWidth = width;
+    trace();
+    ctx.stroke();
+    ctx.restore();
+}
+
+/**
+ * A round gold-ringed medallion with a deep glowing middle in `color`, for icons: a skill's, a stat tile's, a map's.
+ */
+export function iconOrb(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, on = false): void {
+    const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 1, x, y, r);
+    g.addColorStop(0, color);
+    g.addColorStop(0.6, '#2a1260');
+    g.addColorStop(1, '#140830');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = on ? '#fff3c9' : goldGradient(ctx, y - r, y + r);
+    ctx.lineWidth = on ? 1.8 : 1.3;
+    ctx.stroke();
 }

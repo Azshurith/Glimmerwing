@@ -2,13 +2,13 @@
 import * as C from '@/core/config';
 import { FAIRIES } from '@/data/characters';
 import type { Fairy, Layout, RosterView } from '@/types';
-import { Backdrop } from '@/render/backdrop';
 import { drawFairy } from '@/render/entities/fairy';
 import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
-import { drawTopBar } from './top-bar';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { enter } from '@/render/transition';
+import { roundRect } from './emblems';
+import { crest, goldFrame, goldGradient, iconOrb, keyHints, ornatePanel, ornateScreen, ornateTitle, pointed } from './ornate';
 
 /** What each charge-shot style does. */
 const SHOT_TEXT: Record<string, string> = {
@@ -54,11 +54,11 @@ const rate = (v: number, max: number) => Math.max(1, Math.min(5, Math.round(1 + 
 const LAYOUT = {
     wide: {
         W: C.VIEW_W,
-        art: { x: 14, y: 40, w: 116, h: 206 },
-        demo: { x: 340, y: 43, w: 150 },
-        info: { x: 146, y: 52, w: 180 },
-        rowY: 276,
-        r: 14,
+        art: { x: 14, y: 40, w: 116, h: 192 },
+        demo: { x: 340, y: 40, w: 148 },
+        info: { x: 146, y: 46, w: 180 },
+        rowY: 270,
+        r: 13,
     },
     tall: {
         W: C.TALL_W,
@@ -124,13 +124,38 @@ export function rosterMedallions(layout: Layout, h: number = C.TALL_H): { x: num
     return designMedallions('tall', tallShift(f.h)).map(m => ({ x: f.x + m.x * f.s, y: m.y * f.s, r: m.r * f.s }));
 }
 
+/** A small gold icon for a stat: wings for speed, a bolt for charge, a star for burst, a diamond for dodge. */
+function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: number): void {
+    ctx.fillStyle = goldGradient(ctx, y - 4, y + 4);
+    ctx.beginPath();
+    if (kind === 'speed') {
+        ctx.moveTo(x - 4, y + 2);
+        ctx.quadraticCurveTo(x, y - 4, x + 4, y - 3);
+        ctx.quadraticCurveTo(x + 1, y, x - 4, y + 2);
+    } else if (kind === 'charge') {
+        ctx.moveTo(x + 1, y - 4);
+        ctx.lineTo(x - 3, y + 1);
+        ctx.lineTo(x, y + 1);
+        ctx.lineTo(x - 1, y + 4);
+        ctx.lineTo(x + 3, y - 1);
+        ctx.lineTo(x, y - 1);
+    } else if (kind === 'burst') {
+        sparkle(ctx, x, y, 4);
+        return;
+    } else {
+        ctx.moveTo(x, y - 4);
+        ctx.lineTo(x + 4, y);
+        ctx.lineTo(x, y + 4);
+        ctx.lineTo(x - 4, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+}
+
 /** The Characters screen. */
 export class RosterScreen {
-    private backdrop: Backdrop;
-
-    constructor(private ctx: CanvasRenderingContext2D) {
-        this.backdrop = new Backdrop(ctx);
-    }
+    /** Draw on `ctx`. */
+    constructor(private ctx: CanvasRenderingContext2D) {}
 
     /** Draw the screen; `bleed` is how far a widened landscape view reaches past each side. */
     draw(v: RosterView, t: number, layout: Layout = 'wide', h: number = C.TALL_H, bleed = 0, demo?: DemoDraw): void {
@@ -140,20 +165,16 @@ export class RosterScreen {
             dy = 0;
         if (layout === 'tall') {
             const f = tallMenuFit(h);
-            enter(ctx, 'bg', () => this.backdrop.draw(t, C.TALL_W / 2, h * 0.4, C.TALL_W, h));
             ctx.translate(f.x, 0);
             ctx.scale(f.s, f.s);
             bleed = f.bleed;
             H = f.h;
             dy = tallShift(f.h);
-        } else {
-            ctx.save();
-            ctx.translate(-bleed, 0);
-            enter(ctx, 'bg', () => this.backdrop.draw(t, 90 + bleed, 150, C.VIEW_W + 2 * bleed, C.VIEW_H));
-            ctx.restore();
         }
         const L = LAYOUT[layout];
-        enter(ctx, 'bar', () => drawTopBar(ctx, 'CHARACTERS', L.W, bleed, layout === 'tall', 16));
+        const tall = layout === 'tall';
+        enter(ctx, 'bg', () => ornateScreen(ctx, t, L.W, H, bleed, '', tall));
+        enter(ctx, 'bar', () => ornateTitle(ctx, 'CHARACTERS', L.W, t, tall));
         const fy = FAIRIES[v.index],
             locked = v.locked[v.index];
         ctx.save();
@@ -164,16 +185,23 @@ export class RosterScreen {
         else if (!locked) enter(ctx, 'buttons', () => this.previewButton(fy, t), { i: 4 });
         enter(ctx, 'panels', () => this.info(fy, locked, info, layout === 'tall', t), { dx: 0, dy: 10 });
         ctx.restore();
-        designMedallions(layout, dy).forEach((m, i) =>
+        const meds = designMedallions(layout, dy);
+        enter(ctx, 'buttons', () => this.tray(meds, t));
+        meds.forEach((m, i) =>
             enter(ctx, 'buttons', () => this.medallion(FAIRIES[i], v.locked[i], m, i === v.index, t), { i }),
         );
-        enter(ctx, 'hint', () => {
-            ctx.textAlign = 'center';
-            ctx.font = `7px ${ARCADE}`;
-            ctx.fillStyle = 'rgba(203,188,245,0.75)';
-            const hint = v.touch ? 'TAP A FAIRY  ·  ◀ BACK' : 'LEFT / RIGHT BROWSE  ·  ESC BACK';
-            ctx.fillText(hint, L.W / 2, layout === 'tall' ? H - 14 : H - 10, L.W - 16);
-        });
+        enter(ctx, 'hint', () =>
+            keyHints(
+                ctx,
+                [
+                    [['◀', '▶'], 'BROWSE'],
+                    [['ESC'], 'BACK'],
+                ],
+                L.W / 2,
+                tall ? H - 12 : H - 9,
+                v.touch ? 'TAP A FAIRY  ·  ◀ BACK' : null,
+            ),
+        );
         if (layout === 'tall' && v.demoOpen && !locked) this.popup(fy, v, H, demo);
         ctx.restore();
     }
@@ -224,73 +252,75 @@ export class RosterScreen {
         ctx.fillText(v.touch ? 'TAP TO CLOSE' : 'ESC TO CLOSE', L.W / 2, y + h + 16);
     }
 
-    /** The fairy's portrait (or her in-game look, large) in a framed window, with her name on a plate. */
+    /**
+     * The fairy's portrait (or her in-game look, large) in a gold frame with a crest on top, her name on a plaque
+     * across its foot between two stars.
+     */
     private art(fy: Fairy, locked: boolean, a: { x: number; y: number; w: number; h: number }, t: number): void {
         const ctx = this.ctx;
-        const win = slanted(a.x, a.y, a.w, a.h, 10);
+        /** Trace the frame: rounded, with its top corners cut a little deeper. */
+        const win = () => roundRect(ctx, a.x, a.y, a.w, a.h, 14);
         ctx.save();
-        win(ctx);
+        win();
         ctx.clip();
-        const bg = ctx.createRadialGradient(a.x + a.w / 2, a.y + a.h * 0.45, 8, a.x + a.w / 2, a.y + a.h * 0.45, 140);
+        const bg = ctx.createRadialGradient(a.x + a.w / 2, a.y + a.h * 0.45, 8, a.x + a.w / 2, a.y + a.h * 0.45, 150);
         bg.addColorStop(0, locked ? '#3a3360' : fy.color);
         bg.addColorStop(0.55, locked ? '#1d1840' : shade(fy.color, 0.35));
         bg.addColorStop(1, '#0d0a24');
         ctx.fillStyle = bg;
-        ctx.fillRect(a.x - 10, a.y, a.w + 20, a.h);
+        ctx.fillRect(a.x, a.y, a.w, a.h);
         ctx.fillStyle = 'rgba(255,255,255,0.12)';
-        for (let i = 0; i < 9; i++)
-            sparkle(ctx, a.x + ((i * 53 + t * 14) % (a.w + 20)) - 10, a.y + ((i * 37) % a.h), 2 + (i % 3));
+        for (let i = 0; i < 9; i++) sparkle(ctx, a.x + ((i * 53 + t * 14) % a.w), a.y + ((i * 37) % a.h), 2 + (i % 3));
         if (locked) ctx.filter = 'brightness(0) opacity(0.8)';
         const p = fy.portrait;
         if (p && p.img.complete && p.img.naturalWidth) {
             const [sx, sy, sw, sh] = p.panel;
-            const k = Math.max((a.w + 20) / sw, a.h / sh);
+            const k = Math.max(a.w / sw, a.h / sh);
             ctx.drawImage(p.img, sx, sy, sw, sh, a.x + a.w / 2 - (sw * k) / 2, a.y, sw * k, sh * k);
-        } else {
-            drawFairy(ctx, fy, a.x + a.w / 2, a.y + a.h * 0.48 + Math.sin(t * 2.2) * 3, 4.2, t, 0, false);
-        }
+        } else drawFairy(ctx, fy, a.x + a.w / 2, a.y + a.h * 0.46 + Math.sin(t * 2.2) * 3, 4.2, t, 0, false);
         ctx.filter = 'none';
-        if (locked)
-            arcadeText(ctx, '?', a.x + a.w / 2, a.y + a.h * 0.6, 60, ['#ffffff', '#c9b8ff', '#7a5cff'], 'center');
+        if (locked) arcadeText(ctx, '?', a.x + a.w / 2, a.y + a.h * 0.58, 60, ['#ffffff', '#c9b8ff', '#7a5cff'], 'center');
         const fl = ctx.createLinearGradient(0, a.y + a.h - 50, 0, a.y + a.h);
         fl.addColorStop(0, 'rgba(8,5,24,0)');
         fl.addColorStop(1, 'rgba(8,5,24,0.85)');
         ctx.fillStyle = fl;
-        ctx.fillRect(a.x - 10, a.y + a.h - 50, a.w + 20, 50);
+        ctx.fillRect(a.x, a.y + a.h - 50, a.w, 50);
         ctx.restore();
-        ctx.strokeStyle = locked ? '#8a7aa8' : fy.color;
-        ctx.lineWidth = 2;
-        win(ctx);
+        goldFrame(ctx, win, a.y, a.y + a.h);
+        ctx.strokeStyle = 'rgba(255,230,160,0.3)';
+        ctx.lineWidth = 0.7;
+        roundRect(ctx, a.x + 4, a.y + 4, a.w - 8, a.h - 8, 11);
         ctx.stroke();
-        // Nameplate.
-        const ny = a.y + a.h - 14;
-        const plate = slanted(a.x - 2, ny, a.w + 4, 24, 8);
-        const pg = ctx.createLinearGradient(a.x, 0, a.x + a.w, 0);
-        pg.addColorStop(0, locked ? '#4a3f7a' : fy.color);
-        pg.addColorStop(1, locked ? '#1d1840' : shade(fy.color, 0.3));
+        crest(ctx, a.x + a.w / 2, a.y + 2, 9, t);
+        // The name plaque, across the foot of the frame.
+        const pw = a.w + 6,
+            ph = 22,
+            px = a.x - 3,
+            py = a.y + a.h - 12;
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur = 6;
+        const pg = ctx.createLinearGradient(0, py, 0, py + ph);
+        pg.addColorStop(0, '#3a1e70');
+        pg.addColorStop(1, '#180a3a');
         ctx.fillStyle = pg;
-        plate(ctx);
+        pointed(ctx, px, py, pw, ph, 10);
         ctx.fill();
-        ctx.strokeStyle = '#fff3c9';
-        ctx.lineWidth = 1.2;
-        plate(ctx);
+        ctx.restore();
+        ctx.strokeStyle = goldGradient(ctx, py, py + ph);
+        ctx.lineWidth = 1.6;
+        pointed(ctx, px, py, pw, ph, 10);
         ctx.stroke();
         const name = locked ? 'LOCKED' : fy.name.toUpperCase();
-        arcadeText(
-            ctx,
-            name,
-            a.x + 10,
-            ny + 18,
-            name.length > 9 ? 12 : 15,
-            ['#ffffff', '#fff0c8', '#ffd27a'],
-            'left',
-            a.w - 14,
-        );
+        arcadeText(ctx, name, a.x + a.w / 2, py + ph / 2 + 5.5, name.length > 9 ? 11 : 14, ['#fff7d8', '#ffd98a', '#e0a040'], 'center', pw - 40);
+        ctx.fillStyle = '#ffe9a0';
+        sparkle(ctx, px + 16, py + ph / 2, 3);
+        sparkle(ctx, px + pw - 16, py + ph / 2, 3);
     }
 
     /**
-     * The live demo window: her meadow, run by the real game code, with a caption saying which move she's
-     * showing. A locked fairy's window stays dark.
+     * The live demo window: her meadow, run by the real game code, in a glowing gold frame, with a caption saying
+     * which move she's showing. A locked fairy's window stays dark.
      */
     private demo(
         fy: Fairy,
@@ -302,9 +332,9 @@ export class RosterScreen {
         const ctx = this.ctx;
         const s = d.w / C.FIELD_W_BASE,
             h = C.FIELD_H_BASE * s;
+        ornatePanel(ctx, { x: d.x - 6, y: d.y - 6, w: d.w + 12, h: h + 12 }, 12, true);
         ctx.save();
-        ctx.beginPath();
-        ctx.rect(d.x, d.y, d.w, h);
+        roundRect(ctx, d.x, d.y, d.w, h, 7);
         ctx.clip();
         if (!locked && draw) draw(d.x, d.y, s);
         else {
@@ -313,24 +343,25 @@ export class RosterScreen {
             arcadeText(ctx, '?', d.x + d.w / 2, d.y + h * 0.55, 40, ['#ffffff', '#c9b8ff', '#7a5cff'], 'center');
         }
         if (!locked && caption) {
-            // The caption, on a dark band along the bottom.
             const g = ctx.createLinearGradient(0, d.y + h - 30, 0, d.y + h);
             g.addColorStop(0, 'rgba(8,5,24,0)');
             g.addColorStop(1, 'rgba(8,5,24,0.9)');
             ctx.fillStyle = g;
             ctx.fillRect(d.x, d.y + h - 30, d.w, 30);
-            ctx.textAlign = 'center';
+            ctx.textAlign = 'right';
             ctx.font = `7px ${ARCADE}`;
             ctx.fillStyle = '#fff3c9';
-            ctx.fillText(caption.toUpperCase(), d.x + d.w / 2, d.y + h - 8, d.w - 10);
+            ctx.fillText(caption.toUpperCase(), d.x + d.w - 7, d.y + h - 8, d.w - 14);
         }
         ctx.restore();
-        ctx.strokeStyle = locked ? '#8a7aa8' : fy.color;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(d.x, d.y, d.w, h);
+        goldFrame(ctx, () => roundRect(ctx, d.x - 6, d.y - 6, d.w + 12, h + 12, 12), d.y, d.y + h);
+        void fy;
     }
 
-    /** Her blurb, stats and skills (or how to unlock her). */
+    /**
+     * Her blurb, her stats in two gold-framed panels (an icon, a name and five slanted bars each), and her four skills
+     * as gold-framed rows: a glowing orb for an icon, the kind small, the name in gold, what it does in italics.
+     */
     private info(
         fy: Fairy,
         locked: boolean,
@@ -339,75 +370,110 @@ export class RosterScreen {
         t: number,
     ): void {
         const ctx = this.ctx;
-        let y = b.y;
         ctx.textAlign = 'left';
-        ctx.font = `italic 600 ${compact ? 9 : 10}px ${FONT}`;
-        ctx.fillStyle = locked ? '#ffe27a' : 'rgba(246,240,255,0.9)';
-        ctx.fillText(locked ? `To unlock: ${fy.unlock?.hint ?? ''}` : fy.blurb, b.x, y, b.w);
-        // Stats, two to a row.
-        const stats: [string, number][] = [
-            ['SPEED', rate(fy.speed, 1.2)],
-            ['BURST', rate(fy.burst, 1.3)],
-            ['CHARGE', rate(1 / fy.charge, 2)],
-            ['DODGE', rate(1 / fy.hitbox, 1 / 0.7)],
+        ctx.font = `italic 600 ${compact ? 9.5 : 11}px ${FONT}`;
+        ctx.fillStyle = locked ? '#ffe27a' : '#f6f0ff';
+        ctx.fillText(locked ? `To unlock: ${fy.unlock?.hint ?? ''}` : `${fy.blurb}.`, b.x + 2, b.y + 4, b.w);
+        // Stats: two panels side by side, two stats each.
+        const stats: [string, number, string][] = [
+            ['SPEED', rate(fy.speed, 1.2), 'speed'],
+            ['CHARGE', rate(1 / fy.charge, 2), 'charge'],
+            ['BURST', rate(fy.burst, 1.3), 'burst'],
+            ['DODGE', rate(1 / fy.hitbox, 1 / 0.7), 'dodge'],
         ];
-        const colW = Math.min(b.w / 2, 150),
-            step = Math.min(compact ? 13 : 16, (colW - 46) / 5),
-            bar = step - 3;
-        stats.forEach(([label, n], i) => {
-            const sx = b.x + (i % 2) * colW,
-                sy = y + 16 + Math.floor(i / 2) * 13;
-            ctx.font = `7px ${ARCADE}`;
-            ctx.fillStyle = '#cbbcf5';
-            ctx.fillText(label, sx, sy);
-            for (let k = 0; k < 5; k++) {
-                const on = !locked && k < n;
-                ctx.fillStyle = on ? (k >= 4 ? '#ff8a5b' : k >= 3 ? '#ffd45c' : '#8ff0a0') : 'rgba(255,255,255,0.1)';
-                slanted(sx + 42 + k * step, sy - 6, bar, 6, 3)(ctx);
-                ctx.fill();
+        const pw = (b.w - 6) / 2,
+            ph = 30,
+            py = b.y + 12;
+        for (let p = 0; p < 2; p++) {
+            const px = b.x + p * (pw + 6);
+            ornatePanel(ctx, { x: px, y: py, w: pw, h: ph }, 10);
+            for (let r = 0; r < 2; r++) {
+                const [label, n, icon] = stats[p * 2 + r];
+                const sy = py + 11 + r * 11;
+                statIcon(ctx, icon, px + 10, sy - 2.5);
+                ctx.font = `6px ${ARCADE}`;
+                ctx.fillStyle = '#f0e6ff';
+                ctx.fillText(label, px + 17, sy);
+                const bx = px + pw * 0.48,
+                    bw = (pw * 0.48) / 5;
+                for (let k = 0; k < 5; k++) {
+                    const on = !locked && k < n;
+                    ctx.fillStyle = on ? '#6af07a' : 'rgba(255,255,255,0.1)';
+                    slanted(bx + k * bw, sy - 5.5, bw - 2, 6, 2.5)(ctx);
+                    ctx.fill();
+                }
             }
-        });
-        y += 16 + 2 * 13 + 4;
+        }
         // Skills.
-        const skills: [string, string, string][] = locked
+        const skills: [string, string, string, string][] = locked
             ? [
-                  ['SHOT', '???', ''],
-                  ['BOMB', '???', ''],
-                  ['EXTRA ATTACK', '???', ''],
-                  ['GUARDIAN', '???', ''],
+                  ['SHOT', '???', '', '#9a7aff'],
+                  ['BOMB', '???', '', '#ffb43c'],
+                  ['EXTRA ATTACK', '???', '', '#ff7ad0'],
+                  ['GUARDIAN', '???', '', '#c07af0'],
               ]
             : [
-                  ['SHOT', fy.chargeName, fy.skillText?.shot ?? SHOT_TEXT[fy.chargeStyle] ?? ''],
-                  ['BOMB', fy.bomb.name, fy.skillText?.bomb ?? BOMB_TEXT[fy.bomb.style] ?? ''],
+                  ['SHOT', fy.chargeName, fy.skillText?.shot ?? SHOT_TEXT[fy.chargeStyle] ?? '', '#9a7aff'],
+                  ['BOMB', fy.bomb.name, fy.skillText?.bomb ?? BOMB_TEXT[fy.bomb.style] ?? '', '#ffb43c'],
                   [
                       'EXTRA ATTACK',
                       fy.extra.name,
                       `${fy.extra.count} that ${EXTRA_TEXT[fy.extra.flight] ?? 'fly at the rival'}`,
+                      '#ff7ad0',
                   ],
-                  ['GUARDIAN', fy.guardian.name, GUARDIAN_TEXT[fy.guardian.pattern] ?? ''],
+                  ['GUARDIAN', fy.guardian.name, GUARDIAN_TEXT[fy.guardian.pattern] ?? '', '#c07af0'],
               ];
-        const line = compact ? 38 : 34;
-        skills.forEach(([kind, name, text], i) => {
-            const sy = y + 10 + i * line;
-            // A small chip in her colour, then the skill's kind, name and what it does.
-            ctx.fillStyle = locked ? '#4a3f7a' : fy.color;
-            slanted(b.x, sy - 8, 6, 10, 2)(ctx);
-            ctx.fill();
-            ctx.font = `6.5px ${ARCADE}`;
-            ctx.fillStyle = '#cbbcf5';
-            ctx.fillText(kind, b.x + 12, sy);
-            ctx.font = `${compact ? 9 : 10}px ${ARCADE}`;
-            ctx.fillStyle = '#fff3c9';
-            ctx.fillText(name, b.x + 12, sy + 11, b.w - 12);
+        const rh = compact ? 34 : 29,
+            gap = compact ? 5 : 4;
+        skills.forEach(([kind, name, text, color], i) => {
+            const ry = py + ph + 7 + i * (rh + gap);
+            ornatePanel(ctx, { x: b.x, y: ry, w: b.w, h: rh }, rh / 2);
+            const or = rh / 2 - 3;
+            iconOrb(ctx, b.x + or + 4, ry + rh / 2, or, color);
+            ctx.fillStyle = '#ffffff';
+            ctx.globalAlpha = 0.8 + 0.2 * Math.sin(t * 3 + i);
+            sparkle(ctx, b.x + or + 4, ry + rh / 2, or * 0.55);
+            ctx.globalAlpha = 1;
+            const tx = b.x + or * 2 + 11;
+            ctx.textAlign = 'left';
+            ctx.font = `5px ${ARCADE}`;
+            ctx.fillStyle = '#f0e6ff';
+            ctx.fillText(kind, tx, ry + (compact ? 10 : 10));
+            ctx.font = `${compact ? 9 : 9.5}px ${ARCADE}`;
+            ctx.fillStyle = '#ffd45c';
+            const nameW = compact ? b.w - (tx - b.x) - 8 : b.w * 0.38;
+            ctx.fillText(name.toUpperCase(), tx, ry + (compact ? 20 : 21), nameW);
             if (text) {
-                ctx.font = `italic 600 ${compact ? 8 : 8.5}px ${FONT}`;
-                ctx.fillStyle = 'rgba(203,188,245,0.85)';
-                ctx.fillText(text, b.x + 12, sy + 21, b.w - 12);
+                ctx.font = `italic 600 ${compact ? 8 : 8}px ${FONT}`;
+                ctx.fillStyle = 'rgba(239,230,255,0.88)';
+                if (compact) ctx.fillText(`${text}.`, tx, ry + 30, b.w - (tx - b.x) - 8);
+                else ctx.fillText(`${text}.`, b.x + b.w * 0.5, ry + rh / 2 + 3, b.w * 0.48);
             }
         });
-        if (!locked && fy.sprite === undefined) {
-            // Her in-game look, small, beside her name.
-            drawFairy(ctx, fy, b.x + b.w - 16, b.y - 4 + Math.sin(t * 2.4) * 2, 1.4, t);
+        if (!locked && fy.sprite === undefined) drawFairy(ctx, fy, b.x + b.w - 14, b.y - 2 + Math.sin(t * 2.4) * 2, 1.2, t);
+    }
+
+    /** The tray the medallions sit in: a long gold-framed capsule with gold arrows at its ends. */
+    private tray(meds: { x: number; y: number; r: number }[], t: number): void {
+        const ctx = this.ctx;
+        const first = meds[0],
+            last = meds[meds.length - 1];
+        const x = first.x - first.r - 14,
+            w = last.x + last.r + 14 - x,
+            h = first.r * 2 + 12,
+            y = first.y - h / 2;
+        ornatePanel(ctx, { x, y, w, h }, h / 2);
+        for (const dir of [-1, 1]) {
+            const ax = dir < 0 ? x - 4 : x + w + 4,
+                ay = first.y,
+                k = Math.max(0, Math.sin(t * 4)) * 1.2 * dir;
+            ctx.fillStyle = goldGradient(ctx, ay - 9, ay + 9);
+            ctx.beginPath();
+            ctx.moveTo(ax + dir * 10 + k, ay);
+            ctx.lineTo(ax + k, ay - 9);
+            ctx.lineTo(ax + k, ay + 9);
+            ctx.closePath();
+            ctx.fill();
         }
     }
 
@@ -437,8 +503,8 @@ export class RosterScreen {
             ctx.fillText('?', m.x, m.y + lift + 4);
         } else drawFairy(ctx, fy, m.x, m.y + lift + 2, 0.75, t);
         ctx.restore();
-        ctx.strokeStyle = on ? '#fff3c9' : '#a8894a';
-        ctx.lineWidth = on ? 2.2 : 1.2;
+        ctx.strokeStyle = on ? '#ffe9a0' : goldGradient(ctx, m.y - m.r, m.y + m.r);
+        ctx.lineWidth = on ? 2.6 : 1.4;
         if (on) {
             ctx.save();
             ctx.shadowColor = fy.color;
