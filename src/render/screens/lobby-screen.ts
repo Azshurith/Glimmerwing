@@ -68,6 +68,9 @@ export interface LobbyLayout {
     island: { x: number; y: number; r: number };
 }
 
+/** The gap between two of the bottom bar's buttons in landscape. */
+const NAV_GAP = 10;
+
 /**
  * The lobby's boxes in its design units: the usual 504-wide view reaching `bleed` past each side in landscape, or
  * the tall view `H` high on a phone.
@@ -80,7 +83,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
             play: { x: W / 2 - 98, y: playY, w: 196, h: 46 },
             prev: { x: W / 2 - 131, y: playY + 3, w: 32, h: 40 },
             next: { x: W / 2 + 99, y: playY + 3, w: 32, h: 40 },
-            nav: LOBBY_NAV.map((_, i) => ({ x: 4 + i * ((W - 8) / 4), y: H - 64, w: (W - 8) / 4, h: 60 })),
+            nav: LOBBY_NAV.map((_, i) => ({ x: 6 + i * ((W - 12) / 4), y: H - 60, w: (W - 12) / 4 - 6, h: 52 })),
             quick: LOBBY_QUICK.map((_, i) => ({ x: 6 + i * 52, y: 42, w: 48, h: 50 })),
             card: null,
             ticker: { x: 8, y: H - 120, w: W - 16, h: 48 },
@@ -99,11 +102,14 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
     const side = compact ? 108 : 124,
         playW = compact ? 168 : 190,
         isle = compact ? 90 : 102;
+    // The bar of other screens: four separate buttons in a row, centred, as wide as there's room for (up to 124).
+    const navW = Math.min(124, (R - L - 3 * NAV_GAP) / 4),
+        navX = W / 2 - (4 * navW + 3 * NAV_GAP) / 2;
     return {
         play: { x: W / 2 - playW / 2, y: 224, w: playW, h: 38 },
         prev: { x: W / 2 - playW / 2 - 37, y: 225, w: 34, h: 36 },
         next: { x: W / 2 + playW / 2 + 3, y: 225, w: 34, h: 36 },
-        nav: LOBBY_NAV.map((_, i) => ({ x: L + (i * (R - L)) / 4, y: 278, w: (R - L) / 4, h: 42 })),
+        nav: LOBBY_NAV.map((_, i) => ({ x: navX + i * (navW + NAV_GAP), y: 283, w: navW, h: 30 })),
         quick: LOBBY_QUICK.map((_, i) => ({ x: L + i * (compact ? 42 : 47), y: 30, w: compact ? 40 : 45, h: 46 })),
         card: { x: L, y: 82, w: compact ? 122 : 137, h: 62 },
         ticker: { x: L, y: 226, w: Math.max(96, Math.min(150, W / 2 - playW / 2 - 42 - L)), h: 46 },
@@ -938,52 +944,81 @@ export class LobbyScreen {
         ctx.restore();
     }
 
-    /** The bar of other screens along the bottom: each its emblem and name side by side; the chosen one lit. */
+    /**
+     * The other screens along the bottom: four separate slanted arcade buttons on a soft dark band, each its emblem
+     * on a badge and its name; the chosen one lifts, filled and glowing in its own colour.
+     */
     private nav(v: LobbyView, boxes: Box[], t: number, W: number, bleed: number, tall: boolean): void {
         const ctx = this.ctx;
         const y = boxes[0].y,
             h = boxes[0].h;
-        // The top bar's twin: dark, under a gold line.
-        const g = ctx.createLinearGradient(0, y - 4, 0, y + h);
-        g.addColorStop(0, 'rgba(10,6,28,0.6)');
-        g.addColorStop(1, 'rgba(10,6,28,0.95)');
+        // A soft dark band behind the row, fading upward so the bottom of the screen settles.
+        const g = ctx.createLinearGradient(0, y - 16, 0, y + h + 8);
+        g.addColorStop(0, 'rgba(10,6,28,0)');
+        g.addColorStop(1, 'rgba(10,6,28,0.85)');
         ctx.fillStyle = g;
-        ctx.fillRect(-bleed, y - 4, W + 2 * bleed, h + 40);
-        ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(-bleed, y - 5, W + 2 * bleed, 1);
-        ctx.fillStyle = 'rgba(255,230,160,0.25)';
-        ctx.fillRect(-bleed, y - 6, W + 2 * bleed, 1);
+        ctx.fillRect(-bleed, y - 16, W + 2 * bleed, h + 60);
+        const slant = tall ? 5 : 7;
         boxes.forEach((b, i) => {
             const n = LOBBY_NAV[i],
                 on = v.focus === 'nav' && v.nav === i;
+            const lift = on ? -2 + Math.sin(t * 4) * 0.6 : 0;
+            const by = b.y + lift;
+            const shape = slanted(b.x, by, b.w, b.h, slant);
+            ctx.save();
             if (on) {
-                const lg = ctx.createRadialGradient(b.x + b.w / 2, b.y + b.h, 2, b.x + b.w / 2, b.y + b.h, b.w * 0.6);
-                lg.addColorStop(0, hexA(n.color, 0.45));
-                lg.addColorStop(1, hexA(n.color, 0));
-                ctx.fillStyle = lg;
-                ctx.fillRect(b.x, b.y, b.w, b.h);
-                ctx.fillStyle = n.color;
-                slanted(b.x + b.w * 0.2, b.y + b.h - 3, b.w * 0.6, 2.5, 1.5)(ctx);
+                ctx.shadowColor = n.color;
+                ctx.shadowBlur = 12 + 3 * Math.sin(t * 5);
+            }
+            const fill = ctx.createLinearGradient(0, by, 0, by + b.h);
+            if (on) {
+                fill.addColorStop(0, hexA(n.color, 0.95));
+                fill.addColorStop(1, hexA(n.color, 0.55));
+            } else {
+                fill.addColorStop(0, 'rgba(40,26,88,0.9)');
+                fill.addColorStop(1, 'rgba(16,10,40,0.9)');
+            }
+            ctx.fillStyle = fill;
+            shape(ctx);
+            ctx.fill();
+            ctx.restore();
+            // A sheen over the top half, then the edge: white when chosen, thin gold otherwise.
+            ctx.save();
+            shape(ctx);
+            ctx.clip();
+            ctx.fillStyle = on ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.06)';
+            ctx.fillRect(b.x - slant, by, b.w + 2 * slant, b.h * 0.45);
+            ctx.restore();
+            ctx.strokeStyle = on ? '#fff3c9' : 'rgba(201,162,74,0.6)';
+            ctx.lineWidth = on ? 1.5 : 1;
+            shape(ctx);
+            ctx.stroke();
+            // A strip of the button's colour along the bottom of an unchosen one.
+            if (!on) {
+                ctx.fillStyle = hexA(n.color, 0.7);
+                slanted(b.x + 3, by + b.h - 3, b.w - 6, 2, slant * 0.2)(ctx);
                 ctx.fill();
             }
-            const r = tall ? 16 : 11;
+            const ink = on ? '#140a26' : '#efe6ff';
             if (tall) {
-                drawBadge(ctx, n.color, b.x + b.w / 2, b.y + r + 5, r, on, t);
-                drawEmblem(ctx, n.action, b.x + b.w / 2, b.y + r + 5, r / 34, t, on);
+                const r = 13;
+                drawBadge(ctx, n.color, b.x + b.w / 2, by + r + 5, r, on, t);
+                drawEmblem(ctx, n.action, b.x + b.w / 2, by + r + 5, r / 34, t, on);
                 ctx.textAlign = 'center';
-                ctx.font = `6px ${ARCADE}`;
-                ctx.fillStyle = on ? '#fff7c2' : 'rgba(239,230,255,0.85)';
-                ctx.fillText(n.label, b.x + b.w / 2, b.y + b.h - 8, b.w - 4);
+                ctx.font = `5.5px ${ARCADE}`;
+                ctx.fillStyle = ink;
+                ctx.fillText(n.label, b.x + b.w / 2, by + b.h - 7, b.w - 6);
                 return;
             }
+            const r = 10;
             ctx.font = `7px ${ARCADE}`;
-            const lw = ctx.measureText(n.label).width;
+            const lw = Math.min(b.w - r * 2 - 22, ctx.measureText(n.label).width);
             const x0 = b.x + b.w / 2 - (lw + r * 2 + 6) / 2;
-            drawBadge(ctx, n.color, x0 + r, b.y + b.h / 2, r, on, t);
-            drawEmblem(ctx, n.action, x0 + r, b.y + b.h / 2, r / 34, t, on);
+            drawBadge(ctx, n.color, x0 + r, by + b.h / 2, r, on, t);
+            drawEmblem(ctx, n.action, x0 + r, by + b.h / 2, r / 34, t, on);
             ctx.textAlign = 'left';
-            ctx.fillStyle = on ? '#fff7c2' : 'rgba(239,230,255,0.85)';
-            ctx.fillText(n.label, x0 + r * 2 + 6, b.y + b.h / 2 + 2.5);
+            ctx.fillStyle = ink;
+            ctx.fillText(n.label, x0 + r * 2 + 6, by + b.h / 2 + 2.5, b.w - r * 2 - 22);
         });
     }
 }
