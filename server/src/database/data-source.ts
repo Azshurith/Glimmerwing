@@ -1,7 +1,7 @@
 import { DataSource } from 'typeorm';
 import { seedArt } from '@server/art-seed';
 import { seedCatalog } from '@server/catalog-seed';
-import { Character, GameMap, ModeType, Monster } from './entities/catalog';
+import { ChannelType, Character, GameMap, ModeType, Monster } from './entities/catalog';
 import { ChatRow } from './entities/chat';
 import { EndlessRun } from './entities/endless-run';
 import { MatchRow } from './entities/match';
@@ -17,6 +17,7 @@ import { Art1763251200004 } from './migrations/1763251200004-art';
 import { RenameStella1763251200005 } from './migrations/1763251200005-rename-stella';
 import { HistoryReplays1763251200006 } from './migrations/1763251200006-history-replays';
 import { Chat1763251200007 } from './migrations/1763251200007-chat';
+import { ChatChannels1763251200008 } from './migrations/1763251200008-chat-channels';
 
 /** Every table's entity. */
 export const ENTITIES = [
@@ -30,6 +31,7 @@ export const ENTITIES = [
     Character,
     GameMap,
     ModeType,
+    ChannelType,
     Monster,
 ];
 
@@ -57,6 +59,7 @@ export function dataSource(env: NodeJS.ProcessEnv = process.env): DataSource {
             RenameStella1763251200005,
             HistoryReplays1763251200006,
             Chat1763251200007,
+            ChatChannels1763251200008,
         ],
         migrationsTableName: 'migrations',
         synchronize: false,

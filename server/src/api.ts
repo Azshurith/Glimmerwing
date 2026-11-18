@@ -30,7 +30,7 @@ import type { NextFunction, Request, Response, Router } from 'express';
 import { CHAT_MAX, cleanChat } from './chat-filter';
 import { HttpError } from './http-error';
 import type { Catalog } from './catalog';
-import type { PlayerRef, Store } from './store';
+import type { ChannelRef, PlayerRef, Store } from './store';
 import type { Turns } from './turns';
 import type { Verifier } from './verifier';
 import { BUBBLES, FRAMES } from '@/data/looks';
@@ -95,18 +95,16 @@ function lookRefusal(p: Progress, look: PlayerLook): string | null {
     return null;
 }
 
-/** The chat channels open so far (friends', lobbies' and guilds' come later). */
-const CHAT_CHANNELS = ['world'];
-
 /** The least time between one player's messages (ms), and the most they may post a minute. */
 const CHAT_GAP = 1500;
 const CHAT_PER_MINUTE = 12;
 
-/** The chat channel a request names, or a 404. */
-function chatChannel(req: Request): string {
-    const c = String(req.params.channel);
-    if (!CHAT_CHANNELS.includes(c)) throw new HttpError(404, 'No such chat channel');
-    return c;
+/** The chat channel a request names, or a 404 (unknown, switched off or deleted). */
+async function chatChannel(s: Store, req: Request): Promise<ChannelRef> {
+    const code = String(req.params.channel);
+    const id = await s.channelId(code);
+    if (id == null) throw new HttpError(404, 'No such chat channel');
+    return { code, id };
 }
 
 /** The player a token belongs to (a WebSocket sends one to be known), or null. */
@@ -261,7 +259,7 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
     });
 
     api.get('/chat/:channel', async (req, res) => {
-        const channel = chatChannel(req);
+        const channel = await chatChannel(db(), req);
         res.json(await db().chat(channel, int(req.query.after, 0, Number.MAX_SAFE_INTEGER), limitOf(req, 50, 100)));
     });
 
@@ -326,7 +324,7 @@ export function apiRouter({ store, verifier, catalog, turns }: ApiDeps): Router 
         res.json(await db().history(me(res).id, limitOf(req, 30, 200)));
     });
     api.post('/chat/:channel', small, async (req, res) => {
-        const channel = chatChannel(req),
+        const channel = await chatChannel(db(), req),
             p = me(res);
         // At most one message every CHAT_GAP ms, and CHAT_PER_MINUTE a minute.
         const now = Date.now();

@@ -243,6 +243,35 @@ export function initChatPanel(d: ChatPanelDeps): { sync: () => void } {
         if (on) drawStyle();
     };
 
+    /** A pending slide-out hide, if any. */
+    let closeTimer = 0;
+    /** Finish hiding once the slide-out ends (the timeout covers a missed event). */
+    const finishClose = (e?: AnimationEvent) => {
+        if (e && e.target !== root) return;
+        root.removeEventListener('animationend', finishClose);
+        clearTimeout(closeTimer);
+        if (root.classList.contains('closing')) root.hidden = true;
+        root.classList.remove('closing');
+    };
+    /** Stop a slide-out in progress (for when the panel reopens mid-close). */
+    const cancelClose = () => {
+        root.removeEventListener('animationend', finishClose);
+        clearTimeout(closeTimer);
+        root.classList.remove('closing');
+    };
+    /** Hide the panel, sliding it back out first (at once for reduced motion). */
+    const requestClose = () => {
+        if (root.hidden || root.classList.contains('closing')) return;
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            root.hidden = true;
+            return;
+        }
+        root.classList.add('closing');
+        root.addEventListener('animationend', finishClose);
+        clearTimeout(closeTimer);
+        closeTimer = window.setTimeout(finishClose, 350);
+    };
+
     /** Send what the player typed. */
     const submit = async (e: SubmitEvent) => {
         e.preventDefault();
@@ -298,8 +327,9 @@ export function initChatPanel(d: ChatPanelDeps): { sync: () => void } {
             }
             if (open === shown) return;
             shown = open;
-            root.hidden = !open;
             if (open) {
+                cancelClose();
+                root.hidden = false;
                 const can = !!d.account.apiBase;
                 input.disabled = send.disabled = !can;
                 input.placeholder = can ? 'Say something to everyone' : 'Chat needs the game server';
@@ -308,7 +338,10 @@ export function initChatPanel(d: ChatPanelDeps): { sync: () => void } {
                 void poll();
                 // Straight into typing on a keyboard; a phone waits for a tap, so its keyboard doesn't jump up.
                 if (!matchMedia('(pointer: coarse)').matches) input.focus();
-            } else d.canvas.focus();
+            } else {
+                requestClose();
+                d.canvas.focus();
+            }
             schedule();
         },
     };

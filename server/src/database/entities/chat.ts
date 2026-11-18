@@ -2,13 +2,13 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 import { Timestamped } from './columns';
 
 /** A chat message on a channel ('world'; friends', lobbies' and guilds' channels later). */
-@Entity('chat_messages')
+@Entity('players_messages')
 export class ChatRow extends Timestamped {
     @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
     id!: string;
 
-    @Column({ type: 'varchar', length: 40 })
-    channel!: string;
+    @Column({ name: 'channel_id', type: 'int', unsigned: true })
+    channelId!: number;
 
     @Column({ name: 'player_id', type: 'int', unsigned: true })
     playerId!: number;

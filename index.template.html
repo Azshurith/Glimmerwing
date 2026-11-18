@@ -331,7 +331,9 @@
                     Roboto,
                     sans-serif;
                 font-weight: 600;
-                font-size: clamp(12px, calc(var(--sw, 600px) * 0.016), 18px);
+                /* Sized from the panel's own width, so the text stays proportional to the chat
+                   however wide the panel is on this screen (sidebar, overlay or full-screen). */
+                font-size: clamp(16px, calc(var(--chat-w, 400px) * 0.06), 26px);
                 color: #efe6ff;
                 background: rgba(14, 8, 36, 0.94);
                 border-right: 1px solid rgba(201, 162, 74, 0.6);
@@ -355,6 +357,17 @@
                     opacity: 0.4;
                 }
             }
+            /* Closing mirrors opening: the panel slides back out to the left (see requestClose in chat-panel.ts,
+               which waits out this animation before hiding the panel). */
+            #chat.closing {
+                animation: chat-out 0.3s cubic-bezier(0.5, 0, 0.8, 0.4) both;
+            }
+            @keyframes chat-out {
+                to {
+                    transform: translateX(-100%);
+                    opacity: 0;
+                }
+            }
             @keyframes panel-in {
                 from {
                     transform: translateY(1.5em);
@@ -367,10 +380,7 @@
                     animation: none;
                 }
             }
-            /* On a touchscreen everything in the panel is bigger, and every button a comfortable size to tap. */
-            .touch #chat {
-                font-size: clamp(15px, calc(var(--sw, 600px) * 0.02), 20px);
-            }
+            /* On a touchscreen every button is a comfortable size to tap (text size already follows the panel). */
             .touch #chat :is(.chat-tab, .chat-close, .chat-style-btn, .chat-form button) {
                 min-height: 3em;
                 min-width: 3em;
@@ -382,6 +392,91 @@
             }
             .touch #chat .pick {
                 min-height: 4.2em;
+            }
+            /* Full-screen chat on a portrait screen (a phone held upright): big readable bubbles that fill
+               the width, an opaque backdrop so the lobby doesn't bleed through, and a thumb-friendly form
+               with room for the keyboard and the home bar. */
+            .screen[data-layout='tall'] #chat {
+                background: #0e0824;
+                border-right: 0;
+            }
+            .screen[data-layout='tall'] #chat .chat-head {
+                gap: 0.5em;
+                padding: calc(0.6em + env(safe-area-inset-top, 0px)) 0.7em 0.6em;
+            }
+            .screen[data-layout='tall'] #chat .chat-log {
+                padding: 0.5em 0.8em;
+            }
+            .screen[data-layout='tall'] #chat :is(.chat-log li, .chat-preview) {
+                gap: 0.65em;
+                padding: 0.45em 0;
+            }
+            .screen[data-layout='tall'] #chat .ava {
+                width: 2.9em;
+                height: 2.9em;
+            }
+            .screen[data-layout='tall'] #chat .msg-main {
+                max-width: calc(100% - 3.7em);
+            }
+            .screen[data-layout='tall'] #chat .msg-head {
+                font-size: 0.85em;
+                margin-bottom: 0.25em;
+            }
+            .screen[data-layout='tall'] #chat .bubble {
+                padding: 0.55em 0.9em;
+                line-height: 1.45;
+            }
+            .screen[data-layout='tall'] #chat .chat-form {
+                gap: 0.6em;
+                padding: 0.65em 0.7em calc(0.65em + env(safe-area-inset-bottom, 0px));
+            }
+            .screen[data-layout='tall'] #chat .chat-form input {
+                /* 16px or more keeps iOS Safari from zooming in on focus. */
+                font-size: max(1em, 16px);
+                min-height: 3em;
+                padding: 0.6em 0.8em;
+            }
+            .screen[data-layout='tall'] #chat .chat-form button {
+                min-height: 3em;
+                padding: 0.6em 1.4em;
+            }
+            /* Wide layout on a narrow screen (a phone held sideways): the sidebar chat would be a
+               cramped strip, so it opens as a wide overlay with big readable text instead. Everything
+               inside is sized in em, so bumping the base font scales avatars, bubbles and buttons. */
+            @media (max-width: 900px) {
+                .screen:not([data-layout='tall']) #chat {
+                    width: min(94%, 32em);
+                    background: #0e0824;
+                    box-shadow: 0 0 2em rgba(0, 0, 0, 0.6);
+                }
+                .screen:not([data-layout='tall']) #chat .chat-log {
+                    padding: 0.5em 0.8em 0.5em max(0.8em, env(safe-area-inset-left, 0px));
+                }
+                .screen:not([data-layout='tall']) #chat :is(.chat-log li, .chat-preview) {
+                    gap: 0.65em;
+                    padding: 0.45em 0;
+                }
+                .screen:not([data-layout='tall']) #chat .ava {
+                    width: 2.7em;
+                    height: 2.7em;
+                }
+                .screen:not([data-layout='tall']) #chat .bubble {
+                    padding: 0.55em 0.9em;
+                    line-height: 1.45;
+                }
+                .screen:not([data-layout='tall']) #chat .chat-form {
+                    gap: 0.6em;
+                    padding: 0.65em 0.7em calc(0.65em + env(safe-area-inset-bottom, 0px));
+                    padding-left: max(0.7em, env(safe-area-inset-left, 0px));
+                }
+                .screen:not([data-layout='tall']) #chat .chat-form input {
+                    font-size: max(1em, 16px);
+                    min-height: 3em;
+                }
+                .screen:not([data-layout='tall']) #chat .chat-form button {
+                    min-height: 3em;
+                    padding: 0.6em 1.4em;
+                }
             }
             .chat-head {
                 display: flex;
@@ -1121,6 +1216,7 @@
                             maxlength="140"
                             placeholder="Say something to everyone"
                             aria-label="Message"
+                            enterkeyhint="send"
                         />
                         <button type="submit">Send</button>
                     </form>

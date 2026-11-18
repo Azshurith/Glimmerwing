@@ -32,6 +32,12 @@ export interface PlayerRef {
     name: string;
 }
 
+/** A chat channel as the API hands it out: its code and its types_channels id. */
+export interface ChannelRef {
+    code: string;
+    id: number;
+}
+
 /** A saved document and when it was saved (ms). */
 export interface SavedDoc<T> {
     data: T;
@@ -445,16 +451,25 @@ export class Store {
         }));
     }
 
+    /** A chat channel's id by its code, if it's open (enabled and not deleted). */
+    async channelId(code: string): Promise<number | null> {
+        const [r] = await this.rows<{ id: number | string }>(
+            'SELECT id FROM types_channels WHERE code = ? AND is_enabled = 1 AND deleted_at IS NULL',
+            [code],
+        );
+        return r ? Number(r.id) : null;
+    }
+
     /** Post a message on a channel; answers with it as the API hands it out. */
-    async addChat(p: PlayerRef, channel: string, body: string): Promise<ChatMessage> {
-        const r = await this.chats.insert({ channel, playerId: p.id, body });
+    async addChat(p: PlayerRef, channel: ChannelRef, body: string): Promise<ChatMessage> {
+        const r = await this.chats.insert({ channelId: channel.id, playerId: p.id, body });
         const id = Number(r.identifiers[0]?.id);
         const look = await this.lookOf(p.id);
-        return { id, channel, playerId: p.id, name: p.name, body, at: new Date().toISOString(), look };
+        return { id, channel: channel.code, playerId: p.id, name: p.name, body, at: new Date().toISOString(), look };
     }
 
     /** A channel's latest messages (at most `limit`, after id `after`), oldest first, with who wrote them. */
-    async chat(channel: string, after: number, limit: number): Promise<ChatMessage[]> {
+    async chat(channel: ChannelRef, after: number, limit: number): Promise<ChatMessage[]> {
         const rows = await this.rows<{
             id: number | string;
             player_id: number;
@@ -466,14 +481,14 @@ export class Store {
             created_at: Date;
         }>(
             `SELECT c.id, c.player_id, p.name, p.avatar, p.avatar_frame, p.chat_bubble, c.body, c.created_at
-             FROM chat_messages c
+             FROM players_messages c
              JOIN players p ON p.id = c.player_id AND p.deleted_at IS NULL
-             WHERE c.channel = ? AND c.id > ? AND c.deleted_at IS NULL ORDER BY c.id DESC LIMIT ?`,
-            [channel, after, limit],
+             WHERE c.channel_id = ? AND c.id > ? AND c.deleted_at IS NULL ORDER BY c.id DESC LIMIT ?`,
+            [channel.id, after, limit],
         );
         return rows.reverse().map(x => ({
             id: Number(x.id),
-            channel,
+            channel: channel.code,
             playerId: Number(x.player_id),
             name: x.name,
             body: x.body,

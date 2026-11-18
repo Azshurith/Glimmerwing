@@ -70,6 +70,23 @@ export class ModeType extends Timestamped {
     isEnabled!: boolean;
 }
 
+/** A chat channel ('world' for now). One that's disabled (or deleted) can't be read or posted to. */
+@Entity('types_channels')
+export class ChannelType extends Timestamped {
+    @PrimaryGeneratedColumn({ type: 'int', unsigned: true })
+    id!: number;
+
+    /** The API's own id for it (e.g. 'world'). */
+    @Column({ type: 'varchar', length: 16 })
+    code!: string;
+
+    @Column({ type: 'varchar', length: 32 })
+    name!: string;
+
+    @Column({ name: 'is_enabled', type: 'boolean', default: true })
+    isEnabled!: boolean;
+}
+
 /** A monster on a map's sheet: its kind (code), name, what it plays in a formation, and its row. */
 @Entity('monsters')
 export class Monster extends Timestamped {
