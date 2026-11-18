@@ -1599,7 +1599,10 @@ export class Game {
      * arrows; OK, Enter or Esc closes it.
      */
     private stepRoad(pr: Set<string>, lay: ReturnType<typeof lobbyLayout>, tap: { x: number; y: number } | null): void {
-        if (['Escape', 'Enter', 'NumpadEnter', 'Space', 'KeyZ', 'KeyR'].some(k => pr.has(k)) || (tap && inBox(tap, lay.roadOk))) {
+        if (
+            ['Escape', 'Enter', 'NumpadEnter', 'Space', 'KeyZ', 'KeyR'].some(k => pr.has(k)) ||
+            (tap && inBox(tap, lay.roadOk))
+        ) {
             this.roadOpen = false;
             this.ui('tick');
             return;
@@ -1631,7 +1634,11 @@ export class Game {
      * The mode picker over the lobby: the arrows move to the nearest tile that way, Enter or a tap on a tile plays its
      * mode, and Esc, the close button or a tap off the tiles closes it.
      */
-    private stepPicker(pr: Set<string>, lay: ReturnType<typeof lobbyLayout>, tap: { x: number; y: number } | null): void {
+    private stepPicker(
+        pr: Set<string>,
+        lay: ReturnType<typeof lobbyLayout>,
+        tap: { x: number; y: number } | null,
+    ): void {
         const modes = this.lobbyModes;
         if (pr.has('Escape') || (tap && inBox(tap, lay.close))) {
             this.picking = false;
@@ -1687,7 +1694,6 @@ export class Game {
         this.picking = false;
         if (m.action === 'online') this.onWantOnline?.();
         else if (m.action === 'cpu' || m.action === 'versus' || m.action === 'endless') this.start(m.action);
-
     }
 
     /** Open or close the chat panel (the page shows it; see main.ts). */

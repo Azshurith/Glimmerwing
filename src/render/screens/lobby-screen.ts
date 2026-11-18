@@ -1008,7 +1008,15 @@ export class LobbyScreen {
             ctx.fill();
         }
         ctx.restore();
-        arcadeText(ctx, 'CHOOSE A MODE', W / 2, tall ? 52 : 46, tall ? 14 : 16, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'center');
+        arcadeText(
+            ctx,
+            'CHOOSE A MODE',
+            W / 2,
+            tall ? 52 : 46,
+            tall ? 14 : 16,
+            ['#fff7c2', '#ffd45c', '#ff9a2e'],
+            'center',
+        );
         // The tile with the cursor is drawn last, on top.
         const order = v.modes.map((_, i) => i).filter(i => i !== v.pick);
         order.push(v.pick);
@@ -1274,7 +1282,15 @@ export class LobbyScreen {
                 ctx.restore();
                 drawTrophy(ctx, cx - sw / 2 + 22, y, 7);
                 drawTrophy(ctx, cx + sw / 2 - 22, y, 7);
-                arcadeText(ctx, String(n), cx, y + 5, 12, got ? ['#ffffff', '#fff3c9', '#ffe08a'] : ['#e9e2ff', '#cbbcf5', '#9a88c8'], 'center');
+                arcadeText(
+                    ctx,
+                    String(n),
+                    cx,
+                    y + 5,
+                    12,
+                    got ? ['#ffffff', '#fff3c9', '#ffe08a'] : ['#e9e2ff', '#cbbcf5', '#9a88c8'],
+                    'center',
+                );
             }
         }
         STAGES.forEach((st, k) => {
