@@ -5,14 +5,19 @@ import { FAIRIES } from '@/data/characters';
 import { mapById } from '@/data/maps';
 import { STAGES } from '@/data/stages';
 import { clock } from '@/render/hud';
-import type { Fairy, HistoryRow, Layout, ProfileView } from '@/types';
+import type { Fairy, HistoryRow, Layout, PlayerCard, ProfileView } from '@/types';
 import { drawFairy } from '@/render/entities/fairy';
 import { arcadeText, shade, slanted } from '@/render/draw';
 import { ARCADE, FONT, SANS } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { enter } from '@/render/transition';
 import { roundRect } from './emblems';
-import { kitCorners, kitDivider, kitPanel, kitPill, kitReady, kitTab } from './kit-ui';
+import { PieceAtlas } from './kit';
+import { kitCorners, kitDivider, kitPanel, kitPill, kitReady, kitTab, mockBox, mockFit } from './kit-ui';
+import type { MockFit } from './kit-ui';
+import kitUrl from '@/../assets/ui/profile-kit.png';
+import goldUrl from '@/../assets/ui/profile-kit-gold.png';
+import { PROFILE_KIT } from '@/data/profile-kit';
 import {
     crest,
     gem,
@@ -36,6 +41,46 @@ interface Box {
     w: number;
     h: number;
 }
+
+/** The Profile's painted pieces (`tools/extract-screen-kit.py profile`), used in landscape once loaded. */
+const KIT = new PieceAtlas(kitUrl, goldUrl, PROFILE_KIT);
+
+/**
+ * The painted landscape Profile's layout, in its mockup's 2x pixels: each piece's box (the piece fills it), the tap
+ * boxes of the tabs, the first history row and the rows' pitch, and where the game writes on the pieces.
+ */
+const MOCK = {
+    area: [100, 0, 3545, 1480] as const,
+    title: [1146, 2, 1194, 217],
+    card: [134, 90, 876, 1384],
+    tabsRecord: [1072, 229, 1394, 142],
+    tabsHistory: [1100, 205, 1260, 145],
+    tabs: [
+        [1075, 230, 615, 138],
+        [1700, 230, 760, 138],
+    ],
+    tiles: [
+        ['tileWins', 1062, 398, 777, 192, 1347],
+        ['tileChain', 1857, 398, 795, 193, 2133],
+        ['tileFevers', 2670, 398, 849, 194, 2958],
+        ['tileFlawless', 1061, 604, 779, 190, 1347],
+        ['tileFairies', 1858, 604, 794, 190, 2153],
+        ['tileTrophies', 2671, 604, 848, 190, 2933],
+        ['tileEndless', 1062, 804, 1029, 181, 1349],
+    ] as const,
+    fairies: [1056, 995, 2332, 404],
+    row: [1062, 365, 2263, 142],
+    pitch: 139.5,
+} as const;
+
+/** Where the landscape Profile's mockup sits in a view widened by `bleed`. */
+function profileFit(bleed: number): MockFit {
+    const [x0, y0, x1, y1] = MOCK.area;
+    return mockFit(C.VIEW_W, C.VIEW_H, bleed, x0, y0, x1, y1);
+}
+
+/** Whether landscape Profile is drawn from its painted pieces (once they've loaded). */
+const painted = () => KIT.ready() && kitReady();
 
 /** How wide the player card is in landscape. */
 const CARD_W = 150;
@@ -82,6 +127,14 @@ function designLayout(layout: Layout, dy: number, bleed: number): { tabs: Box[];
 
 /** The tabs and the history rows in view units (also their tap targets), for a view `h` tall widened by `bleed`. */
 export function profileBoxes(layout: Layout, h: number = C.TALL_H, bleed = 0): { tabs: Box[]; rows: Box[] } {
+    if (layout !== 'tall' && painted()) {
+        const f = profileFit(bleed);
+        const [rx, ry, rw, rh] = MOCK.row;
+        return {
+            tabs: MOCK.tabs.map(([x, y, w, hh]) => mockBox(f, x, y, w, hh)),
+            rows: Array.from({ length: HISTORY_ROWS.wide }, (_, i) => mockBox(f, rx, ry + i * MOCK.pitch, rw, rh)),
+        };
+    }
     if (layout !== 'tall') return designLayout(layout, 0, bleed);
     const f = tallMenuFit(h);
     const d = designLayout(layout, tallShift(f.h), f.bleed);
@@ -108,6 +161,10 @@ export class ProfileScreen {
     ): void {
         const ctx = this.ctx;
         const tall = layout === 'tall';
+        if (!tall && painted()) {
+            this.drawPainted(v, t, bleed, stage);
+            return;
+        }
         ctx.save();
         let W: number = C.VIEW_W,
             H: number = C.VIEW_H,
@@ -159,6 +216,256 @@ export class ProfileScreen {
             ),
         );
         ctx.restore();
+    }
+
+    /** Landscape Profile drawn from its painted pieces, laid out as its mockup and fitted to the view. */
+    private drawPainted(v: ProfileView, t: number, bleed: number, stage?: StagePainter): void {
+        const ctx = this.ctx;
+        const W = C.VIEW_W,
+            H = C.VIEW_H;
+        const f = profileFit(bleed);
+        ctx.save();
+        enter(ctx, 'bg', () => ornateScreen(ctx, t, W, H, bleed, '', false));
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.scale(f.s, f.s);
+        const piece = (name: string, b: readonly number[], phase?: number) => {
+            KIT.draw(ctx, name, b[0], b[1], b[2], b[3]);
+            if (phase !== undefined) KIT.glint(ctx, name, b[0], b[1], b[2], b[3], t, phase, 7);
+        };
+        enter(ctx, 'bar', () => piece('title', MOCK.title, 0));
+        enter(ctx, 'panels', () => drawPlayerCard(ctx, v, MOCK.card, t), { dx: -22 });
+        enter(ctx, 'buttons', () =>
+            v.tab === 'history' ? piece('tabsHistory', MOCK.tabsHistory, 1) : piece('tabsRecord', MOCK.tabsRecord, 1),
+        );
+        enter(ctx, 'panels', () =>
+            v.tab === 'history' ? this.paintedHistory(v, t, stage) : this.paintedRecord(v, t, piece),
+        );
+        ctx.restore();
+        enter(ctx, 'hint', () =>
+            keyHints(
+                ctx,
+                v.tab === 'history'
+                    ? [
+                          [['◀', '▶'], 'TABS'],
+                          [['▲', '▼'], 'CHOOSE'],
+                          [['ENTER'], 'DETAILS'],
+                          [['ESC'], 'BACK'],
+                      ]
+                    : [
+                          [['◀', '▶'], 'TABS'],
+                          [['ESC'], 'BACK'],
+                      ],
+                W / 2,
+                H - 8,
+                v.touch
+                    ? v.tab === 'history'
+                        ? 'TAP A GAME FOR ITS DETAILS'
+                        : 'TAP MATCH HISTORY FOR YOUR GAMES'
+                    : null,
+            ),
+        );
+        ctx.restore();
+    }
+
+    /** The painted Record tab: the numbers on their tiles (with where the trophy road goes next) and the fairies. */
+    private paintedRecord(
+        v: ProfileView,
+        t: number,
+        piece: (name: string, b: readonly number[], phase?: number) => void,
+    ): void {
+        const ctx = this.ctx;
+        const unlocked = v.locked.filter(l => !l).length;
+        const values: Record<string, string> = {
+            tileWins: String(v.wins),
+            tileChain: String(v.bestChain),
+            tileFevers: String(v.fevers),
+            tileFlawless: String(v.flawless),
+            tileFairies: `${unlocked}/${FAIRIES.length}`,
+            tileTrophies: String(v.trophies),
+            tileEndless: clock(v.endlessBest),
+        };
+        const gold: [string, string, string] = ['#fff7c2', '#ffd45c', '#ff9a2e'];
+        MOCK.tiles.forEach(([name, x, y, w, h, vx], i) => {
+            piece(name, [x, y, w, h], 2 + i * 0.4);
+            arcadeText(ctx, values[name], vx, y + 150, 92, gold, 'left', 520);
+        });
+        // Where the trophy road goes next, on a lilac chip; the Endless rank on a dark one.
+        const nextStage = STAGES.find(st => st.trophies > v.bestTrophies);
+        const chip = nextStage
+            ? `${(mapById(nextStage.mapId)?.name ?? '').toUpperCase()} AT ${nextStage.trophies}`
+            : 'ALL STAGES';
+        this.chip(chip, 3135, 662, 265, 86, 'lilac');
+        if (v.rank) this.chip(`#${v.rank.rank} OF ${v.rank.players}`, 1745, 873, 302, 80, 'capsule');
+        // The fairies, and what unlocks the next.
+        const [fx, fy, fw, fh] = MOCK.fairies;
+        piece('fairies', [fx, fy, fw, fh], 4);
+        const next = FAIRIES.find((_, i) => v.locked[i]);
+        ctx.textAlign = 'center';
+        ctx.font = `italic 700 38px ${FONT}`;
+        ctx.fillStyle = next ? '#ffe27a' : '#f0e8ff';
+        ctx.fillText(
+            next ? `Next: ${next.unlock?.hint ?? ''} to unlock ${next.name}` : '✦ Every fairy is unlocked! ✦',
+            2986,
+            1032,
+            1100,
+        );
+        const xs = [1310, 1620, 1930, 2240, 2552, 2864, 3164];
+        FAIRIES.slice(0, xs.length).forEach((fy2, i) => {
+            const x = xs[i],
+                y = 1224,
+                r = 100;
+            if (v.locked[i]) {
+                const g = ctx.createRadialGradient(x, y - 30, 10, x, y, r);
+                g.addColorStop(0, '#3a3360');
+                g.addColorStop(1, '#141030');
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.textAlign = 'center';
+                ctx.font = `${r * 0.9}px ${ARCADE}`;
+                ctx.fillStyle = 'rgba(255,226,122,0.85)';
+                ctx.fillText('?', x, y + r * 0.32);
+            } else {
+                ctx.save();
+                const g = ctx.createRadialGradient(x, y - 30, 10, x, y, r);
+                g.addColorStop(0, fy2.color);
+                g.addColorStop(1, shade(fy2.color, 0.3));
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.clip();
+                drawFairy(ctx, fy2, x, y + 14, 5.2, t);
+                ctx.restore();
+            }
+            ctx.strokeStyle = v.locked[i] ? 'rgba(201,162,74,0.55)' : goldGradient(ctx, y - r, y + r);
+            ctx.lineWidth = 12;
+            ctx.beginPath();
+            ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+            ctx.stroke();
+        });
+    }
+
+    /** A chip of `kind` in the mockup's units, with its text. */
+    private chip(text: string, x: number, y: number, w: number, h: number, kind: 'lilac' | 'capsule'): void {
+        const ctx = this.ctx;
+        kitPill(ctx, { x, y, w, h }, kind);
+        ctx.textAlign = 'center';
+        ctx.font = `800 ${h * 0.42}px ${SANS}`;
+        ctx.fillStyle = kind === 'lilac' ? '#ffffff' : '#ffe27a';
+        ctx.fillText(text, x + w / 2, y + h * 0.64, w - 30);
+    }
+
+    /** The painted Match History tab: a row per game, newest first, the chosen one glowing, and a scroll bar. */
+    private paintedHistory(v: ProfileView, t: number, stage?: StagePainter): void {
+        const ctx = this.ctx;
+        const [rx, ry, rw, rh] = MOCK.row;
+        if (v.message) {
+            ctx.textAlign = 'center';
+            ctx.font = `italic 600 48px ${FONT}`;
+            ctx.fillStyle = 'rgba(239,230,255,0.9)';
+            v.message.split('\n').forEach((l, i) => ctx.fillText(l, rx + rw / 2, ry + 140 + i * 64, rw - 40));
+        }
+        const n = HISTORY_ROWS.wide;
+        const shown = v.history.slice(v.start, v.start + n);
+        const pieces: Record<string, string> = {
+            ENDLESS: 'rowEndless',
+            'VS CPU': 'rowCpu',
+            '2 PLAYERS': 'rowVersus',
+            ONLINE: 'rowOnline',
+        };
+        shown.forEach((row, k) => {
+            const y = ry + k * MOCK.pitch,
+                on = v.start + k === v.index;
+            const name = pieces[row.tag] ?? 'rowOnline';
+            if (on) {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255,150,255,0.35)';
+                ctx.lineWidth = 22 + 6 * Math.sin(t * 5);
+                roundRect(ctx, rx + 8, y + 8, rw - 16, rh - 16, (rh - 16) / 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+            KIT.draw(ctx, name, rx, y, rw, rh);
+            if (on) {
+                ctx.strokeStyle = 'rgba(255,214,255,0.95)';
+                ctx.lineWidth = 5;
+                roundRect(ctx, rx + 6, y + 6, rw - 12, rh - 12, (rh - 12) / 2);
+                ctx.stroke();
+                KIT.glint(ctx, name, rx, y, rw, rh, t, 0, 4);
+            }
+            if (name === 'rowOnline') {
+                ctx.textAlign = 'center';
+                ctx.font = `800 40px ${SANS}`;
+                ctx.fillStyle = row.color;
+                ctx.fillText(row.tag, rx + 180, y + 86, 300);
+            }
+            // The stage's picture, in a rounded frame.
+            const tx = rx + 438,
+                ty = y + 30,
+                tw = 245,
+                th = 92;
+            if (stage && row.map) {
+                ctx.save();
+                roundRect(ctx, tx, ty, tw, th, 14);
+                ctx.clip();
+                stage(row.map, tx, ty, tw, th);
+                ctx.restore();
+            }
+            ctx.strokeStyle = 'rgba(214,170,255,0.8)';
+            ctx.lineWidth = 3;
+            roundRect(ctx, tx, ty, tw, th, 14);
+            ctx.stroke();
+            // Who flew, the map and numbers, the result and when.
+            ctx.textAlign = 'left';
+            ctx.font = `700 46px ${FONT}`;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(row.title, rx + 768, y + 64, 760);
+            ctx.font = `italic 600 36px ${FONT}`;
+            ctx.fillStyle = 'rgba(224,214,255,0.95)';
+            ctx.fillText(row.detail, rx + 768, y + 106, 760);
+            const win = row.result.startsWith('WIN');
+            const cx = rx + 1640;
+            ctx.textAlign = 'center';
+            ctx.font = `48px ${ARCADE}`;
+            ctx.fillStyle = win ? '#c8f55a' : row.tag === 'ENDLESS' ? '#ffd45c' : row.resultColor;
+            ctx.fillText(row.result, cx, y + 88, 330);
+            if (win) {
+                const lw = Math.min(330, ctx.measureText(row.result).width);
+                for (const dir of [-1, 1]) {
+                    ctx.save();
+                    ctx.translate(cx + dir * (lw / 2 + 34), y + 72);
+                    ctx.scale(7, 7);
+                    laurel(ctx, 0, 0, 4, dir, '#c8f55a');
+                    ctx.restore();
+                }
+            }
+            ctx.textAlign = 'right';
+            ctx.font = `30px ${ARCADE}`;
+            ctx.fillStyle = row.local ? '#ffe27a' : '#e2ccff';
+            ctx.fillText(row.local ? 'THIS DEVICE' : row.when, rx + 2150, y + 84, 260);
+        });
+        // The scroll bar down the right.
+        if (v.history.length > n) {
+            const x = 3345,
+                y0 = ry + 5,
+                h = n * MOCK.pitch - 10;
+            ctx.fillStyle = 'rgba(20,10,44,0.8)';
+            roundRect(ctx, x, y0, 44, h, 22);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(214,170,255,0.6)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            const th = Math.max(80, (h * n) / v.history.length);
+            const g = ctx.createLinearGradient(x, 0, x + 44, 0);
+            g.addColorStop(0, '#ffe9a0');
+            g.addColorStop(1, '#e09a2c');
+            ctx.fillStyle = g;
+            roundRect(ctx, x + 8, y0 + ((h - th) * v.start) / (v.history.length - n), 28, th, 14);
+            ctx.fill();
+        }
     }
 
     /**
@@ -626,6 +933,64 @@ function tabIcon(ctx: CanvasRenderingContext2D, i: number, x: number, y: number,
     ctx.moveTo(x + 4, y - 4);
     ctx.lineTo(x - 4, y + 4);
     ctx.stroke();
+}
+
+/**
+ * The painted player card filling `box` (in the units of the current transform): the card's picture, the player's
+ * name on its plate, where progress is kept, and the Endless top three. Laid out in the card's own mockup pixels, so
+ * it scales to any box; used by Profile and the match details in landscape once the Profile's pieces have loaded.
+ */
+export function drawPlayerCard(ctx: CanvasRenderingContext2D, card: PlayerCard, box: readonly number[], t: number): void {
+    const [bx, by, bw, bh] = box;
+    const [cx0, cy0, cw, ch] = MOCK.card;
+    KIT.draw(ctx, 'card', bx, by, bw, bh);
+    KIT.glint(ctx, 'card', bx, by, bw, bh, t, 0.5, 7);
+    ctx.save();
+    ctx.translate(bx, by);
+    ctx.scale(bw / cw, bh / ch);
+    ctx.translate(-cx0, -cy0);
+    ctx.textAlign = 'center';
+    ctx.font = `800 58px ${SANS}`;
+    ctx.fillStyle = goldText(ctx, 862, 916);
+    ctx.fillText(card.name, 560, 912, 560);
+    ctx.font = `italic 600 34px ${FONT}`;
+    ctx.fillStyle = '#efe6ff';
+    ctx.fillText(
+        card.synced ? 'Progress is saved on the game server.' : 'Progress is saved in this browser.',
+        560,
+        1003,
+        700,
+    );
+    ctx.fillText('Sign in with Google: coming soon', 560, 1047, 700);
+    const top = card.leaders.slice(0, 3);
+    if (!top.length) {
+        ctx.font = `italic 600 36px ${FONT}`;
+        ctx.fillStyle = 'rgba(214,204,250,0.85)';
+        ctx.fillText(card.synced ? 'No runs yet: set the first!' : 'Shown when the server is reached', 560, 1300, 700);
+    }
+    top.forEach((e, i) => {
+        const y = 1262 + i * 67,
+            mine = e.playerId === card.me;
+        ctx.textAlign = 'left';
+        ctx.font = `800 44px ${SANS}`;
+        ctx.fillStyle = mine ? '#ffe27a' : '#ffffff';
+        ctx.fillText(e.name, 240, y, 400);
+        ctx.textAlign = 'right';
+        ctx.fillText(clock(e.seconds), 718, y);
+    });
+    ctx.restore();
+}
+
+/** Whether the painted player card can be drawn (the Profile's pieces have loaded). */
+export const playerCardReady = (): boolean => KIT.ready();
+
+/** A gold gradient for lettering between y0 and y1, as on the painted name plate. */
+function goldText(ctx: CanvasRenderingContext2D, y0: number, y1: number): CanvasGradient {
+    const g = ctx.createLinearGradient(0, y0, 0, y1);
+    g.addColorStop(0, '#fffbe0');
+    g.addColorStop(0.55, '#ffd45c');
+    g.addColorStop(1, '#f0a020');
+    return g;
 }
 
 /** A sprig of laurel, `s` tall, curving out `dir` (−1 left, 1 right) from (x, y): a stem with leaves. */

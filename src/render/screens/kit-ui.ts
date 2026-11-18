@@ -127,3 +127,40 @@ export function kitCorners(ctx: CanvasRenderingContext2D, b: Box, s: number): vo
     drawKit(ctx, 'cornerBL', b.x - o, b.y + b.h - s + o, s, s);
     drawKit(ctx, 'cornerBR', b.x + b.w - s + o, b.y + b.h - s + o, s, s);
 }
+
+/** How a screen's mockup (drawn at 2x, `MOCK` units) maps onto the view: its top-left corner and its scale. */
+export interface MockFit {
+    x: number;
+    y: number;
+    s: number;
+}
+
+/**
+ * Fits the part of a mockup from (mx0, my0) to (mx1, my1), in its 2x pixels, into the landscape view (504 design units
+ * wide plus `bleed` each side, `H` tall, `foot` kept free along the bottom for the key hints), centred.
+ */
+export function mockFit(
+    W: number,
+    H: number,
+    bleed: number,
+    mx0: number,
+    my0: number,
+    mx1: number,
+    my1: number,
+    foot = 18,
+): MockFit {
+    const vx0 = -bleed + 4,
+        vw = W + 2 * bleed - 8,
+        vh = H - foot - 2;
+    const s = Math.min(vw / (mx1 - mx0), vh / (my1 - my0));
+    return {
+        s,
+        x: vx0 + (vw - (mx1 - mx0) * s) / 2 - mx0 * s,
+        y: 2 + (vh - (my1 - my0) * s) / 2 - my0 * s,
+    };
+}
+
+/** A box in a mockup's 2x pixels, in view units under `fit`. */
+export function mockBox(fit: MockFit, x: number, y: number, w: number, h: number): Box {
+    return { x: fit.x + x * fit.s, y: fit.y + y * fit.s, w: w * fit.s, h: h * fit.s };
+}

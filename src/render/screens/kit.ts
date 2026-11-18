@@ -83,11 +83,11 @@ function blit(
 }
 
 /**
- * Paints the glint of a piece into the scratch canvas: its gold, lit by a slanted bright band `at` (0 to 1) of the
+ * Paints the glint of a piece into the scratch canvas: its gold (from `gold`, the lobby kit's by default), lit by a slanted bright band `at` (0 to 1) of the
  * way across it. Returns the scratch canvas as a source laid out like the piece's cell, or null if it can't.
  */
-function glintCell(p: KitPiece, at: number): Source | null {
-    if (!(GOLD.complete && GOLD.naturalWidth > 0)) return null;
+function glintCell(p: KitPiece, at: number, gold: HTMLImageElement = GOLD): Source | null {
+    if (!(gold.complete && gold.naturalWidth > 0)) return null;
     scratch ??= document.createElement('canvas');
     if (scratch.width < p.w) scratch.width = p.w;
     if (scratch.height < p.h) scratch.height = p.h;
@@ -95,7 +95,7 @@ function glintCell(p: KitPiece, at: number): Source | null {
     if (!c) return null;
     c.save();
     c.globalCompositeOperation = 'copy';
-    c.drawImage(GOLD, p.x, p.y, p.w, p.h, 0, 0, p.w, p.h);
+    c.drawImage(gold, p.x, p.y, p.w, p.h, 0, 0, p.w, p.h);
     c.globalCompositeOperation = 'source-in';
     const band = Math.max(26, p.w * 0.14);
     const cx = -band + (p.w + band * 2) * at;
@@ -249,4 +249,58 @@ function blit9(
             if (dw <= 0 || dh <= 0) continue;
             ctx.drawImage(src.img, sx[i], sy[j], sx[i + 1] - sx[i], sy[j + 1] - sy[j], dx[i], dy[j], dw, dh);
         }
+}
+
+/**
+ * Another painted atlas of pieces, laid out like the lobby kit (a screen's own pieces, cut by
+ * `tools/extract-screen-kit.py`): each piece is drawn whole, scaled to the box it's given, and can glint.
+ */
+export class PieceAtlas {
+    private img: HTMLImageElement;
+    private gold: HTMLImageElement;
+
+    /** The atlas at `url`, its gold at `goldUrl`, and where each piece sits in it. */
+    constructor(
+        url: string,
+        goldUrl: string,
+        private layout: Record<string, KitPiece>,
+    ) {
+        this.img = loadImage(url);
+        this.gold = loadImage(goldUrl);
+    }
+
+    /** Whether the atlas's picture has loaded. */
+    ready(): boolean {
+        return this.img.complete && this.img.naturalWidth > 0;
+    }
+
+    /** Draws piece `name` scaled to fill the box. */
+    draw(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, w: number, h: number): void {
+        const p = this.layout[name];
+        if (!p || !this.ready()) return;
+        blit(ctx, { img: this.img, x: p.x, y: p.y }, p, x, y, w, h, false);
+    }
+
+    /** A band of light sweeping across piece `name`'s gold every `period` seconds, `phase` seconds into its cycle. */
+    glint(
+        ctx: CanvasRenderingContext2D,
+        name: string,
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+        t: number,
+        phase: number,
+        period = 6,
+    ): void {
+        const p = this.layout[name];
+        const at = sweep(t, phase, period);
+        if (!p || at === null || !this.ready()) return;
+        const src = glintCell(p, at, this.gold);
+        if (!src) return;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        blit(ctx, src, p, x, y, w, h, false);
+        ctx.restore();
+    }
 }
