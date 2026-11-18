@@ -3,54 +3,54 @@ import type { KitPiece } from '@/types';
 
 /** Where each of the mapselect screen's painted pieces sits in `assets/ui/mapselect-kit.png`. */
 export const MAPSELECT_KIT: Record<string, KitPiece> = {
-    'cardOn': {
-        'x': 0,
-        'y': 0,
-        'w': 536,
-        'h': 490,
-        'bx': 0,
-        'by': 0,
-        'bw': 536,
-        'bh': 490
+    cardOn: {
+        x: 0,
+        y: 0,
+        w: 536,
+        h: 490,
+        bx: 0,
+        by: 0,
+        bw: 536,
+        bh: 490,
     },
-    'cardOff': {
-        'x': 538,
-        'y': 0,
-        'w': 528,
-        'h': 490,
-        'bx': 0,
-        'by': 0,
-        'bw': 528,
-        'bh': 490
+    cardOff: {
+        x: 538,
+        y: 0,
+        w: 528,
+        h: 490,
+        bx: 0,
+        by: 0,
+        bw: 528,
+        bh: 490,
     },
-    'title': {
-        'x': 0,
-        'y': 492,
-        'w': 1320,
-        'h': 143,
-        'bx': 0,
-        'by': 0,
-        'bw': 1320,
-        'bh': 143
+    title: {
+        x: 0,
+        y: 492,
+        w: 1320,
+        h: 143,
+        bx: 0,
+        by: 0,
+        bw: 1320,
+        bh: 143,
     },
-    'hint': {
-        'x': 0,
-        'y': 637,
-        'w': 1868,
-        'h': 118,
-        'bx': 0,
-        'by': 0,
-        'bw': 1868,
-        'bh': 118
+    hint: {
+        x: 0,
+        y: 637,
+        w: 1868,
+        h: 118,
+        bx: 0,
+        by: 0,
+        bw: 1868,
+        bh: 118,
     },
-    'trophies': {
-        'x': 0,
-        'y': 757,
-        'w': 363,
-        'h': 105,
-        'bx': 0,
-        'by': 0,
-        'bw': 363,
-        'bh': 105
-    }
+    trophies: {
+        x: 0,
+        y: 757,
+        w: 363,
+        h: 105,
+        bx: 0,
+        by: 0,
+        bw: 363,
+        bh: 105,
+    },
 };

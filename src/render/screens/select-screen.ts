@@ -299,7 +299,8 @@ export class SelectScreen {
         ctx.fillStyle = bg;
         ctx.fillRect(wx0, wy0, ww, wh);
         ctx.fillStyle = 'rgba(255,255,255,0.12)';
-        for (let k = 0; k < 9; k++) sparkle(ctx, wx0 + ((k * 330 + t * 80) % ww), wy0 + ((k * 230) % wh), 12 + (k % 3) * 6);
+        for (let k = 0; k < 9; k++)
+            sparkle(ctx, wx0 + ((k * 330 + t * 80) % ww), wy0 + ((k * 230) % wh), 12 + (k % 3) * 6);
         if (hidden) ctx.filter = 'brightness(0) opacity(0.8)';
         const p = fy.portrait;
         if (p && p.img.complete && p.img.naturalWidth) {
@@ -308,7 +309,8 @@ export class SelectScreen {
             ctx.drawImage(p.img, sx, sy, sw, sh, wx0 + ww / 2 - (sw * k) / 2, wy0, sw * k, sh * k);
         } else drawFairy(ctx, fy, wx0 + ww / 2, wy0 + wh * 0.5 + Math.sin(t * 2.2) * 18, 24, t, 0, false);
         ctx.filter = 'none';
-        if (hidden) arcadeText(ctx, '?', wx0 + ww / 2, wy0 + wh * 0.64, 400, ['#ffffff', '#c9b8ff', '#7a5cff'], 'center');
+        if (hidden)
+            arcadeText(ctx, '?', wx0 + ww / 2, wy0 + wh * 0.64, 400, ['#ffffff', '#c9b8ff', '#7a5cff'], 'center');
         ctx.restore();
         // Once chosen, the window glows in the player's colour.
         if (s.done) {
@@ -324,7 +326,16 @@ export class SelectScreen {
         arcadeText(ctx, s.tag, c.tag[0], c.tag[1] + 26, 72, ['#2a0f2a', '#1b0a24', '#140a1a'], 'center', 200);
         const off = !fairyAvailable(fy.id);
         const name = s.cpu ? '? ? ?' : s.locked ? (off ? 'UNAVAILABLE' : 'LOCKED') : fy.name.toUpperCase();
-        arcadeText(ctx, name, c.mid, R.name, name.length > 9 ? 78 : 96, ['#fff6d0', '#ffd45c', '#e88a1c'], 'center', 820);
+        arcadeText(
+            ctx,
+            name,
+            c.mid,
+            R.name,
+            name.length > 9 ? 78 : 96,
+            ['#fff6d0', '#ffd45c', '#e88a1c'],
+            'center',
+            820,
+        );
         ctx.textAlign = 'center';
         ctx.font = `italic 600 54px ${FONT}`;
         ctx.fillStyle = s.locked ? '#ffe27a' : '#f6f0ff';
@@ -468,7 +479,16 @@ export class SelectScreen {
             const [x, y, w, h] = MOCK.prompt;
             piece('prompt', MOCK.prompt, 3);
             ctx.globalAlpha = 0.7 + 0.3 * Math.abs(Math.sin(t * 3));
-            arcadeText(ctx, v.hints[0], x + w / 2, y + h / 2 + 20, 56, ['#ffffff', '#fff3c9', '#ffd45c'], 'center', w - 240);
+            arcadeText(
+                ctx,
+                v.hints[0],
+                x + w / 2,
+                y + h / 2 + 20,
+                56,
+                ['#ffffff', '#fff3c9', '#ffd45c'],
+                'center',
+                w - 240,
+            );
             ctx.globalAlpha = 1;
         }
         if (v.hints[1]) {

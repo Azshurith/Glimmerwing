@@ -279,8 +279,7 @@ export class MapScreen {
             const cy = c.y + lift;
             const b = on ? MOCK.on : MOCK.off;
             piece(on ? 'cardOn' : 'cardOff', [c.x + b[0], cy + b[1], b[2], b[3]], on ? 0.5 : 1.5 + i * 0.3);
-            if (random)
-                arcadeText(ctx, '?', c.x, cy - 10, 300, ['#ffffff', '#ffe08a', '#ff9a2e'], 'center');
+            if (random) arcadeText(ctx, '?', c.x, cy - 10, 300, ['#ffffff', '#ffe08a', '#ff9a2e'], 'center');
             else if (locked) {
                 drawPadlock(ctx, c.x, cy - 110, 170);
                 if (mapAvailable(map.id)) {
