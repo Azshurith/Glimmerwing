@@ -120,16 +120,23 @@ const wide = (): readonly [Placement, Placement] => [
  * The band left above your meadow holds the rival's meadow and the console, designed TALL_TOP high: on a
  * shorter screen the band shrinks to fit, on a longer one it stays centred in the spare height.
  */
-function tallPlacement(h: number, fit = false, solo = false): { at: readonly [Placement, Placement]; band: Placement } {
+function tallPlacement(
+    h: number,
+    fit = false,
+    solo = false,
+    followX = 0,
+): { at: readonly [Placement, Placement]; band: Placement } {
     // A replay's meadow may be wider (recorded on a wide screen) or taller (recorded on a longer phone) than
-    // this screen's: `fit` scales it down to fit under the band (or the solo bar) and centres it.
+    // this screen's: `fit` shows it at a live round's scale (scaled down only to fit a taller one under the band or
+    // the solo bar), so it looks as it does in play; a meadow wider than the screen then follows its fairy across
+    // (`followX`, her x in the meadow), and a narrower one is centred.
     const s = fit
-        ? Math.min(C.TALL_W / C.FIELD_W, (h - (solo ? C.TALL_SOLO_BAR : C.TALL_TOP_MIN)) / C.FIELD_H)
+        ? Math.min(C.TALL_OWN_S, (h - (solo ? C.TALL_SOLO_BAR : C.TALL_TOP_MIN)) / C.FIELD_H)
         : C.TALL_OWN_S;
-    const ownX = fit ? (C.TALL_W - C.FIELD_W * s) / 2 : 0;
-    // A lone meadow scaled down to fit the width (an Endless run recorded on a wide screen) sits in the middle of
-    // the space under the bar, not against the bottom edge.
-    const ownY = fit && solo ? C.TALL_SOLO_BAR + (h - C.TALL_SOLO_BAR - C.FIELD_H * s) / 2 : h - C.FIELD_H * s;
+    const over = C.FIELD_W * s - C.TALL_W;
+    const ownX = !fit ? 0 : over <= 0 ? -over / 2 : Math.max(-over, Math.min(0, C.TALL_W / 2 - followX * s));
+    // Your meadow sits against the bottom edge, as in play.
+    const ownY = h - C.FIELD_H * s;
     const k = Math.min(1, ownY / C.TALL_TOP);
     const band = { x: (C.TALL_W * (1 - k)) / 2, y: Math.max(0, (ownY - C.TALL_TOP * k) / 2), s: k };
     const R = C.TALL_RIVAL;
@@ -2229,7 +2236,11 @@ export class Game {
             this.stepMapSelect();
             return;
         }
-        if (this.paused) return;
+        if (this.paused) {
+            // A touchscreen has no P: a tap anywhere resumes.
+            if (this.input.tap && (this.phase === 'playing' || this.phase === 'countdown')) this.paused = false;
+            return;
+        }
         this.phaseT += dt;
 
         if (this.online && this.phase !== 'playing' && pr.has('Escape')) {
@@ -2410,7 +2421,7 @@ export class Game {
     private pauseBanner(touch: boolean): void {
         this.r.banner({
             title: 'Paused',
-            sub: touch ? 'Tap the pause button to resume' : 'Press P to resume',
+            sub: touch ? 'Tap anywhere to resume' : 'Press P to resume',
             dim: 0.6,
             tone: 'blue',
             blinkSub: true,
@@ -2446,7 +2457,13 @@ export class Game {
                 : 'wide';
         // Endless side by side: one meadow in the middle, between its panels.
         const endless = inRound && this.mode === 'endless';
-        const tall = r.layout === 'tall' ? tallPlacement(r.viewH, watching, soloTall || endless) : null;
+        // A replay wider than the screen follows this player's fairy (the second seat's, watching an online match
+        // from it).
+        const own = this.online && this.me === 1 ? 1 : 0;
+        const tall =
+            r.layout === 'tall'
+                ? tallPlacement(r.viewH, watching, soloTall || endless, this.fields[own].player.x)
+                : null;
         // With the rival's meadow hidden it's placed far off screen, so nothing of it (or flying to it) shows.
         const offscreen: Placement = { x: 0, y: -10000, s: tall ? tall.at[0].s : 1 };
         const at: readonly [Placement, Placement] = !tall
@@ -2478,6 +2495,8 @@ export class Game {
                   { label: solo ? 'YOU' : '1P', color: PLAYER_COLORS.p1 },
                   this.vsCpu ? { label: 'CPU', color: PLAYER_COLORS.cpu } : { label: '2P', color: PLAYER_COLORS.p2 },
               ];
+        // An Endless replay recorded in a shorter meadow leaves room above it on a phone: its scenery fills it.
+        if (tall && watching && (soloTall || endless)) r.tallFill(this.fields[0], 0, at[0].y, this.time);
         r.field(this.fields[0], at[0].x, this.wins[0], this.time, tags[0], at[0].y, at[0].s);
         if (!soloTall && !endless) r.field(this.fields[1], at[1].x, this.wins[1], this.time, tags[1], at[1].y, at[1].s);
         // Between rounds the console still shows the round just played.
