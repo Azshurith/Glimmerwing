@@ -121,13 +121,8 @@ const MOCK = {
     ],
     barRows: [379, 457],
     skills: [519, 655, 795, 935],
-    // The stat icons' boxes (as cut), and where each panel's labels start.
-    statIcons: [
-        [1022, 348, 70, 64],
-        [1022, 426, 66, 66],
-        [1798, 346, 68, 66],
-        [1798, 424, 68, 66],
-    ],
+    // Where each panel's icons and labels sit across.
+    statIcons: [1056, 1832],
     statLabels: [1105, 1883],
     // The demo frame: its middle across, its top, its height, and how far in its window starts (sides, top, foot).
     demo: [3021, 218, 912, 36, 23, 37],
@@ -458,6 +453,90 @@ function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: num
     ctx.fill();
 }
 
+/** Each skill's orb colours: the glow, the ring and the glyph's light. */
+const ORB_COLOURS: Record<string, [string, string, string]> = {
+    SHOT: ['#a24dff', '#c98bff', '#ffffff'],
+    BOMB: ['#ff8a1c', '#ffc35a', '#fff6d0'],
+    'EXTRA ATTACK': ['#ff4fb8', '#ff9ad8', '#fff0fa'],
+    GUARDIAN: ['#b04dff', '#e08aff', '#fbeaff'],
+};
+
+/**
+ * A skill's orb, drawn in code round (cx, cy), `r` across the middle: a dark disc with a glow of the skill's colour, a
+ * double ring, and its glyph (a starburst for the shot, a sun for the bomb, a heart for the Extra Attack, a lotus for
+ * the guardian), gently pulsing.
+ */
+function skillOrb(ctx: CanvasRenderingContext2D, kind: string, cx: number, cy: number, r: number, t: number): void {
+    const [glow, ring, light] = ORB_COLOURS[kind] ?? ORB_COLOURS.SHOT;
+    ctx.save();
+    // A halo, then the disc glowing from its middle.
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = r * 0.6;
+    const disc = ctx.createRadialGradient(cx, cy, r * 0.05, cx, cy, r);
+    disc.addColorStop(0, glow);
+    disc.addColorStop(0.75, '#3a1468');
+    disc.addColorStop(1, '#1c0a38');
+    ctx.fillStyle = disc;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = r * 0.08;
+    ctx.strokeStyle = ring;
+    ctx.stroke();
+    ctx.lineWidth = r * 0.03;
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.84, 0, Math.PI * 2);
+    ctx.stroke();
+    // The glyph, glowing.
+    const k = r * (0.74 + 0.03 * Math.sin(t * 3));
+    ctx.translate(cx, cy);
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = r * 0.7;
+    const g = ctx.createRadialGradient(0, 0, k * 0.1, 0, 0, k);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.5, light);
+    g.addColorStop(1, ring);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    if (kind === 'SHOT' || kind === 'BOMB') {
+        // A ball with rays: eight thin ones for the shot, sixteen sun points for the bomb.
+        const rays = kind === 'SHOT' ? 8 : 16;
+        for (let i = 0; i < rays * 2; i++) {
+            const a = (i * Math.PI) / rays - Math.PI / 2,
+                rr = i % 2 ? k * 0.55 : k * (kind === 'SHOT' && i % 4 === 0 ? 1.1 : 0.85);
+            ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, k * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (kind === 'EXTRA ATTACK') {
+        // A heart.
+        ctx.moveTo(0, k * 0.8);
+        ctx.bezierCurveTo(-k * 1.1, k * 0.05, -k * 0.75, -k * 0.85, 0, -k * 0.35);
+        ctx.bezierCurveTo(k * 0.75, -k * 0.85, k * 1.1, k * 0.05, 0, k * 0.8);
+        ctx.fill();
+    } else {
+        // A lotus: five petals fanned from its foot.
+        for (let i = -2; i <= 2; i++) {
+            ctx.save();
+            ctx.translate(0, k * 0.55);
+            ctx.rotate(i * 0.5);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(k * 0.38, -k * 0.6, 0, -k * (i === 0 ? 1.25 : 1.05));
+            ctx.quadraticCurveTo(-k * 0.38, -k * 0.6, 0, 0);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+    ctx.restore();
+}
+
 /** The Characters screen. */
 export class RosterScreen {
     /** Draw on `ctx`. */
@@ -705,7 +784,7 @@ export class RosterScreen {
         arcadeText(ctx, name, cx, py + ph / 2 + 28, 80, ['#fff7d8', '#ffd98a', '#e0a040'], 'center', pw - 220);
     }
 
-    /** Her blurb, the stat panels with her bars, and her four skills, on panels drawn in code with their painted icons. */
+    /** Her blurb, the stat panels with her bars, and her four skills: panels, icons and orbs all drawn in code. */
     private paintedInfo(fy: Fairy, locked: boolean, t: number): void {
         const ctx = this.ctx;
         ctx.textAlign = 'left';
@@ -720,8 +799,12 @@ export class RosterScreen {
             const [x0, w] = MOCK.bars[i >> 1],
                 y = MOCK.barRows[i & 1],
                 bw = w / 5;
-            const ib = MOCK.statIcons[i];
-            KIT.draw(ctx, `statIcon${i}`, ib[0], ib[1], ib[2], ib[3]);
+            // Its icon, drawn in code at eight times its HUD size.
+            ctx.save();
+            ctx.translate(MOCK.statIcons[i >> 1], y);
+            ctx.scale(8, 8);
+            statIcon(ctx, statsOf(fy)[i][2], 0, 0);
+            ctx.restore();
             arcadeText(ctx, label, MOCK.statLabels[i >> 1], y + 15, 40, ['#ffffff', '#f6efff', '#d8c8ff'], 'left', 150);
             for (let k = 0; k < 5; k++) {
                 const on = !locked && k < n;
@@ -739,7 +822,7 @@ export class RosterScreen {
             const y = MOCK.skills[i],
                 cy = y + 71;
             glassPanel(ctx, 1046, cy - 61, 1460, 122, 61);
-            KIT.draw(ctx, `skillIcon${i}`, 1040, y + 2, 146, 138);
+            skillOrb(ctx, kind, 1112, cy, 62, t);
             arcadeText(ctx, kind, 1224, y + 50, 34, ['#ffffff', '#f6efff', '#d8c8ff'], 'left', 480);
             arcadeText(ctx, name.toUpperCase(), 1224, y + 104, 48, ['#fff3c0', '#ffd45c', '#e08a1c'], 'left', 480);
             if (text) {
@@ -749,7 +832,6 @@ export class RosterScreen {
                 ctx.fillText(`${text}.`, 1735, y + 76, 720);
             }
         });
-        void t;
     }
 
     /** One fairy's medallion on the painted tray: her colour and her look in a gold ring, glowing when she's in view. */

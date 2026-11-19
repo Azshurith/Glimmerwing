@@ -129,15 +129,6 @@ SCREENS = {
     },
     'roster': {
         'title': ('roster', (846, 0, 2698, 232), []),
-        # The panels and rows are drawn in code; only their painted icons are kept, lifted off the dark behind them.
-        'statIcon0': ('roster', (1022, 348, 1092, 412), [('bright',)]),
-        'statIcon1': ('roster', (1022, 426, 1088, 492), [('bright',)]),
-        'statIcon2': ('roster', (1798, 346, 1866, 412), [('bright',)]),
-        'statIcon3': ('roster', (1798, 424, 1866, 490), [('bright',)]),
-        **{
-            f'skillIcon{i}': ('roster', (1040, y + 2, 1186, y + 140), [('keep', 1112, y + 70, 66, None)])
-            for i, y in enumerate((519, 655, 795, 935))
-        },
         'demo': ('roster', (2520, 218, 3523, 1130), [('rrect', 2556, 241, 3487, 1093, 50)]),
         'tray': ('roster', (900, 1095, 2700, 1350), [(1085, 1095, 2520, 1345, 1497), ('mirrorleft', 186)]),
         'medOn': ('roster', (1080, 1100, 1320, 1340), [('circle', 1200, 1222, 78), ('keep', 1200, 1222, 116, None)]),
