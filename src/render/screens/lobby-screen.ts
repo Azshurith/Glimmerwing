@@ -21,7 +21,7 @@ import { STAGES } from '@/data/stages';
 import { drawPadlock } from './map-screen';
 import { shine } from './kit';
 import { frameCrest } from './roster-screen';
-import { drawFlowers, drawNight, goldGradient, pointed } from './ornate';
+import { drawFlowers, drawNight, goldGradient, ornateTitle, pointed } from './ornate';
 
 /** A box, in design or view units. */
 export interface Box {
@@ -83,8 +83,10 @@ export function inTile(p: { x: number; y: number }, t: Tile): boolean {
     return Math.abs(p.x - t.x) + Math.abs(p.y - t.y) <= t.d;
 }
 
-/** How far apart two stages' gates are on the trophy road, in design units. */
-const ROAD_STAGE = 200;
+/** How far apart two stages' cards are on the trophy road, in design units. */
+const ROAD_STAGE = 250;
+/** A stage card's height on the trophy road, in design units. */
+const ROAD_CARD_H = 150;
 
 /**
  * The trophy road's geometry for a view `H` tall: where on screen the road's start sits (`anchor`, scrolled to 0),
@@ -92,7 +94,9 @@ const ROAD_STAGE = 200;
  */
 export function roadGeometry(layout: Layout, H: number): { anchor: number; step: number; max: number } {
     const anchor = H - (layout === 'tall' ? 150 : 112);
-    return { anchor, step: ROAD_STAGE, max: Math.max(0, (STAGES.length - 1) * ROAD_STAGE - anchor + 112) };
+    // Scrolled all the way, the last card sits under the heading with room above it for the player's plate.
+    const top = layout === 'tall' ? 190 : 150;
+    return { anchor, step: ROAD_STAGE, max: Math.max(0, (STAGES.length - 1) * ROAD_STAGE - anchor + top) };
 }
 
 /** Where `trophies` sit on the trophy road, in design units up from its start (the first stage's gate). */
@@ -898,10 +902,12 @@ export class LobbyScreen {
     }
 
     /**
-     * The trophy road, over everything: a carpet running up the middle of the screen with a step for every few
-     * trophies (gold once reached) and, at each stage, a gate with its scenery in a window, its name and the trophies
-     * it needs (gold once open, dark and padlocked until then); the player's avatar on the carpet at their trophies.
-     * It scrolls (`v.roadScroll`, design units up from its start): drag, the wheel or ▲ ▼. OK closes it.
+     * The trophy road, over everything, on the painted castle night: a beam of light runs up the middle with a card
+     * at each stage (its island, STAGE n on a pointed plate, its name on a dark ribbon between gold laurels and the
+     * trophies it needs; framed in glowing gold once open, dim and padlocked until then) and a gold milestone bar
+     * halfway between each two; the player's avatar and trophies on a plate at their place on it. The winged heading
+     * on top (the page's Back tab beside it, as on the other screens), the trophies at the top right, a scroll bar down the right and OK at the foot.
+     * It scrolls (`v.roadScroll`, design units up from its start): drag, the wheel or ▲ ▼; OK, Back or Esc closes it.
      */
     private trophyRoad(
         v: LobbyView,
@@ -920,239 +926,362 @@ export class LobbyScreen {
         const cx = W / 2;
         /** Where a point `u` units up the road is on screen. */
         const Y = (u: number) => g.anchor - (u - v.roadScroll);
-        const bg = ctx.createLinearGradient(0, 0, 0, H);
-        bg.addColorStop(0, '#1a0c3a');
-        bg.addColorStop(1, '#0c0620');
-        ctx.fillStyle = bg;
+        // The castle night behind it all, and flowers in the corners.
+        drawNight(ctx, t, x0, w, H, {
+            planet: { x: W + bleed - (tall ? 50 : 80), y: tall ? 70 : 56, r: tall ? 34 : 46 },
+            horizon: H * (tall ? 0.86 : 0.8),
+        });
+        ctx.fillStyle = 'rgba(14,6,36,0.35)';
         ctx.fillRect(x0, 0, w, H);
-        // Stone walls either side, in bands that scroll with the road.
-        ctx.save();
-        ctx.globalAlpha = 0.5;
-        const band = 24,
-            off = ((v.roadScroll % band) + band) % band;
-        for (let y = -band + off; y < H + band; y += band) {
-            ctx.fillStyle = Math.floor((y - off) / band) % 2 ? 'rgba(60,40,110,0.35)' : 'rgba(40,26,88,0.35)';
-            ctx.fillRect(x0, y, w, band - 1);
-        }
-        ctx.restore();
-        // The carpet, purple with gold edges and a lighter stripe down the middle.
-        const cw = tall ? 54 : 60;
-        const carpet = ctx.createLinearGradient(cx - cw / 2, 0, cx + cw / 2, 0);
-        carpet.addColorStop(0, '#4a1a78');
-        carpet.addColorStop(0.5, '#7a34b8');
-        carpet.addColorStop(1, '#4a1a78');
-        ctx.fillStyle = carpet;
-        ctx.fillRect(cx - cw / 2, 0, cw, H);
-        ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(cx - cw / 2 - 2, 0, 2, H);
-        ctx.fillRect(cx + cw / 2, 0, 2, H);
-        ctx.fillStyle = 'rgba(255,214,255,0.18)';
-        ctx.fillRect(cx - 3, 0, 6, H);
+        drawFlowers(ctx, -bleed + 12, H - 12, tall ? 0.8 : 1, t, 0);
+        drawFlowers(ctx, W + bleed - 12, H - 12, tall ? 0.8 : 1, t, 3);
+        drawFlowers(ctx, -bleed + 10, 12, tall ? 0.6 : 0.8, t, 5);
+        // The beam of light up the middle.
+        const beam = ctx.createLinearGradient(cx - 14, 0, cx + 14, 0);
+        beam.addColorStop(0, 'rgba(200,120,255,0)');
+        beam.addColorStop(0.5, 'rgba(255,190,250,0.5)');
+        beam.addColorStop(1, 'rgba(200,120,255,0)');
+        ctx.fillStyle = beam;
+        ctx.fillRect(cx - 14, 0, 28, H);
+        ctx.fillStyle = 'rgba(255,240,255,0.75)';
+        ctx.fillRect(cx - 0.6, 0, 1.2, H);
         const best = v.best;
-        const sw = tall ? 168 : 190;
-        // The steps between the gates, then the gates over them.
+        const cw = tall ? Math.min(W - 56, 236) : 270;
+        // A milestone halfway between each two stages, then the stages' cards.
         for (let k = 0; k < STAGES.length - 1; k++) {
-            const a = STAGES[k].trophies,
-                b = STAGES[k + 1].trophies;
-            for (let j = 1; j <= 3; j++) {
-                const u = (k + j / 4) * g.step;
-                const y = Y(u);
-                if (y < -30 || y > H + 30) continue;
-                const n = Math.round((a + ((b - a) * j) / 4) / 10) * 10;
-                const got = best >= n;
-                const sh = 30;
-                ctx.save();
-                const sg = ctx.createLinearGradient(0, y - sh / 2, 0, y + sh / 2);
-                sg.addColorStop(0, got ? '#ffe08a' : '#5a4a8a');
-                sg.addColorStop(1, got ? '#d08a2a' : '#2a2050');
-                ctx.fillStyle = sg;
-                slanted(cx - sw / 2, y - sh / 2, sw, sh, 6)(ctx);
-                ctx.fill();
-                ctx.strokeStyle = got ? '#fff3c9' : 'rgba(201,162,74,0.55)';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-                // The carpet runs over the step's middle; trophies on the stone either side.
-                ctx.fillStyle = got ? 'rgba(122,52,184,0.9)' : 'rgba(74,26,120,0.9)';
-                ctx.fillRect(cx - cw / 2, y - sh / 2 + 1, cw, sh - 2);
-                ctx.restore();
-                drawTrophy(ctx, cx - sw / 2 + 22, y, 7);
-                drawTrophy(ctx, cx + sw / 2 - 22, y, 7);
-                arcadeText(
-                    ctx,
-                    String(n),
-                    cx,
-                    y + 5,
-                    12,
-                    got ? ['#ffffff', '#fff3c9', '#ffe08a'] : ['#e9e2ff', '#cbbcf5', '#9a88c8'],
-                    'center',
-                );
-            }
+            const y = Y((k + 0.5) * g.step);
+            if (y < -30 || y > H + 30) continue;
+            const n = Math.round((STAGES[k].trophies + STAGES[k + 1].trophies) / 20) * 10;
+            this.roadMilestone(n, best >= n, cx, y, cw * 0.78, t, k);
         }
         STAGES.forEach((st, k) => {
             const y = Y(k * g.step);
-            if (y < -90 || y > H + 90) return;
-            this.roadGate(st.mapId, k, st.trophies, best >= st.trophies, cx, y, tall, t, stage);
+            if (y < -ROAD_CARD_H || y > H + ROAD_CARD_H) return;
+            this.roadCard(st.mapId, k, st.trophies, best >= st.trophies, cx, y, cw, t, stage);
         });
-        // The player on the carpet at their trophies.
-        const my = Y(roadAt(v.trophies));
-        if (my > -20 && my < H + 20) {
-            const r = tall ? 13 : 14;
-            const bob = Math.sin(t * 3) * 2;
-            this.framedAvatar(v.fairy, v.frame, cx, my + bob, r, t);
-            const tag = `YOU  ${v.trophies}`;
-            ctx.font = `7px ${ARCADE}`;
-            const tw = ctx.measureText(tag).width + 18;
-            const tx = cx + r + 8;
-            ctx.fillStyle = 'rgba(20,12,48,0.92)';
-            slanted(tx, my - 7 + bob, tw, 14, 4)(ctx);
-            ctx.fill();
-            ctx.strokeStyle = '#ffd45c';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            ctx.textAlign = 'left';
-            ctx.fillStyle = '#ffe08a';
-            ctx.fillText(tag, tx + 7, my + 3 + bob);
-            drawTrophy(ctx, tx + tw - 8, my + bob, 4.5);
+        // The player at their trophies: the avatar in a gold ring and a slanted plate beside it.
+        // On a stage's card it stands just above the card instead, clear of the island.
+        let my = Y(roadAt(v.trophies));
+        for (let k = 0; k < STAGES.length; k++) {
+            const cy = Y(k * g.step);
+            if (Math.abs(my - cy) < ROAD_CARD_H / 2 + 14) my = cy - ROAD_CARD_H / 2 - 18;
         }
-        // The heading, and the OK button.
-        const hh = tall ? 36 : 27;
-        const hg = ctx.createLinearGradient(0, 0, 0, hh);
-        hg.addColorStop(0, 'rgba(10,6,28,0.98)');
-        hg.addColorStop(1, 'rgba(10,6,28,0.8)');
+        if (my > -20 && my < H + 20) {
+            const r = tall ? 14 : 16;
+            const bob = Math.sin(t * 3) * 1.5;
+            const ay = my + bob;
+            const tag = `YOU ${v.trophies}`;
+            ctx.font = `8px ${ARCADE}`;
+            const tw = ctx.measureText(tag).width + 26;
+            const tx = cx + r - 2,
+                th = 17;
+            const plate = slanted(tx, ay - th / 2, tw, th, 5);
+            const pg = ctx.createLinearGradient(0, ay - th / 2, 0, ay + th / 2);
+            pg.addColorStop(0, '#3a1878');
+            pg.addColorStop(1, '#1a0840');
+            ctx.fillStyle = pg;
+            plate(ctx);
+            ctx.fill();
+            goldEdge(ctx, () => plate(ctx), ay - th / 2, ay + th / 2, undefined, 1);
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(tag, tx + 10, ay + 3);
+            drawTrophy(ctx, tx + tw - 11, ay, 4.5);
+            this.framedAvatar(v.fairy, v.frame, cx - 4, ay, r, t);
+        }
+        // The heading, its gold rule with a gem, and the trophies at the top right.
+        const hh = tall ? 40 : 34;
+        const hg = ctx.createLinearGradient(0, 0, 0, hh + 14);
+        hg.addColorStop(0, 'rgba(12,4,32,0.98)');
+        hg.addColorStop(0.7, 'rgba(12,4,32,0.94)');
+        hg.addColorStop(1, 'rgba(12,4,32,0)');
         ctx.fillStyle = hg;
-        ctx.fillRect(x0, 0, w, hh);
-        ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(x0, hh, w, 1);
-        arcadeText(ctx, 'TROPHY ROAD', cx, hh / 2 + 6, tall ? 14 : 16, ['#fff7c2', '#ffd45c', '#ff9a2e'], 'center');
-        ctx.textAlign = 'right';
-        ctx.font = `${tall ? 9 : 9}px ${ARCADE}`;
-        ctx.fillStyle = '#ffe08a';
-        ctx.fillText(String(v.trophies), W + bleed - 10, hh / 2 + 4);
-        drawTrophy(ctx, W + bleed - 18 - ctx.measureText(String(v.trophies)).width, hh / 2, 6);
+        ctx.fillRect(x0, 0, w, hh + 14);
+        ornateTitle(ctx, 'TROPHY ROAD', W, t, tall);
+        const ry = hh - 4;
+        const rule = ctx.createLinearGradient(cx - W * 0.35, 0, cx + W * 0.35, 0);
+        rule.addColorStop(0, 'rgba(255,190,90,0)');
+        rule.addColorStop(0.5, 'rgba(255,214,120,0.95)');
+        rule.addColorStop(1, 'rgba(255,190,90,0)');
+        ctx.fillStyle = rule;
+        ctx.fillRect(cx - W * 0.35, ry - 0.6, W * 0.7, 1.2);
+        this.roadGem(cx, ry, 4, t);
+        const label = String(v.trophies);
+        ctx.font = `${tall ? 9 : 10}px ${ARCADE}`;
+        const lw = ctx.measureText(label).width;
+        const pw = lw + 34,
+            ph = tall ? 22 : 24,
+            px = W + bleed - pw - (tall ? 8 : 10),
+            py = tall ? 10 : 7;
+        const cap = () => roundRect(ctx, px, py, pw, ph, ph / 2);
+        ctx.fillStyle = 'rgba(20,6,46,0.92)';
+        cap();
+        ctx.fill();
+        goldEdge(ctx, cap, py, py + ph, undefined, 1.1);
+        drawTrophy(ctx, px + 13, py + ph / 2, 6);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(label, px + 23, py + ph / 2 + 4);
+        // The scroll bar down the right: a dark track in a lilac edge, arrows at its ends, a gold thumb.
+        const sx = W + bleed - (tall ? 12 : 16),
+            st0 = tall ? 76 : 50,
+            st1 = H - (tall ? 70 : 36),
+            sw = 7;
+        ctx.fillStyle = 'rgba(14,6,36,0.8)';
+        roundRect(ctx, sx - sw / 2, st0, sw, st1 - st0, sw / 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(200,150,255,0.6)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+        ctx.fillStyle = '#f0c8ff';
+        for (const [ay, d] of [
+            [st0 + 6, -1],
+            [st1 - 6, 1],
+        ] as const) {
+            ctx.beginPath();
+            ctx.moveTo(sx - 2.5, ay - d * 1.5);
+            ctx.lineTo(sx + 2.5, ay - d * 1.5);
+            ctx.lineTo(sx, ay + d * 2);
+            ctx.closePath();
+            ctx.fill();
+        }
+        const track0 = st0 + 12,
+            track1 = st1 - 12,
+            span = track1 - track0;
+        const thumb = Math.max(18, span * 0.22);
+        const k = g.max > 0 ? v.roadScroll / g.max : 0;
+        const ty = track1 - thumb - (span - thumb) * k;
+        const tg = ctx.createLinearGradient(sx - 3, 0, sx + 3, 0);
+        tg.addColorStop(0, '#fff3b0');
+        tg.addColorStop(0.5, '#ffd23e');
+        tg.addColorStop(1, '#c87010');
+        ctx.fillStyle = tg;
+        roundRect(ctx, sx - 2.5, ty, 5, thumb, 2.5);
+        ctx.fill();
+        // OK at the foot, over a fade, with the scroll hint beside it.
         const fade = ctx.createLinearGradient(0, H - 60, 0, H);
-        fade.addColorStop(0, 'rgba(10,6,28,0)');
-        fade.addColorStop(1, 'rgba(10,6,28,0.95)');
+        fade.addColorStop(0, 'rgba(10,4,28,0)');
+        fade.addColorStop(1, 'rgba(10,4,28,0.9)');
         ctx.fillStyle = fade;
         ctx.fillRect(x0, H - 60, w, 60);
         const ok = lay.roadOk;
-        const okBar = slanted(ok.x, ok.y, ok.w, ok.h, 8);
+        const okBar = slanted(ok.x, ok.y, ok.w, ok.h, 9);
         ctx.save();
         ctx.shadowColor = '#ffb43c';
         ctx.shadowBlur = 12 + 4 * Math.sin(t * 5);
-        const og = ctx.createLinearGradient(ok.x, 0, ok.x + ok.w, 0);
-        og.addColorStop(0, '#fff0a8');
-        og.addColorStop(0.5, '#ffd45c');
-        og.addColorStop(1, '#ff9a2e');
+        const og = ctx.createLinearGradient(0, ok.y, 0, ok.y + ok.h);
+        og.addColorStop(0, '#fff6c0');
+        og.addColorStop(0.5, '#ffd23e');
+        og.addColorStop(1, '#f0a010');
         ctx.fillStyle = og;
         okBar(ctx);
         ctx.fill();
         ctx.restore();
-        ctx.strokeStyle = '#fffbe0';
-        ctx.lineWidth = 1.5;
-        okBar(ctx);
-        ctx.stroke();
-        arcadeText(ctx, 'OK', ok.x + ok.w / 2, ok.y + ok.h / 2 + 6, 16, ['#5a1a2e', '#3a0f2e', '#2a0f2e'], 'center');
+        gloss(ctx, () => okBar(ctx), ok.x, ok.y, ok.w, ok.h);
+        goldEdge(ctx, () => okBar(ctx), ok.y, ok.y + ok.h, ['#fffbe0', '#ffd45c', '#b8640c'], 1.2);
+        shine(ctx, () => okBar(ctx), ok.x, ok.y, ok.w, ok.h, t, 1, 4);
+        arcadeText(ctx, 'OK', ok.x + ok.w / 2, ok.y + ok.h / 2 + 6, 16, ['#5a1a10', '#2a0e04', '#1a0804'], 'center');
         if (!v.touch) {
             ctx.textAlign = 'left';
-            ctx.font = `5.5px ${ARCADE}`;
-            ctx.fillStyle = 'rgba(203,188,245,0.7)';
-            ctx.fillText('▲ ▼ / WHEEL SCROLLS', x0 + 14, H - 14);
+            ctx.font = `6px ${ARCADE}`;
+            ctx.fillStyle = 'rgba(240,230,255,0.85)';
+            ctx.fillText('▲ ▼  WHEEL SCROLLS', -bleed + 12, H - 10);
+        }
+    }
+
+    /** A small violet gem in a gold diamond on the trophy road (centred on x, y, `r` across), glinting now and then. */
+    private roadGem(x: number, y: number, r: number, t: number): void {
+        const ctx = this.ctx;
+        const d = (k: number) => {
+            ctx.beginPath();
+            ctx.moveTo(x, y - k * 1.3);
+            ctx.lineTo(x + k * 1.5, y);
+            ctx.lineTo(x, y + k * 1.3);
+            ctx.lineTo(x - k * 1.5, y);
+            ctx.closePath();
+        };
+        goldEdge(ctx, () => d(r), y - r * 1.3, y + r * 1.3, undefined, 1);
+        const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.4, 0.3, x, y, r);
+        g.addColorStop(0, '#ffffff');
+        g.addColorStop(0.45, '#f0c8ff');
+        g.addColorStop(1, '#a050e0');
+        ctx.fillStyle = g;
+        d(r * 0.8);
+        ctx.fill();
+        const k = Math.max(0, Math.sin(t * 1.6));
+        if (k > 0.5) {
+            ctx.fillStyle = `rgba(255,255,255,${(k - 0.5) * 1.6})`;
+            sparkle(ctx, x, y, r * 2.2);
         }
     }
 
     /**
-     * One stage's gate on the trophy road, centred on (cx, y): a banner with the stage's scenery in an arched window,
-     * STAGE n and its name over it, and the trophies it needs; gold once open, dark with a padlock until then.
+     * A milestone on the trophy road, centred on (cx, y), `w` wide: a slanted gold bar (dim until reached) with a trophy
+     * at each end and the trophies on a dark plate in its middle.
      */
-    private roadGate(
+    private roadMilestone(n: number, got: boolean, cx: number, y: number, w: number, t: number, k: number): void {
+        const ctx = this.ctx;
+        const h = 24,
+            x = cx - w / 2,
+            top = y - h / 2;
+        const bar = slanted(x, top, w, h, 10);
+        ctx.save();
+        if (got) {
+            ctx.shadowColor = 'rgba(255,190,70,0.7)';
+            ctx.shadowBlur = 10;
+        }
+        const g = ctx.createLinearGradient(0, top, 0, top + h);
+        g.addColorStop(0, got ? '#fff3b0' : '#6a5a9a');
+        g.addColorStop(0.5, got ? '#ffd23e' : '#4a3a7a');
+        g.addColorStop(1, got ? '#e89010' : '#2a2050');
+        ctx.fillStyle = g;
+        bar(ctx);
+        ctx.fill();
+        ctx.restore();
+        if (got) {
+            gloss(ctx, () => bar(ctx), x, top, w, h);
+            shine(ctx, () => bar(ctx), x, top, w, h, t, k * 0.9, 6);
+        }
+        goldEdge(ctx, () => bar(ctx), top, top + h, got ? ['#fffbe0', '#ffd45c', '#b8640c'] : undefined, 1);
+        // The dark plate in the middle with the number.
+        const pw = w * 0.42,
+            ph = h - 4;
+        const plate = slanted(cx - pw / 2, top + 2, pw, ph, 8);
+        const pg = ctx.createLinearGradient(0, top, 0, top + h);
+        pg.addColorStop(0, '#2a1060');
+        pg.addColorStop(1, '#12062e');
+        ctx.fillStyle = pg;
+        plate(ctx);
+        ctx.fill();
+        ctx.strokeStyle = got ? 'rgba(255,240,190,0.9)' : 'rgba(200,170,255,0.5)';
+        ctx.lineWidth = 0.8;
+        plate(ctx);
+        ctx.stroke();
+        arcadeText(
+            ctx,
+            String(n),
+            cx,
+            y + 5,
+            13,
+            got ? ['#ffffff', '#fff6d0', '#ffe08a'] : ['#e9e2ff', '#cbbcf5', '#9a88c8'],
+            'center',
+        );
+        const tx = (cx - pw / 2 + x + 10) / 2;
+        drawTrophy(ctx, tx, y, 7.5);
+        drawTrophy(ctx, 2 * cx - tx, y, 7.5);
+    }
+
+    /**
+     * One stage's card on the trophy road, centred on (cx, y), `w` wide: a rounded card in a glowing gold frame (dim
+     * until open), STAGE n on a pointed plate at its top, the stage's floating island, and its name on a dark ribbon
+     * between gold laurels with the trophies it needs; a padlock over the island until it's open.
+     */
+    private roadCard(
         map: string,
         k: number,
         need: number,
         open: boolean,
         cx: number,
         y: number,
-        tall: boolean,
+        w: number,
         t: number,
         stage: StagePainter,
     ): void {
         const ctx = this.ctx;
-        const gw = tall ? 220 : 250,
-            gh = 112;
-        const x = cx - gw / 2,
-            top = y - gh / 2;
-        // The banner: a slanted plate with a gold (or dim) frame, glowing once open.
+        const h = ROAD_CARD_H;
+        const x = cx - w / 2,
+            top = y - h / 2;
+        const card = () => roundRect(ctx, x, top, w, h, 16);
         ctx.save();
-        if (open) {
-            ctx.shadowColor = '#ffb43c';
-            ctx.shadowBlur = 12;
-        }
-        const g = ctx.createLinearGradient(0, top, 0, top + gh);
-        g.addColorStop(0, open ? '#5a2a8a' : '#2a2050');
-        g.addColorStop(1, open ? '#2a1250' : '#141030');
-        ctx.fillStyle = g;
-        slanted(x, top, gw, gh, 10)(ctx);
+        ctx.shadowColor = open ? 'rgba(255,120,240,0.75)' : 'rgba(120,80,200,0.4)';
+        ctx.shadowBlur = open ? 18 : 8;
+        const bg = ctx.createLinearGradient(0, top, 0, top + h);
+        bg.addColorStop(0, open ? 'rgba(40,14,86,0.95)' : 'rgba(24,14,52,0.95)');
+        bg.addColorStop(1, open ? 'rgba(16,4,40,0.95)' : 'rgba(12,8,30,0.95)');
+        ctx.fillStyle = bg;
+        card();
         ctx.fill();
         ctx.restore();
-        ctx.strokeStyle = open ? '#ffd45c' : 'rgba(201,162,74,0.5)';
-        ctx.lineWidth = open ? 2 : 1.2;
-        slanted(x, top, gw, gh, 10)(ctx);
-        ctx.stroke();
-        // The scenery in an arched window.
-        const ww = gw * 0.56,
-            wh = 58,
-            wx = cx - ww / 2,
-            wy = top + 24;
-        /** Trace the window: straight sides, an arch on top. */
-        const win = () => {
-            ctx.beginPath();
-            ctx.moveTo(wx, wy + wh);
-            ctx.lineTo(wx, wy + ww * 0.25);
-            ctx.quadraticCurveTo(wx, wy, cx, wy);
-            ctx.quadraticCurveTo(wx + ww, wy, wx + ww, wy + ww * 0.25);
-            ctx.lineTo(wx + ww, wy + wh);
-            ctx.closePath();
-        };
-        ctx.save();
-        win();
-        ctx.clip();
-        stage(map, wx, wy, ww, wh);
-        if (!open) {
-            ctx.fillStyle = 'rgba(8,5,22,0.72)';
-            ctx.fillRect(wx, wy, ww, wh);
+        if (open) {
+            // A pink glow just inside the gold.
+            ctx.save();
+            card();
+            ctx.clip();
+            ctx.strokeStyle = 'rgba(255,120,240,0.45)';
+            ctx.lineWidth = 6;
+            card();
+            ctx.stroke();
+            ctx.restore();
         }
-        ctx.restore();
-        ctx.strokeStyle = open ? '#fff3c9' : 'rgba(201,162,74,0.6)';
-        ctx.lineWidth = 1.5;
-        win();
-        ctx.stroke();
-        if (!open) drawPadlock(ctx, cx, wy + wh * 0.42, 22);
-        // STAGE n, the name, and the trophies it needs.
+        goldEdge(ctx, card, top, top + h, open ? undefined : ['#8a78b8', '#6a5a9a', '#3a2a6a'], open ? 2 : 1.2);
+        if (open) shine(ctx, card, x, top, w, h, t, k * 1.3, 8);
+        // Sparkles in its upper corners.
+        if (open) {
+            ctx.fillStyle = '#ffe7a0';
+            sparkle(ctx, x + 26, top + 26, 4 + Math.abs(Math.sin(t * 2 + k)) * 2);
+            sparkle(ctx, x + w - 26, top + 26, 4 + Math.abs(Math.cos(t * 2 + k)) * 2);
+            ctx.fillStyle = 'rgba(255,231,160,0.6)';
+            sparkle(ctx, x + 16, top + 44, 1.8);
+            sparkle(ctx, x + w - 16, top + 44, 1.8);
+        }
+        // The island in the middle of the card, its own scenery on its top.
+        const theme = mapById(map);
+        const isle = { x: cx, y: top + 66, r: Math.min(56, w * 0.22) };
+        if (theme) {
+            ctx.save();
+            card();
+            ctx.clip();
+            if (!open) ctx.globalAlpha = 0.45;
+            this.island(map, theme, isle, t + k * 1.7, stage);
+            ctx.restore();
+        }
+        if (!open) drawPadlock(ctx, cx, top + 72, 22);
+        // STAGE n on a pointed plate across the top edge.
+        const sw = 84,
+            sh = 17,
+            sy = top - 1;
+        const tag = () => pointed(ctx, cx - sw / 2, sy, sw, sh, 8);
+        ctx.fillStyle = open ? '#24104e' : '#181030';
+        tag();
+        ctx.fill();
+        goldEdge(ctx, tag, sy, sy + sh, open ? undefined : ['#8a78b8', '#6a5a9a', '#3a2a6a'], 1);
         ctx.textAlign = 'center';
-        ctx.font = `6.5px ${ARCADE}`;
-        ctx.fillStyle = open ? '#ffe08a' : '#9a88c8';
-        ctx.fillText(`STAGE ${k + 1}`, cx, top + 15);
+        ctx.font = `7.5px ${ARCADE}`;
+        ctx.fillStyle = open ? '#ffffff' : '#b8a8e0';
+        ctx.fillText(`STAGE ${k + 1}`, cx, sy + 12);
+        ctx.fillStyle = open ? '#ffd45c' : '#8a78b8';
+        sparkle(ctx, cx - sw / 2 + 12, sy + sh / 2, 2.2);
+        sparkle(ctx, cx + sw / 2 - 12, sy + sh / 2, 2.2);
+        // The name on a dark ribbon between gold laurels, and the trophies it needs.
+        const by = top + h - 40,
+            bw = w * 0.74,
+            bh = 32;
+        const ribbon = slanted(cx - bw / 2, by, bw, bh, -8);
+        ctx.fillStyle = 'rgba(10,4,26,0.85)';
+        ribbon(ctx);
+        ctx.fill();
+        if (open) {
+            laurel(ctx, cx - bw / 2 + 18, by + bh / 2 + 2, 1);
+            laurel(ctx, cx + bw / 2 - 18, by + bh / 2 + 2, -1);
+        }
         const name = (mapById(map)?.name ?? map).toUpperCase();
         arcadeText(
             ctx,
             name,
             cx,
-            wy + wh + 15,
+            by + 15,
             13,
-            open ? ['#ffffff', '#fff3a0', '#ffb43c'] : ['#cbbcf5', '#9a88c8', '#6a5a9a'],
+            open ? ['#ffffff', '#fff6e0', '#f0d8ff'] : ['#cbbcf5', '#9a88c8', '#6a5a9a'],
             'center',
+            bw - 60,
         );
-        ctx.font = `6px ${ARCADE}`;
-        ctx.fillStyle = open ? '#fff3c9' : '#cbbcf5';
+        ctx.font = `7px ${ARCADE}`;
+        ctx.fillStyle = open ? '#ffffff' : '#b8a8e0';
         const label = need ? String(need) : 'START';
         const lw = ctx.measureText(label).width;
-        ctx.fillText(label, cx + (need ? 5 : 0), wy + wh + 27);
-        if (need) drawTrophy(ctx, cx - lw / 2 - 2, wy + wh + 24.5, 4.5);
-        // Gold crowns at the banner's corners once it's open.
-        if (open) {
-            ctx.fillStyle = '#ffd45c';
-            sparkle(ctx, x + 14, top + 12, 3 + Math.abs(Math.sin(t * 2 + k)) * 1.5);
-            sparkle(ctx, x + gw - 14, top + 12, 3 + Math.abs(Math.cos(t * 2 + k)) * 1.5);
-        }
+        ctx.textAlign = 'center';
+        ctx.fillText(label, cx + (need ? 6 : 0), by + 27);
+        if (need) drawTrophy(ctx, cx - lw / 2 - 2, by + 24.5, 4.5);
     }
 
     /**
@@ -1975,6 +2104,38 @@ export function sweptWing(ctx: CanvasRenderingContext2D, x: number, y: number, l
         feather(0);
         ctx.fill();
         ctx.restore();
+    }
+    ctx.restore();
+}
+
+/**
+ * A gold laurel sprig rising from (x, y), leaning out toward `dir` (1 to the left of a name, -1 to its right): a curved
+ * stem with leaves along it.
+ */
+function laurel(ctx: CanvasRenderingContext2D, x: number, y: number, dir: number): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(-dir, 1);
+    ctx.fillStyle = goldGradient(ctx, -14, 6);
+    ctx.strokeStyle = goldGradient(ctx, -14, 6);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-4, 6);
+    ctx.quadraticCurveTo(6, 0, 6, -14);
+    ctx.stroke();
+    for (let i = 0; i < 4; i++) {
+        const k = i / 4;
+        const px = -4 + 10 * k * (2 - k),
+            py = 6 - 20 * k;
+        for (const side of [-1, 1]) {
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(side * 0.9 - 0.4);
+            ctx.beginPath();
+            ctx.ellipse(0, -3, 1.4, 3.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
     }
     ctx.restore();
 }
