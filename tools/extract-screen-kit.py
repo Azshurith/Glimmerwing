@@ -143,7 +143,7 @@ SCREENS = {
         'skill2': roster_skill(801),
         'skill3': roster_skill(941),
         'demo': ('roster', (2520, 218, 3523, 1130), [('rrect', 2556, 241, 3487, 1093, 50)]),
-        'tray': ('roster', (900, 1095, 2700, 1350), [(1085, 1095, 2520, 1345, 1497)]),
+        'tray': ('roster', (900, 1095, 2700, 1350), [(1085, 1095, 2520, 1345, 1497), ('mirrorleft', 186)]),
         'medOn': ('roster', (1080, 1100, 1320, 1340), [('circle', 1200, 1222, 78), ('keep', 1200, 1222, 116, None)]),
         'medOff': ('roster', (1311, 1127, 1491, 1307), [('circle', 1401, 1217, 64), ('keep', 1401, 1217, 84, None)]),
     },
@@ -270,6 +270,11 @@ def main(group):
         piece = sheet[y0:y1, x0:x1].copy()
         keep = None
         for wipe in wipes:
+            if wipe[0] == 'mirrorleft':
+                # The right end made the left end turned round (the painting's two ends differ).
+                n = at(wipe[1])
+                piece[:, -n:] = piece[:, :n][:, ::-1]
+                continue
             if wipe[0] == 'lum':
                 # An icon lifted off its pill: as opaque as it is dark (on gold) or light (on violet).
                 rgb = piece[:, :, :3].astype(np.float32)
