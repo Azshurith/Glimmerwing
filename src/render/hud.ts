@@ -590,8 +590,7 @@ export class Hud {
         ctx.fillStyle = `rgba(10,6,28,${v.dim ?? 0.45})`;
         ctx.fillRect(0, 0, W, H);
 
-        // The band sweeps open from the centre: deep violet, gold-ruled, with a magenta glow along its edges and
-        // light swooping across it.
+        // The band sweeps open from the centre: deep violet, gold-ruled, with a magenta glow along its edges.
         const open = Math.min(1, age / 0.18);
         const bandH = (v.extra ? 92 : 76) * (0.2 + 0.8 * easeOut(open));
         const y0 = cy - bandH / 2,
@@ -606,18 +605,6 @@ export class Hud {
         ctx.beginPath();
         ctx.rect(0, y0, W, bandH);
         ctx.clip();
-        // Swoops of light, drifting slowly.
-        ctx.lineCap = 'round';
-        for (let i = 0; i < 3; i++) {
-            const d = Math.sin(age * 0.8 + i * 2) * 10;
-            ctx.strokeStyle = i === 1 ? 'rgba(255,140,240,0.22)' : 'rgba(170,110,255,0.25)';
-            ctx.lineWidth = 2.5 - i * 0.6;
-            ctx.beginPath();
-            ctx.moveTo(-20, y1 - 4 - i * 6);
-            ctx.bezierCurveTo(W * 0.25, y0 + 6 + d, W * 0.4, y1 - 8, W * 0.5, cy + i * 4);
-            ctx.bezierCurveTo(W * 0.6, y1 - 8, W * 0.75, y0 + 6 - d, W + 20, y1 - 4 - i * 6);
-            ctx.stroke();
-        }
         ctx.fillStyle = 'rgba(255,240,200,0.05)';
         for (let i = 0; i < 4; i++) {
             const sx = ((age * 160 + i * 150) % (W + 120)) - 60;
@@ -639,7 +626,7 @@ export class Hud {
         }
         if (open < 1) return;
 
-        // Title punches in big, then settles: leaning gold lettering between two gold wings.
+        // Title punches in big, then settles: leaning gold lettering.
         const tAge = age - 0.18;
         const s = tAge < 0.16 ? 1.8 - (tAge / 0.16) * 0.8 : 1 + 0.03 * Math.sin(age * 6);
         const tone = v.tone ?? 'gold';
@@ -650,20 +637,15 @@ export class Hud {
                   ? ['#ffffff', '#bfe8ff', '#4fb8ff']
                   : ['#fffbe0', '#ffd45c', '#ff8a2e'];
         const size = v.size ?? 30;
-        const ty = cy + (v.sub || v.extra ? -6 : size * 0.36);
+        // The title, subtitle and extra line centred as one block in the band: the title's capitals rise about 0.72
+        // of its size above its baseline, and the lines under it end 22 (subtitle) or 40 (extra) below it.
+        const below = v.extra ? 40 : v.sub ? 22 : 0;
+        const ty = cy + (size * 0.72 - below) / 2;
         const text = v.title.toUpperCase();
-        ctx.font = `${size}px ${ARCADE}`;
-        const tw = Math.min(W - 40, ctx.measureText(text).width);
         ctx.save();
         ctx.translate(W / 2, ty);
         ctx.scale(s, s);
         ctx.globalAlpha = Math.min(1, tAge / 0.1 + 0.2);
-        if (tw + size * 3.4 < W) {
-            const wy = -size * 0.42,
-                wl = size * 1.15;
-            sweptWing(ctx, -tw / 2 - size * 0.2, wy, wl, -1);
-            sweptWing(ctx, tw / 2 + size * 0.2, wy, wl, 1);
-        }
         ctx.transform(1, 0, -0.18, 1, 0, 0);
         ctx.shadowColor = tone === 'pink' ? '#ff6b8a' : tone === 'blue' ? '#4fb8ff' : '#ffb43c';
         ctx.shadowBlur = 14;
