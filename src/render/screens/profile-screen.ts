@@ -7,13 +7,14 @@ import { STAGES } from '@/data/stages';
 import { clock } from '@/render/hud';
 import type { Fairy, HistoryRow, Layout, PlayerCard, ProfileView } from '@/types';
 import { drawFairy } from '@/render/entities/fairy';
-import { arcadeText, shade, slanted } from '@/render/draw';
+import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
 import { ARCADE, FONT, SANS } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { enter } from '@/render/transition';
 import { roundRect } from './emblems';
 import { PieceAtlas } from './kit';
-import { kitCorners, kitDivider, kitPanel, kitPill, kitReady, kitTab, mockBox, mockFit } from './kit-ui';
+import { frameCrest, glassPanel, goldRoundFrame, namePlaque } from './roster-screen';
+import { kitCorners, kitDivider, kitPanel, kitPill, kitReady, kitTab, mockBox } from './kit-ui';
 import type { MockFit } from './kit-ui';
 import kitUrl from '@/../assets/ui/profile-kit.png';
 import goldUrl from '@/../assets/ui/profile-kit-gold.png';
@@ -50,7 +51,6 @@ const KIT = new PieceAtlas(kitUrl, goldUrl, PROFILE_KIT);
  * boxes of the tabs, the first history row and the rows' pitch, and where the game writes on the pieces.
  */
 const MOCK = {
-    area: [100, 0, 3545, 1480] as const,
     title: [1146, 2, 1194, 217],
     card: [134, 90, 876, 1384],
     // The tabs' pills, the same on both tabs (only which is gold changes), and their tap boxes.
@@ -58,21 +58,10 @@ const MOCK = {
         [1075, 230, 605, 140],
         [1690, 230, 772, 140],
     ],
-    tiles: [
-        ['tileWins', 1062, 398, 777, 192, 1347],
-        ['tileChain', 1857, 398, 795, 193, 2133],
-        ['tileFevers', 2670, 398, 849, 194, 2958],
-        ['tileFlawless', 1061, 604, 779, 190, 1347],
-        ['tileFairies', 1858, 604, 794, 190, 2153],
-        ['tileTrophies', 2671, 604, 848, 190, 2933],
-        ['tileEndless', 1062, 804, 1029, 181, 1349],
-    ] as const,
-    fairies: [1056, 995, 2332, 404],
     // The history fills the record's area: from the first tiles' top to the fairies' foot, as wide as the tiles
-    // (less the scroll bar); its row pieces were cut 2263 wide, so what's on them spreads by `rw / ROW_W`.
+    // (less the scroll bar); a row is laid out 2263 wide and spread to its width by `rw / ROW_W`.
     row: [1062, 398, 2380, 142],
     pitch: 143.2,
-    scroll: 3470,
 } as const;
 
 /** A tab's Record icon: three rising bars, `w` wide, left edge at `x`, centred on `cy`, in `ink`. */
@@ -124,10 +113,44 @@ function tabSwords(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: num
 /** How wide the history's row pieces were cut, in the mockup's pixels. */
 const ROW_W = 2263;
 
-/** Where the landscape Profile's mockup sits in a view widened by `bleed`. */
-function profileFit(bleed: number): MockFit {
-    const [x0, y0, x1, y1] = MOCK.area;
-    return mockFit(C.VIEW_W, C.VIEW_H, bleed, x0, y0, x1, y1);
+/** Where the main area (tabs, record and history) starts, in the mockup's pixels. */
+const MAIN_L = 1062;
+
+/**
+ * Where landscape Profile's parts sit in a view widened by `bleed`, all at one scale so it fills the screen: the
+ * player card against the left edge and the main area (`main`, in the mockup's pixels) running from beside it to
+ * the right edge, which is at `R` in its pixels.
+ */
+interface ProfileFits {
+    card: MockFit;
+    main: MockFit;
+    R: number;
+}
+
+/** Profile's parts fitted to a view widened by `bleed`, the card left and the main area reaching the right edge. */
+function profileFits(bleed: number): ProfileFits {
+    const x0 = -bleed + 4,
+        x1 = C.VIEW_W + bleed - 4,
+        y0 = 2,
+        y1 = C.VIEW_H - 18;
+    const [cx, cy, cw, ch] = MOCK.card;
+    const gap = 40,
+        minMain = 2400;
+    const s = Math.min((y1 - y0) / 1480, (x1 - x0) / (cw + gap + minMain));
+    /** A fit drawing the mockup's point (mx, my) at the view's (vx, vy). */
+    const at = (mx: number, my: number, vx: number, vy: number): MockFit => ({ s, x: vx - mx * s, y: vy - my * s });
+    const band = (y0 + y1) / 2;
+    const mainX = x0 + (cw + gap) * s;
+    return {
+        card: at(cx, cy + ch / 2, x0, band),
+        main: at(MAIN_L, 740, mainX, band),
+        R: MAIN_L + (x1 - mainX) / s - 6,
+    };
+}
+
+/** Where the history's rows sit across the main area that ends at `R`: their left, width and the scroll bar's x. */
+function rowSpan(R: number): { x: number; w: number; scroll: number } {
+    return { x: MAIN_L, w: R - MAIN_L - 70, scroll: R - 44 };
 }
 
 /** Whether landscape Profile is drawn from its painted pieces (once they've loaded). */
@@ -179,11 +202,14 @@ function designLayout(layout: Layout, dy: number, bleed: number): { tabs: Box[];
 /** The tabs and the history rows in view units (also their tap targets), for a view `h` tall widened by `bleed`. */
 export function profileBoxes(layout: Layout, h: number = C.TALL_H, bleed = 0): { tabs: Box[]; rows: Box[] } {
     if (layout !== 'tall' && painted()) {
-        const f = profileFit(bleed);
-        const [rx, ry, rw, rh] = MOCK.row;
+        const { main: f, R } = profileFits(bleed);
+        const [, ry, , rh] = MOCK.row,
+            span = rowSpan(R);
         return {
             tabs: MOCK.tabs.map(([x, y, w, hh]) => mockBox(f, x, y, w, hh)),
-            rows: Array.from({ length: HISTORY_ROWS.wide }, (_, i) => mockBox(f, rx, ry + i * MOCK.pitch, rw, rh)),
+            rows: Array.from({ length: HISTORY_ROWS.wide }, (_, i) =>
+                mockBox(f, span.x, ry + i * MOCK.pitch, span.w, rh),
+            ),
         };
     }
     if (layout !== 'tall') return designLayout(layout, 0, bleed);
@@ -269,31 +295,43 @@ export class ProfileScreen {
         ctx.restore();
     }
 
-    /** Landscape Profile drawn from its painted pieces, laid out as its mockup and fitted to the view. */
+    /**
+     * Landscape Profile, filling the screen: the player card against the left edge and the main area out to the right,
+     * all drawn in code but for the winged heading.
+     */
     private drawPainted(v: ProfileView, t: number, bleed: number, stage?: StagePainter): void {
         const ctx = this.ctx;
         const W = C.VIEW_W,
             H = C.VIEW_H;
-        const f = profileFit(bleed);
+        const { card, main, R } = profileFits(bleed);
+        /** Runs `draw` in the mockup's pixels under `f`. */
+        const inFit = (f: MockFit, draw: () => void) => {
+            ctx.save();
+            ctx.translate(f.x, f.y);
+            ctx.scale(f.s, f.s);
+            draw();
+            ctx.restore();
+        };
         ctx.save();
         enter(ctx, 'bg', () => ornateScreen(ctx, t, W, H, bleed, '', false));
-        ctx.save();
-        ctx.translate(f.x, f.y);
-        ctx.scale(f.s, f.s);
-        const piece = (name: string, b: readonly number[], phase?: number) => {
-            KIT.draw(ctx, name, b[0], b[1], b[2], b[3]);
-            if (phase !== undefined) KIT.glint(ctx, name, b[0], b[1], b[2], b[3], t, phase, 7);
-        };
-        enter(ctx, 'bar', () => piece('title', MOCK.title, 0));
-        enter(ctx, 'panels', () => drawPlayerCard(ctx, v, MOCK.card, t), { dx: -22 });
-        enter(ctx, 'buttons', () => {
-            this.paintedTab(MOCK.tabs[0], 'RECORD', 'record', v.tab !== 'history', t);
-            this.paintedTab(MOCK.tabs[1], 'MATCH HISTORY', 'history', v.tab === 'history', t);
-        });
-        enter(ctx, 'panels', () =>
-            v.tab === 'history' ? this.paintedHistory(v, t, stage) : this.paintedRecord(v, t, piece),
+        enter(ctx, 'bar', () =>
+            inFit(main, () => {
+                const [, ty, tw, th] = MOCK.title,
+                    tx = (MAIN_L + R) / 2 - tw / 2;
+                KIT.draw(ctx, 'title', tx, ty, tw, th);
+                KIT.glint(ctx, 'title', tx, ty, tw, th, t, 0, 7);
+            }),
         );
-        ctx.restore();
+        enter(ctx, 'panels', () => inFit(card, () => drawPlayerCard(ctx, v, MOCK.card, t)), { dx: -22 });
+        enter(ctx, 'buttons', () =>
+            inFit(main, () => {
+                this.paintedTab(MOCK.tabs[0], 'RECORD', 'record', v.tab !== 'history', t);
+                this.paintedTab(MOCK.tabs[1], 'MATCH HISTORY', 'history', v.tab === 'history', t);
+            }),
+        );
+        enter(ctx, 'panels', () =>
+            inFit(main, () => (v.tab === 'history' ? this.paintedHistory(v, t, R, stage) : this.paintedRecord(v, t, R))),
+        );
         enter(ctx, 'hint', () =>
             keyHints(
                 ctx,
@@ -320,94 +358,110 @@ export class ProfileScreen {
         ctx.restore();
     }
 
-    /** The painted Record tab: the numbers on their tiles (with where the trophy road goes next) and the fairies. */
-    private paintedRecord(
-        v: ProfileView,
-        t: number,
-        piece: (name: string, b: readonly number[], phase?: number) => void,
-    ): void {
+    /**
+     * The Record tab across the main area out to `R`: three rows of tiles (each a glass panel with its icon in an orb,
+     * its name and its number), the last row the Endless best (with its rank) and where the trophy road goes next,
+     * then the fairies in a framed panel, each in a gold ring.
+     */
+    private paintedRecord(v: ProfileView, t: number, R: number): void {
         const ctx = this.ctx;
         const unlocked = v.locked.filter(l => !l).length;
-        const values: Record<string, string> = {
-            tileWins: String(v.wins),
-            tileChain: String(v.bestChain),
-            tileFevers: String(v.fevers),
-            tileFlawless: String(v.flawless),
-            tileFairies: `${unlocked}/${FAIRIES.length}`,
-            tileTrophies: String(v.trophies),
-            tileEndless: clock(v.endlessBest),
-        };
-        const gold: [string, string, string] = ['#fff7c2', '#ffd45c', '#ff9a2e'];
-        MOCK.tiles.forEach(([name, x, y, w, h, vx], i) => {
-            piece(name, [x, y, w, h], 2 + i * 0.4);
-            arcadeText(ctx, values[name], vx, y + 150, 92, gold, 'left', 520);
-        });
-        // Where the trophy road goes next, on a lilac chip; the Endless rank on a dark one.
+        const g = 22,
+            colW = (R - MAIN_L - 2 * g) / 3,
+            col = (i: number) => MAIN_L + i * (colW + g);
         const nextStage = STAGES.find(st => st.trophies > v.bestTrophies);
-        const chip = nextStage
-            ? `${(mapById(nextStage.mapId)?.name ?? '').toUpperCase()} AT ${nextStage.trophies}`
-            : 'ALL STAGES';
-        this.chip(chip, 3135, 662, 265, 86, 'lilac');
-        if (v.rank) this.chip(`#${v.rank.rank} OF ${v.rank.players}`, 1745, 873, 302, 80, 'capsule');
-        // The fairies, and what unlocks the next.
-        const [fx, fy, fw, fh] = MOCK.fairies;
-        piece('fairies', [fx, fy, fw, fh], 4);
+        const road = nextStage ? (mapById(nextStage.mapId)?.name ?? '').toUpperCase() : 'ALL OPEN';
+        const tiles: [string, string, string, number, number, number][] = [
+            ['trophy', 'WINS', String(v.wins), col(0), 398, colW],
+            ['chain', 'BEST CHAIN', String(v.bestChain), col(1), 398, colW],
+            ['flame', 'FEVERS', String(v.fevers), col(2), 398, colW],
+            ['crown', 'FLAWLESS WINS', String(v.flawless), col(0), 602, colW],
+            ['wings', 'FAIRIES', `${unlocked}/${FAIRIES.length}`, col(1), 602, colW],
+            ['cup', 'TROPHIES', String(v.trophies), col(2), 602, colW],
+            ['clock', 'ENDLESS BEST', clock(v.endlessBest), col(0), 806, colW * 2 + g],
+            ['flag', nextStage ? 'NEXT STAGE' : 'TROPHY ROAD', road, col(2), 806, colW],
+        ];
+        const gold: [string, string, string] = ['#fff7c2', '#ffd45c', '#ff9a2e'];
+        tiles.forEach(([kind, label, value, x, y, w]) => {
+            const h = 180;
+            glassPanel(ctx, x, y, w, h, 40);
+            tileIcon(ctx, kind, x + 98, y + h / 2, 66, t);
+            ctx.textAlign = 'left';
+            ctx.font = `800 44px ${SANS}`;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(label, x + 192, y + 70, w - 220);
+            const small = kind === 'flag';
+            arcadeText(ctx, value, x + 192, y + 150, small ? 64 : 88, gold, 'left', w - 230);
+            if (kind === 'flag' && nextStage) {
+                ctx.textAlign = 'right';
+                ctx.font = `800 36px ${SANS}`;
+                ctx.fillStyle = '#e2ccff';
+                ctx.fillText(`AT ${nextStage.trophies}`, x + w - 34, y + 70);
+            }
+            if (kind === 'clock' && v.rank) capsule(ctx, `#${v.rank.rank} OF ${v.rank.players}`, x + w - 340, y + 50, 300, 80);
+        });
+        // The fairies: a heading tag on a gold rule, what unlocks the next, and a framed panel with a ring each.
+        const py = 1000,
+            pw = R - MAIN_L;
+        const tag = () => pointed(ctx, MAIN_L + 6, py, 400, 86, 30);
+        ctx.fillStyle = '#2a1458';
+        tag();
+        ctx.fill();
+        ctx.strokeStyle = goldGradient(ctx, py, py + 86);
+        ctx.lineWidth = 5;
+        tag();
+        ctx.stroke();
+        tileIcon(ctx, 'wings', MAIN_L + 90, py + 43, 0, t);
+        arcadeText(ctx, 'FAIRIES', MAIN_L + 150, py + 64, 50, ['#fff7d8', '#ffd98a', '#e0a040'], 'left', 230);
         const next = FAIRIES.find((_, i) => v.locked[i]);
-        ctx.textAlign = 'center';
+        ctx.textAlign = 'right';
         ctx.font = `italic 700 38px ${FONT}`;
         ctx.fillStyle = next ? '#ffe27a' : '#f0e8ff';
         ctx.fillText(
             next ? `Next: ${next.unlock?.hint ?? ''} to unlock ${next.name}` : '✦ Every fairy is unlocked! ✦',
-            2986,
-            1032,
-            1100,
+            R - 30,
+            py + 56,
+            pw - 500,
         );
-        const xs = [1310, 1620, 1930, 2240, 2552, 2864, 3164];
-        FAIRIES.slice(0, xs.length).forEach((fy2, i) => {
-            const x = xs[i],
-                y = 1224,
-                r = 100;
-            if (v.locked[i]) {
-                const g = ctx.createRadialGradient(x, y - 30, 10, x, y, r);
-                g.addColorStop(0, '#3a3360');
-                g.addColorStop(1, '#141030');
-                ctx.fillStyle = g;
-                ctx.beginPath();
-                ctx.arc(x, y, r, 0, Math.PI * 2);
-                ctx.fill();
+        const by = py + 104,
+            bh = 290;
+        glassPanel(ctx, MAIN_L, by, pw, bh, 56);
+        const n = FAIRIES.length,
+            step = (pw - 60) / n,
+            r = Math.min(104, step * 0.38),
+            y = by + bh / 2;
+        FAIRIES.forEach((fy, i) => {
+            const x = MAIN_L + 30 + step * (i + 0.5),
+                locked = v.locked[i];
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            const bg = ctx.createRadialGradient(x, y - r * 0.3, r * 0.1, x, y, r);
+            bg.addColorStop(0, locked ? '#3a3360' : fy.color);
+            bg.addColorStop(1, locked ? '#141030' : shade(fy.color, 0.3));
+            ctx.fillStyle = bg;
+            ctx.fill();
+            ctx.clip();
+            const p = fy.portrait;
+            if (locked) {
                 ctx.textAlign = 'center';
                 ctx.font = `${r * 0.9}px ${ARCADE}`;
                 ctx.fillStyle = 'rgba(255,226,122,0.85)';
                 ctx.fillText('?', x, y + r * 0.32);
-            } else {
-                ctx.save();
-                const g = ctx.createRadialGradient(x, y - 30, 10, x, y, r);
-                g.addColorStop(0, fy2.color);
-                g.addColorStop(1, shade(fy2.color, 0.3));
-                ctx.fillStyle = g;
-                ctx.beginPath();
-                ctx.arc(x, y, r, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.clip();
-                drawFairy(ctx, fy2, x, y + 14, 5.2, t);
-                ctx.restore();
-            }
-            ctx.strokeStyle = v.locked[i] ? 'rgba(201,162,74,0.55)' : goldGradient(ctx, y - r, y + r);
-            ctx.lineWidth = 12;
+            } else if (p && p.img.complete && p.img.naturalWidth) {
+                const [fx, fyy, fr] = p.face;
+                ctx.drawImage(p.img, fx - fr, fyy - fr, fr * 2, fr * 2, x - r, y - r, r * 2, r * 2);
+            } else drawFairy(ctx, fy, x, y + r * 0.14, 5.2 * (r / 100), t);
+            ctx.restore();
+            ctx.strokeStyle = '#1a0a10';
+            ctx.lineWidth = 18;
             ctx.beginPath();
-            ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+            ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = locked ? 'rgba(201,162,74,0.55)' : goldGradient(ctx, y - r, y + r);
+            ctx.lineWidth = locked ? 6 : 11;
             ctx.stroke();
         });
-    }
-
-    /** A chip of `kind` in the mockup's units, with its text. */
-    private chip(text: string, x: number, y: number, w: number, h: number, kind: 'lilac' | 'capsule'): void {
-        const ctx = this.ctx;
-        kitPill(ctx, { x, y, w, h }, kind);
-        ctx.textAlign = 'center';
-        ctx.font = `800 ${h * 0.42}px ${SANS}`;
-        ctx.fillStyle = kind === 'lilac' ? '#ffffff' : '#ffe27a';
-        ctx.fillText(text, x + w / 2, y + h * 0.64, w - 30);
     }
 
     /**
@@ -494,9 +548,12 @@ export class ProfileScreen {
     }
 
     /** The painted Match History tab: a row per game, newest first, the chosen one glowing, and a scroll bar. */
-    private paintedHistory(v: ProfileView, t: number, stage?: StagePainter): void {
+    private paintedHistory(v: ProfileView, t: number, R: number, stage?: StagePainter): void {
         const ctx = this.ctx;
-        const [rx, ry, rw, rh] = MOCK.row;
+        const [, ry, , rh] = MOCK.row,
+            span = rowSpan(R),
+            rx = span.x,
+            rw = span.w;
         /** Where a point `d` across a row piece (as cut, 2263 wide) lands on the wider row. */
         const at = (d: number) => rx + (d * rw) / ROW_W;
         if (v.message) {
@@ -507,38 +564,39 @@ export class ProfileScreen {
         }
         const n = HISTORY_ROWS.wide;
         const shown = v.history.slice(v.start, v.start + n);
-        const pieces: Record<string, string> = {
-            ENDLESS: 'rowEndless',
-            'VS CPU': 'rowCpu',
-            '2 PLAYERS': 'rowVersus',
-            ONLINE: 'rowOnline',
-        };
         shown.forEach((row, k) => {
             const y = ry + k * MOCK.pitch,
                 on = v.start + k === v.index;
-            const name = pieces[row.tag] ?? 'rowOnline';
+            // The row: a glass capsule, the chosen one ringed in pink light; the mode on a tag in its colour.
+            const py = y + 8,
+                ph = rh - 16;
             if (on) {
                 ctx.save();
                 ctx.strokeStyle = 'rgba(255,150,255,0.35)';
                 ctx.lineWidth = 22 + 6 * Math.sin(t * 5);
-                roundRect(ctx, rx + 8, y + 8, rw - 16, rh - 16, (rh - 16) / 2);
+                roundRect(ctx, rx, py, rw, ph, ph / 2);
                 ctx.stroke();
                 ctx.restore();
             }
-            KIT.draw(ctx, name, rx, y, rw, rh);
+            glassPanel(ctx, rx, py, rw, ph, ph / 2);
             if (on) {
                 ctx.strokeStyle = 'rgba(255,214,255,0.95)';
                 ctx.lineWidth = 5;
-                roundRect(ctx, rx + 6, y + 6, rw - 12, rh - 12, (rh - 12) / 2);
+                roundRect(ctx, rx + 4, py + 4, rw - 8, ph - 8, (ph - 8) / 2);
                 ctx.stroke();
-                KIT.glint(ctx, name, rx, y, rw, rh, t, 0, 4);
             }
-            if (name === 'rowOnline') {
-                ctx.textAlign = 'center';
-                ctx.font = `800 40px ${SANS}`;
-                ctx.fillStyle = row.color;
-                ctx.fillText(row.tag, at(180), y + 86, 300);
-            }
+            const tagX = at(36),
+                tagW = at(330) - tagX;
+            ctx.fillStyle = shade(row.color, 0.35);
+            roundRect(ctx, tagX, py + 22, tagW, ph - 44, (ph - 44) / 2);
+            ctx.fill();
+            ctx.strokeStyle = row.color;
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            ctx.textAlign = 'center';
+            ctx.font = `800 38px ${SANS}`;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(row.tag, tagX + tagW / 2, py + ph / 2 + 13, tagW - 30);
             // The stage's picture, in a rounded frame.
             const tx = at(438),
                 ty = y + 30,
@@ -586,7 +644,7 @@ export class ProfileScreen {
         });
         // The scroll bar down the right.
         if (v.history.length > n) {
-            const x = MOCK.scroll,
+            const x = span.scroll,
                 y0 = ry + 5,
                 h = n * MOCK.pitch - 10;
             ctx.fillStyle = 'rgba(20,10,44,0.8)';
@@ -1073,9 +1131,10 @@ function tabIcon(ctx: CanvasRenderingContext2D, i: number, x: number, y: number,
 }
 
 /**
- * The painted player card filling `box` (in the units of the current transform): the card's picture, the player's
- * name on its plate, where progress is kept, and the Endless top three. Laid out in the card's own mockup pixels, so
- * it scales to any box; used by Profile and the match details in landscape once the Profile's pieces have loaded.
+ * The player card filling `box` (in the units of the current transform), drawn in code: a gold-framed violet card,
+ * the player's fairy in a window under a crest, their name on a plaque, where progress is kept, and the Endless top
+ * three each beside a crown. Laid out in the card's own mockup pixels, so it scales to any box; used by Profile and
+ * the match details in landscape.
  */
 export function drawPlayerCard(
     ctx: CanvasRenderingContext2D,
@@ -1085,55 +1144,350 @@ export function drawPlayerCard(
 ): void {
     const [bx, by, bw, bh] = box;
     const [cx0, cy0, cw, ch] = MOCK.card;
-    KIT.draw(ctx, 'card', bx, by, bw, bh);
-    KIT.glint(ctx, 'card', bx, by, bw, bh, t, 0.5, 7);
     ctx.save();
     ctx.translate(bx, by);
     ctx.scale(bw / cw, bh / ch);
     ctx.translate(-cx0, -cy0);
+    const cx = cx0 + cw / 2;
+    // The card: violet glass in a gold frame.
+    const x = cx0 + 14,
+        y = cy0 + 36,
+        w = cw - 28,
+        h = ch - 50,
+        r = 70;
+    const body = ctx.createLinearGradient(0, y, 0, y + h);
+    body.addColorStop(0, '#2e1658');
+    body.addColorStop(0.5, '#1a0b36');
+    body.addColorStop(1, '#241048');
+    ctx.fillStyle = body;
+    roundRect(ctx, x, y, w, h, r);
+    ctx.fill();
+    goldRoundFrame(ctx, x, y, w, h, r, 16);
+    // The fairy's window, under the crest.
+    const fy = FAIRIES[0];
+    const ix = x + 40,
+        iy = y + 50,
+        iw = w - 80,
+        ih = 640,
+        ir = 44;
+    ctx.save();
+    roundRect(ctx, ix, iy, iw, ih, ir);
+    ctx.clip();
+    const bg = ctx.createRadialGradient(cx, iy + ih * 0.45, 30, cx, iy + ih * 0.45, 700);
+    bg.addColorStop(0, fy.color);
+    bg.addColorStop(0.55, shade(fy.color, 0.35));
+    bg.addColorStop(1, '#0d0a24');
+    ctx.fillStyle = bg;
+    ctx.fillRect(ix, iy, iw, ih);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    for (let i = 0; i < 7; i++) sparkle(ctx, ix + ((i * 290 + t * 70) % iw), iy + ((i * 190) % ih), 10 + (i % 3) * 5);
+    const p = fy.portrait;
+    if (p && p.img.complete && p.img.naturalWidth) {
+        const [sx, sy, sw, sh] = p.panel;
+        const k = Math.max(iw / sw, ih / sh);
+        ctx.drawImage(p.img, sx, sy, sw, sh, cx - (sw * k) / 2, iy, sw * k, sh * k);
+    } else drawFairy(ctx, fy, cx, iy + ih * 0.5 + Math.sin(t * 2.2) * 14, 22, t, 0, false);
+    ctx.strokeStyle = 'rgba(20,6,30,0.45)';
+    ctx.lineWidth = 12;
+    roundRect(ctx, ix, iy, iw, ih, ir);
+    ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = goldGradient(ctx, iy, iy + ih);
+    ctx.lineWidth = 6;
+    roundRect(ctx, ix, iy, iw, ih, ir);
+    ctx.stroke();
+    frameCrest(ctx, cx, y + 8, t);
+    namePlaque(ctx, card.name, ix + 10, iy + ih - 60, iw - 20, 120, 54);
+    // Where progress is kept.
     ctx.textAlign = 'center';
-    ctx.font = `800 58px ${SANS}`;
-    ctx.fillStyle = goldText(ctx, 862, 916);
-    ctx.fillText(card.name, 560, 912, 560);
     ctx.font = `italic 600 34px ${FONT}`;
     ctx.fillStyle = '#efe6ff';
+    const ty = iy + ih + 120;
     ctx.fillText(
         card.synced ? 'Progress is saved on the game server.' : 'Progress is saved in this browser.',
-        560,
-        1003,
-        700,
+        cx,
+        ty,
+        w - 80,
     );
-    ctx.fillText('Sign in with Google: coming soon', 560, 1047, 700);
-    const top = card.leaders.slice(0, 3);
-    if (!top.length) {
-        ctx.font = `italic 600 36px ${FONT}`;
-        ctx.fillStyle = 'rgba(214,204,250,0.85)';
-        ctx.fillText(card.synced ? 'No runs yet: set the first!' : 'Shown when the server is reached', 560, 1300, 700);
+    ctx.fillText('Sign in with Google: coming soon', cx, ty + 44, w - 80);
+    // A starred divider, then the Endless top three under their heading between sprigs of laurel.
+    const dy = ty + 92;
+    const rule = ctx.createLinearGradient(x + 60, 0, x + w - 60, 0);
+    rule.addColorStop(0, 'rgba(255,212,92,0)');
+    rule.addColorStop(0.5, 'rgba(255,212,92,0.95)');
+    rule.addColorStop(1, 'rgba(255,212,92,0)');
+    ctx.fillStyle = rule;
+    ctx.fillRect(x + 60, dy - 2, w - 120, 4);
+    ctx.fillStyle = '#ffe9a8';
+    sparkle(ctx, cx, dy, 18);
+    const hy = dy + 80;
+    arcadeText(ctx, 'ENDLESS TOP 3', cx, hy, 50, ['#fff7d8', '#ffd98a', '#e0a040'], 'center', w - 260);
+    ctx.font = `50px ${ARCADE}`;
+    const hw = Math.min(w - 260, ctx.measureText('ENDLESS TOP 3').width);
+    for (const dir of [-1, 1]) {
+        ctx.save();
+        ctx.translate(cx + dir * (hw / 2 + 40), hy - 18);
+        ctx.scale(7, 7);
+        laurel(ctx, 0, 0, 4, dir);
+        ctx.restore();
     }
-    top.forEach((e, i) => {
-        const y = 1262 + i * 67,
-            mine = e.playerId === card.me;
+    const top = card.leaders.slice(0, 3);
+    const rows0 = hy + 34;
+    for (let i = 0; i < 3; i++) {
+        const ry = rows0 + i * 88,
+            e = top[i],
+            mine = e && e.playerId === card.me;
+        ctx.fillStyle = mine ? 'rgba(255,212,92,0.14)' : 'rgba(10,4,26,0.55)';
+        roundRect(ctx, x + 40, ry, w - 80, 72, 36);
+        ctx.fill();
+        ctx.strokeStyle = mine ? 'rgba(255,212,92,0.7)' : 'rgba(190,140,255,0.45)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        rankCrown(ctx, i, x + 100, ry + 36);
+        if (!e) continue;
         ctx.textAlign = 'left';
-        ctx.font = `800 44px ${SANS}`;
+        ctx.font = `800 42px ${SANS}`;
         ctx.fillStyle = mine ? '#ffe27a' : '#ffffff';
-        ctx.fillText(e.name, 240, y, 400);
+        ctx.fillText(e.name, x + 160, ry + 51, w - 420);
         ctx.textAlign = 'right';
-        ctx.fillText(clock(e.seconds), 718, y);
-    });
+        ctx.fillText(clock(e.seconds), x + w - 76, ry + 51);
+    }
+    if (!top.length) {
+        ctx.textAlign = 'center';
+        ctx.font = `italic 600 34px ${FONT}`;
+        ctx.fillStyle = 'rgba(214,204,250,0.85)';
+        ctx.fillText(
+            card.synced ? 'No runs yet: set the first!' : 'Shown when the server is reached',
+            cx + 30,
+            rows0 + 88 + 49,
+            w - 220,
+        );
+    }
+    ctx.restore();
+}
+
+/** A crown for place `i` (0 gold, 1 silver, 2 bronze) centred on (x, y), with the place's number on it. */
+function rankCrown(ctx: CanvasRenderingContext2D, i: number, x: number, y: number): void {
+    const tones = [
+        ['#fff4c0', '#f2b53a', '#a8600e'],
+        ['#ffffff', '#c8cfe0', '#6a7290'],
+        ['#ffd8b0', '#d08a4a', '#7a3e14'],
+    ][i];
+    ctx.save();
+    ctx.translate(x, y);
+    const g = ctx.createLinearGradient(0, -30, 0, 26);
+    g.addColorStop(0, tones[0]);
+    g.addColorStop(0.5, tones[1]);
+    g.addColorStop(1, tones[2]);
+    ctx.beginPath();
+    ctx.moveTo(-34, 24);
+    ctx.lineTo(-38, -18);
+    ctx.lineTo(-17, -2);
+    ctx.lineTo(0, -30);
+    ctx.lineTo(17, -2);
+    ctx.lineTo(38, -18);
+    ctx.lineTo(34, 24);
+    ctx.closePath();
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#2a1006';
+    ctx.lineWidth = 7;
+    ctx.stroke();
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.font = `30px ${ARCADE}`;
+    ctx.fillStyle = '#2a1006';
+    ctx.fillText(String(i + 1), 0, 20);
+    ctx.restore();
+}
+
+/** A dark capsule with a gold edge and `text` in gold, over (x, y, w, h). */
+function capsule(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, w: number, h: number): void {
+    ctx.fillStyle = '#12082a';
+    roundRect(ctx, x, y, w, h, h / 2);
+    ctx.fill();
+    ctx.strokeStyle = goldGradient(ctx, y, y + h);
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.font = `800 ${h * 0.44}px ${SANS}`;
+    ctx.fillStyle = '#ffe27a';
+    ctx.fillText(text, x + w / 2, y + h * 0.64, w - 30);
+}
+
+/**
+ * A record tile's icon in a round orb `r` across centred on (x, y) (no orb when `r` is 0): a trophy, a chain, a flame,
+ * a crown, a butterfly, a cup, a stopwatch or a flag, shaded in gold, silver, fire or pink.
+ */
+function tileIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: number, r: number, t: number): void {
+    if (r) {
+        const orb = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+        orb.addColorStop(0, '#4a2a86');
+        orb.addColorStop(1, '#12082a');
+        ctx.fillStyle = orb;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(214,170,255,0.55)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+    }
+    const k = r ? r * 0.62 : 30;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(k, k);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    /** A gold (or other) gradient down the icon. */
+    const tone = (a: string, b: string, c: string) => {
+        const g = ctx.createLinearGradient(0, -1, 0, 1);
+        g.addColorStop(0, a);
+        g.addColorStop(0.5, b);
+        g.addColorStop(1, c);
+        return g;
+    };
+    const gold = tone('#fff4c0', '#f6c03a', '#b8640c');
+    ctx.strokeStyle = '#2a1006';
+    ctx.lineWidth = 0.12;
+    if (kind === 'trophy' || kind === 'cup') {
+        ctx.beginPath();
+        ctx.moveTo(-0.6, -0.85);
+        ctx.lineTo(0.6, -0.85);
+        ctx.quadraticCurveTo(0.62, 0.15, 0, 0.3);
+        ctx.quadraticCurveTo(-0.62, 0.15, -0.6, -0.85);
+        ctx.closePath();
+        ctx.fillStyle = gold;
+        ctx.fill();
+        ctx.stroke();
+        ctx.strokeStyle = gold;
+        ctx.lineWidth = 0.14;
+        for (const d of [-1, 1]) {
+            ctx.beginPath();
+            ctx.arc(d * 0.66, -0.5, 0.26, d < 0 ? Math.PI * 0.5 : -Math.PI * 0.5, d < 0 ? Math.PI * 1.5 : Math.PI * 0.5);
+            ctx.stroke();
+        }
+        ctx.fillStyle = gold;
+        ctx.fillRect(-0.12, 0.28, 0.24, 0.32);
+        roundRect(ctx, -0.48, 0.58, 0.96, 0.26, 0.06);
+        ctx.fill();
+        if (kind === 'cup') {
+            ctx.fillStyle = '#fff7d8';
+            sparkle(ctx, 0, -0.35, 0.22);
+        }
+    } else if (kind === 'chain') {
+        for (const [dx, dy] of [
+            [-0.3, 0.3],
+            [0.3, -0.3],
+        ]) {
+            ctx.save();
+            ctx.translate(dx, dy);
+            ctx.rotate(-Math.PI / 4);
+            ctx.strokeStyle = '#2a1006';
+            ctx.lineWidth = 0.34;
+            roundRect(ctx, -0.55, -0.27, 1.1, 0.54, 0.27);
+            ctx.stroke();
+            ctx.strokeStyle = tone('#ffffff', '#c8cfe0', '#6a7290');
+            ctx.lineWidth = 0.2;
+            ctx.stroke();
+            ctx.restore();
+        }
+    } else if (kind === 'flame') {
+        const flick = 1 + 0.05 * Math.sin(t * 9);
+        ctx.scale(1, flick);
+        ctx.beginPath();
+        ctx.moveTo(0, -1);
+        ctx.bezierCurveTo(0.9, -0.2, 0.75, 0.9, 0, 0.9);
+        ctx.bezierCurveTo(-0.75, 0.9, -0.9, -0.1, -0.35, -0.5);
+        ctx.quadraticCurveTo(-0.2, -0.1, 0, -1);
+        ctx.fillStyle = tone('#ffb04a', '#ff6a1c', '#c8280a');
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(0, -0.25);
+        ctx.bezierCurveTo(0.45, 0.2, 0.4, 0.85, 0, 0.85);
+        ctx.bezierCurveTo(-0.4, 0.85, -0.45, 0.25, 0, -0.25);
+        ctx.fillStyle = tone('#fffbe0', '#ffe27a', '#ffb02e');
+        ctx.fill();
+    } else if (kind === 'crown') {
+        ctx.beginPath();
+        ctx.moveTo(-0.8, 0.6);
+        ctx.lineTo(-0.9, -0.5);
+        ctx.lineTo(-0.42, -0.05);
+        ctx.lineTo(0, -0.75);
+        ctx.lineTo(0.42, -0.05);
+        ctx.lineTo(0.9, -0.5);
+        ctx.lineTo(0.8, 0.6);
+        ctx.closePath();
+        ctx.fillStyle = gold;
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#ff5a8a';
+        ctx.beginPath();
+        ctx.arc(0, 0.25, 0.13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#7ad8ff';
+        for (const d of [-0.45, 0.45]) {
+            ctx.beginPath();
+            ctx.arc(d, 0.3, 0.09, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    } else if (kind === 'wings') {
+        const pink = tone('#ffe0ff', '#e88aff', '#9a4ae0');
+        ctx.fillStyle = pink;
+        for (const d of [-1, 1]) {
+            ctx.beginPath();
+            ctx.ellipse(d * 0.48, -0.32, 0.5, 0.36, d * -0.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(d * 0.36, 0.42, 0.32, 0.26, d * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        }
+        ctx.fillStyle = '#ffffff';
+        roundRect(ctx, -0.07, -0.55, 0.14, 1.1, 0.07);
+        ctx.fill();
+    } else if (kind === 'clock') {
+        ctx.fillStyle = tone('#ffffff', '#e8e0ff', '#a898d8');
+        roundRect(ctx, -0.16, -1.05, 0.32, 0.22, 0.06);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, 0.1, 0.82, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#1a0b36';
+        ctx.beginPath();
+        ctx.arc(0, 0.1, 0.64, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 0.12;
+        const a = t * 1.2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0.1);
+        ctx.lineTo(0, -0.38);
+        ctx.moveTo(0, 0.1);
+        ctx.lineTo(Math.sin(a) * 0.5, 0.1 - Math.cos(a) * 0.5);
+        ctx.stroke();
+    } else {
+        // A flag on a pole, rippling.
+        ctx.fillStyle = gold;
+        roundRect(ctx, -0.62, -0.95, 0.14, 1.9, 0.07);
+        ctx.fill();
+        const w = 0.08 * Math.sin(t * 4);
+        ctx.beginPath();
+        ctx.moveTo(-0.5, -0.9);
+        ctx.quadraticCurveTo(0.05, -0.9 - w * 3, 0.75, -0.7 + w);
+        ctx.lineTo(0.75, 0.05 + w);
+        ctx.quadraticCurveTo(0.05, -0.15 - w * 3, -0.5, -0.1);
+        ctx.closePath();
+        ctx.fillStyle = tone('#ffb0d8', '#ff5a8a', '#b0204a');
+        ctx.fill();
+        ctx.stroke();
+    }
     ctx.restore();
 }
 
 /** Whether the painted player card can be drawn (the Profile's pieces have loaded). */
 export const playerCardReady = (): boolean => KIT.ready();
-
-/** A gold gradient for lettering between y0 and y1, as on the painted name plate. */
-function goldText(ctx: CanvasRenderingContext2D, y0: number, y1: number): CanvasGradient {
-    const g = ctx.createLinearGradient(0, y0, 0, y1);
-    g.addColorStop(0, '#fffbe0');
-    g.addColorStop(0.55, '#ffd45c');
-    g.addColorStop(1, '#f0a020');
-    return g;
-}
 
 /** A sprig of laurel, `s` tall, curving out `dir` (−1 left, 1 right) from (x, y): a stem with leaves. */
 function laurel(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, dir: number, color = '#ffd45c'): void {

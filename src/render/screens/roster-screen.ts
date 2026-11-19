@@ -236,6 +236,98 @@ export function glassPanel(ctx: CanvasRenderingContext2D, x: number, y: number, 
     ctx.restore();
 }
 
+/**
+ * The crest on top of a code-drawn frame, centred on (cx, cy): a four-pointed gold star round a violet gem, pulsing
+ * now and then.
+ */
+export function frameCrest(ctx: CanvasRenderingContext2D, cx: number, cy: number, t: number): void {
+    const pulse = 1 + 0.06 * Math.max(0, Math.sin(t * 2.4));
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(pulse, pulse);
+    ctx.shadowColor = 'rgba(255,220,140,0.8)';
+    ctx.shadowBlur = 30;
+    /** Traces a four-pointed star `R` long and `q` thick at its waist. */
+    const star = (R: number, q: number) => {
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+            const a = (i * Math.PI) / 4 - Math.PI / 2,
+                rr = i % 2 ? q : R * (i % 4 === 0 ? 1 : 0.7);
+            ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        }
+        ctx.closePath();
+    };
+    ctx.fillStyle = '#2a1006';
+    star(96, 30);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    const sg = ctx.createLinearGradient(0, -86, 0, 86);
+    sg.addColorStop(0, '#fff6d0');
+    sg.addColorStop(0.5, '#f2b53a');
+    sg.addColorStop(1, '#b8640c');
+    ctx.fillStyle = sg;
+    star(84, 24);
+    ctx.fill();
+    const gem = ctx.createRadialGradient(-6, -8, 2, 0, 0, 26);
+    gem.addColorStop(0, '#ffffff');
+    gem.addColorStop(0.4, '#e2c8ff');
+    gem.addColorStop(1, '#8a5ad8');
+    ctx.fillStyle = gem;
+    ctx.beginPath();
+    ctx.moveTo(0, -26);
+    ctx.lineTo(20, 0);
+    ctx.lineTo(0, 26);
+    ctx.lineTo(-20, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+/**
+ * A name plaque drawn in code over (px, py, pw, ph): a gold capsule round a violet plate, sparkles at its ends, and
+ * `text` in gold `size` high.
+ */
+export function namePlaque(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    px: number,
+    py: number,
+    pw: number,
+    ph: number,
+    size: number,
+): void {
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 24;
+    ctx.fillStyle = '#2a1006';
+    roundRect(ctx, px - 10, py - 10, pw + 20, ph + 20, (ph + 20) / 2);
+    ctx.fill();
+    ctx.restore();
+    const gold = ctx.createLinearGradient(px, py, px + pw * 0.4, py + ph);
+    gold.addColorStop(0, '#fff4c0');
+    gold.addColorStop(0.5, '#e0a030');
+    gold.addColorStop(1, '#a8600e');
+    ctx.fillStyle = gold;
+    roundRect(ctx, px, py, pw, ph, ph / 2);
+    ctx.fill();
+    const plate = ctx.createLinearGradient(0, py, 0, py + ph);
+    plate.addColorStop(0, '#4a2286');
+    plate.addColorStop(0.5, '#22103f');
+    plate.addColorStop(1, '#341660');
+    ctx.fillStyle = plate;
+    roundRect(ctx, px + 12, py + 12, pw - 24, ph - 24, (ph - 24) / 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,190,255,0.4)';
+    ctx.lineWidth = 3;
+    roundRect(ctx, px + 18, py + 18, pw - 36, ph - 36, (ph - 36) / 2);
+    ctx.stroke();
+    ctx.fillStyle = '#ffe9a8';
+    sparkle(ctx, px + 70, py + ph / 2, 22);
+    sparkle(ctx, px + pw - 70, py + ph / 2, 22);
+    const ink: [string, string, string] = ['#fff7d8', '#ffd98a', '#e0a040'];
+    arcadeText(ctx, text, px + pw / 2, py + ph / 2 + size * 0.35, size, ink, 'center', pw - 220);
+}
+
 /** How thick the code-drawn gold frames are, and the rounding of their inside, in a mockup's pixels. */
 export const FRAME_BORDER = 20;
 /** The rounding of a code-drawn frame's inside. */
@@ -818,84 +910,9 @@ export class RosterScreen {
         ctx.stroke();
         ctx.restore();
         goldRoundFrame(ctx, x, y, w, h, r, b);
-        // The crest on top: a four-pointed gold star round a violet gem, twinkling now and then.
-        const cx = x + w / 2,
-            cy = y + 4,
-            pulse = 1 + 0.06 * Math.max(0, Math.sin(t * 2.4));
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.scale(pulse, pulse);
-        ctx.shadowColor = 'rgba(255,220,140,0.8)';
-        ctx.shadowBlur = 30;
-        /** Traces a four-pointed star `R` long and `q` thick at its waist. */
-        const star = (R: number, q: number) => {
-            ctx.beginPath();
-            for (let i = 0; i < 8; i++) {
-                const a = (i * Math.PI) / 4 - Math.PI / 2,
-                    rr = i % 2 ? q : R * (i % 4 === 0 ? 1 : 0.7);
-                ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
-            }
-            ctx.closePath();
-        };
-        ctx.fillStyle = '#2a1006';
-        star(96, 30);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        const sg = ctx.createLinearGradient(0, -86, 0, 86);
-        sg.addColorStop(0, '#fff6d0');
-        sg.addColorStop(0.5, '#f2b53a');
-        sg.addColorStop(1, '#b8640c');
-        ctx.fillStyle = sg;
-        star(84, 24);
-        ctx.fill();
-        const gem = ctx.createRadialGradient(-6, -8, 2, 0, 0, 26);
-        gem.addColorStop(0, '#ffffff');
-        gem.addColorStop(0.4, '#e2c8ff');
-        gem.addColorStop(1, '#8a5ad8');
-        ctx.fillStyle = gem;
-        ctx.beginPath();
-        ctx.moveTo(0, -26);
-        ctx.lineTo(20, 0);
-        ctx.lineTo(0, 26);
-        ctx.lineTo(-20, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-        // The name plaque across the frame's foot.
-        const px = x + 40,
-            pw = w - 80,
-            py = y + h - 70,
-            ph = 140;
-        ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 24;
-        ctx.fillStyle = '#2a1006';
-        roundRect(ctx, px - 10, py - 10, pw + 20, ph + 20, (ph + 20) / 2);
-        ctx.fill();
-        ctx.restore();
-        const gold = ctx.createLinearGradient(px, py, px + pw * 0.4, py + ph);
-        gold.addColorStop(0, '#fff4c0');
-        gold.addColorStop(0.5, '#e0a030');
-        gold.addColorStop(1, '#a8600e');
-        ctx.fillStyle = gold;
-        roundRect(ctx, px, py, pw, ph, ph / 2);
-        ctx.fill();
-        const plate = ctx.createLinearGradient(0, py, 0, py + ph);
-        plate.addColorStop(0, '#4a2286');
-        plate.addColorStop(0.5, '#22103f');
-        plate.addColorStop(1, '#341660');
-        ctx.fillStyle = plate;
-        roundRect(ctx, px + 12, py + 12, pw - 24, ph - 24, (ph - 24) / 2);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,190,255,0.4)';
-        ctx.lineWidth = 3;
-        roundRect(ctx, px + 18, py + 18, pw - 36, ph - 36, (ph - 36) / 2);
-        ctx.stroke();
-        ctx.fillStyle = '#ffe9a8';
-        sparkle(ctx, px + 70, py + ph / 2, 22);
-        sparkle(ctx, px + pw - 70, py + ph / 2, 22);
+        frameCrest(ctx, x + w / 2, y + 4, t);
         const name = locked ? 'LOCKED' : fy.name.toUpperCase();
-        arcadeText(ctx, name, cx, py + ph / 2 + 28, 80, ['#fff7d8', '#ffd98a', '#e0a040'], 'center', pw - 220);
+        namePlaque(ctx, name, x + 40, y + h - 70, w - 80, 140, 80);
     }
 
     /** Her blurb, the stat panels with her bars, and her four skills: panels, icons and orbs all drawn in code. */
