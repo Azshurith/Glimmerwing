@@ -422,7 +422,16 @@ export class MatchScreen {
             medalRing(ctx, cx, y + 232, 150);
             plate(ctx, cx - 100, y + 18, 200, 66, false);
             plate(ctx, cx - w / 2 + 20, y + 392, w - 40, 92, false);
-            shine(ctx, () => roundRect(ctx, cx - w / 2 + 20, y + 392, w - 40, 92, 46), cx - w / 2, y + 392, w, 92, t, side + 0.7);
+            shine(
+                ctx,
+                () => roundRect(ctx, cx - w / 2 + 20, y + 392, w - 40, 92, 46),
+                cx - w / 2,
+                y + 392,
+                w,
+                92,
+                t,
+                side + 0.7,
+            );
             ringShine(ctx, cx, y + 232, 150, t, side + 3.4);
             ctx.textAlign = 'center';
             ctx.font = `800 40px ${SANS}`;
