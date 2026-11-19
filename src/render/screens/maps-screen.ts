@@ -10,7 +10,7 @@ import { ARCADE, FONT } from '@/render/theme';
 import { drawPadlock } from './map-screen';
 import { tallMenuFit } from './menu-fit';
 import type { DemoDraw } from './roster-screen';
-import { drawDemoMeadow, paintedDemo } from './roster-screen';
+import { demoFrame, drawDemoMeadow, paintedDemo } from './roster-screen';
 import { PieceAtlas } from './kit';
 import { kitReady, mockFit } from './kit-ui';
 import type { MockFit } from './kit-ui';
@@ -216,11 +216,7 @@ export class MapsScreen {
         enter(
             ctx,
             'panels',
-            () => {
-                const b = d.frame;
-                KIT.draw9(ctx, 'preview', b.x, b.y, b.w, b.h, 70, 1 / 0.75);
-                KIT.glint9(ctx, 'preview', b.x, b.y, b.w, b.h, 70, 1 / 0.75, t, 2.4);
-            },
+            () => demoFrame(ctx, d),
             { dx: 22 },
         );
         enter(ctx, 'panels', () => this.paintedInfo(map, v.index, locked, stage, t, piece), { dx: -22 });

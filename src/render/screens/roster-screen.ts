@@ -199,6 +199,74 @@ export function paintedDemo(spec: readonly number[]): PaintedDemo {
     return { frame: { x: cx - w / 2 - side, y: top, w: w + side * 2, h: height }, x: cx - w / 2, y: top + head, w, h };
 }
 
+/** How thick the code-drawn gold frames are, and the rounding of their inside, in a mockup's pixels. */
+export const FRAME_BORDER = 20;
+/** The rounding of a code-drawn frame's inside. */
+export const FRAME_INNER_R = 30;
+
+/**
+ * A gold rounded frame drawn in code round the box (x, y, w, h) (the frame's outer edge), `b` thick and rounded `r`:
+ * a soft glow behind, a dark outline, a gold band shaded from light to dark, and a bright line along both its edges.
+ * Its inside is left alone, so whatever is drawn there first shows through.
+ */
+export function goldRoundFrame(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r: number,
+    b: number = FRAME_BORDER,
+): void {
+    /** Adds a rounded rectangle to `path` (without starting a new one, so two make a ring). */
+    const rr = (path: Path2D, rx: number, ry: number, rw: number, rh: number, rad: number) => {
+        path.moveTo(rx + rad, ry);
+        path.arcTo(rx + rw, ry, rx + rw, ry + rh, rad);
+        path.arcTo(rx + rw, ry + rh, rx, ry + rh, rad);
+        path.arcTo(rx, ry + rh, rx, ry, rad);
+        path.arcTo(rx, ry, rx + rw, ry, rad);
+        path.closePath();
+    };
+    // The glow and the outline, as one ring round the outside: the inside stays clear.
+    const ring = new Path2D();
+    rr(ring, x - 8, y - 8, w + 16, h + 16, r + 8);
+    rr(ring, x + b, y + b, w - 2 * b, h - 2 * b, r - b);
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,190,70,0.55)';
+    ctx.shadowBlur = 50;
+    ctx.fillStyle = '#2a1006';
+    ctx.fill(ring, 'evenodd');
+    ctx.restore();
+    const gold = ctx.createLinearGradient(x, y, x + w * 0.4, y + h);
+    gold.addColorStop(0, '#fff4c0');
+    gold.addColorStop(0.25, '#f6c652');
+    gold.addColorStop(0.5, '#c27a16');
+    gold.addColorStop(0.75, '#f2be4a');
+    gold.addColorStop(1, '#a8600e');
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = b;
+    roundRect(ctx, x + b / 2, y + b / 2, w - b, h - b, r - b / 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,248,214,0.9)';
+    ctx.lineWidth = 3;
+    roundRect(ctx, x + 4, y + 4, w - 8, h - 8, r - 4);
+    ctx.stroke();
+    roundRect(ctx, x + b - 1, y + b - 1, w - 2 * b + 2, h - 2 * b + 2, r - b + 1);
+    ctx.stroke();
+    ctx.restore();
+}
+
+/**
+ * A live meadow's window in a code-drawn frame, in a mockup's pixels: the frame goes round the window `d`, so the
+ * meadow drawn under it (by `drawDemoMeadow`) sits exactly inside.
+ */
+export function demoFrame(ctx: CanvasRenderingContext2D, d: PaintedDemo): void {
+    const b = FRAME_BORDER;
+    goldRoundFrame(ctx, d.x - b, d.y - b, d.w + 2 * b, d.h + 2 * b, FRAME_INNER_R + b, b);
+}
+
 /**
  * Draws a painted demo's live meadow into its window, in view units under `fit` (before its frame goes over it), with
  * `caption` across its foot; with no meadow to show the window stays dark, with a question mark.
@@ -215,7 +283,7 @@ export function drawDemoMeadow(
         w = d.w * fit.s,
         h = d.h * fit.s;
     ctx.save();
-    roundRect(ctx, x, y, w, h, 5);
+    roundRect(ctx, x, y, w, h, FRAME_INNER_R * fit.s);
     ctx.clip();
     if (draw) draw(x, y, w / C.FIELD_W_BASE);
     else {
@@ -442,11 +510,7 @@ export class RosterScreen {
             ctx,
             'panels',
             () =>
-                inFit(f.right, () => {
-                    const b = d.frame;
-                    KIT.draw9(ctx, 'demo', b.x, b.y, b.w, b.h, 70, 1 / 0.75);
-                    KIT.glint9(ctx, 'demo', b.x, b.y, b.w, b.h, 70, 1 / 0.75, t, 2.4);
-                }),
+                inFit(f.right, () => demoFrame(ctx, d)),
             { dx: 22 },
         );
         enter(ctx, 'panels', () => inFit(f.mid, () => this.paintedInfo(fy, locked, t, piece)), { dx: 0, dy: 10 });
@@ -496,14 +560,6 @@ export class RosterScreen {
             iw = w - 2 * b,
             ih = h - 2 * b,
             ir = r - b;
-        // A soft gold glow behind it.
-        ctx.save();
-        ctx.shadowColor = 'rgba(255,190,70,0.55)';
-        ctx.shadowBlur = 60;
-        ctx.fillStyle = '#2a1006';
-        roundRect(ctx, x - 8, y - 8, w + 16, h + 16, r + 8);
-        ctx.fill();
-        ctx.restore();
         // Her picture, clipped to the frame's inside.
         ctx.save();
         roundRect(ctx, ix, iy, iw, ih, ir);
@@ -532,28 +588,7 @@ export class RosterScreen {
         roundRect(ctx, ix, iy, iw, ih, ir);
         ctx.stroke();
         ctx.restore();
-        // The frame: a dark outline, the gold band, and a bright line along its inner edge.
-        const gold = ctx.createLinearGradient(x, y, x + w * 0.4, y + h);
-        gold.addColorStop(0, '#fff4c0');
-        gold.addColorStop(0.25, '#f6c652');
-        gold.addColorStop(0.5, '#c27a16');
-        gold.addColorStop(0.75, '#f2be4a');
-        gold.addColorStop(1, '#a8600e');
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#2a1006';
-        ctx.lineWidth = b + 12;
-        roundRect(ctx, x + b / 2, y + b / 2, w - b, h - b, r - b / 2);
-        ctx.stroke();
-        ctx.strokeStyle = gold;
-        ctx.lineWidth = b;
-        roundRect(ctx, x + b / 2, y + b / 2, w - b, h - b, r - b / 2);
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,248,214,0.9)';
-        ctx.lineWidth = 3;
-        roundRect(ctx, x + 4, y + 4, w - 8, h - 8, r - 4);
-        ctx.stroke();
-        roundRect(ctx, ix - 1, iy - 1, iw + 2, ih + 2, ir + 1);
-        ctx.stroke();
+        goldRoundFrame(ctx, x, y, w, h, r, b);
         // The crest on top: a four-pointed gold star round a violet gem, twinkling now and then.
         const cx = x + w / 2,
             cy = y + 4,
@@ -609,6 +644,10 @@ export class RosterScreen {
         roundRect(ctx, px - 10, py - 10, pw + 20, ph + 20, (ph + 20) / 2);
         ctx.fill();
         ctx.restore();
+        const gold = ctx.createLinearGradient(px, py, px + pw * 0.4, py + ph);
+        gold.addColorStop(0, '#fff4c0');
+        gold.addColorStop(0.5, '#e0a030');
+        gold.addColorStop(1, '#a8600e');
         ctx.fillStyle = gold;
         roundRect(ctx, px, py, pw, ph, ph / 2);
         ctx.fill();
