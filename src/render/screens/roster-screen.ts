@@ -420,12 +420,9 @@ export class RosterScreen {
         enter(ctx, 'bg', () => ornateScreen(ctx, t, C.VIEW_W, C.VIEW_H, bleed, '', false));
         // The live meadow first, in view units, so the frame drawn over it covers its edges.
         const d = paintedDemo(MOCK.demo);
-        enter(
-            ctx,
-            'panels',
-            () => drawDemoMeadow(ctx, f.right, d, locked ? null : (draw ?? null), v.caption),
-            { dx: 22 },
-        );
+        enter(ctx, 'panels', () => drawDemoMeadow(ctx, f.right, d, locked ? null : (draw ?? null), v.caption), {
+            dx: 22,
+        });
         /** Runs `draw` in the mockup's pixels under one part's fit. */
         const inFit = (fit: MockFit, draw: () => void) => {
             ctx.save();
