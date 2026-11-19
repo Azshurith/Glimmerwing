@@ -25,11 +25,12 @@ const MOCK = {
         {
             piece: 'cardL',
             box: [45, 220, 1075, 1535],
+            // The rival's window mirrored, so both portraits are the same shape.
             window: [
-                [108, 272],
-                [1044, 272],
-                [1044, 1102],
-                [108, 1102],
+                [98, 295],
+                [1064, 295],
+                [980, 1108],
+                [98, 1108],
             ],
             tag: [265, 300],
             mid: 576,
@@ -310,12 +311,14 @@ export class SelectScreen {
         arcadeText(ctx, s.tag, c.tag[0], c.tag[1] + 26, 72, ['#ffffff', '#fff6fa', '#f2e4ff'], 'center', 200);
         const off = !fairyAvailable(fy.id);
         const name = s.cpu ? '? ? ?' : s.locked ? (off ? 'UNAVAILABLE' : 'LOCKED') : fy.name.toUpperCase();
+        // Centred in its plate (which runs from 92 above R.name to 38 below): capitals rise about 0.72 of their size.
+        const nameSize = name.length > 9 ? 78 : 96;
         arcadeText(
             ctx,
             name,
             c.mid,
-            R.name,
-            name.length > 9 ? 78 : 96,
+            R.name - 27 + nameSize * 0.36,
+            nameSize,
             ['#fff6d0', '#ffd45c', '#e88a1c'],
             'center',
             820,
