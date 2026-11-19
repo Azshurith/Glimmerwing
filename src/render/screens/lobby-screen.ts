@@ -1524,9 +1524,8 @@ export class LobbyScreen {
 
     /**
      * The bar along the bottom, in two halves either side of PLAY: each a dark plate framed in gold, coming to a point
-     * with a star at its outer end and rounded where it meets PLAY, a curl of gold rising off its outer end. Each half
-     * holds two screens, a gold-ringed badge with its emblem and its name, a thin gold line between them, the one with
-     * the cursor lit in its colour.
+     * with a star at its outer end and rounded where it meets PLAY. Each half holds two screens, a gold-ringed badge
+     * with its emblem and its name, a thin gold line between them, the one with the cursor lit in its colour.
      */
     private bottomBar(v: LobbyView, lay: LobbyLayout, t: number, tall: boolean): void {
         const ctx = this.ctx;
@@ -1572,15 +1571,9 @@ export class LobbyScreen {
             half(3.5);
             ctx.stroke();
             shine(ctx, () => half(0), x0 - (dir > 0 ? r : 0), b.y, bw, b.h, t, dir < 0 ? 0 : 0.6, 6);
-            // A star at the point, and a curl of gold rising off the outer end.
+            // A star at the point.
             ctx.fillStyle = '#fff3c0';
             sparkle(ctx, outer + dir * 2, b.y + b.h / 2, 4 + Math.abs(Math.sin(t * 2 + dir)) * 1.5);
-            ctx.strokeStyle = goldGradient(ctx, b.y - 10, b.y);
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(outer - dir * tip * 1.4, b.y - 1);
-            ctx.quadraticCurveTo(outer - dir * tip * 3, b.y - 9, outer - dir * tip * 5, b.y - 6);
-            ctx.stroke();
         }
         lay.nav.forEach((n, i) => {
             const it = LOBBY_NAV[i],
