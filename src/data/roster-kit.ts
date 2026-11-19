@@ -3,54 +3,54 @@ import type { KitPiece } from '@/types';
 
 /** Where each of the roster screen's painted pieces sits in `assets/ui/roster-kit.png`. */
 export const ROSTER_KIT: Record<string, KitPiece> = {
-    'demo': {
-        'x': 0,
-        'y': 0,
-        'w': 752,
-        'h': 684,
-        'bx': 0,
-        'by': 0,
-        'bw': 752,
-        'bh': 684
+    demo: {
+        x: 0,
+        y: 0,
+        w: 752,
+        h: 684,
+        bx: 0,
+        by: 0,
+        bw: 752,
+        bh: 684,
     },
-    'tray': {
-        'x': 0,
-        'y': 686,
-        'w': 1350,
-        'h': 191,
-        'bx': 0,
-        'by': 0,
-        'bw': 1350,
-        'bh': 191
+    tray: {
+        x: 0,
+        y: 686,
+        w: 1350,
+        h: 191,
+        bx: 0,
+        by: 0,
+        bw: 1350,
+        bh: 191,
     },
-    'medOn': {
-        'x': 1352,
-        'y': 686,
-        'w': 180,
-        'h': 180,
-        'bx': 0,
-        'by': 0,
-        'bw': 180,
-        'bh': 180
+    medOn: {
+        x: 1352,
+        y: 686,
+        w: 180,
+        h: 180,
+        bx: 0,
+        by: 0,
+        bw: 180,
+        bh: 180,
     },
-    'title': {
-        'x': 0,
-        'y': 879,
-        'w': 1390,
-        'h': 174,
-        'bx': 0,
-        'by': 0,
-        'bw': 1390,
-        'bh': 174
+    title: {
+        x: 0,
+        y: 879,
+        w: 1390,
+        h: 174,
+        bx: 0,
+        by: 0,
+        bw: 1390,
+        bh: 174,
     },
-    'medOff': {
-        'x': 1392,
-        'y': 879,
-        'w': 135,
-        'h': 135,
-        'bx': 0,
-        'by': 0,
-        'bw': 135,
-        'bh': 135
-    }
+    medOff: {
+        x: 1392,
+        y: 879,
+        w: 135,
+        h: 135,
+        bx: 0,
+        by: 0,
+        bw: 135,
+        bh: 135,
+    },
 };
