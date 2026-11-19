@@ -172,7 +172,7 @@ type StagePainter = (map: string, x: number, y: number, w: number, h: number) =>
 /** The two tabs' labels, in order. */
 const TABS = ['RECORD', 'MATCH HISTORY'] as const;
 
-/** Rows of the match history in view at once in each layout; the list scrolls with the cursor. */
+/** Rows of the match history in view at once in each layout; the list scrolls with the cursor, wheel or bar. */
 export const HISTORY_ROWS = { wide: 7, tall: 6 } as const;
 
 /**
@@ -207,7 +207,11 @@ function designLayout(layout: Layout, dy: number, bleed: number): { tabs: Box[];
 }
 
 /** The tabs and the history rows in view units (also their tap targets), for a view `h` tall widened by `bleed`. */
-export function profileBoxes(layout: Layout, h: number = C.TALL_H, bleed = 0): { tabs: Box[]; rows: Box[] } {
+export function profileBoxes(
+    layout: Layout,
+    h: number = C.TALL_H,
+    bleed = 0,
+): { tabs: Box[]; rows: Box[]; scroll: Box } {
     if (layout !== 'tall' && painted()) {
         const { main: f, R } = profileFits(bleed);
         const [, ry, , rh] = MOCK.row,
@@ -217,13 +221,24 @@ export function profileBoxes(layout: Layout, h: number = C.TALL_H, bleed = 0): {
             rows: Array.from({ length: HISTORY_ROWS.wide }, (_, i) =>
                 mockBox(f, span.x, ry + i * MOCK.pitch, span.w, rh),
             ),
+            scroll: mockBox(f, span.scroll, ry + 5, 44, HISTORY_ROWS.wide * MOCK.pitch - 10),
         };
     }
-    if (layout !== 'tall') return designLayout(layout, 0, bleed);
+    /** The thin scroll bar drawn just right of the rows. */
+    const bar = (rows: Box[]): Box => {
+        const first = rows[0],
+            last = rows[rows.length - 1];
+        return { x: first.x + first.w + 4, y: first.y, w: 3, h: last.y + last.h - first.y };
+    };
+    if (layout !== 'tall') {
+        const d = designLayout(layout, 0, bleed);
+        return { tabs: d.tabs, rows: d.rows, scroll: bar(d.rows) };
+    }
     const f = tallMenuFit(h);
     const d = designLayout(layout, tallShift(f.h), f.bleed);
     const view = (b: Box) => ({ x: f.x + b.x * f.s, y: b.y * f.s, w: b.w * f.s, h: b.h * f.s });
-    return { tabs: d.tabs.map(view), rows: d.rows.map(view) };
+    const rows = d.rows.map(view);
+    return { tabs: d.tabs.map(view), rows, scroll: bar(rows) };
 }
 
 /** The Profile screen. */
