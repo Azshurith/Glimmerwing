@@ -95,7 +95,7 @@ export class TitleScreen {
             enter(ctx, 'bar', () => this.logo(t, W / 2, TALL.logoY, 24));
             ctx.restore();
             enter(ctx, 'buttons', () => this.menu(v, t, tallButtons(dy)), { dy: 10 });
-            enter(ctx, 'hint', () => this.footer(v, t, W / 2, TALL.ctaY + dy, W, f.h));
+            enter(ctx, 'hint', () => this.footer(v, t, W / 2, TALL.ctaY + dy, W));
             ctx.restore();
             this.bleed = 0;
             return;
@@ -405,10 +405,9 @@ export class TitleScreen {
     // ---- footer ---------------------------------------------------------------------
 
     /**
-     * Draw the call to action between two gold wings, glowing softly, the controls line under it, and a sweep of gold
-     * light along the foot of the screen.
+     * Draw the call to action between two gold wings, glowing softly, and the controls line under it.
      */
-    private footer(v: TitleView, t: number, cx = LOGO_X, ctaY = 236, W: number = C.VIEW_W, H: number = C.VIEW_H): void {
+    private footer(v: TitleView, t: number, cx = LOGO_X, ctaY = 236, W: number = C.VIEW_W): void {
         const ctx = this.ctx;
         const tall = W !== C.VIEW_W;
         const size = tall ? 13 : 16,
@@ -427,34 +426,6 @@ export class TitleScreen {
             ctx.fillStyle = 'rgba(230,220,255,0.85)';
             ctx.fillText('UP / DOWN CHOOSE   •   ENTER OR Z PICKS', cx, ctaY + 17, W - 16);
         }
-        // The sweep of gold light along the foot, from under the hero across to the right.
-        const x0 = -this.bleed,
-            x1 = W + this.bleed,
-            fy = H - 16;
-        ctx.save();
-        ctx.lineCap = 'round';
-        for (const [w, a] of [
-            [5, 0.18],
-            [1.6, 0.9],
-        ] as const) {
-            const g = ctx.createLinearGradient(x0, 0, x1, 0);
-            g.addColorStop(0, `rgba(255,214,120,${a * 0.2})`);
-            g.addColorStop(0.35, `rgba(255,214,120,${a})`);
-            g.addColorStop(0.7, `rgba(255,236,170,${a})`);
-            g.addColorStop(1, `rgba(255,214,120,${a * 0.2})`);
-            ctx.strokeStyle = g;
-            ctx.lineWidth = w;
-            ctx.beginPath();
-            ctx.moveTo(x0, fy - 8);
-            ctx.bezierCurveTo(x0 + (x1 - x0) * 0.3, fy + 10, x0 + (x1 - x0) * 0.55, fy - 16, x1, fy + 2);
-            ctx.stroke();
-        }
-        ctx.restore();
-        const k = (t * 0.12) % 1,
-            sx = x0 + (x1 - x0) * k;
-        ctx.fillStyle = `rgba(255,248,220,${0.6 + 0.4 * Math.sin(t * 4)})`;
-        const sy = fy - 8 + Math.sin(k * Math.PI * 2.2) * 9 * (1 - Math.abs(0.5 - k));
-        sparkle(ctx, sx, sy, 3);
     }
 }
 
