@@ -34,11 +34,6 @@ STORED = 0.75
 # medallion lifted off the tray it sits on).
 
 
-def maps_card(x0, x1):
-    """One of the Maps mockup's five monster cards, from x0 to x1: its role kept, the monster and its name wiped."""
-    return ('maps', (x0 - 8, 718, x1 + 8, 1150), [(x0 + 24, 795, x1 - 24, 1046, x0 + 20), (x0 + 26, 1060, x1 - 26, 1114, 'dark')])
-
-
 # Mockups whose transparency left a red fringe round their pieces: it's taken off as they're cut.
 DEFRINGE = {'select', 'mapselect'}
 
@@ -133,30 +128,6 @@ SCREENS = {
     },
     'maps': {
         'title': ('maps', (436, 20, 2083, 240), []),
-        'plate': (
-            'maps',
-            (30, 232, 1100, 500),
-            [('circle', 244, 365, 90), (392, 290, 985, 392, 385), (416, 422, 900, 474, 405)],
-        ),
-        'difficulty': ('maps', (1110, 333, 1822, 454), [(1415, 368, 1765, 422, 1400)]),
-        'monsters': ('maps', (78, 588, 1787, 697), []),
-        'card0': maps_card(53, 396),
-        'card1': maps_card(416, 753),
-        'card2': maps_card(777, 1110),
-        'card3': maps_card(1136, 1469),
-        'card4': maps_card(1493, 1812),
-        'preview': ('maps', (1830, 240, 2625, 1160), [('rrect', 1866, 276, 2588, 1124, 50)]),
-        'tray': ('maps', (60, 1170, 2600, 1470), [(300, 1170, 2345, 1465, 580)]),
-        'medOn': (
-            'maps',
-            (220, 1165, 645, 1448),
-            [('circle', 431, 1300, 93), (290, 1378, 572, 1424, 'dark'), ('keep', 431, 1300, 122, (280, 1358, 582, 1438))],
-        ),
-        'medOff': (
-            'maps',
-            (590, 1180, 870, 1440),
-            [('circle', 729, 1300, 88), (640, 1380, 818, 1424, 'dark'), ('keep', 729, 1300, 104, (634, 1362, 824, 1434))],
-        ),
         **{
             f'disc{i}': ('maps', (cx - 92, 1208, cx + 92, 1392), [('keep', cx, 1300, 86, None), (cx - 92, 1362, cx + 92, 1392, None)])
             for i, cx in enumerate(MAP_DISCS)
