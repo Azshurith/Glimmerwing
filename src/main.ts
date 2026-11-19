@@ -62,7 +62,8 @@ function fit(): void {
                 : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
         renderer.tallH = Math.max(C.TALL_H_MIN, Math.min(C.TALL_H_MAX, (C.TALL_W * availH) / Math.max(1, availW)));
     }
-    // On a wide landscape screen, the meadow width that would fill it (used from the next local round on).
+    // On a wide landscape screen, how wide a view fills it (a round's meadows stay their usual width, centred,
+    // their scenery and bars reaching out to its edges).
     {
         const cs = getComputedStyle(stage);
         const immersive = stage.classList.contains('immersive');
@@ -70,8 +71,6 @@ function fit(): void {
             availH = immersive
                 ? vh - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
                 : vh - stage.getBoundingClientRect().top - window.scrollY - 10;
-        const fill = ((C.VIEW_H * availW) / Math.max(1, availH) - C.GAP) / 2;
-        renderer.fieldWidthToFill = renderer.portrait ? C.FIELD_W_BASE : Math.floor(fill);
         renderer.viewWidthToFill = Math.floor((C.VIEW_H * availW) / Math.max(1, availH));
         // The menus widen to the same shape, up to WIDE_W_MAX.
         renderer.menuW = renderer.portrait

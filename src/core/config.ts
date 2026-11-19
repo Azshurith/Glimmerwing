@@ -3,9 +3,9 @@ import { powi } from './dmath';
 // all times in seconds.
 
 /**
- * A meadow's width. It's FIELD_W_BASE, except that a local match on a wide landscape screen plays in wider meadows
- * (up to FIELD_W_MAX) so the side-by-side view fills the screen: Game sets it with setFieldWidth at the start of each
- * round. Online play, the menus and the tall layout always use FIELD_W_BASE.
+ * A meadow's width. Every round plays at FIELD_W_BASE; a replay keeps the width it was recorded at (older local
+ * matches on wide landscape screens played in wider meadows, up to FIELD_W_MAX). Game sets it with setFieldWidth at
+ * the start of each round.
  */
 export let FIELD_W = 240;
 export const FIELD_W_BASE = 240,
@@ -71,6 +71,12 @@ export const TALL_SOLO_BAR = 22;
  * as on a phone in the middle of the screen under its slim bar, with the run's stats either side.
  */
 export const ENDLESS_DESK_H = 500;
+/**
+ * A VS round's meadow height (CPU, 2 Players and online), the same on every screen, so a game and its replay look
+ * alike however the screen is held: upright the meadow fills down from a slimmer band, and side by side the two
+ * stand at full height with their scenery reaching out to the screen's edges.
+ */
+export const ROUND_H = 400;
 
 export const STEP = 1 / 60;
 
@@ -397,5 +403,5 @@ export const TROPHY_LOSS = 20;
 /** Online play. */
 /** How long each round's countdown lasts before play starts (s): the announcer's call, Ready, then Fight!. */
 export const COUNTDOWN_TIME = 3;
-export const NET_VERSION = '44'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '45'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';
