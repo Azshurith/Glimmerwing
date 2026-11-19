@@ -2392,6 +2392,7 @@ export class Game {
         if (!inRound && C.FIELD_W !== C.FIELD_W_BASE) C.setFieldWidth(C.FIELD_W_BASE);
         if (!inRound && C.FIELD_H !== C.FIELD_H_BASE) C.setFieldHeight(C.FIELD_H_BASE);
         r.inMenu = !inRound;
+        if (!inRound) r.fillRound = false;
         // A round in wider meadows stays side by side even if the screen turns upright mid-round.
         // A round in taller meadows (rival hidden) stays tall even if the screen turns sideways.
         const soloTall = inRound && C.FIELD_H !== C.FIELD_H_BASE;
@@ -2419,7 +2420,11 @@ export class Game {
                 ? [tall.at[1], tall.at[0]]
                 : tall.at;
         if (tall) r.tallBand = tall.band;
+        // A replay recorded in meadows narrower than this screen, or an online round (always the usual width), keeps
+        // them centred, the view filling the screen.
+        r.fillRound = (watching || this.online) && r.layout === 'wide';
         r.begin();
+        if (r.fillRound) r.roundMargins(this.fields[0], this.fields[endless ? 0 : 1], this.time);
         const solo = this.mode !== 'versus';
         // Online the meadows keep the server's seat order (and colours); YOU is whichever is this player's.
         const tags: [HudTag, HudTag] = this.online
