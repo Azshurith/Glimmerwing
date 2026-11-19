@@ -737,12 +737,12 @@ export class RosterScreen {
         enter(ctx, 'panels', () => inFit(f.mid, () => this.paintedInfo(fy, locked, t)), { dx: 0, dy: 10 });
         enter(ctx, 'buttons', () =>
             inFit(f.tray, () => {
-                    // Round the fairies' row, its buttons just clear of the first and last.
-                    const m = MOCK.meds,
-                        x0 = m.x0 - 96 - 210,
-                        x1 = m.x0 + (FAIRIES.length - 1) * m.gap + 96 + 210;
-                    trayBar(ctx, x0, m.y - 118, x1 - x0, 236);
-                }),
+                // Round the fairies' row, its buttons just clear of the first and last.
+                const m = MOCK.meds,
+                    x0 = m.x0 - 96 - 210,
+                    x1 = m.x0 + (FAIRIES.length - 1) * m.gap + 96 + 210;
+                trayBar(ctx, x0, m.y - 118, x1 - x0, 236);
+            }),
         );
         const m = MOCK.meds;
         FAIRIES.forEach((other, i) =>
