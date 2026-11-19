@@ -256,7 +256,8 @@ export class Renderer {
         // The two meadows look into one world, the right-hand one (whose rival is to its left) GAP across from
         // the left-hand one, so the scenery runs on from one into the other behind the console.
         const side = f.rivalSide < 0 ? 1 : 0;
-        if (bleed <= 0 && rt <= 0 && rb <= 0) this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W, C.FIELD_H, map, side, C.GAP);
+        if (bleed <= 0 && rt <= 0 && rb <= 0)
+            this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W, C.FIELD_H, map, side, C.GAP);
 
         if (f.fever > 0) {
             ctx.fillStyle = `rgba(255,170,120,${0.08 + 0.05 * Math.sin(time * 10)})`;
