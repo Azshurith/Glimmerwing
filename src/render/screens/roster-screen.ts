@@ -506,13 +506,7 @@ export class RosterScreen {
         };
         enter(ctx, 'bar', () => inFit(f.title, () => piece('title', MOCK.title, 0.2)));
         enter(ctx, 'panels', () => inFit(f.left, () => this.paintedPortrait(fy, locked, t)), { dx: -22 });
-        enter(
-            ctx,
-            'panels',
-            () =>
-                inFit(f.right, () => demoFrame(ctx, d)),
-            { dx: 22 },
-        );
+        enter(ctx, 'panels', () => inFit(f.right, () => demoFrame(ctx, d)), { dx: 22 });
         enter(ctx, 'panels', () => inFit(f.mid, () => this.paintedInfo(fy, locked, t, piece)), { dx: 0, dy: 10 });
         enter(ctx, 'buttons', () => inFit(f.tray, () => piece('tray', MOCK.tray, 1.2)));
         const m = MOCK.meds;

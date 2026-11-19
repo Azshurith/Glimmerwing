@@ -213,12 +213,7 @@ export class MapsScreen {
             KIT.glint(ctx, name, b[0], b[1], b[2], b[3], t, phase, 7);
         };
         enter(ctx, 'bar', () => piece('title', MOCK.title, 0.2));
-        enter(
-            ctx,
-            'panels',
-            () => demoFrame(ctx, d),
-            { dx: 22 },
-        );
+        enter(ctx, 'panels', () => demoFrame(ctx, d), { dx: 22 });
         enter(ctx, 'panels', () => this.paintedInfo(map, v.index, locked, stage, t, piece), { dx: -22 });
         enter(ctx, 'buttons', () => piece('tray', MOCK.tray, 1.2));
         MAPS.forEach((m, i) =>
