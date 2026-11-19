@@ -102,11 +102,14 @@ export class Renderer {
      */
     fillRound = false;
     /**
-     * How far a lone meadow's scenery and HUD reach out past it on each side (an Endless replay recorded narrower
-     * than this screen): its scenery is painted across the whole screen as one picture, and its bars and stat cards
-     * span it, while play stays in the recorded meadow. 0 otherwise. Game sets it.
+     * How far a meadow's scenery and HUD reach out past it to the screen's edge (a round in meadows narrower than
+     * this screen: a replay recorded at another width, or an online round): its scenery is painted out to the edge
+     * as one picture and its bars span it, while play stays in the meadow. A lone meadow (Endless, `bleedBoth`)
+     * reaches out both ways; of two, the left one reaches left and the right one right. 0 otherwise. Game sets it.
      */
     meadowBleed = 0;
+    /** Whether the bleed reaches out on both sides (a lone meadow) rather than only on the meadow's outer side. */
+    bleedBoth = false;
     /** Width of the view in view units, for the current layout. */
     get viewW(): number {
         if (this.layout === 'tall') return C.TALL_W;
@@ -163,36 +166,6 @@ export class Renderer {
         this.hudLayer.setView(w - 2 * this.viewX, h);
     }
 
-    /**
-     * Fill the bands either side of a centred round (see `fillRound`) with its meadows' scenery, dimmed and
-     * fading toward the screen's edges, so the screen is filled without stretching the meadows.
-     */
-    roundMargins(left: Field, right: Field, time: number): void {
-        const m = this.viewX;
-        if (m <= 0) return;
-        const ctx = this.ctx,
-            H = C.VIEW_H;
-        for (const [f, x0, side] of [
-            [left, -m, 0],
-            [right, C.VIEW_W, 1],
-        ] as const) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(x0, 0, m, H);
-            ctx.clip();
-            ctx.translate(x0, 0);
-            const map = mapById(f.mapId) ?? mapForSeed(f.sceneSeed);
-            this.scenery.draw(ctx, f.sceneSeed, f.time, time, m, H, map, side, C.GAP);
-            // A dark violet veil, deepening toward the screen's edge.
-            const g = ctx.createLinearGradient(side ? 0 : m, 0, side ? m : 0, 0);
-            g.addColorStop(0, 'rgba(16,8,40,0.45)');
-            g.addColorStop(1, 'rgba(16,8,40,0.85)');
-            ctx.fillStyle = g;
-            ctx.fillRect(0, 0, m, H);
-            ctx.restore();
-        }
-    }
-
     /** One critter: as its map's monster where the map has a sheet, else in its code-drawn look. */
     private critter(
         ctx: CanvasRenderingContext2D,
@@ -224,15 +197,18 @@ export class Renderer {
         ctx.translate(ox + sx * scale, oy + sy * scale);
         ctx.scale(scale, scale);
         const bleed = scale === 1 ? this.meadowBleed : 0;
+        const outer = f.rivalSide < 0 ? 1 : 0;
+        const bl = bleed > 0 && (this.bleedBoth || outer === 0) ? bleed : 0,
+            br = bleed > 0 && (this.bleedBoth || outer === 1) ? bleed : 0;
         const map = mapById(f.mapId) ?? mapForSeed(f.sceneSeed);
         if (bleed > 0) {
-            // A lone meadow reaching out to the screen's edges: its scenery painted as one wide picture behind it.
+            // A meadow reaching out to the screen's edge: its scenery painted as one wide picture behind it.
             ctx.save();
             ctx.beginPath();
-            ctx.rect(-bleed, 0, C.FIELD_W + 2 * bleed, C.FIELD_H);
+            ctx.rect(-bl, 0, C.FIELD_W + bl + br, C.FIELD_H);
             ctx.clip();
-            ctx.translate(-bleed, 0);
-            this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W + 2 * bleed, C.FIELD_H, map);
+            ctx.translate(-bl, 0);
+            this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W + bl + br, C.FIELD_H, map);
             ctx.restore();
         }
         ctx.beginPath();
@@ -440,8 +416,8 @@ export class Renderer {
             // Its bars reach out to the screen's edges, past the meadow's clip.
             ctx.restore();
             ctx.save();
-            ctx.translate(ox - bleed, oy);
-            this.hudLayer.meadow(f, wins, time, tag, C.FIELD_W + 2 * bleed);
+            ctx.translate(ox - bl, oy);
+            this.hudLayer.meadow(f, wins, time, tag, C.FIELD_W + bl + br);
         } else if (v0 > 0.5 || v1 < C.FIELD_W - 0.5) {
             // Its bars stay at a live round's size across the screen however far the meadow is zoomed: the top plate
             // against its top edge and the charge bar against its foot, each drawn in its own half.
@@ -543,6 +519,7 @@ export class Renderer {
             this.ctx.restore();
             return;
         }
+        this.hudLayer.frameX = this.meadowBleed;
         this.hudLayer.console(v, time);
     }
 
@@ -565,7 +542,18 @@ export class Renderer {
 
     /** A full-width arcade banner (round start, round over, match over, pause). */
     banner(v: BannerView): void {
+        // A round whose view is wider than its meadows: the banner spans the whole screen.
+        const x = this.layout === 'wide' && this.fillRound ? this.viewX : 0;
+        if (x <= 0) {
+            this.hudLayer.banner(v);
+            return;
+        }
+        this.ctx.save();
+        this.ctx.translate(-x, 0);
+        this.hudLayer.setView(this.viewW, this.viewH);
         this.hudLayer.banner(v);
+        this.hudLayer.setView(this.viewW - 2 * x, this.viewH);
+        this.ctx.restore();
     }
 
     /** The replay's controls along the bottom (see Hud.replayPanel). */
