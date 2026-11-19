@@ -130,9 +130,7 @@ function tallPlacement(
     // this screen's: `fit` shows it at a live round's scale (scaled down only to fit a taller one under the band or
     // the solo bar), so it looks as it does in play; a meadow wider than the screen then follows its fairy across
     // (`followX`, her x in the meadow), and a narrower one is centred.
-    const s = fit
-        ? Math.min(C.TALL_OWN_S, (h - (solo ? C.TALL_SOLO_BAR : C.TALL_TOP_MIN)) / C.FIELD_H)
-        : C.TALL_OWN_S;
+    const s = fit ? Math.min(C.TALL_OWN_S, (h - (solo ? C.TALL_SOLO_BAR : C.TALL_TOP_MIN)) / C.FIELD_H) : C.TALL_OWN_S;
     const over = C.FIELD_W * s - C.TALL_W;
     const ownX = !fit ? 0 : over <= 0 ? -over / 2 : Math.max(-over, Math.min(0, C.TALL_W / 2 - followX * s));
     // Your meadow sits against the bottom edge, as in play.
