@@ -294,6 +294,13 @@ export class Game {
     private profileTab: ProfileTab = 'record';
     private history: HistoryEntry[] = [];
     private historyIndex = 0;
+    /**
+     * The history's first row in view once the wheel or the scroll bar has moved it (null: follow the cursor), the
+     * wheel turned toward the next row, and whether the scroll bar is being dragged.
+     */
+    private historyTop: number | null = null;
+    private historyWheel = 0;
+    private historyDrag = false;
     private historyMessage = '';
     private historyNote = '';
     private historyNoteT = 0;
@@ -898,6 +905,8 @@ export class Game {
         this.phase = 'profile';
         this.profileTab = tab;
         if (fresh) this.historyIndex = 0;
+        this.historyTop = null;
+        this.historyDrag = false;
         if (!this.history.length) this.historyMessage = 'Loading your games…';
         void this.account.refreshLeaders();
         void this.loadHistory();
@@ -990,7 +999,53 @@ export class Game {
     private get historyStart(): number {
         const n = this.history.length,
             rows = HISTORY_ROWS[this.r.layout];
-        return Math.max(0, Math.min(this.historyIndex - Math.floor(rows / 2), n - rows));
+        const top = this.historyTop ?? this.historyIndex - Math.floor(rows / 2);
+        return Math.max(0, Math.min(top, n - rows));
+    }
+
+    /**
+     * Scroll the match history by the mouse wheel, or by a press on its scroll bar (`track`) and a drag along it,
+     * keeping the cursor on a game in view. Whether a press went to the scroll bar (so it isn't also a tap on a row).
+     */
+    private scrollHistory(
+        track: { x: number; y: number; w: number; h: number },
+        tap: { x: number; y: number } | null,
+    ): boolean {
+        const n = this.history.length,
+            rows = HISTORY_ROWS[this.r.layout];
+        if (n <= rows) return false;
+        const max = n - rows;
+        let top = this.historyStart;
+        // The wheel: a row for each notch (about 60 of its pixels), however finely a trackpad sends it.
+        this.historyWheel += this.input.wheel;
+        while (Math.abs(this.historyWheel) >= 60) {
+            const d = Math.sign(this.historyWheel);
+            top += d;
+            this.historyWheel -= d * 60;
+        }
+        // The scroll bar, a little wider than drawn so it's easy to catch: a press on it starts a drag, and the
+        // rows in view centre on where the pointer is along it until it's let go.
+        const pad = Math.max(6, track.w);
+        const onBar =
+            !!tap &&
+            tap.x >= track.x - pad &&
+            tap.x <= track.x + track.w + pad &&
+            tap.y >= track.y - 4 &&
+            tap.y <= track.y + track.h + 4;
+        if (onBar) this.historyDrag = true;
+        const p = this.input.pointer;
+        if (!p) this.historyDrag = false;
+        else if (this.historyDrag) {
+            const k = Math.max(0, Math.min(1, (p.y - track.y) / track.h));
+            top = Math.round(k * n - rows / 2);
+        }
+        top = Math.max(0, Math.min(top, max));
+        if (top !== this.historyStart) {
+            this.historyTop = top;
+            // Keep the cursor on a game in view, so Enter opens one you can see.
+            this.historyIndex = Math.max(top, Math.min(this.historyIndex, top + rows - 1));
+        }
+        return onBar;
     }
 
     /**
@@ -1021,7 +1076,11 @@ export class Game {
         const was = this.historyIndex;
         if (['ArrowUp', 'KeyW'].some(k => pr.has(k))) this.historyIndex = (this.historyIndex + n - 1) % n;
         if (['ArrowDown', 'KeyS'].some(k => pr.has(k))) this.historyIndex = (this.historyIndex + 1) % n;
-        if (this.historyIndex !== was) this.ui('tick');
+        if (this.historyIndex !== was) {
+            this.historyTop = null;
+            this.ui('tick');
+        }
+        if (this.scrollHistory(boxes.scroll, tap)) return;
         let pick = -1;
         if (tap) {
             const start = this.historyStart;
