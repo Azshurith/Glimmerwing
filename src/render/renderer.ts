@@ -94,11 +94,18 @@ export class Renderer {
     /** Whether a menu (title or select) is showing; Game sets it each frame. */
     inMenu = false;
 
-    /** Width of the view in view units, for the current layout. */
     /** How wide a lone meadow must be to fill a landscape screen edge to edge (Endless), set by the page. */
     viewWidthToFill = C.VIEW_W;
+    /**
+     * Whether a round's view widens to fill the screen around meadows narrower than it (a replay recorded at
+     * another width): the meadows stay centred and their scenery fills the bands either side. Game sets it.
+     */
+    fillRound = false;
+    /** Width of the view in view units, for the current layout. */
     get viewW(): number {
-        return this.layout === 'tall' ? C.TALL_W : this.inMenu ? Math.max(C.VIEW_W, this.menuW) : C.VIEW_W;
+        if (this.layout === 'tall') return C.TALL_W;
+        if (this.inMenu) return Math.max(C.VIEW_W, this.menuW);
+        return this.fillRound ? Math.max(C.VIEW_W, this.viewWidthToFill) : C.VIEW_W;
     }
     /** How far a widened menu sits in from the left edge (its sky and bars reach out over that much each side). */
     get viewX(): number {
@@ -148,6 +155,36 @@ export class Renderer {
         // A widened menu is drawn in its usual units, centred.
         ctx.translate(this.viewX, 0);
         this.hudLayer.setView(w - 2 * this.viewX, h);
+    }
+
+    /**
+     * Fill the bands either side of a centred round (see `fillRound`) with its meadows' scenery, dimmed and
+     * fading toward the screen's edges, so the screen is filled without stretching the meadows.
+     */
+    roundMargins(left: Field, right: Field, time: number): void {
+        const m = this.viewX;
+        if (m <= 0) return;
+        const ctx = this.ctx,
+            H = C.VIEW_H;
+        for (const [f, x0, side] of [
+            [left, -m, 0],
+            [right, C.VIEW_W, 1],
+        ] as const) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x0, 0, m, H);
+            ctx.clip();
+            ctx.translate(x0, 0);
+            const map = mapById(f.mapId) ?? mapForSeed(f.sceneSeed);
+            this.scenery.draw(ctx, f.sceneSeed, f.time, time, m, H, map, side, C.GAP);
+            // A dark violet veil, deepening toward the screen's edge.
+            const g = ctx.createLinearGradient(side ? 0 : m, 0, side ? m : 0, 0);
+            g.addColorStop(0, 'rgba(16,8,40,0.45)');
+            g.addColorStop(1, 'rgba(16,8,40,0.85)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, m, H);
+            ctx.restore();
+        }
     }
 
     /** One critter: as its map's monster where the map has a sheet, else in its code-drawn look. */
