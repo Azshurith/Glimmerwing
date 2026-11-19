@@ -13,6 +13,11 @@ export let FIELD_W = 240;
  * fits an upright phone's width a touch smaller than FIELD_W_BASE's, so a game looks the same on every screen.
  */
 export const FIELD_W_STD = 272;
+/**
+ * How far a VS round may zoom in on a screen wider than 16:9 to fill its width (the top of the meadow, where critters
+ * glide in under the top plate, running off the screen): enough for a browser window on a 16:9 monitor.
+ */
+export const WIDE_ZOOM_MAX = 1.13;
 export const FIELD_W_BASE = 240,
     FIELD_W_MAX = 380;
 /**

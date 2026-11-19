@@ -111,6 +111,10 @@ export class Renderer {
      */
     riseTop = 0;
     riseBottom = 0;
+    /** The two meadows' places side by side (the console follows them); Game sets it. */
+    wideAt: readonly [Placement, Placement] | null = null;
+    /** How far the meadows' top plates are pushed down to stay on screen when the meadows zoom in (screen units). */
+    hudLift = 0;
     /** Where the side-by-side console sits when a wider recording is shown side by side on an upright screen. */
     consoleAt: Placement | null = null;
     /**
@@ -448,13 +452,26 @@ export class Renderer {
         // on the part that's on screen.
         const v0 = this.layout === 'tall' ? Math.max(0, -ox / scale) : 0,
             v1 = this.layout === 'tall' ? Math.min(C.FIELD_W, (this.viewW - ox) / scale) : C.FIELD_W;
-        if (bleed > 0) {
-            // Its bars reach out to the screen's edges, past the meadow's clip.
+        if (bleed > 0 || (this.layout === 'wide' && this.hudLift > 0)) {
+            // Its bars reach out to the screen's edges, past the meadow's clip; zoomed in, the top plate stays at the
+            // top of the screen and the charge bar at its foot, each drawn in its own half.
             ctx.restore();
+            const lift = this.layout === 'wide' ? this.hudLift : 0,
+                mid = this.viewH / 2;
+            for (const [y, y0, y1] of [
+                [oy + lift, -1e4, mid],
+                [oy, mid, 1e4],
+            ]) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(-1e4, y0, 2e4, y1 - y0);
+                ctx.clip();
+                ctx.translate(ox - bl * scale, y);
+                ctx.scale(scale, scale);
+                this.hudLayer.meadow(f, wins, time, tag, C.FIELD_W + bl + br);
+                ctx.restore();
+            }
             ctx.save();
-            ctx.translate(ox - bl * scale, oy);
-            ctx.scale(scale, scale);
-            this.hudLayer.meadow(f, wins, time, tag, C.FIELD_W + bl + br);
         } else if (v0 > 0.5 || v1 < C.FIELD_W - 0.5) {
             // Its bars stay at a live round's size across the screen however far the meadow is zoomed: the top plate
             // against its top edge and the charge bar against its foot, each drawn in its own half.
@@ -610,11 +627,12 @@ export class Renderer {
             this.ctx.restore();
             return;
         }
-        // Side by side the meadows (and the console with them) are scaled to fill the view's height.
-        const s = C.VIEW_H / C.FIELD_H,
-            x = (C.VIEW_W * (1 - s)) / 2;
+        // Side by side the console stands between the meadows, at their scale.
+        const at = this.wideAt;
+        const s = at ? at[0].s : C.VIEW_H / C.FIELD_H,
+            x = at ? at[0].x : (C.VIEW_W * (1 - s)) / 2;
         this.ctx.save();
-        this.ctx.translate(x, 0);
+        this.ctx.translate(x, at ? at[0].y : 0);
         this.ctx.scale(s, s);
         this.hudLayer.frameX = this.meadowBleed / s;
         this.hudLayer.console(v, time);
