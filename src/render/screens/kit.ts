@@ -117,6 +117,40 @@ function sweep(t: number, phase: number, period: number): number | null {
 }
 
 /**
+ * A band of light sweeping left to right across a shape drawn in code, every `period` seconds (`phase` seconds into
+ * the cycle), like the painted pieces' glints: `trace` traces the shape (beginning its own path), which bounds the
+ * box (x, y, w, h).
+ */
+export function shine(
+    ctx: CanvasRenderingContext2D,
+    trace: () => void,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    t: number,
+    phase: number,
+    period = 6,
+): void {
+    const at = sweep(t, phase, period);
+    if (at === null) return;
+    const band = Math.max(h * 0.8, w * 0.14),
+        cx = x - band + (w + 2 * band) * at;
+    ctx.save();
+    trace();
+    ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    // Slanted, so it reads as light glancing across the surface.
+    const g = ctx.createLinearGradient(cx - band, y, cx + band, y + h * 0.7);
+    g.addColorStop(0, 'rgba(255,240,200,0)');
+    g.addColorStop(0.5, 'rgba(255,240,200,0.5)');
+    g.addColorStop(1, 'rgba(255,240,200,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+}
+
+/**
  * The glint over a piece drawn with `drawKit` into the same box: every `period` seconds (`phase` seconds into the
  * cycle) a band of light sweeps across its gold, left to right.
  */
