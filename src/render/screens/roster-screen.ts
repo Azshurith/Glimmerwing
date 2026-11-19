@@ -120,8 +120,10 @@ const MOCK = {
         [2054, 392],
     ],
     barRows: [379, 457],
-    skills: [521, 661, 801, 941],
-    skillX: [1000, 1506, 136],
+    skills: [519, 655, 795, 935],
+    // Where each panel's icons and labels sit across.
+    statIcons: [1056, 1832],
+    statLabels: [1105, 1883],
     // The demo frame: its middle across, its top, its height, and how far in its window starts (sides, top, foot).
     demo: [3021, 218, 912, 36, 23, 37],
     tray: [900, 1095, 1800, 255],
@@ -197,6 +199,41 @@ export function paintedDemo(spec: readonly number[]): PaintedDemo {
     const h = height - head - foot,
         w = (h * C.FIELD_W_BASE) / C.FIELD_H_BASE;
     return { frame: { x: cx - w / 2 - side, y: top, w: w + side * 2, h: height }, x: cx - w / 2, y: top + head, w, h };
+}
+
+/**
+ * A dark violet glass panel drawn in code, rounded `r`: a soft violet glow behind, a deep gradient fill, an edge that
+ * runs from gold at the left to violet at the right, and a faint light along its top.
+ */
+export function glassPanel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+    ctx.save();
+    ctx.shadowColor = 'rgba(150,80,255,0.35)';
+    ctx.shadowBlur = 30;
+    const fill = ctx.createLinearGradient(0, y, 0, y + h);
+    fill.addColorStop(0, '#2e1658');
+    fill.addColorStop(0.5, '#1a0b36');
+    fill.addColorStop(1, '#241048');
+    ctx.fillStyle = fill;
+    roundRect(ctx, x, y, w, h, r);
+    ctx.fill();
+    ctx.restore();
+    const edge = ctx.createLinearGradient(x, 0, x + w, 0);
+    edge.addColorStop(0, 'rgba(255,205,110,0.95)');
+    edge.addColorStop(0.35, 'rgba(214,140,255,0.8)');
+    edge.addColorStop(1, 'rgba(160,100,240,0.7)');
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 4;
+    roundRect(ctx, x, y, w, h, r);
+    ctx.stroke();
+    ctx.save();
+    roundRect(ctx, x, y, w, h, r);
+    ctx.clip();
+    const hl = ctx.createLinearGradient(0, y, 0, y + h * 0.45);
+    hl.addColorStop(0, 'rgba(220,180,255,0.18)');
+    hl.addColorStop(1, 'rgba(220,180,255,0)');
+    ctx.fillStyle = hl;
+    ctx.fillRect(x, y, w, h * 0.45);
+    ctx.restore();
 }
 
 /** How thick the code-drawn gold frames are, and the rounding of their inside, in a mockup's pixels. */
@@ -388,14 +425,27 @@ export function rosterMedallions(
     return designMedallions('tall', tallShift(f.h)).map(m => ({ x: f.x + m.x * f.s, y: m.y * f.s, r: m.r * f.s }));
 }
 
-/** A small gold icon for a stat: wings for speed, a bolt for charge, a star for burst, a diamond for dodge. */
+/** A small gold icon for a stat, about 9 across round (x, y): a wing for speed, lightning for charge, a bomb for burst,
+ * a diamond for dodge. */
 function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: number): void {
     ctx.fillStyle = goldGradient(ctx, y - 4, y + 4);
     ctx.beginPath();
     if (kind === 'speed') {
-        ctx.moveTo(x - 4, y + 2);
-        ctx.quadraticCurveTo(x, y - 4, x + 4, y - 3);
-        ctx.quadraticCurveTo(x + 1, y, x - 4, y + 2);
+        // One wing: five feathers fanned up and out from its root at the lower left, the top ones longest.
+        const rx = x - 3.6,
+            ry = y + 3.4;
+        for (let f = 0; f < 5; f++) {
+            const a = -1.25 + f * 0.27,
+                len = 8.4 - f * 0.9,
+                tx = rx + Math.cos(a) * len,
+                ty = ry + Math.sin(a) * len,
+                nx = -Math.sin(a) * 1.15,
+                ny = Math.cos(a) * 1.15;
+            ctx.moveTo(rx, ry);
+            ctx.quadraticCurveTo(rx + (tx - rx) * 0.55 - nx, ry + (ty - ry) * 0.55 - ny, tx, ty);
+            ctx.quadraticCurveTo(rx + (tx - rx) * 0.55 + nx, ry + (ty - ry) * 0.55 + ny, rx, ry);
+            ctx.closePath();
+        }
     } else if (kind === 'charge') {
         ctx.moveTo(x + 1, y - 4);
         ctx.lineTo(x - 3, y + 1);
@@ -404,7 +454,25 @@ function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: num
         ctx.lineTo(x + 3, y - 1);
         ctx.lineTo(x, y - 1);
     } else if (kind === 'burst') {
-        sparkle(ctx, x, y, 4);
+        // A round bomb with its cap and a fuse ending in a spark.
+        ctx.arc(x - 0.4, y + 0.8, 3.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.rect(x + 0.6, y - 3.1, 1.8, 1.4);
+        ctx.fill();
+        ctx.strokeStyle = goldGradient(ctx, y - 4, y);
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(x + 1.5, y - 3.1);
+        ctx.quadraticCurveTo(x + 2.2, y - 4.4, x + 3.4, y - 4);
+        ctx.stroke();
+        ctx.fillStyle = '#fff6d0';
+        sparkle(ctx, x + 3.6, y - 4.1, 1.4);
+        // A shine on the bomb.
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.beginPath();
+        ctx.arc(x - 1.5, y - 0.3, 0.7, 0, Math.PI * 2);
+        ctx.fill();
         return;
     } else {
         ctx.moveTo(x, y - 4);
@@ -414,6 +482,158 @@ function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: num
     }
     ctx.closePath();
     ctx.fill();
+}
+
+/**
+ * The fairies' tray, drawn in code into the box (x, y, w, h): a dark violet bar with one gold edge all round, its ends
+ * pointed violet caps each holding a gold arrow, the left one pointing left and the right one right.
+ */
+function trayBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+    const cy = y + h / 2,
+        cap = h * 0.62;
+    /** Traces the tray's outline, `inset` in from its edge. */
+    const outline = (inset: number) => {
+        const y0 = y + inset,
+            y1 = y + h - inset,
+            x0 = x + inset * 1.6,
+            x1 = x + w - inset * 1.6;
+        ctx.beginPath();
+        ctx.moveTo(x0, cy);
+        ctx.quadraticCurveTo(x0 + cap * 0.35, y0, x0 + cap, y0);
+        ctx.lineTo(x1 - cap, y0);
+        ctx.quadraticCurveTo(x1 - cap * 0.35, y0, x1, cy);
+        ctx.quadraticCurveTo(x1 - cap * 0.35, y1, x1 - cap, y1);
+        ctx.lineTo(x0 + cap, y1);
+        ctx.quadraticCurveTo(x0 + cap * 0.35, y1, x0, cy);
+        ctx.closePath();
+    };
+    ctx.save();
+    ctx.shadowColor = 'rgba(150,80,255,0.4)';
+    ctx.shadowBlur = 40;
+    const fill = ctx.createLinearGradient(0, y, 0, y + h);
+    fill.addColorStop(0, '#3a1a6e');
+    fill.addColorStop(0.5, '#1c0b3a');
+    fill.addColorStop(1, '#2c1256');
+    ctx.fillStyle = fill;
+    outline(0);
+    ctx.fill();
+    ctx.restore();
+    // One gold edge round the whole tray.
+    const gold = ctx.createLinearGradient(0, y, 0, y + h);
+    gold.addColorStop(0, '#fff4c0');
+    gold.addColorStop(0.5, '#e0a030');
+    gold.addColorStop(1, '#fff0b0');
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 6;
+    outline(3);
+    ctx.stroke();
+    // The arrows.
+    for (const d of [-1, 1]) {
+        const ax = d < 0 ? x + cap * 0.7 : x + w - cap * 0.7,
+            s = h * 0.2;
+        const ag = ctx.createLinearGradient(0, cy - s, 0, cy + s);
+        ag.addColorStop(0, '#fff6d0');
+        ag.addColorStop(0.5, '#ffc23a');
+        ag.addColorStop(1, '#d97a10');
+        ctx.save();
+        ctx.shadowColor = 'rgba(255,190,70,0.7)';
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = ag;
+        ctx.beginPath();
+        ctx.moveTo(ax + d * s, cy);
+        ctx.lineTo(ax - d * s * 0.6, cy - s);
+        ctx.lineTo(ax - d * s * 0.6, cy + s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = '#4a1e06';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
+}
+
+/** Each skill's orb colours: the glow, the ring and the glyph's light. */
+const ORB_COLOURS: Record<string, [string, string, string]> = {
+    SHOT: ['#a24dff', '#c98bff', '#ffffff'],
+    BOMB: ['#ff8a1c', '#ffc35a', '#fff6d0'],
+    'EXTRA ATTACK': ['#ff4fb8', '#ff9ad8', '#fff0fa'],
+    GUARDIAN: ['#b04dff', '#e08aff', '#fbeaff'],
+};
+
+/**
+ * A skill's orb, drawn in code round (cx, cy), `r` across the middle: a dark disc with a glow of the skill's colour, a
+ * double ring, and its glyph (a starburst for the shot, a sun for the bomb, a heart for the Extra Attack, a lotus for
+ * the guardian), gently pulsing.
+ */
+function skillOrb(ctx: CanvasRenderingContext2D, kind: string, cx: number, cy: number, r: number, t: number): void {
+    const [glow, ring, light] = ORB_COLOURS[kind] ?? ORB_COLOURS.SHOT;
+    ctx.save();
+    // A halo, then the disc glowing from its middle.
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = r * 0.6;
+    const disc = ctx.createRadialGradient(cx, cy, r * 0.05, cx, cy, r);
+    disc.addColorStop(0, glow);
+    disc.addColorStop(0.75, '#3a1468');
+    disc.addColorStop(1, '#1c0a38');
+    ctx.fillStyle = disc;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = r * 0.08;
+    ctx.strokeStyle = ring;
+    ctx.stroke();
+    ctx.lineWidth = r * 0.03;
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.84, 0, Math.PI * 2);
+    ctx.stroke();
+    // The glyph, glowing.
+    const k = r * (0.74 + 0.03 * Math.sin(t * 3));
+    ctx.translate(cx, cy);
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = r * 0.7;
+    const g = ctx.createRadialGradient(0, 0, k * 0.1, 0, 0, k);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.5, light);
+    g.addColorStop(1, ring);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    if (kind === 'SHOT' || kind === 'BOMB') {
+        // A ball with rays: eight thin ones for the shot, sixteen sun points for the bomb.
+        const rays = kind === 'SHOT' ? 8 : 16;
+        for (let i = 0; i < rays * 2; i++) {
+            const a = (i * Math.PI) / rays - Math.PI / 2,
+                rr = i % 2 ? k * 0.55 : k * (kind === 'SHOT' && i % 4 === 0 ? 1.1 : 0.85);
+            ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, 0, k * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (kind === 'EXTRA ATTACK') {
+        // A heart.
+        ctx.moveTo(0, k * 0.8);
+        ctx.bezierCurveTo(-k * 1.1, k * 0.05, -k * 0.75, -k * 0.85, 0, -k * 0.35);
+        ctx.bezierCurveTo(k * 0.75, -k * 0.85, k * 1.1, k * 0.05, 0, k * 0.8);
+        ctx.fill();
+    } else {
+        // A lotus: five petals fanned from its foot.
+        for (let i = -2; i <= 2; i++) {
+            ctx.save();
+            ctx.translate(0, k * 0.55);
+            ctx.rotate(i * 0.5);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(k * 0.38, -k * 0.6, 0, -k * (i === 0 ? 1.25 : 1.05));
+            ctx.quadraticCurveTo(-k * 0.38, -k * 0.6, 0, 0);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+    ctx.restore();
 }
 
 /** The Characters screen. */
@@ -507,8 +727,10 @@ export class RosterScreen {
         enter(ctx, 'bar', () => inFit(f.title, () => piece('title', MOCK.title, 0.2)));
         enter(ctx, 'panels', () => inFit(f.left, () => this.paintedPortrait(fy, locked, t)), { dx: -22 });
         enter(ctx, 'panels', () => inFit(f.right, () => demoFrame(ctx, d)), { dx: 22 });
-        enter(ctx, 'panels', () => inFit(f.mid, () => this.paintedInfo(fy, locked, t, piece)), { dx: 0, dy: 10 });
-        enter(ctx, 'buttons', () => inFit(f.tray, () => piece('tray', MOCK.tray, 1.2)));
+        enter(ctx, 'panels', () => inFit(f.mid, () => this.paintedInfo(fy, locked, t)), { dx: 0, dy: 10 });
+        enter(ctx, 'buttons', () =>
+            inFit(f.tray, () => trayBar(ctx, MOCK.tray[0], MOCK.tray[1] + 30, MOCK.tray[2], MOCK.tray[3] - 50)),
+        );
         const m = MOCK.meds;
         FAIRIES.forEach((other, i) =>
             enter(
@@ -663,26 +885,28 @@ export class RosterScreen {
         arcadeText(ctx, name, cx, py + ph / 2 + 28, 80, ['#fff7d8', '#ffd98a', '#e0a040'], 'center', pw - 220);
     }
 
-    /** Her blurb, the stat panels with her bars, and her four skills on their painted rows. */
-    private paintedInfo(
-        fy: Fairy,
-        locked: boolean,
-        t: number,
-        piece: (name: string, b: readonly number[], phase?: number) => void,
-    ): void {
+    /** Her blurb, the stat panels with her bars, and her four skills: panels, icons and orbs all drawn in code. */
+    private paintedInfo(fy: Fairy, locked: boolean, t: number): void {
         const ctx = this.ctx;
         ctx.textAlign = 'left';
         ctx.font = `italic 600 50px ${FONT}`;
         ctx.fillStyle = locked ? '#ffe27a' : '#f6f0ff';
         const [bx, by] = MOCK.blurb;
         ctx.fillText(locked ? `To unlock: ${fy.unlock?.hint ?? ''}` : `${fy.blurb}.`, bx, by, 1500);
-        piece('statsL', MOCK.statsL, 1.6);
-        piece('statsR', MOCK.statsR, 2.1);
+        glassPanel(ctx, MOCK.statsL[0], MOCK.statsL[1], MOCK.statsL[2], MOCK.statsL[3], 56);
+        glassPanel(ctx, MOCK.statsR[0], MOCK.statsR[1], MOCK.statsR[2], MOCK.statsR[3], 56);
         const stats = statsOf(fy);
-        stats.forEach(([, n], i) => {
+        stats.forEach(([label, n], i) => {
             const [x0, w] = MOCK.bars[i >> 1],
                 y = MOCK.barRows[i & 1],
                 bw = w / 5;
+            // Its icon, drawn in code at eight times its HUD size.
+            ctx.save();
+            ctx.translate(MOCK.statIcons[i >> 1], y);
+            ctx.scale(8, 8);
+            statIcon(ctx, statsOf(fy)[i][2], 0, 0);
+            ctx.restore();
+            arcadeText(ctx, label, MOCK.statLabels[i >> 1], y + 15, 40, ['#ffffff', '#f6efff', '#d8c8ff'], 'left', 150);
             for (let k = 0; k < 5; k++) {
                 const on = !locked && k < n;
                 ctx.fillStyle = on ? '#6af07a' : 'rgba(255,255,255,0.1)';
@@ -695,11 +919,16 @@ export class RosterScreen {
                 }
             }
         });
-        const [sx, sw, sh] = MOCK.skillX;
-        skillsOf(fy, locked).forEach(([, name, text], i) => {
-            const y = MOCK.skills[i];
-            piece(`skill${i}`, [sx, y - 6, sw, sh], 2.6 + i * 0.4);
-            arcadeText(ctx, name.toUpperCase(), 1224, y + 104, 48, ['#fff3c0', '#ffd45c', '#e08a1c'], 'left', 480);
+        skillsOf(fy, locked).forEach(([kind, name, text], i) => {
+            const y = MOCK.skills[i],
+                cy = y + 71;
+            // As wide as the two stat panels together.
+            const sx0 = MOCK.statsL[0],
+                sx1 = MOCK.statsR[0] + MOCK.statsR[2];
+            glassPanel(ctx, sx0, cy - 61, sx1 - sx0, 122, 61);
+            skillOrb(ctx, kind, sx0 + 68, cy, 60, t);
+            arcadeText(ctx, kind, sx0 + 156, y + 50, 34, ['#ffffff', '#f6efff', '#d8c8ff'], 'left', 480);
+            arcadeText(ctx, name.toUpperCase(), sx0 + 156, y + 104, 48, ['#fff3c0', '#ffd45c', '#e08a1c'], 'left', 480);
             if (text) {
                 ctx.textAlign = 'left';
                 ctx.font = `italic 600 38px ${FONT}`;
@@ -707,7 +936,6 @@ export class RosterScreen {
                 ctx.fillText(`${text}.`, 1735, y + 76, 720);
             }
         });
-        void t;
     }
 
     /** One fairy's medallion on the painted tray: her colour and her look in a gold ring, glowing when she's in view. */
@@ -728,8 +956,29 @@ export class RosterScreen {
         ctx.restore();
         if (on) {
             // Its ring holds still: no shine sweeping round it.
-            KIT.draw(ctx, 'medOn', x - 120, y - 122, 240, 240);
-        } else KIT.draw(ctx, 'medOff', x - 90, y - 90, 180, 180);
+            // A thick gold ring that glows.
+            ctx.save();
+            ctx.shadowColor = 'rgba(255,200,80,0.9)';
+            ctx.shadowBlur = 40;
+            ctx.strokeStyle = goldGradient(ctx, y - r, y + r);
+            ctx.lineWidth = 12;
+            ctx.beginPath();
+            ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+            ctx.strokeStyle = 'rgba(255,250,220,0.9)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(x, y, r + 10, 0, Math.PI * 2);
+            ctx.stroke();
+        } else {
+            // A thin gold ring.
+            ctx.strokeStyle = goldGradient(ctx, y - r, y + r);
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+            ctx.stroke();
+        }
     }
 
     /** The PREVIEW button in the corner of her portrait (phones only), glowing gently. */
