@@ -2406,6 +2406,17 @@ export class Game {
         saveProgress(this.progress);
     }
 
+    /** The Paused banner, telling the player how to carry on (a tap on the pause button, or P). */
+    private pauseBanner(touch: boolean): void {
+        this.r.banner({
+            title: 'Paused',
+            sub: touch ? 'Tap the pause button to resume' : 'Press P to resume',
+            dim: 0.6,
+            tone: 'blue',
+            blinkSub: true,
+        });
+    }
+
     /** Draw the current screen. */
     draw(): void {
         const r = this.r;
@@ -2807,8 +2818,10 @@ export class Game {
                 break;
             }
             case 'playing':
-                // Fight!: as play starts, with the announcer, fading off the meadows.
-                if (this.phaseT < FIGHT_BANNER_TIME)
+                // Paused: the pause banner over everything. Otherwise Fight!: as play starts, with the announcer,
+                // fading off the meadows.
+                if (this.paused) this.pauseBanner(touch);
+                else if (this.phaseT < FIGHT_BANNER_TIME)
                     r.banner({ title: 'Fight!', age: this.phaseT, dim: 0.1, size: 40, tone: 'pink' });
                 break;
             case 'roundOver': {
@@ -2891,14 +2904,7 @@ export class Game {
                 break;
             }
             default:
-                if (this.paused)
-                    r.banner({
-                        title: 'Paused',
-                        sub: touch ? 'Tap the pause button to resume' : 'Press P to resume',
-                        dim: 0.6,
-                        tone: 'blue',
-                        blinkSub: true,
-                    });
+                if (this.paused) this.pauseBanner(touch);
         }
         if (this.replay) {
             const rp = this.replay,
