@@ -399,60 +399,14 @@
             .screen[data-layout='tall'] #chat {
                 /* Sized from the screen's width rather than the panel's 6%, which made everything huge. */
                 font-size: clamp(14px, calc(var(--chat-w, 400px) * 0.042), 19px);
-                background:
-                    radial-gradient(120% 50% at 50% 0%, rgba(120, 70, 210, 0.35), transparent 70%),
-                    linear-gradient(180deg, #1c0e46 0%, #0e0824 55%, #0a0620 100%);
-                border-right: 0;
-                box-shadow:
-                    inset 0 0 0 2px rgba(201, 162, 74, 0.75),
-                    inset 0 0 0 4px rgba(20, 8, 48, 0.9),
-                    inset 0 0 0 5px rgba(255, 220, 140, 0.25);
+                border-radius: 0;
             }
             .screen[data-layout='tall'] #chat .chat-head {
-                gap: 0.55em;
-                padding: calc(0.7em + env(safe-area-inset-top, 0px)) 0.8em 0.7em;
-                border-bottom: 0;
-                background: linear-gradient(180deg, rgba(40, 20, 90, 0.9), rgba(20, 10, 50, 0.6));
-                box-shadow: 0 1px 0 rgba(217, 168, 69, 0.55);
-            }
-            .screen[data-layout='tall'] #chat .chat-title {
-                font-size: 1.35em;
-                text-transform: uppercase;
-                background: linear-gradient(180deg, #fff6d0, #ffd45c 55%, #e88a1c);
-                -webkit-background-clip: text;
-                background-clip: text;
-                color: transparent;
-                filter: drop-shadow(0 1px 0 rgba(60, 20, 0, 0.8));
-            }
-            /* Tabs: gold-edged pills that fit their whole names. */
-            .screen[data-layout='tall'] #chat .chat-tabs {
-                gap: 0.35em;
-                padding: 0.25em;
-                border-radius: 999px;
-                background: rgba(0, 0, 0, 0.35);
-                box-shadow: inset 0 0 0 1px rgba(201, 162, 74, 0.45);
+                padding-top: calc(0.7em + env(safe-area-inset-top, 0px));
             }
             .screen[data-layout='tall'] #chat .chat-tab {
                 font-size: 0.78em;
-                min-width: 0;
                 min-height: 2.4em;
-                padding: 0.4em 0.3em;
-                border-radius: 999px;
-                background: transparent;
-                text-overflow: clip;
-            }
-            .screen[data-layout='tall'] #chat .chat-tab[aria-selected='true'] {
-                background: linear-gradient(180deg, #fff0b0, #e0a83e 60%, #c48a2a);
-                box-shadow: 0 0 0.6em rgba(255, 196, 80, 0.45);
-            }
-            .screen[data-layout='tall'] #chat :is(.chat-close, .chat-style-btn) {
-                font-size: 0.8em;
-                min-height: 2.4em;
-                min-width: 2.4em;
-                border-radius: 999px;
-                background: rgba(30, 14, 70, 0.9);
-                box-shadow: inset 0 0 0 1px rgba(201, 162, 74, 0.7);
-                color: #ffe7a8;
             }
             .screen[data-layout='tall'] #chat .chat-log {
                 padding: 0.5em 0.8em;
@@ -477,30 +431,15 @@
                 line-height: 1.45;
             }
             .screen[data-layout='tall'] #chat .chat-form {
-                gap: 0.6em;
-                padding: 0.7em 0.8em calc(0.8em + env(safe-area-inset-bottom, 0px));
-                border-top: 0;
-                background: linear-gradient(0deg, rgba(40, 20, 90, 0.9), rgba(20, 10, 50, 0.6));
-                box-shadow: 0 -1px 0 rgba(217, 168, 69, 0.55);
+                padding-bottom: calc(0.8em + env(safe-area-inset-bottom, 0px));
             }
             .screen[data-layout='tall'] #chat .chat-form input {
                 /* 16px or more keeps iOS Safari from zooming in on focus. */
                 font-size: max(1em, 16px);
                 min-height: 2.8em;
-                padding: 0.5em 1em;
-                border-radius: 999px;
-                border-color: rgba(201, 162, 74, 0.7);
-                background: rgba(8, 4, 24, 0.7);
             }
             .screen[data-layout='tall'] #chat .chat-form button {
-                font-size: 0.85em;
                 min-height: 3.2em;
-                padding: 0.5em 1.4em;
-                border-radius: 999px;
-                text-transform: uppercase;
-                box-shadow:
-                    inset 0 0 0 1px rgba(255, 245, 200, 0.6),
-                    0 0 0.6em rgba(255, 196, 80, 0.35);
             }
             /* Wide layout on a narrow screen (a phone held sideways): the sidebar chat would be a
                cramped strip, so it opens as a wide overlay with big readable text instead. Everything
@@ -508,8 +447,6 @@
             @media (max-width: 900px) {
                 .screen:not([data-layout='tall']) #chat {
                     width: min(94%, 32em);
-                    background: #0e0824;
-                    box-shadow: 0 0 2em rgba(0, 0, 0, 0.6);
                 }
                 .screen:not([data-layout='tall']) #chat .chat-log {
                     padding: 0.5em 0.8em 0.5em max(0.8em, env(safe-area-inset-left, 0px));
@@ -790,6 +727,204 @@
             .chat-form input:disabled {
                 opacity: 0.5;
                 cursor: default;
+            }
+            /* ---- The chat panel's look, after the game's painted mockup: violet glass in a glowing gold frame with
+               stars at its corners, a gold CHAT heading with a speech bubble, slanted tabs (gold when chosen), the
+               log in a dark inset well with a gold scroll bar, and a quill-marked input beside a gold Send. ---- */
+            #chat {
+                background:
+                    radial-gradient(120% 40% at 50% 0%, rgba(140, 80, 230, 0.35), transparent 70%),
+                    linear-gradient(180deg, #2a1258 0%, #170a3a 45%, #120830 100%);
+                border-right: 0;
+                border-radius: 0 0.9em 0.9em 0;
+                box-shadow:
+                    inset 0 0 0 0.12em #ffd36a,
+                    inset 0 0 0 0.24em #3a1a10,
+                    inset 0 0 0 0.3em rgba(255, 220, 140, 0.55),
+                    inset 0 0 1.2em rgba(255, 170, 60, 0.35),
+                    0 0 1.4em rgba(255, 160, 60, 0.35),
+                    0 0.4em 1.6em rgba(0, 0, 0, 0.5);
+            }
+            /* Four-pointed stars at the frame's right corners. */
+            #chat::before,
+            #chat::after {
+                content: '';
+                position: absolute;
+                right: 0.15em;
+                width: 1.1em;
+                height: 1.1em;
+                background: radial-gradient(circle, #fff 0 12%, #d8b8ff 30%, transparent 32%), #ffd36a;
+                clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+                filter: drop-shadow(0 0 0.3em rgba(255, 210, 120, 0.9));
+                pointer-events: none;
+                z-index: 2;
+            }
+            #chat::before {
+                top: 0.15em;
+            }
+            #chat::after {
+                bottom: 0.15em;
+            }
+            #chat .chat-head {
+                gap: 0.5em;
+                padding: 0.7em 0.8em 0.4em;
+                border-bottom: 0;
+            }
+            #chat .chat-title {
+                display: flex;
+                align-items: center;
+                gap: 0.35em;
+                font:
+                    400 1.3em 'Bungee',
+                    'Nunito',
+                    sans-serif;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                background: linear-gradient(180deg, #fff6d0, #ffd45c 55%, #e88a1c);
+                -webkit-background-clip: text;
+                background-clip: text;
+                color: transparent;
+                filter: drop-shadow(0 0.06em 0 rgba(60, 20, 0, 0.85));
+            }
+            /* A gold speech bubble with three dots before the heading. */
+            #chat .chat-title::before {
+                content: '';
+                flex: none;
+                width: 1.15em;
+                height: 1em;
+                background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 21'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23fff3b0'/%3E%3Cstop offset='1' stop-color='%23f0a020'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M12 1C5.9 1 1 4.9 1 9.6c0 2.6 1.5 4.9 3.8 6.5L3.5 20l4.6-2.6c1.2.3 2.5.5 3.9.5 6.1 0 11-3.8 11-8.4S18.1 1 12 1z' fill='url(%23g)' stroke='%235a2a08' stroke-width='1.2'/%3E%3Ccircle cx='7.5' cy='9.6' r='1.5' fill='%235a2a08'/%3E%3Ccircle cx='12' cy='9.6' r='1.5' fill='%235a2a08'/%3E%3Ccircle cx='16.5' cy='9.6' r='1.5' fill='%235a2a08'/%3E%3C/svg%3E")
+                    center / contain no-repeat;
+            }
+            #chat .chat-head :is(.chat-style-btn, .chat-close) {
+                color: #ffffff;
+                font-size: 0.85em;
+                border-radius: 0.4em;
+                background: linear-gradient(180deg, #5a2aa8, #2c1266);
+                box-shadow:
+                    inset 0 0 0 0.1em #ffd36a,
+                    inset 0 0 0 0.18em #3a1a10,
+                    0 0 0.6em rgba(170, 100, 255, 0.45);
+            }
+            #chat .chat-style-btn[aria-pressed='true'] {
+                color: #2a0e04;
+                background: linear-gradient(180deg, #fff3b0, #ffd23e 55%, #f0a010);
+            }
+            #chat .chat-close {
+                font-size: 1em;
+                font-weight: 900;
+            }
+            /* Tabs: slanted plates in a gold edge, their names kept upright. */
+            #chat .chat-tabs {
+                gap: 0.45em;
+                padding: 0 0.3em;
+            }
+            #chat .chat-tab {
+                transform: skewX(-14deg);
+                color: #ffffff;
+                border-radius: 0.35em;
+                background: linear-gradient(180deg, #6a34c0, #3a168a 60%, #2a0f66);
+                box-shadow:
+                    inset 0 0 0 0.1em #e8a8ff,
+                    inset 0 0.25em 0.5em rgba(255, 255, 255, 0.18),
+                    0 0 0.5em rgba(170, 100, 255, 0.4);
+                text-overflow: clip;
+            }
+            #chat .chat-tab > span {
+                display: inline-block;
+                transform: skewX(14deg);
+            }
+            #chat .chat-tab[aria-selected='true'] {
+                color: #2a0e04;
+                background: linear-gradient(180deg, #fff6c0, #ffd23e 50%, #f0a010);
+                box-shadow:
+                    inset 0 0 0 0.1em #fff4c0,
+                    inset 0 -0.2em 0.3em rgba(180, 90, 0, 0.35),
+                    0 0 0.7em rgba(255, 190, 70, 0.6);
+            }
+            #chat .chat-tab.soon {
+                opacity: 0.8;
+            }
+            /* The log and the style picker sit in a dark inset well. */
+            #chat :is(.chat-log, .chat-style) {
+                margin: 0.5em 0.8em 0.3em;
+                border-radius: 0.5em;
+                background: linear-gradient(180deg, rgba(14, 6, 38, 0.92), rgba(24, 10, 60, 0.9));
+                box-shadow:
+                    inset 0 0 0 0.06em rgba(190, 150, 255, 0.45),
+                    inset 0 0 1.4em rgba(0, 0, 0, 0.55),
+                    0 0 0.6em rgba(160, 90, 255, 0.35);
+                scrollbar-width: thin;
+                scrollbar-color: #f0b030 rgba(60, 30, 20, 0.6);
+            }
+            #chat :is(.chat-log, .chat-style)::-webkit-scrollbar {
+                width: 0.55em;
+            }
+            #chat :is(.chat-log, .chat-style)::-webkit-scrollbar-track {
+                margin: 0.4em 0;
+                border-radius: 1em;
+                background: linear-gradient(180deg, #5a3a20, #3a2410);
+            }
+            #chat :is(.chat-log, .chat-style)::-webkit-scrollbar-thumb {
+                border-radius: 1em;
+                background: linear-gradient(90deg, #fff0a0, #f0a020 60%, #c87010);
+                box-shadow: inset 0 0 0 0.06em #3a1a08;
+            }
+            #chat .chat-form {
+                gap: 0.6em;
+                margin: 0 0.8em 0.8em;
+                padding: 0.45em;
+                border-top: 0;
+                border-radius: 0.7em;
+                background: linear-gradient(180deg, rgba(60, 28, 120, 0.7), rgba(30, 12, 70, 0.7));
+                box-shadow: inset 0 0 0 0.06em rgba(255, 210, 120, 0.45);
+            }
+            #chat .chat-form input {
+                padding-left: 2.4em;
+                padding-right: 0.5em;
+                border: 0;
+                border-radius: 0.5em;
+                color: #ffffff;
+                background:
+                    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 2C12 3 6 9 4.5 16.5L3 22l1.5-1C6 15 9 11 13 8c-3 3.5-5 7-6 11 6-1 11-5 13-12l-3 1 4-6z' fill='%23f4ecff'/%3E%3C/svg%3E")
+                        0.75em center / 1.3em no-repeat,
+                    linear-gradient(180deg, #1a0b40, #241050);
+                box-shadow:
+                    inset 0 0 0 0.08em rgba(120, 190, 255, 0.55),
+                    0 0 0.5em rgba(100, 170, 255, 0.25);
+            }
+            #chat .chat-form input:focus {
+                outline: none;
+                box-shadow:
+                    inset 0 0 0 0.1em rgba(255, 210, 120, 0.85),
+                    0 0 0.7em rgba(255, 190, 90, 0.4);
+            }
+            #chat .chat-form input::placeholder {
+                color: rgba(200, 185, 240, 0.7);
+                font-size: 0.88em;
+            }
+            #chat .chat-form button {
+                display: flex;
+                align-items: center;
+                gap: 0.45em;
+                flex: none;
+                padding: 0.5em 0.9em;
+                font-size: 1em;
+                font-weight: 900;
+                color: #2a0e04;
+                border-radius: 0.55em;
+                background: linear-gradient(180deg, #fff6c0, #ffd23e 50%, #f0a010);
+                box-shadow:
+                    inset 0 0 0 0.08em #fff4c0,
+                    inset 0 -0.2em 0.3em rgba(180, 90, 0, 0.35),
+                    0 0 0.8em rgba(255, 190, 70, 0.55);
+            }
+            /* A paper plane before Send. */
+            #chat .chat-form button::before {
+                content: '';
+                width: 1.1em;
+                height: 1.1em;
+                background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M22 2 2 10.5l7 2.5 2.5 7L22 2zM9 13l13-11' fill='%232a0e04' stroke='%232a0e04' stroke-width='1' stroke-linejoin='round'/%3E%3C/svg%3E")
+                    center / contain no-repeat;
             }
             #settings {
                 position: absolute;
@@ -1433,7 +1568,7 @@
                         <span class="chat-title">Chat</span>
                         <div class="chat-tabs" role="tablist" aria-label="Chat channels">
                             <button type="button" class="chat-tab" role="tab" data-ch="world" aria-selected="true">
-                                World
+                                <span>World</span>
                             </button>
                             <button
                                 type="button"
@@ -1442,7 +1577,7 @@
                                 data-ch="friends"
                                 aria-selected="false"
                             >
-                                Friends
+                                <span>Friends</span>
                             </button>
                             <button
                                 type="button"
@@ -1451,7 +1586,7 @@
                                 data-ch="lobby"
                                 aria-selected="false"
                             >
-                                Lobby
+                                <span>Lobby</span>
                             </button>
                             <button
                                 type="button"
@@ -1460,7 +1595,7 @@
                                 data-ch="guild"
                                 aria-selected="false"
                             >
-                                Guild
+                                <span>Guild</span>
                             </button>
                         </div>
                         <button type="button" class="chat-style-btn" aria-pressed="false">Style</button>
@@ -1481,7 +1616,7 @@
                         <input
                             type="text"
                             maxlength="140"
-                            placeholder="Say something to everyone"
+                            placeholder="Say something to everyone…"
                             aria-label="Message"
                             enterkeyhint="send"
                         />

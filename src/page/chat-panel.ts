@@ -332,7 +332,7 @@ export function initChatPanel(d: ChatPanelDeps): { sync: () => void } {
                 root.hidden = false;
                 const can = !!d.account.apiBase;
                 input.disabled = send.disabled = !can;
-                input.placeholder = can ? 'Say something to everyone' : 'Chat needs the game server';
+                input.placeholder = can ? 'Say something to everyone…' : 'Chat needs the game server';
                 showStyle(false);
                 log.scrollTop = log.scrollHeight;
                 void poll();
