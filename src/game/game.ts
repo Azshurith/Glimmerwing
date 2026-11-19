@@ -154,7 +154,8 @@ function tallPlacement(
     const ownX = !fit ? 0 : over <= 0 ? -over / 2 : Math.max(-over, Math.min(0, C.TALL_W / 2 - followX * s));
     // Your meadow sits against the bottom edge, as in play; one shrunk to show a wider recording whole rises above
     // the replay's controls as far as the room allows (keeping the band at least TALL_TOP high).
-    const lift = fit && !solo && s < C.TALL_OWN_S ? Math.max(0, Math.min(REPLAY_PANEL_ROOM, h - C.FIELD_H * s - C.TALL_TOP)) : 0;
+    const lift =
+        fit && !solo && s < C.TALL_OWN_S ? Math.max(0, Math.min(REPLAY_PANEL_ROOM, h - C.FIELD_H * s - C.TALL_TOP)) : 0;
     const ownY = h - C.FIELD_H * s - lift;
     const k = Math.min(1, ownY / C.TALL_TOP);
     const band = { x: (C.TALL_W * (1 - k)) / 2, y: Math.max(0, (ownY - C.TALL_TOP * k) / 2), s: k };
