@@ -12,14 +12,15 @@ import { roundRect } from './emblems';
 import { tallMenuFit } from './menu-fit';
 import { drawKit } from './kit';
 import { PieceAtlas } from './kit';
-import { kitButton, kitHintBar, kitPanel, kitPill, kitReady, kitTab, mockBox, mockFit } from './kit-ui';
+import { kitButton, kitHintBar, kitPanel, kitPill, kitReady, kitTab, mockBox } from './kit-ui';
 import type { MockFit } from './kit-ui';
 import kitUrl from '@/../assets/ui/match-kit.png';
 import goldUrl from '@/../assets/ui/match-kit-gold.png';
 import { MATCH_KIT } from '@/data/match-kit';
 import { drawMedal, drawPlayerCard, playerCardReady } from './profile-screen';
 import { enter } from '@/render/transition';
-import { ornateScreen, ornateTitle } from './ornate';
+import { goldGradient, ornateScreen, ornateTitle, pointed } from './ornate';
+import { glassPanel, goldRoundFrame } from './roster-screen';
 
 /** How far the tall screen's content moves down to sit centred in a view `h` tall. */
 const tallShift = (h: number) => Math.max(0, h - C.TALL_H) / 2;
@@ -98,7 +99,7 @@ const MOCK = {
         [1764, 347, 575, 98],
         [2352, 347, 575, 98],
     ],
-    card: [96, 176, 808, 1408],
+    card: [0, 220, 790, 1380],
     tag: [1570, 376, 425, 72],
     banner: [1279, 450, 995, 224],
     frames: [
@@ -122,10 +123,54 @@ const MOCK = {
     hint: [960, 1600, 1660, 140],
 } as const;
 
-/** Where the landscape match details' mockup sits in a view widened by `bleed`. */
-function matchFit(bleed: number): MockFit {
-    const [x0, y0, x1, y1] = MOCK.area;
-    return mockFit(C.VIEW_W, C.VIEW_H, bleed, x0, y0, x1, y1, 2);
+/** Where the screen's middle is, in the mockups' pixels: the heading, tabs and hint bar are centred on it. */
+const MID = 1790;
+
+/**
+ * Where landscape match details sit in a view widened by `bleed`: one fit at the scale that fits the mockups' height,
+ * their middle on the view's, and the view's left and right edges (`L`, `R`) in their pixels, so the screen can reach
+ * them.
+ */
+interface MatchFits {
+    f: MockFit;
+    L: number;
+    R: number;
+}
+
+/** The match details fitted to a view widened by `bleed`, filling it edge to edge. */
+function matchFits(bleed: number): MatchFits {
+    const x0 = -bleed + 4,
+        x1 = C.VIEW_W + bleed - 4,
+        y0 = 2,
+        y1 = C.VIEW_H - 2;
+    const [, my0, , my1] = MOCK.area;
+    const s = Math.min((y1 - y0) / (my1 - my0), (x1 - x0) / 3500);
+    const f = { s, x: (x0 + x1) / 2 - MID * s, y: (y0 + y1) / 2 - ((my0 + my1) / 2) * s };
+    const half = (x1 - x0) / 2 / s;
+    return { f, L: MID - half, R: MID + half };
+}
+
+/**
+ * Overview's room beside the player card, between `L` and `R`: its left and right edges and middle, where the
+ * fairies' frames centre (`left`, `right`), and the Watch Replay and Copy Link buttons, all in the mockups' pixels.
+ */
+function overviewRoom(L: number, R: number) {
+    const [, , cw] = MOCK.card;
+    const a = L + 10 + cw + 60,
+        b = R - 30,
+        w = b - a,
+        mid = (a + b) / 2;
+    const [, wy, , wh] = MOCK.watch;
+    const bw = Math.min(1100, (w - 60) / 2);
+    return {
+        a,
+        b,
+        mid,
+        left: a + w * 0.18,
+        right: b - w * 0.18,
+        watch: [mid - 30 - bw, wy, bw, wh] as const,
+        copy: [mid + 30, wy, bw, wh] as const,
+    };
 }
 
 /** Whether the landscape screen is drawn from its painted pieces (once they've loaded). */
@@ -167,13 +212,14 @@ function designLayout(layout: Layout, dy: number): { tabs: Box[]; graphs: Box[];
 /** The tabs, graph tabs and buttons in view units (their tap targets), for a view `h` tall. */
 export function matchBoxes(layout: Layout, h: number = C.TALL_H, bleed = 0): ReturnType<typeof designLayout> {
     if (layout !== 'tall' && painted()) {
-        const f = matchFit(bleed);
+        const { f, L, R } = matchFits(bleed);
+        const room = overviewRoom(L, R);
         const box = (b: readonly number[]) => mockBox(f, b[0], b[1], b[2], b[3]);
         return {
             tabs: MOCK.tabs.map(box),
             graphs: MOCK.graphs.map(box),
-            watch: box(MOCK.watch),
-            copy: box(MOCK.copy),
+            watch: box(room.watch),
+            copy: box(room.copy),
         };
     }
     if (layout !== 'tall') return designLayout(layout, 0);
@@ -261,46 +307,52 @@ export class MatchScreen {
         ctx.restore();
     }
 
-    /** Landscape match details drawn from the painted pieces, laid out as their mockups and fitted to the view. */
+    /**
+     * Landscape match details, filling the screen edge to edge and drawn in code but for the winged heading: the tabs,
+     * then Overview beside the player card, or the Scoreboard or the chart across the whole width, and the hint bar.
+     */
     private drawPainted(v: MatchInfoView, t: number, bleed: number): void {
         const ctx = this.ctx;
         const W = C.VIEW_W,
             H = C.VIEW_H;
-        const f = matchFit(bleed);
+        const { f, L, R } = matchFits(bleed);
         ctx.save();
         enter(ctx, 'bg', () => ornateScreen(ctx, t, W, H, bleed, '', false));
         ctx.save();
         ctx.translate(f.x, f.y);
         ctx.scale(f.s, f.s);
-        enter(ctx, 'bar', () => this.piece('title', MOCK.title, 0));
+        enter(ctx, 'bar', () =>
+            this.piece('title', [MID - MOCK.title[2] / 2, MOCK.title[1], MOCK.title[2], MOCK.title[3]], 0),
+        );
         MOCK.tabs.forEach((b, i) =>
             enter(ctx, 'buttons', () => this.paintedTab(b, TAB_LABELS[MATCH_TABS[i]], MATCH_TABS[i] === v.tab, 56), {
                 i,
             }),
         );
         const stats = v.stats;
-        if (v.tab === 'overview') enter(ctx, 'panels', () => this.paintedOverview(v, t));
+        if (v.tab === 'overview') enter(ctx, 'panels', () => this.paintedOverview(v, t, L, R));
         else if (!stats) {
             ctx.textAlign = 'center';
             ctx.font = `italic 600 52px ${FONT}`;
             ctx.fillStyle = 'rgba(214,204,250,0.9)';
-            v.statsNote.split('\n').forEach((l, i) => ctx.fillText(l, 1790, 820 + i * 70, 2600));
-        } else if (v.tab === 'scoreboard') enter(ctx, 'panels', () => this.paintedBoard(v, stats, t));
+            v.statsNote.split('\n').forEach((l, i) => ctx.fillText(l, MID, 820 + i * 70, 2600));
+        } else if (v.tab === 'scoreboard') enter(ctx, 'panels', () => this.paintedBoard(v, stats, t, L, R));
         else {
             MOCK.graphs.forEach((b, i) =>
                 enter(ctx, 'buttons', () => this.paintedTab(b, GRAPHS[i], i === v.graph, 44, true), { i: i + 3 }),
             );
             enter(ctx, 'panels', () => {
-                // A dark pane inside the painted frame for the chart to sit on.
-                ctx.fillStyle = 'rgba(16,8,40,0.86)';
-                roundRect(ctx, 200, 556, 3280, 734, 40);
+                // A dark pane in a gold frame for the chart to sit on.
+                const [, cy, , ch] = MOCK.chart;
+                ctx.fillStyle = 'rgba(16,8,40,0.88)';
+                roundRect(ctx, L + 70, cy, R - L - 140, ch, 60);
                 ctx.fill();
-                this.piece('chart', MOCK.chart, 3);
+                goldRoundFrame(ctx, L + 70, cy, R - L - 140, ch, 60, 16);
             });
         }
-        const [hx, hy, hw, hh] = MOCK.hint;
+        const [, hy, hw, hh] = MOCK.hint;
         enter(ctx, 'hint', () => {
-            this.piece('hintBar', MOCK.hint);
+            hintBar(ctx, MID - hw / 2, hy + 10, hw, hh - 20);
             ctx.textAlign = 'center';
             ctx.font = `800 40px ${SANS}`;
             ctx.fillStyle = '#ffffff';
@@ -308,13 +360,13 @@ export class MatchScreen {
                 v.tab === 'graphs'
                     ? '◀ ▶ TABS  ·  ▲ ▼ GRAPHS  ·  ENTER WATCHES  ·  ESC BACK'
                     : '◀ ▶ TABS  ·  ENTER WATCHES  ·  ESC BACK';
-            ctx.fillText(v.touch ? '◀ BACK TO THE HISTORY' : keys, hx + hw / 2, hy + hh * 0.62, hw - 150);
+            ctx.fillText(v.touch ? '◀ BACK TO THE HISTORY' : keys, MID, hy + hh * 0.62, hw - 150);
         });
         ctx.restore();
-        // The chart is drawn in view units over its painted frame, so its lines and lettering stay crisp.
+        // The chart is drawn in view units inside its frame, so its lines and lettering stay crisp.
         if (v.tab === 'graphs' && stats) {
-            const [px, py, pw, ph] = MOCK.plot;
-            enter(ctx, 'panels', () => this.graph(v, stats, false, W, bleed, mockBox(f, px, py, pw, ph)));
+            const [, py, , ph] = MOCK.plot;
+            enter(ctx, 'panels', () => this.graph(v, stats, false, W, bleed, mockBox(f, L + 160, py, R - L - 300, ph)));
         }
         ctx.restore();
     }
@@ -325,10 +377,10 @@ export class MatchScreen {
         if (phase !== undefined) KIT.glint(this.ctx, name, b[0], b[1], b[2], b[3], this.t, phase, 7);
     }
 
-    /** A painted tab, gold when it's showing (lilac for the graphs' own tabs), with its label. */
+    /** A slanted tab drawn in code, gold when it's showing (lilac for the graphs' own tabs), with its label. */
     private paintedTab(b: readonly number[], label: string, on: boolean, size: number, graph = false): void {
         const ctx = this.ctx;
-        this.piece(graph ? (on ? 'subOn' : 'subOff') : on ? 'tabOn' : 'tabOff', b, on ? 1 : undefined);
+        slantPlate(ctx, b[0], b[1], b[2], b[3], on ? (graph ? 'lilac' : 'gold') : 'violet', this.t);
         ctx.textAlign = 'center';
         ctx.font = `800 ${size}px ${SANS}`;
         ctx.fillStyle = on ? (graph ? '#1e0c3c' : '#2e1004') : '#ffffff';
@@ -336,58 +388,68 @@ export class MatchScreen {
     }
 
     /** The painted Overview: the card, the result on its banner, the fairies in their frames, score, tiles, buttons. */
-    private paintedOverview(v: MatchInfoView, t: number): void {
+    private paintedOverview(v: MatchInfoView, t: number, L: number, R: number): void {
         const ctx = this.ctx;
-        drawPlayerCard(ctx, v.card, MOCK.card, t);
-        const [tx, ty, tw, th] = MOCK.tag;
-        this.piece('tag', MOCK.tag, 2);
+        const [, cy, cw, ch] = MOCK.card;
+        drawPlayerCard(ctx, v.card, [L + 10, cy, cw, ch], t);
+        // Everything else spreads across the room beside the card, out to the right edge.
+        const room = overviewRoom(L, R),
+            mid = room.mid;
+        const [, ty, tw, th] = MOCK.tag;
+        slantPlate(ctx, mid - tw / 2, ty, tw, th, 'gold', t);
         ctx.textAlign = 'center';
         ctx.font = `800 40px ${SANS}`;
         ctx.fillStyle = '#2e1004';
-        ctx.fillText(v.tag, tx + tw / 2, ty + th * 0.68, tw - 60);
-        const [bx, by, bw] = MOCK.banner;
-        this.piece('banner', MOCK.banner, 2.5);
+        ctx.fillText(v.tag, mid, ty + th * 0.68, tw - 60);
+        const [, by, , bh] = MOCK.banner,
+            bw = Math.min(1500, (room.b - room.a) * 0.55);
+        banner(ctx, mid - bw / 2, by, bw, bh);
         const blue: [string, string, string] = ['#ffffff', '#c9d8ff', '#7d8cff'];
-        arcadeText(ctx, v.banner, bx + bw / 2, by + 132, 110, v.won ? this.gold : blue, 'center', 620);
+        arcadeText(ctx, v.banner, mid, by + 132, 110, v.won ? this.gold : blue, 'center', bw - 380);
         ctx.font = `italic 600 44px ${FONT}`;
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(v.when, bx + bw / 2, by + 196, 620);
+        ctx.fillText(v.when, mid, by + 196, bw - 300);
         // The fairies in their frames: the player's left, the rival's right (or the score there in Endless).
         const fy = fairyById(v.fairy),
             rival = v.rival ? fairyById(v.rival) : null;
         const sides: [Fairy, number][] = [[fy, 0]];
         if (rival) sides.push([rival, 1]);
         sides.forEach(([fairy, side]) => {
-            const [x, y, w, h] = MOCK.frames[side];
-            const cx = x + w / 2;
+            const [, y, w] = MOCK.frames[side];
+            const cx = side ? room.right : room.left;
             drawMedal(ctx, fairy, cx, y + 232, 150, t);
-            this.piece('frame', [x, y, w, h], side + 0.7);
+            medalRing(ctx, cx, y + 232, 150);
+            plate(ctx, cx - 100, y + 18, 200, 66, false);
+            plate(ctx, cx - w / 2 + 20, y + 392, w - 40, 92, false);
             ctx.textAlign = 'center';
             ctx.font = `800 40px ${SANS}`;
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(v.labels[side], cx, y + 62, 160);
+            ctx.fillText(v.labels[side], cx, y + 64, 160);
             ctx.font = `700 56px ${FONT}`;
-            ctx.fillText(fairy.name, cx, y + 452, 280);
+            ctx.fillText(fairy.name, cx, y + 456, 280);
         });
         // The score, and what it counts on its pill.
-        const sx = rival ? MOCK.roundsPill[0] + MOCK.roundsPill[2] / 2 : 2400;
+        const sx = rival ? mid : room.right;
         arcadeText(ctx, v.score, sx, 905, rival ? 150 : 130, this.gold, 'center');
         const [, ry, rw, rh] = MOCK.roundsPill;
-        const pill = [sx - rw / 2, ry, rw, rh] as const;
-        this.piece('roundsPill', pill);
+        plate(ctx, sx - rw / 2, ry, rw, rh, true);
         ctx.font = `800 40px ${SANS}`;
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(v.scoreLabel, pill[0] + rw / 2, ry + rh * 0.66, rw - 50);
+        ctx.fillText(v.scoreLabel, sx, ry + rh * 0.66, rw - 50);
         ctx.fillStyle = '#fff3c0';
         sparkle(ctx, sx - 270, 810, 26 + 6 * Math.sin(t * 2.6));
         sparkle(ctx, sx + 270, 980, 22 + 6 * Math.sin(t * 2.6 + 2));
-        // The numbers on tiles, centred under them.
+        // The numbers on tiles, sharing the room's width.
         const T = MOCK.tiles,
             n = v.tiles.length;
-        const w = Math.min(T.w, (2700 - (n - 1) * T.gap) / n);
+        const w = (room.b - room.a - (n - 1) * T.gap) / n;
         v.tiles.forEach(([label, value], i) => {
-            const x = T.mid - (n * w + (n - 1) * T.gap) / 2 + i * (w + T.gap);
-            this.piece('tile', [x, T.y, w, T.h], 3 + i * 0.4);
+            const x = room.a + i * (w + T.gap);
+            glassPanel(ctx, x, T.y, w, T.h, 30);
+            ctx.strokeStyle = goldGradient(ctx, T.y, T.y + T.h);
+            ctx.lineWidth = 6;
+            roundRect(ctx, x, T.y, w, T.h, 30);
+            ctx.stroke();
             ctx.textAlign = 'left';
             ctx.font = `800 40px ${SANS}`;
             ctx.fillStyle = '#ffffff';
@@ -395,78 +457,157 @@ export class MatchScreen {
             arcadeText(ctx, value, x + 34, T.y + 162, 70, this.gold, 'left', w - 60);
         });
         // Watch the replay, copy its link: dimmed when there's nothing to do.
+        const [wx, wy, ww, wh] = room.watch,
+            [cx2, cy2, cw2, ch2] = room.copy;
         ctx.save();
         if (!v.hasReplay) ctx.globalAlpha = 0.45;
-        this.piece('watch', MOCK.watch, v.hasReplay ? 0.2 : undefined);
+        slantPlate(ctx, wx, wy, ww, wh, 'gold', t);
+        ctx.textAlign = 'center';
+        ctx.font = `900 64px ${SANS}`;
+        ctx.fillStyle = '#2e1004';
+        ctx.fillText('▶  WATCH REPLAY', wx + ww / 2, wy + wh / 2 + 23, ww - 120);
         ctx.restore();
         ctx.save();
         if (!v.link) ctx.globalAlpha = 0.45;
-        this.piece('copy', MOCK.copy, v.link ? 1.2 : undefined);
-        ctx.restore();
-        const noteY = MOCK.watch[1] + MOCK.watch[3] + 48;
+        slantPlate(ctx, cx2, cy2, cw2, ch2, 'lilac', t);
         ctx.textAlign = 'center';
-        if (v.note) arcadeText(ctx, v.note, 1871, noteY, 40, this.gold, 'center');
+        ctx.font = `900 64px ${SANS}`;
+        ctx.fillStyle = '#1e0c3c';
+        ctx.fillText('COPY LINK', cx2 + cw2 / 2, cy2 + ch2 / 2 + 23, cw2 - 120);
+        ctx.restore();
+        const noteY = wy + wh + 48;
+        ctx.textAlign = 'center';
+        if (v.note) arcadeText(ctx, v.note, mid, noteY, 40, this.gold, 'center');
         else if (!v.hasReplay) {
             ctx.font = `italic 600 40px ${FONT}`;
             ctx.fillStyle = 'rgba(214,204,250,0.85)';
-            ctx.fillText('No replay was saved for this game', 1871, noteY);
+            ctx.fillText('No replay was saved for this game', mid, noteY);
         }
     }
 
     /** The painted Scoreboard: the column heads, a row per side (the winner's gold), and the rounds. */
-    private paintedBoard(v: MatchInfoView, s: MatchStats, t: number): void {
+    private paintedBoard(v: MatchInfoView, s: MatchStats, t: number, L: number, R: number): void {
         const ctx = this.ctx;
         const solo = !v.rival;
         const best = (c: (typeof COLUMNS)[number]) => {
             const [a, b] = [c.get(s.sides[0]), c.get(s.sides[1])];
             return a === b ? -1 : a > b !== !!c.low ? 0 : 1;
         };
-        this.piece('boardHead', MOCK.head);
-        const cols = MOCK.columns;
+        // The columns spread across the whole width: the rounds won, then the numbers.
+        const x0 = L + 20,
+            x1 = R - 20,
+            c0 = x0 + 1000,
+            c1 = x1 - 120,
+            step = (c1 - c0) / (COLUMNS.length - 1);
+        const cols = [x0 + 830, ...COLUMNS.map((_, i) => c0 + i * step)];
+        const [, hy, , hh] = MOCK.head;
+        const head = () => pointed(ctx, x0 + 360, hy, x1 - x0 - 360, hh, hh / 2);
+        ctx.fillStyle = 'rgba(30,12,64,0.92)';
+        head();
+        ctx.fill();
+        ctx.strokeStyle = goldGradient(ctx, hy, hy + hh);
+        ctx.lineWidth = 6;
+        head();
+        ctx.stroke();
+        ctx.textAlign = 'center';
+        ctx.font = `800 44px ${SANS}`;
+        ['W', ...COLUMNS.map(c => c.label)].forEach((label, i) => {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(label, cols[i], hy + hh / 2 + 16, step - 30);
+            if (i) {
+                ctx.fillStyle = 'rgba(214,170,255,0.7)';
+                sparkle(ctx, cols[i] - (i === 1 ? (cols[1] - cols[0]) / 2 : step / 2), hy + hh / 2, 10);
+            }
+        });
         [0, 1].forEach(side => {
             const st = s.sides[side];
             const won = !solo && st.roundsWon > s.sides[1 - side].roundsWon;
-            const [x, y, w, h] = MOCK.rows[side];
-            const my = y + (side ? 100 : 114);
-            drawMedal(ctx, fairyById(s.fairies[side]), 222, my, 92, t);
-            this.piece(won ? 'rowGold' : 'rowDark', [x, y, w, h], won ? 1.5 : undefined);
-            if (won) this.piece('ribbon', [572, y + 32, 236, 68]);
+            const [, ry, , rh] = MOCK.rows[side];
+            const y = ry + 10,
+                h = rh - 20,
+                x = x0,
+                w = x1 - x0;
+            glassPanel(ctx, x, y, w, h, h / 2);
+            if (won) {
+                ctx.save();
+                ctx.shadowColor = 'rgba(255,190,60,0.5)';
+                ctx.shadowBlur = 30;
+                ctx.strokeStyle = goldGradient(ctx, y, y + h);
+                ctx.lineWidth = 8;
+                roundRect(ctx, x, y, w, h, h / 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+            const my = y + h / 2;
+            drawMedal(ctx, fairyById(s.fairies[side]), x + 120, my, 86, t);
+            medalRing(ctx, x + 120, my, 86);
+            if (won) {
+                plate(ctx, x + 560, y + 14, 200, 56, true);
+                ctx.textAlign = 'center';
+                ctx.font = `900 34px ${SANS}`;
+                ctx.fillStyle = '#ffe27a';
+                ctx.fillText('WINNER', x + 660, y + 54, 170);
+            }
             ctx.textAlign = 'left';
             ctx.font = `italic 700 64px ${FONT}`;
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(v.names[side], 400, y + h * 0.5, 400);
+            ctx.fillText(v.names[side], x + 240, y + h * 0.5 + (won ? 14 : 0), 520);
             ctx.font = `800 40px ${SANS}`;
             ctx.fillStyle = SIDE_COLOURS[side];
-            ctx.fillText(v.labels[side], 400, y + h * 0.5 + 52, 400);
-            const baseline = y + h * 0.5 + 26;
-            arcadeText(ctx, solo ? '—' : String(st.roundsWon), 900, baseline + 4, 64, this.gold, 'center');
+            ctx.fillText(v.labels[side], x + 240, y + h * 0.5 + (won ? 62 : 50), 400);
+            const baseline = y + h * 0.5 + 22;
+            ctx.fillStyle = 'rgba(10,4,26,0.6)';
+            roundRect(ctx, cols[0] - 70, y + 24, 140, h - 48, 24);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(214,170,255,0.55)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            arcadeText(ctx, solo ? '—' : String(st.roundsWon), cols[0], baseline + 4, 64, this.gold, 'center');
             COLUMNS.forEach((c, i) => {
                 const lit = best(c) === side;
                 ctx.textAlign = 'center';
                 ctx.font = `800 ${lit ? 60 : 54}px ${SANS}`;
                 ctx.fillStyle = lit ? '#ffe27a' : '#ffffff';
-                ctx.fillText(String(c.get(st)), cols[i + 1], baseline, 190);
+                ctx.fillText(String(c.get(st)), cols[i + 1], baseline, step - 20);
             });
         });
-        this.piece('roundsHead', MOCK.roundsHead);
-        const R = MOCK.round,
+        // The rounds' heading: winged lettering between gold rules.
+        const [, rhy, , rhh] = MOCK.roundsHead,
+            hcy = rhy + rhh / 2;
+        arcadeText(ctx, 'ROUNDS', MID, hcy + 30, 84, this.gold, 'center');
+        ctx.font = `84px ${ARCADE}`;
+        const half = ctx.measureText('ROUNDS').width / 2 + 60;
+        for (const d of [-1, 1]) {
+            const g = ctx.createLinearGradient(MID + d * half, 0, MID + d * (half + 700), 0);
+            g.addColorStop(0, 'rgba(255,212,92,0.95)');
+            g.addColorStop(1, 'rgba(255,212,92,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(Math.min(MID + d * half, MID + d * (half + 700)), hcy - 3, 700, 6);
+            ctx.fillStyle = '#ffe9a8';
+            sparkle(ctx, MID + d * (half - 24), hcy, 16);
+        }
+        const RD = MOCK.round,
             n = s.rounds.length;
-        const w = Math.min(R.w, (3300 - (n - 1) * R.gap) / Math.max(1, n));
+        const w = Math.min(1300, (R - L - 200 - (n - 1) * RD.gap) / Math.max(1, n));
         s.rounds.forEach((r, i) => {
-            const x = R.mid - (n * w + (n - 1) * R.gap) / 2 + i * (w + R.gap);
+            const x = MID - (n * w + (n - 1) * RD.gap) / 2 + i * (w + RD.gap);
             const who = r.winner === -1 ? null : r.winner;
             const gold = who === 0;
-            this.piece(gold ? 'roundGold' : 'roundBlue', [x, R.y, w, R.h], gold ? 2 + i * 0.3 : undefined);
+            glassPanel(ctx, x, RD.y, w, RD.h, 60);
+            ctx.strokeStyle = gold ? goldGradient(ctx, RD.y, RD.y + RD.h) : 'rgba(120,200,255,0.75)';
+            ctx.lineWidth = gold ? 8 : 5;
+            roundRect(ctx, x, RD.y, w, RD.h, 60);
+            ctx.stroke();
             ctx.textAlign = 'center';
             ctx.font = `800 40px ${SANS}`;
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(solo ? 'RUN' : `ROUND ${i + 1}  •  ${clock(r.seconds)}`, x + w / 2, R.y + 80, w - 120);
+            ctx.fillText(solo ? 'RUN' : `ROUND ${i + 1}  •  ${clock(r.seconds)}`, x + w / 2, RD.y + 80, w - 120);
             const line = solo ? `SURVIVED ${clock(r.seconds)}` : who === null ? 'NO WINNER' : `${v.labels[who]} WON`;
             arcadeText(
                 ctx,
                 line,
                 x + w / 2,
-                R.y + 178,
+                RD.y + 178,
                 56,
                 gold ? this.gold : ['#ffffff', '#bff4ff', '#5ad8ff'],
                 'center',
@@ -479,8 +620,8 @@ export class MatchScreen {
             ctx.fillStyle = '#ffe9b0';
             ctx.fillText(
                 '✦  Recorded on another version of the game: these numbers may be a little off  ✦',
-                R.mid,
-                R.y + R.h + 70,
+                MID,
+                RD.y + RD.h + 70,
                 3000,
             );
         }
@@ -990,4 +1131,156 @@ export class MatchScreen {
         ctx.fillStyle = on ? '#140a26' : 'rgba(203,188,245,0.5)';
         ctx.fillText(text, b.x + b.w / 2, b.y + b.h / 2 + 4, b.w - 10);
     }
+}
+
+/** A slanted plate drawn in code over (x, y, w, h): a dark outline, a gold rim and a glossy gold, lilac or violet fill. */
+function slantPlate(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    kind: 'gold' | 'lilac' | 'violet',
+    t: number,
+): void {
+    const k = h * 0.3;
+    /** Traces the plate's slanted outline, `i` in from its edge. */
+    const shape = (i: number) => {
+        ctx.beginPath();
+        ctx.moveTo(x + k + i, y + i);
+        ctx.lineTo(x + w - i, y + i);
+        ctx.lineTo(x + w - k - i, y + h - i);
+        ctx.lineTo(x + i, y + h - i);
+        ctx.closePath();
+    };
+    ctx.save();
+    ctx.lineJoin = 'round';
+    if (kind !== 'violet') {
+        ctx.shadowColor = kind === 'gold' ? 'rgba(255,190,60,0.55)' : 'rgba(200,150,255,0.55)';
+        ctx.shadowBlur = 30 + 6 * Math.sin(t * 3);
+    }
+    shape(0);
+    ctx.strokeStyle = '#1a0a10';
+    ctx.lineWidth = 16;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    const rim = ctx.createLinearGradient(0, y, 0, y + h);
+    rim.addColorStop(0, '#fff3b0');
+    rim.addColorStop(0.45, '#f2b53a');
+    rim.addColorStop(1, '#b8640c');
+    ctx.fillStyle = rim;
+    ctx.fill();
+    const fill = ctx.createLinearGradient(0, y, 0, y + h);
+    if (kind === 'gold') {
+        fill.addColorStop(0, '#fff7b8');
+        fill.addColorStop(0.45, '#ffd23e');
+        fill.addColorStop(1, '#f6a40a');
+    } else if (kind === 'lilac') {
+        fill.addColorStop(0, '#f4e8ff');
+        fill.addColorStop(0.5, '#c9a4ff');
+        fill.addColorStop(1, '#9a70f0');
+    } else {
+        fill.addColorStop(0, '#4a2486');
+        fill.addColorStop(0.5, '#25103f');
+        fill.addColorStop(1, '#341762');
+    }
+    shape(7);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.clip();
+    const hl = ctx.createLinearGradient(0, y, 0, y + h * 0.5);
+    hl.addColorStop(0, kind === 'violet' ? 'rgba(255,190,255,0.3)' : 'rgba(255,255,255,0.6)');
+    hl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hl;
+    ctx.fillRect(x, y, w, h * 0.5);
+    ctx.restore();
+}
+
+/** A rounded plate over (x, y, w, h): deep violet with a gold edge (or a lilac one when `gold` is false). */
+function plate(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, gold: boolean): void {
+    const fill = ctx.createLinearGradient(0, y, 0, y + h);
+    fill.addColorStop(0, '#4a2286');
+    fill.addColorStop(0.5, '#22103f');
+    fill.addColorStop(1, '#341660');
+    ctx.fillStyle = fill;
+    roundRect(ctx, x, y, w, h, h / 2);
+    ctx.fill();
+    ctx.strokeStyle = gold ? goldGradient(ctx, y, y + h) : 'rgba(255,200,120,0.9)';
+    ctx.lineWidth = 5;
+    ctx.stroke();
+}
+
+/** A gold ring round a medal `r` across centred on (x, y): a dark outline under a gold band. */
+function medalRing(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+    ctx.beginPath();
+    ctx.arc(x, y, r + 8, 0, Math.PI * 2);
+    ctx.strokeStyle = '#1a0a10';
+    ctx.lineWidth = 22;
+    ctx.stroke();
+    ctx.strokeStyle = goldGradient(ctx, y - r, y + r);
+    ctx.lineWidth = 14;
+    ctx.stroke();
+}
+
+/** The result's banner over (x, y, w, h): a pointed violet ribbon with a double gold edge and gold wing tips. */
+function banner(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+    const by = y + h * 0.18,
+        bh = h * 0.56;
+    // Gold feathered wings fanning out and up from the ends.
+    for (const d of [-1, 1]) {
+        const ex = d < 0 ? x + 90 : x + w - 90;
+        for (let i = 0; i < 4; i++) {
+            ctx.save();
+            ctx.translate(ex, by + bh * 0.62);
+            ctx.scale(d, 1);
+            ctx.rotate(-0.95 + i * 0.32);
+            const len = 150 - i * 22;
+            ctx.beginPath();
+            ctx.ellipse(len / 2, 0, len / 2, 20 - i * 2, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#2a1006';
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(len / 2, 0, len / 2 - 5, 15 - i * 2, 0, 0, Math.PI * 2);
+            ctx.fillStyle = goldGradient(ctx, -20, 20);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+    const shape = () => pointed(ctx, x + 60, by, w - 120, bh, 60);
+    const fill = ctx.createLinearGradient(0, by, 0, by + bh);
+    fill.addColorStop(0, '#5a2a9a');
+    fill.addColorStop(0.5, '#2a1050');
+    fill.addColorStop(1, '#3a1868');
+    ctx.fillStyle = fill;
+    shape();
+    ctx.fill();
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1a0a10';
+    ctx.lineWidth = 14;
+    shape();
+    ctx.stroke();
+    ctx.strokeStyle = goldGradient(ctx, by, by + bh);
+    ctx.lineWidth = 7;
+    shape();
+    ctx.stroke();
+}
+
+/** The hint bar along the foot over (x, y, w, h): a dark capsule in a gold rim. */
+function hintBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,190,70,0.4)';
+    ctx.shadowBlur = 30;
+    ctx.fillStyle = '#1a0a10';
+    roundRect(ctx, x - 6, y - 6, w + 12, h + 12, (h + 12) / 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = goldGradient(ctx, y, y + h);
+    roundRect(ctx, x, y, w, h, h / 2);
+    ctx.fill();
+    const fill = ctx.createLinearGradient(0, y, 0, y + h);
+    fill.addColorStop(0, '#3a1a70');
+    fill.addColorStop(1, '#1a0b36');
+    ctx.fillStyle = fill;
+    roundRect(ctx, x + 8, y + 8, w - 16, h - 16, (h - 16) / 2);
+    ctx.fill();
 }
