@@ -7,7 +7,7 @@ import { arcadeText, shade, slanted, sparkle } from '@/render/draw';
 import { ARCADE, FONT } from '@/render/theme';
 import { tallMenuFit } from './menu-fit';
 import { PieceAtlas } from './kit';
-import { kitReady, mockFit } from './kit-ui';
+import { kitReady } from './kit-ui';
 import type { MockFit } from './kit-ui';
 import { ROSTER_KIT } from '@/data/roster-kit';
 import kitUrl from '@/../assets/ui/roster-kit.png';
@@ -128,10 +128,50 @@ const MOCK = {
     meds: { x0: 1200, gap: 195.7, y: 1218 },
 } as const;
 
-/** How the painted Characters screen sits in a widened landscape view `bleed` past each side. */
-function rosterFit(bleed: number): MockFit {
-    const [x0, y0, x1, y1] = MOCK.area;
-    return mockFit(C.VIEW_W, C.VIEW_H, bleed, x0, y0, x1, y1);
+/** Where each part of the painted Characters screen sits in the view, all at one scale. */
+interface RosterFits {
+    /** The heading, along the top. */
+    title: MockFit;
+    /** The portrait, against the left edge. */
+    left: MockFit;
+    /** The demo, against the right edge. */
+    right: MockFit;
+    /** The blurb, stats and skills, centred between the two. */
+    mid: MockFit;
+    /** The fairies' tray, along the bottom. */
+    tray: MockFit;
+}
+
+/**
+ * How the painted Characters screen fills a widened landscape view `bleed` past each side: one scale, as big as the
+ * screen allows, with the heading against the top, the portrait and the demo against the left and right edges, the
+ * tray along the bottom, and the blurb, stats and skills centred in the room between them.
+ */
+function rosterFits(bleed: number): RosterFits {
+    const x0 = -bleed + 4,
+        x1 = C.VIEW_W + bleed - 4,
+        y0 = 2,
+        y1 = C.VIEW_H - 18;
+    const d = paintedDemo(MOCK.demo).frame;
+    const [px0, , pw] = MOCK.portrait,
+        mid0 = 980,
+        mid1 = 2507,
+        gap = 40;
+    const s = Math.min((y1 - y0) / 1350, (x1 - x0) / (pw + (mid1 - mid0) + d.w + 2 * gap));
+    /** A fit drawing the mockup's point (mx, my) at the view's (vx, vy). */
+    const at = (mx: number, my: number, vx: number, vy: number): MockFit => ({ s, x: vx - mx * s, y: vy - my * s });
+    const band = (y0 + y1) / 2;
+    const left = at(px0, 110 + 1108 / 2, x0, band),
+        right = at(d.x + d.w, d.y + d.h / 2, x1, band);
+    const midL = left.x + (px0 + pw) * s,
+        midR = right.x + d.x * s,
+        midX = (midL + midR) / 2;
+    const title = at(MOCK.title[0] + MOCK.title[2] / 2, 0, (x0 + x1) / 2, y0);
+    const tray = at(MOCK.tray[0] + MOCK.tray[2] / 2, 1350, midX, y1);
+    const top = title.y + 232 * s,
+        bottom = tray.y + MOCK.tray[1] * s;
+    const mid = at((mid0 + mid1) / 2, (250 + 1085) / 2, midX, (top + bottom) / 2);
+    return { title, left, right, mid, tray };
 }
 
 /** Whether landscape Characters is drawn from its painted pieces (once they've loaded). */
@@ -271,7 +311,7 @@ export function rosterMedallions(
     bleed = 0,
 ): { x: number; y: number; r: number }[] {
     if (layout !== 'tall' && painted()) {
-        const f = rosterFit(bleed),
+        const f = rosterFits(bleed).tray,
             m = MOCK.meds;
         return FAIRIES.map((_, i) => ({ x: f.x + (m.x0 + i * m.gap) * f.s, y: f.y + m.y * f.s, r: 80 * f.s }));
     }
@@ -374,45 +414,58 @@ export class RosterScreen {
      */
     private drawPainted(v: RosterView, t: number, bleed: number, draw?: DemoDraw): void {
         const ctx = this.ctx,
-            f = rosterFit(bleed),
+            f = rosterFits(bleed),
             fy = FAIRIES[v.index],
             locked = v.locked[v.index];
         enter(ctx, 'bg', () => ornateScreen(ctx, t, C.VIEW_W, C.VIEW_H, bleed, '', false));
         // The live meadow first, in view units, so the frame drawn over it covers its edges.
         const d = paintedDemo(MOCK.demo);
-        enter(ctx, 'panels', () => drawDemoMeadow(ctx, f, d, locked ? null : (draw ?? null), v.caption), { dx: 22 });
-        ctx.save();
-        ctx.translate(f.x, f.y);
-        ctx.scale(f.s, f.s);
+        enter(
+            ctx,
+            'panels',
+            () => drawDemoMeadow(ctx, f.right, d, locked ? null : (draw ?? null), v.caption),
+            { dx: 22 },
+        );
+        /** Runs `draw` in the mockup's pixels under one part's fit. */
+        const inFit = (fit: MockFit, draw: () => void) => {
+            ctx.save();
+            ctx.translate(fit.x, fit.y);
+            ctx.scale(fit.s, fit.s);
+            draw();
+            ctx.restore();
+        };
         /** Draws piece `name` into a box of the mockup, with its glint every so often. */
         const piece = (name: string, b: readonly number[], phase = 0) => {
             KIT.draw(ctx, name, b[0], b[1], b[2], b[3]);
             KIT.glint(ctx, name, b[0], b[1], b[2], b[3], t, phase, 7);
         };
-        enter(ctx, 'bar', () => piece('title', MOCK.title, 0.2));
-        enter(ctx, 'panels', () => this.paintedPortrait(fy, locked, t, piece), { dx: -22 });
+        enter(ctx, 'bar', () => inFit(f.title, () => piece('title', MOCK.title, 0.2)));
+        enter(ctx, 'panels', () => inFit(f.left, () => this.paintedPortrait(fy, locked, t, piece)), { dx: -22 });
         enter(
             ctx,
             'panels',
-            () => {
-                const b = d.frame;
-                KIT.draw9(ctx, 'demo', b.x, b.y, b.w, b.h, 70, 1 / 0.75);
-                KIT.glint9(ctx, 'demo', b.x, b.y, b.w, b.h, 70, 1 / 0.75, t, 2.4);
-            },
+            () =>
+                inFit(f.right, () => {
+                    const b = d.frame;
+                    KIT.draw9(ctx, 'demo', b.x, b.y, b.w, b.h, 70, 1 / 0.75);
+                    KIT.glint9(ctx, 'demo', b.x, b.y, b.w, b.h, 70, 1 / 0.75, t, 2.4);
+                }),
             { dx: 22 },
         );
-        enter(ctx, 'panels', () => this.paintedInfo(fy, locked, t, piece), { dx: 0, dy: 10 });
-        enter(ctx, 'buttons', () => piece('tray', MOCK.tray, 1.2));
+        enter(ctx, 'panels', () => inFit(f.mid, () => this.paintedInfo(fy, locked, t, piece)), { dx: 0, dy: 10 });
+        enter(ctx, 'buttons', () => inFit(f.tray, () => piece('tray', MOCK.tray, 1.2)));
         const m = MOCK.meds;
         FAIRIES.forEach((other, i) =>
             enter(
                 ctx,
                 'buttons',
-                () => this.paintedMedallion(other, v.locked[i], m.x0 + i * m.gap, m.y, i === v.index, t),
+                () =>
+                    inFit(f.tray, () =>
+                        this.paintedMedallion(other, v.locked[i], m.x0 + i * m.gap, m.y, i === v.index, t),
+                    ),
                 { i },
             ),
         );
-        ctx.restore();
         enter(ctx, 'hint', () =>
             keyHints(
                 ctx,
@@ -512,9 +565,7 @@ export class RosterScreen {
     /** One fairy's medallion on the painted tray: her colour and her look in a gold ring, glowing when she's in view. */
     private paintedMedallion(fy: Fairy, locked: boolean, x: number, y: number, on: boolean, t: number): void {
         const ctx = this.ctx,
-            r = on ? 80 : 66,
-            lift = on ? Math.sin(t * 4) * 4 : 0;
-        y += lift;
+            r = on ? 80 : 66;
         ctx.save();
         const g = ctx.createRadialGradient(x, y - 20, 8, x, y, r);
         g.addColorStop(0, locked ? '#3a3360' : fy.color);
