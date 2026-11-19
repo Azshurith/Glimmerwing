@@ -278,7 +278,7 @@ export class Hud {
         const ctx = this.ctx;
         const x = C.FIELD_W,
             w = C.GAP,
-            H = C.VIEW_H,
+            H = C.FIELD_H,
             cx = x + w / 2;
         const g = ctx.createLinearGradient(x, 0, x + w, 0);
         g.addColorStop(0, '#120830');

@@ -109,11 +109,18 @@ interface Picker {
     done: boolean;
 }
 
-/** Where the two meadows sit side by side in the wide layout (the meadows' width can change by round). */
-const wide = (): readonly [Placement, Placement] => [
-    { x: 0, y: 0, s: 1 },
-    { x: C.FIELD_W + C.GAP, y: 0, s: 1 },
-];
+/**
+ * Where the two meadows sit side by side in the wide layout: scaled together with the console between them so they
+ * fill the view's height (a meadow can be taller than the view, ROUND_H), centred across it.
+ */
+const wide = (): readonly [Placement, Placement] => {
+    const s = C.VIEW_H / C.FIELD_H,
+        x = (C.VIEW_W * (1 - s)) / 2;
+    return [
+        { x, y: 0, s },
+        { x: x + (C.FIELD_W + C.GAP) * s, y: 0, s },
+    ];
+};
 
 /**
  * Where Endless's lone meadow sits on a landscape screen: in the middle, filling the height (its stats are at its
@@ -143,8 +150,11 @@ function tallPlacement(
     // the solo bar), so it looks as it does in play; a meadow wider than the screen then follows its fairy across
     // (`followX`, her x in the meadow), and a narrower one is centred.
     // A lone meadow (Endless) fills the whole height under its bar, as it does in play.
+    // A live round's meadow (ROUND_H tall) also shrinks on a short screen so the band keeps TALL_TOP_MIN.
     const s = !fit
-        ? C.TALL_OWN_S
+        ? solo
+            ? C.TALL_OWN_S
+            : Math.min(C.TALL_OWN_S, (h - C.TALL_TOP_MIN) / C.FIELD_H)
         : solo
           ? (h - C.TALL_SOLO_BAR) / C.FIELD_H
           : // One recorded in wider meadows (on a landscape screen) shrinks to show its whole width, never zoomed
@@ -1419,6 +1429,9 @@ export class Game {
         }
     }
 
+    /** Whether this round plays with the rival's meadow hidden (Settings, on an upright phone), in taller meadows. */
+    private rivalHidden = false;
+
     /**
      * Whether a round played now would hide the rival's meadow: an upright phone, against the CPU, with the
      * setting on. Such a round plays in taller meadows that reach the top of the screen.
@@ -1451,6 +1464,8 @@ export class Game {
         }
         // The seed also decides which meadow the Hollow Crow wakes in.
         // A replay keeps the size it was recorded at (older ones played on landscape screens in wider meadows).
+        // A replay shows the rival's meadow even if it was played with it hidden.
+        this.rivalHidden = !recorded && this.soloView && this.mode !== 'endless';
         if (recorded) {
             C.setFieldWidth(recorded.field.w, recorded.field.single);
             C.setFieldHeight(recorded.field.h);
@@ -1467,7 +1482,7 @@ export class Game {
                     ? (this.r.tallH - C.TALL_SOLO_BAR) / C.TALL_OWN_S
                     : endless
                       ? C.ENDLESS_DESK_H
-                      : C.FIELD_H_BASE,
+                      : C.ROUND_H,
             );
         }
         const crowHere = (seed & 1) === 0;
@@ -2477,7 +2492,7 @@ export class Game {
         }
         // A replay recorded in wider meadows stays side by side even if the screen turns upright mid-round.
         // A round in taller meadows (rival hidden) stays tall even if the screen turns sideways.
-        const soloTall = inRound && C.FIELD_H !== C.FIELD_H_BASE && this.mode !== 'endless';
+        const soloTall = inRound && this.rivalHidden;
         // A replay on an upright screen always takes the tall layout, its meadows scaled to fit whatever size
         // they were recorded at.
         const watching = inRound && this.replay !== null;
@@ -2516,7 +2531,7 @@ export class Game {
         r.begin();
         // Meadows narrower than the screen reach out to its edges: their scenery and bars, not their play.
         // Endless's sides hold its stats instead.
-        r.meadowBleed = r.fillRound && !endless ? r.viewX : 0;
+        r.meadowBleed = r.fillRound && !endless ? r.viewX + at[0].x : 0;
         const solo = this.mode !== 'versus';
         // Online the meadows keep the server's seat order (and colours); YOU is whichever is this player's.
         const tags: [HudTag, HudTag] = this.online

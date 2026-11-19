@@ -527,8 +527,15 @@ export class Renderer {
             this.ctx.restore();
             return;
         }
-        this.hudLayer.frameX = this.meadowBleed;
+        // Side by side the meadows (and the console with them) are scaled to fill the view's height.
+        const s = C.VIEW_H / C.FIELD_H,
+            x = (C.VIEW_W * (1 - s)) / 2;
+        this.ctx.save();
+        this.ctx.translate(x, 0);
+        this.ctx.scale(s, s);
+        this.hudLayer.frameX = this.meadowBleed / s;
         this.hudLayer.console(v, time);
+        this.ctx.restore();
     }
 
     /**
