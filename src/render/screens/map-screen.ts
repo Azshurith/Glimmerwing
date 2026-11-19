@@ -320,11 +320,11 @@ export class MapScreen {
         const ctx = this.ctx;
         const [ox, oy, ow, oh] = b,
             [wx, wy, ww, wh] = MOCK.window;
-        // Inset a little inside its box, so neighbouring cards keep a gap between them.
+        // Inset inside its box, so neighbouring cards keep a gap between them, across and down alike.
         const x = cx + ox + 22,
-            y = cy + oy + 10,
+            y = cy + oy + 30,
             w = ow - 44,
-            h = oh - 20;
+            h = oh - 60;
         const outer = () => roundRect(ctx, x, y, w, h, 44);
         // The frame: the card less its window (which reaches down behind the pill).
         ctx.save();
