@@ -1,12 +1,16 @@
 import * as C from '@/core/config';
 import { FAIRIES } from '@/data/characters';
 import type { Layout, TitleAction, TitleView } from '@/types';
-import { Backdrop } from '@/render/backdrop';
 import { arcadeText, slanted, sparkle } from '@/render/draw';
 import { drawSprite } from '@/render/sprites';
 import { tallMenuFit } from './menu-fit';
-import { ARCADE, FONT } from '@/render/theme';
+import { ARCADE, FONT, SANS } from '@/render/theme';
 import { enter } from '@/render/transition';
+import { shine } from './kit';
+import { goldEdge, gloss, sweptWing } from './lobby-screen';
+import { drawPadlock } from './map-screen';
+import { goldGradient, ornateScreen, pointed } from './ornate';
+import { frameCrest } from './roster-screen';
 
 /** A title menu entry and its tap target, in view units. */
 interface TitleButton {
@@ -26,7 +30,7 @@ const MENU: Omit<TitleButton, 'x' | 'y' | 'w' | 'h'>[] = [
     { action: 'google', label: 'SIGN IN WITH GOOGLE', sub: 'Coming soon', disabled: true },
     { action: 'guest', label: 'PLAY AS GUEST', sub: 'Progress is saved in this browser' },
 ];
-const WIDE_BUTTONS: TitleButton[] = MENU.map((b, i) => ({ ...b, x: 290, y: 132 + i * 44, w: 192, h: 36 }));
+const WIDE_BUTTONS: TitleButton[] = MENU.map((b, i) => ({ ...b, x: 284, y: 124 + i * 44, w: 204, h: 36 }));
 /** In the tall layout the choices stack under the hero and the logo, shifted down `dy` on longer screens. */
 function tallButtons(dy: number): TitleButton[] {
     return MENU.map((b, i) => ({ ...b, x: 40, y: 360 + dy + i * 50, w: 192, h: 40 }));
@@ -54,7 +58,6 @@ const TALL = { heroH: 290, logoY: 300, ctaY: 514 } as const;
 
 /** The title screen: hero art, logo, menu and footer. */
 export class TitleScreen {
-    private backdrop: Backdrop;
     /** The hero portrait, pre-faded into the scene on its right and bottom edges. */
     private hero: HTMLCanvasElement | null = null;
     private motes: { x: number; y: number; s: number; p: number }[] = [];
@@ -62,7 +65,6 @@ export class TitleScreen {
     private bleed = 0;
 
     constructor(private ctx: CanvasRenderingContext2D) {
-        this.backdrop = new Backdrop(ctx);
         for (let i = 0; i < 24; i++)
             this.motes.push({
                 x: Math.random() * 260,
@@ -82,7 +84,7 @@ export class TitleScreen {
                 f = tallMenuFit(h),
                 dy = tallShift(f.h);
             const ctx = this.ctx;
-            enter(ctx, 'bg', () => this.backdrop.draw(t, W / 2, (170 + dy) * f.s, W, h));
+            enter(ctx, 'bg', () => ornateScreen(ctx, t, W, h, 0, '', true));
             this.bleed = f.bleed;
             ctx.save();
             ctx.translate(f.x, 0);
@@ -102,10 +104,7 @@ export class TitleScreen {
         // against the left edge of the screen.
         this.bleed = bleed;
         const ctx = this.ctx;
-        ctx.save();
-        ctx.translate(-bleed, 0);
-        enter(ctx, 'bg', () => this.backdrop.draw(t, 150 + bleed, 170, C.VIEW_W + 2 * bleed, C.VIEW_H));
-        ctx.restore();
+        enter(ctx, 'bg', () => ornateScreen(ctx, t, C.VIEW_W, C.VIEW_H, bleed, '', false));
         enter(ctx, 'panels', () => this.heroArt(t), { dx: -22 });
         enter(ctx, 'bar', () => this.logo(t));
         enter(ctx, 'buttons', () => this.menu(v, t, WIDE_BUTTONS), { dy: 10 });
@@ -208,160 +207,312 @@ export class TitleScreen {
 
     // ---- logo -----------------------------------------------------------------------
 
-    /** Draw the GLIMMERWING logo centred on `cx` (size 30 in the wide layout). */
-    private logo(t: number, cx = LOGO_X, y0 = 58, size = 30): void {
+    /**
+     * Draw the logo centred on `cx` with its title's baseline at `y0` (size 30 in the wide layout): the jewelled star
+     * crest between two gold wings, GLIMMERWING in gold on a dark edge with gold scrolls either side and a light
+     * sweeping across it, and the strapline on a gold-edged violet ribbon over a starred gold rule.
+     */
+    private logo(t: number, cx = LOGO_X, y0 = 66, size = 30): void {
         const ctx = this.ctx;
-        const lx = cx,
-            k30 = size / 30;
-        const y = y0 + Math.sin(t * 1.6) * 1.5;
+        const k = size / 30;
+        const y = y0 + Math.sin(t * 1.6) * 1.2;
+        // The crest between its wings.
+        for (const dir of [-1, 1]) sweptWing(ctx, cx + dir * 9 * k, y - 38 * k, 30 * k, dir);
         ctx.save();
-        ctx.shadowColor = 'rgba(255,190,90,0.55)';
-        ctx.shadowBlur = 18;
-        arcadeText(ctx, 'GLIMMERWING', lx, y, size, ['#fffbe0', '#ffd45c', '#ff8a2e'], 'center', 214 * k30);
+        ctx.translate(cx, y - 44 * k);
+        ctx.scale(0.13 * k, 0.13 * k);
+        frameCrest(ctx, 0, 0, t);
+        ctx.restore();
+        // The title: a dark edge, a light rim, then gold shading down.
+        const fs = 34 * k,
+            maxW = 226 * k;
+        ctx.save();
+        ctx.font = `${fs}px ${ARCADE}`;
+        ctx.textAlign = 'center';
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = 'rgba(255,170,60,0.55)';
+        ctx.shadowBlur = 16;
+        ctx.strokeStyle = '#2a0e04';
+        ctx.lineWidth = fs * 0.24;
+        ctx.strokeText('GLIMMERWING', cx, y, maxW);
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#fff1c0';
+        ctx.lineWidth = fs * 0.08;
+        ctx.strokeText('GLIMMERWING', cx, y, maxW);
+        const g = ctx.createLinearGradient(0, y - fs * 0.85, 0, y);
+        g.addColorStop(0, '#fffbe0');
+        g.addColorStop(0.45, '#ffd45c');
+        g.addColorStop(1, '#d8740e');
+        ctx.fillStyle = g;
+        ctx.fillText('GLIMMERWING', cx, y, maxW);
+        const w = Math.min(maxW, ctx.measureText('GLIMMERWING').width);
         ctx.restore();
         // A shine sweeping across the letters every few seconds.
-        const k = ((t * 0.45) % 1.8) - 0.4;
-        if (k >= 0 && k <= 1) {
+        const s = ((t * 0.45) % 1.8) - 0.4;
+        if (s >= 0 && s <= 1) {
             ctx.save();
-            ctx.font = `${size}px ${ARCADE}`;
+            ctx.font = `${fs}px ${ARCADE}`;
             ctx.textAlign = 'center';
-            // Sweep across the letters as they're actually drawn: the text can come out narrower than its
-            // 214-unit cap, and a band clamped to the cap's ends would stall over the last letters and vanish.
-            const w = Math.min(214 * k30, ctx.measureText('GLIMMERWING').width),
-                band = w * 0.09;
-            const px = lx - w / 2 - band + k * (w + 2 * band);
-            const g = ctx.createLinearGradient(px - band, 0, px + band, 0);
-            g.addColorStop(0, 'rgba(255,255,255,0)');
-            g.addColorStop(0.5, 'rgba(255,255,255,0.85)');
-            g.addColorStop(1, 'rgba(255,255,255,0)');
+            const band = w * 0.09,
+                px = cx - w / 2 - band + s * (w + 2 * band);
+            const sg = ctx.createLinearGradient(px - band, 0, px + band, 0);
+            sg.addColorStop(0, 'rgba(255,255,255,0)');
+            sg.addColorStop(0.5, 'rgba(255,255,255,0.85)');
+            sg.addColorStop(1, 'rgba(255,255,255,0)');
             ctx.globalCompositeOperation = 'lighter';
-            ctx.fillStyle = g;
-            ctx.fillText('GLIMMERWING', lx, y, 214 * k30);
+            ctx.fillStyle = sg;
+            ctx.fillText('GLIMMERWING', cx, y, maxW);
             ctx.restore();
+        }
+        // Gold scrolls curling off either end of the title.
+        ctx.lineCap = 'round';
+        for (const dir of [-1, 1]) {
+            const x0 = cx + dir * (w / 2 + 4 * k);
+            ctx.strokeStyle = goldGradient(ctx, y - 16 * k, y + 12 * k);
+            ctx.lineWidth = 1.4 * k;
+            ctx.beginPath();
+            ctx.moveTo(x0, y + 8 * k);
+            ctx.bezierCurveTo(
+                x0 + dir * 14 * k,
+                y + 10 * k,
+                x0 + dir * 18 * k,
+                y - 2 * k,
+                x0 + dir * 10 * k,
+                y - 6 * k,
+            );
+            ctx.bezierCurveTo(x0 + dir * 4 * k, y - 8 * k, x0 + dir * 3 * k, y - 1 * k, x0 + dir * 8 * k, y);
+            ctx.stroke();
         }
         // Twinkles at the logo's corners.
         ctx.fillStyle = '#fff6c8';
         for (const [dx, dy, ph] of [
-            [-112, -24, 0],
-            [110, -6, 2.1],
-            [96, -30, 4.2],
+            [-118, -30, 0],
+            [116, -10, 2.1],
+            [100, -36, 4.2],
         ] as const) {
-            const s = Math.max(0, Math.sin(t * 2.4 + ph));
-            if (s > 0.05) sparkle(ctx, lx + dx * k30, y + dy * k30, 2 + 4 * s);
+            const tw = Math.max(0, Math.sin(t * 2.4 + ph));
+            if (tw > 0.05) sparkle(ctx, cx + dx * k, y + dy * k, 2 + 4 * tw);
         }
-        // Strapline between gold rules.
-        ctx.font = `8px ${ARCADE}`;
+        // The strapline on its ribbon.
+        const rw = 176 * k,
+            rh = 17 * k,
+            rx = cx - rw / 2,
+            ry = y + 7 * k;
+        const ribbon = () => pointed(ctx, rx, ry, rw, rh, 8 * k);
+        const rg = ctx.createLinearGradient(0, ry, 0, ry + rh);
+        rg.addColorStop(0, '#4a2486');
+        rg.addColorStop(0.55, '#1c0c38');
+        rg.addColorStop(1, '#2e1458');
+        ctx.fillStyle = rg;
+        ribbon();
+        ctx.fill();
+        gloss(ctx, ribbon, rx, ry, rw, rh);
+        goldEdge(ctx, ribbon, ry, ry + rh, undefined, 1.2 * k);
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#e6d6ff';
-        ctx.fillText('A MEADOW VERSUS SHOOTER', lx, y + 22);
-        ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(lx - 104 * k30, y + 19, 30 * k30, 1);
-        ctx.fillRect(lx + 74 * k30, y + 19, 30 * k30, 1);
+        ctx.font = `800 ${8.5 * k}px ${SANS}`;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('A MEADOW VERSUS SHOOTER', cx, ry + rh / 2 + 3 * k, rw - 24 * k);
+        // A gold rule with a star at its middle under the ribbon.
+        const ly = ry + rh + 9 * k;
+        for (const dir of [-1, 1]) {
+            const rule = ctx.createLinearGradient(cx, 0, cx + dir * 60 * k, 0);
+            rule.addColorStop(0, 'rgba(255,214,120,0.9)');
+            rule.addColorStop(1, 'rgba(255,214,120,0)');
+            ctx.fillStyle = rule;
+            ctx.fillRect(Math.min(cx, cx + dir * 60 * k), ly - 0.4, 60 * k, 0.8);
+        }
+        ctx.fillStyle = '#ffe9a8';
+        sparkle(ctx, cx, ly, 3.2 * k);
     }
 
     // ---- menu -----------------------------------------------------------------------
 
-    /** Draw the menu buttons, highlighting the selected one. */
+    /**
+     * Draw the menu buttons: slanted plates in a gold edge, the one with the cursor bright gold, glowing, with a light
+     * sweeping over it and a bouncing gold pointer beside it, the others deep violet; each with its icon (Google's G,
+     * a gamepad), its name and a line under it, and a padlock on one that can't be picked yet.
+     */
     private menu(v: TitleView, t: number, buttons: TitleButton[]): void {
         const ctx = this.ctx;
         buttons.forEach((b, i) => {
-            const on = i === v.index;
-            const x = b.x - (on ? 8 : 0);
-            const bar = slanted(x, b.y, b.w, b.h, 10);
-            ctx.save();
-            // Not ready yet: greyed out, whether or not the cursor is on it.
-            if (b.disabled) {
-                ctx.filter = 'grayscale(1)';
-                ctx.globalAlpha = on ? 0.75 : 0.5;
-            }
+            const on = i === v.index,
+                lit = on && !b.disabled;
+            const x = b.x,
+                cy = b.y + b.h / 2;
+            const plate = () => slanted(x, b.y, b.w, b.h, 9)(ctx);
             ctx.save();
             if (on) {
-                ctx.shadowColor = b.disabled ? '#9a9a9a' : '#ffb43c';
-                ctx.shadowBlur = 14 + 4 * Math.sin(t * 6);
-                const g = ctx.createLinearGradient(x, 0, x + b.w, 0);
-                g.addColorStop(0, '#fff0a8');
-                g.addColorStop(0.5, '#ffd45c');
-                g.addColorStop(1, '#ff9a2e');
-                ctx.fillStyle = g;
-            } else {
-                ctx.fillStyle = 'rgba(20,12,48,0.82)';
+                ctx.shadowColor = b.disabled ? 'rgba(200,170,255,0.7)' : '#ffb43c';
+                ctx.shadowBlur = 16 + 5 * Math.sin(t * 5);
             }
-            bar(ctx);
+            const g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
+            if (lit) {
+                g.addColorStop(0, '#fff8c0');
+                g.addColorStop(0.45, '#ffd640');
+                g.addColorStop(1, '#f0a010');
+            } else {
+                g.addColorStop(0, '#4a2486');
+                g.addColorStop(0.55, '#1c0c38');
+                g.addColorStop(1, '#2e1458');
+            }
+            ctx.fillStyle = g;
+            plate();
             ctx.fill();
             ctx.restore();
-            ctx.strokeStyle = on ? '#fffbe0' : 'rgba(201,162,74,0.7)';
-            ctx.lineWidth = on ? 1.6 : 1;
-            bar(ctx);
+            gloss(ctx, plate, x, b.y, b.w, b.h);
+            goldEdge(ctx, plate, b.y, b.y + b.h, lit ? ['#ffffff', '#ffe9a0', '#d8900e'] : undefined, 1.6);
+            ctx.strokeStyle = lit ? 'rgba(255,255,240,0.7)' : 'rgba(255,214,120,0.3)';
+            ctx.lineWidth = 0.6;
+            slanted(x + 3, b.y + 3, b.w - 6, b.h - 6, 7)(ctx);
             ctx.stroke();
-            // Number tag for keys, on the bar's right.
-            if (!v.touch) {
+            if (!b.disabled) shine(ctx, plate, x, b.y, b.w, b.h, t, i * 0.7, on ? 3 : 5);
+            // Its icon, name and line.
+            const ix = x + 24;
+            if (b.action === 'google') googleG(ctx, ix, cy, 9);
+            else gamepad(ctx, ix, cy, 11, lit ? '#2a0e1e' : '#f4ecff');
+            ctx.textAlign = 'left';
+            ctx.font = `${lit ? 12.5 : 11.5}px ${ARCADE}`;
+            ctx.fillStyle = lit ? '#2a0e1e' : b.disabled ? '#d8cff0' : '#ffffff';
+            ctx.fillText(b.label, x + 44, cy - 1, b.w - (b.disabled ? 80 : 60));
+            ctx.font = `italic 600 8px ${FONT}`;
+            ctx.fillStyle = lit ? 'rgba(60,20,30,0.9)' : 'rgba(214,204,250,0.85)';
+            ctx.fillText(b.sub, x + 44, cy + 10, b.w - 60);
+            if (b.disabled) drawPadlock(ctx, x + b.w - 24, cy, 13);
+            else if (!v.touch) {
                 ctx.font = `9px ${ARCADE}`;
                 ctx.textAlign = 'center';
-                ctx.fillStyle = on ? 'rgba(42,15,46,0.55)' : 'rgba(201,188,245,0.45)';
-                ctx.fillText(String(i + 1), x + b.w - 14, b.y + b.h / 2 + 4);
+                ctx.fillStyle = lit ? 'rgba(60,20,30,0.45)' : 'rgba(201,188,245,0.45)';
+                ctx.fillText(String(i + 1), x + b.w - 18, cy + 4);
             }
-            ctx.textAlign = 'left';
-            ctx.font = `${on ? 15 : 13}px ${ARCADE}`;
-            ctx.fillStyle = on ? '#2a0f2e' : '#fff3c9';
-            ctx.fillText(b.label, x + 18, b.y + 18, b.w - 36);
-            ctx.font = `italic 600 8.5px ${FONT}`;
-            ctx.fillStyle = on ? 'rgba(70,25,20,0.85)' : 'rgba(203,188,245,0.7)';
-            ctx.fillText(b.sub, x + 16, b.y + 30, b.w - 34);
-            // Bouncing pointer.
+            // The bouncing pointer.
             if (on) {
-                const ax = x - 10 + Math.sin(t * 9) * 2.5,
-                    ay = b.y + b.h / 2;
-                ctx.fillStyle = '#ffd45c';
-                ctx.strokeStyle = '#2a0f2e';
-                ctx.lineWidth = 1.5;
+                const ax = x - 7 + Math.sin(t * 9) * 2.5;
+                ctx.lineJoin = 'round';
                 ctx.beginPath();
-                ctx.moveTo(ax, ay);
-                ctx.lineTo(ax - 9, ay - 7);
-                ctx.lineTo(ax - 9, ay + 7);
+                ctx.moveTo(ax, cy);
+                ctx.lineTo(ax - 9, cy - 7);
+                ctx.lineTo(ax - 9, cy + 7);
                 ctx.closePath();
+                ctx.strokeStyle = '#2a0e04';
+                ctx.lineWidth = 2.2;
                 ctx.stroke();
+                ctx.fillStyle = goldGradient(ctx, cy - 7, cy + 7);
                 ctx.fill();
             }
-            ctx.restore();
         });
     }
 
     // ---- footer ---------------------------------------------------------------------
 
-    /** Draw the blinking call to action, the controls line and this browser's record. */
-    private footer(v: TitleView, t: number, cx = LOGO_X, ctaY = 254, W: number = C.VIEW_W, H: number = C.VIEW_H): void {
+    /**
+     * Draw the call to action between two gold wings, glowing softly, the controls line under it, and a sweep of gold
+     * light along the foot of the screen.
+     */
+    private footer(v: TitleView, t: number, cx = LOGO_X, ctaY = 236, W: number = C.VIEW_W, H: number = C.VIEW_H): void {
         const ctx = this.ctx;
         const tall = W !== C.VIEW_W;
-        // Blinking call to action.
-        const blink = Math.floor(t * 2.2) % 2 === 0;
-        if (blink)
-            arcadeText(
-                ctx,
-                v.touch ? 'TAP TO PLAY' : 'PRESS START',
-                cx,
-                ctaY,
-                tall ? 11 : 13,
-                ['#ffffff', '#fff3a0', '#ffb43c'],
-                'center',
-            );
+        const size = tall ? 13 : 16,
+            text = v.touch ? 'TAP TO PLAY' : 'PRESS START';
+        ctx.font = `${size}px ${ARCADE}`;
+        const half = ctx.measureText(text).width / 2;
+        const pulse = 0.75 + 0.25 * Math.sin(t * 3.5);
+        ctx.save();
+        ctx.globalAlpha = pulse;
+        for (const dir of [-1, 1]) sweptWing(ctx, cx + dir * (half + 6), ctaY - size * 0.3, size * 1.5, dir);
+        arcadeText(ctx, text, cx, ctaY, size, ['#fffbe0', '#ffd45c', '#ff9a2e'], 'center');
+        ctx.restore();
         if (!v.touch) {
-            ctx.font = `7px ${ARCADE}`;
+            ctx.font = `800 ${tall ? 6.5 : 7.5}px ${SANS}`;
             ctx.textAlign = 'center';
-            ctx.fillStyle = 'rgba(203,188,245,0.75)';
-            ctx.fillText('UP / DOWN CHOOSE  ·  ENTER OR Z PICKS', cx, ctaY + 16, W - 16);
+            ctx.fillStyle = 'rgba(230,220,255,0.85)';
+            ctx.fillText('UP / DOWN CHOOSE   •   ENTER OR Z PICKS', cx, ctaY + 17, W - 16);
         }
-        // Bottom bar with this browser's record.
-        const g = ctx.createLinearGradient(0, H - 20, 0, H);
-        g.addColorStop(0, 'rgba(10,6,28,0.6)');
-        g.addColorStop(1, 'rgba(10,6,28,0.95)');
-        ctx.fillStyle = g;
-        ctx.fillRect(-this.bleed, H - 20, W + 2 * this.bleed, 20);
-        ctx.fillStyle = '#c9a24a';
-        ctx.fillRect(-this.bleed, H - 20, W + 2 * this.bleed, 1);
-        ctx.font = `${tall ? 6.5 : 8}px ${ARCADE}`;
-        ctx.fillStyle = '#cbbcf5';
-        ctx.textAlign = 'center';
-        const stats = [`FAIRIES  ${v.unlocked}/${v.total}`, `WINS  ${v.wins}`, `BEST CHAIN  ${v.bestChain}`];
-        stats.forEach((s, i) => ctx.fillText(s, W * (0.18 + i * 0.32), H - 7));
+        // The sweep of gold light along the foot, from under the hero across to the right.
+        const x0 = -this.bleed,
+            x1 = W + this.bleed,
+            fy = H - 16;
+        ctx.save();
+        ctx.lineCap = 'round';
+        for (const [w, a] of [
+            [5, 0.18],
+            [1.6, 0.9],
+        ] as const) {
+            const g = ctx.createLinearGradient(x0, 0, x1, 0);
+            g.addColorStop(0, `rgba(255,214,120,${a * 0.2})`);
+            g.addColorStop(0.35, `rgba(255,214,120,${a})`);
+            g.addColorStop(0.7, `rgba(255,236,170,${a})`);
+            g.addColorStop(1, `rgba(255,214,120,${a * 0.2})`);
+            ctx.strokeStyle = g;
+            ctx.lineWidth = w;
+            ctx.beginPath();
+            ctx.moveTo(x0, fy - 8);
+            ctx.bezierCurveTo(x0 + (x1 - x0) * 0.3, fy + 10, x0 + (x1 - x0) * 0.55, fy - 16, x1, fy + 2);
+            ctx.stroke();
+        }
+        ctx.restore();
+        const k = (t * 0.12) % 1,
+            sx = x0 + (x1 - x0) * k;
+        ctx.fillStyle = `rgba(255,248,220,${0.6 + 0.4 * Math.sin(t * 4)})`;
+        const sy = fy - 8 + Math.sin(k * Math.PI * 2.2) * 9 * (1 - Math.abs(0.5 - k));
+        sparkle(ctx, sx, sy, 3);
     }
+}
+
+/** Google's G, `r` across, centred on (x, y), in its four colours on a white disc. */
+function googleG(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x, y, r + 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    const w = r * 0.42,
+        rr = r - w / 2;
+    ctx.lineWidth = w;
+    for (const [a0, a1, c] of [
+        [-0.25 * Math.PI, -0.78 * Math.PI, '#ea4335'],
+        [-0.78 * Math.PI, -1.22 * Math.PI, '#fbbc05'],
+        [-1.22 * Math.PI, -1.75 * Math.PI, '#34a853'],
+        [0.25 * Math.PI, 0, '#4285f4'],
+    ] as const) {
+        ctx.strokeStyle = c;
+        ctx.beginPath();
+        ctx.arc(x, y, rr, a0, a1, a0 > a1);
+        ctx.stroke();
+    }
+    ctx.fillStyle = '#4285f4';
+    ctx.fillRect(x, y - w / 2, r, w);
+    ctx.restore();
+}
+
+/** A gamepad `s` wide centred on (x, y) in one colour: its body and grips, a cross pad on the left, buttons on the right. */
+function gamepad(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, ink: string): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s / 12, s / 12);
+    ctx.fillStyle = ink;
+    ctx.beginPath();
+    ctx.moveTo(-8, -5);
+    ctx.lineTo(8, -5);
+    ctx.quadraticCurveTo(13, -5, 13, 2);
+    ctx.quadraticCurveTo(13, 8, 9, 7);
+    ctx.lineTo(5, 3);
+    ctx.lineTo(-5, 3);
+    ctx.lineTo(-9, 7);
+    ctx.quadraticCurveTo(-13, 8, -13, 2);
+    ctx.quadraticCurveTo(-13, -5, -8, -5);
+    ctx.closePath();
+    ctx.fill();
+    // The cross pad and buttons, cut out of the body in a contrasting tone.
+    ctx.fillStyle = ink === '#f4ecff' ? '#2a1458' : '#ffd640';
+    ctx.fillRect(-8.5, -1.6, 6, 1.6);
+    ctx.fillRect(-6.3, -3.8, 1.6, 6);
+    for (const [bx, by] of [
+        [5.5, -2.8],
+        [8, -0.6],
+    ] as const) {
+        ctx.beginPath();
+        ctx.arc(bx, by, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
 }

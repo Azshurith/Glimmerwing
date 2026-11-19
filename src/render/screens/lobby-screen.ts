@@ -1805,7 +1805,7 @@ export class LobbyScreen {
  * A gold edge round a shape traced by `trace` (between y0 and y1): a dark outline under a band of gold shaded from
  * light to dark (or the three colours of `tones`), `w` wide.
  */
-function goldEdge(
+export function goldEdge(
     ctx: CanvasRenderingContext2D,
     trace: () => void,
     y0: number,
@@ -1833,7 +1833,14 @@ function goldEdge(
 }
 
 /** A glossy light across the top of a shape traced by `trace`, inside its box (x, y, w, h). */
-function gloss(ctx: CanvasRenderingContext2D, trace: () => void, x: number, y: number, w: number, h: number): void {
+export function gloss(
+    ctx: CanvasRenderingContext2D,
+    trace: () => void,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+): void {
     ctx.save();
     trace();
     ctx.clip();
@@ -1945,7 +1952,7 @@ function smallOrb(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
  * A swept gold wing from (x, y), `len` long, reaching out and up toward `dir` (−1 left, 1 right) as on the painted
  * PLAY: five feathers, the upper ones longest, each pale gold shading to deep gold on a dark outline.
  */
-function sweptWing(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, dir: number): void {
+export function sweptWing(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, dir: number): void {
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(dir, 1);
