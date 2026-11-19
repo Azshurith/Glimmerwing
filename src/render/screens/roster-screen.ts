@@ -489,7 +489,7 @@ function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: num
  * outline, a darker track along its middle for the medallions, and a round gold-ringed button at each end with a gold
  * arrow, the left one pointing left and the right one right.
  */
-function trayBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+export function trayBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
     const cy = y + h / 2,
         r = h / 2;
     ctx.save();

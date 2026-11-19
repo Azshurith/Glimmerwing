@@ -10,14 +10,14 @@ import { ARCADE, FONT } from '@/render/theme';
 import { drawPadlock } from './map-screen';
 import { tallMenuFit } from './menu-fit';
 import type { DemoDraw } from './roster-screen';
-import { demoFrame, drawDemoMeadow, paintedDemo } from './roster-screen';
+import { demoFrame, drawDemoMeadow, paintedDemo, trayBar } from './roster-screen';
 import { PieceAtlas } from './kit';
-import { kitReady, mockFit } from './kit-ui';
+import { kitReady } from './kit-ui';
 import type { MockFit } from './kit-ui';
 import { MAPS_KIT } from '@/data/maps-kit';
 import kitUrl from '@/../assets/ui/maps-kit.png';
 import goldUrl from '@/../assets/ui/maps-kit-gold.png';
-import { arcadeText } from '@/render/draw';
+import { arcadeText, sparkle } from '@/render/draw';
 import { enter } from '@/render/transition';
 import { roundRect } from './emblems';
 import { gem, goldFrame, goldGradient, keyHints, ornatePanel, ornateScreen, ornateTitle, pointed } from './ornate';
@@ -56,8 +56,12 @@ function designMedallions(layout: Layout, dy = 0, bleed = 0): { x: number; y: nu
 /** The medallions in view units, for a layout, view height and widened-view bleed: the tap targets. */
 export function mapsMedallions(layout: Layout, h: number = C.TALL_H, bleed = 0): { x: number; y: number; r: number }[] {
     if (layout !== 'tall' && painted()) {
-        const f = mapsFit(bleed);
-        return MOCK.discs.x.map(x => ({ x: f.x + x * f.s, y: f.y + MOCK.discs.y * f.s, r: 110 * f.s }));
+        const f = mapsFits(bleed);
+        return discXs(f.trayW).map(x => ({
+            x: f.tray.x + x * f.tray.s,
+            y: f.tray.y + TRAY.discY * f.tray.s,
+            r: (TRAY.discR + 20) * f.tray.s,
+        }));
     }
     if (layout !== 'tall') return designMedallions('wide', 0, bleed);
     const f = tallMenuFit(h);
@@ -91,14 +95,60 @@ const MOCK = {
         [1493, 1812],
     ],
     demo: [2227, 240, 920, 36, 36, 36],
-    tray: [60, 1170, 2540, 300],
-    discs: { x: [431, 729, 1028, 1330, 1629, 1927, 2230], y: 1300 },
 } as const;
 
-/** How the painted Maps screen sits in a widened landscape view `bleed` past each side. */
-function mapsFit(bleed: number): MockFit {
-    const [x0, y0, x1, y1] = MOCK.area;
-    return mockFit(C.VIEW_W, C.VIEW_H, bleed, x0, y0, x1, y1);
+/** Where each part of the painted Maps screen sits in the view, all at one scale. */
+interface MapsFits {
+    /** The heading, along the top. */
+    title: MockFit;
+    /** The stage's plate, blurb and monsters, against the left edge. */
+    left: MockFit;
+    /** The preview, against the right edge. */
+    right: MockFit;
+    /** The stages' tray, across the bottom, its middle at the mockup's x 0. */
+    tray: MockFit;
+    /** How wide the tray is, in the mockup's pixels. */
+    trayW: number;
+    /** Where the left part's right edge is (the room before the preview), in the mockup's pixels. */
+    infoR: number;
+}
+
+/** The stages' tray: its middle's height, its height, and the discs' size, in the mockup's pixels. */
+const TRAY = { y: 1300, h: 290, discY: 1278, discR: 88, nameY: 1392 };
+
+/**
+ * How the painted Maps screen fills a widened landscape view `bleed` past each side: one scale, as big as the screen
+ * allows, with the heading against the top, the plate, blurb and monsters against the left edge, the preview against
+ * the right, and the tray of stages across the whole width along the bottom.
+ */
+function mapsFits(bleed: number): MapsFits {
+    const x0 = -bleed + 4,
+        x1 = C.VIEW_W + bleed - 4,
+        y0 = 2,
+        y1 = C.VIEW_H - 18;
+    const d = paintedDemo(MOCK.demo).frame;
+    const infoX0 = 30,
+        infoX1 = 1830,
+        gap = 60;
+    const s = Math.min((y1 - y0) / 1460, (x1 - x0) / (infoX1 - infoX0 + d.w + gap));
+    /** A fit drawing the mockup's point (mx, my) at the view's (vx, vy). */
+    const at = (mx: number, my: number, vx: number, vy: number): MockFit => ({ s, x: vx - mx * s, y: vy - my * s });
+    const title = at(MOCK.title[0] + MOCK.title[2] / 2, 20, (x0 + x1) / 2, y0);
+    const tray = at(0, TRAY.y + TRAY.h / 2, (x0 + x1) / 2, y1);
+    const top = title.y + 220 * s,
+        bottom = tray.y + (TRAY.y - TRAY.h / 2) * s;
+    const band = (top + bottom) / 2;
+    const left = at(infoX0, (232 + 1150) / 2, x0, band),
+        right = at(d.x + d.w, d.y + d.h / 2, x1, band);
+    const infoR = infoX0 + (right.x + d.x * s - x0) / s - gap;
+    return { title, left, right, tray, trayW: (x1 - x0) / s - 30, infoR };
+}
+
+/** The stages' discs across the tray, in the tray's mockup pixels (its middle at x 0). */
+function discXs(trayW: number): number[] {
+    const inner = trayW - 2 * TRAY.h * 0.86 - 40,
+        step = inner / MAPS.length;
+    return MAPS.map((_, i) => -inner / 2 + step * (i + 0.5));
 }
 
 /** Whether landscape Maps is drawn from its painted pieces (once they've loaded). */
@@ -197,29 +247,44 @@ export class MapsScreen {
      */
     private drawPainted(v: MapsView, t: number, bleed: number, draw?: DemoDraw): void {
         const ctx = this.ctx,
-            f = mapsFit(bleed),
+            f = mapsFits(bleed),
             map = MAPS[v.index],
             locked = v.locked[v.index],
             stage = stageFor(map.id);
         enter(ctx, 'bg', () => ornateScreen(ctx, t, C.VIEW_W, C.VIEW_H, bleed, '', false));
         const d = paintedDemo(MOCK.demo);
-        enter(ctx, 'panels', () => drawDemoMeadow(ctx, f, d, draw ?? null, v.caption), { dx: 22 });
-        ctx.save();
-        ctx.translate(f.x, f.y);
-        ctx.scale(f.s, f.s);
-        /** Draws piece `name` into a box of the mockup, with its glint every so often. */
-        const piece = (name: string, b: readonly number[], phase = 0) => {
-            KIT.draw(ctx, name, b[0], b[1], b[2], b[3]);
-            KIT.glint(ctx, name, b[0], b[1], b[2], b[3], t, phase, 7);
+        enter(ctx, 'panels', () => drawDemoMeadow(ctx, f.right, d, draw ?? null, v.caption), { dx: 22 });
+        /** Runs `draw` in the mockup's pixels under one part's fit. */
+        const inFit = (fit: MockFit, draw: () => void) => {
+            ctx.save();
+            ctx.translate(fit.x, fit.y);
+            ctx.scale(fit.s, fit.s);
+            draw();
+            ctx.restore();
         };
-        enter(ctx, 'bar', () => piece('title', MOCK.title, 0.2));
-        enter(ctx, 'panels', () => demoFrame(ctx, d), { dx: 22 });
-        enter(ctx, 'panels', () => this.paintedInfo(map, v.index, locked, stage, t, piece), { dx: -22 });
-        enter(ctx, 'buttons', () => piece('tray', MOCK.tray, 1.2));
-        MAPS.forEach((m, i) =>
-            enter(ctx, 'buttons', () => this.paintedDisc(m, i, v.locked[i], i === v.index, t), { i }),
+        enter(ctx, 'bar', () =>
+            inFit(f.title, () => {
+                const b = MOCK.title;
+                KIT.draw(ctx, 'title', b[0], b[1], b[2], b[3]);
+                KIT.glint(ctx, 'title', b[0], b[1], b[2], b[3], t, 0.2, 7);
+            }),
         );
-        ctx.restore();
+        enter(ctx, 'panels', () => inFit(f.right, () => demoFrame(ctx, d)), { dx: 22 });
+        enter(ctx, 'panels', () => inFit(f.left, () => this.paintedInfo(map, v.index, locked, stage, t, f.infoR)), {
+            dx: -22,
+        });
+        const xs = discXs(f.trayW);
+        enter(ctx, 'buttons', () =>
+            inFit(f.tray, () => trayBar(ctx, -f.trayW / 2, TRAY.y - TRAY.h / 2, f.trayW, TRAY.h)),
+        );
+        MAPS.forEach((m, i) =>
+            enter(
+                ctx,
+                'buttons',
+                () => inFit(f.tray, () => this.paintedDisc(m, i, xs[i], v.locked[i], i === v.index, t)),
+                { i },
+            ),
+        );
         enter(ctx, 'hint', () =>
             keyHints(
                 ctx,
@@ -234,18 +299,64 @@ export class MapsScreen {
         );
     }
 
-    /** The painted stage plate, difficulty, blurb and monster cards, with the game's own words and pictures on them. */
+    /** A gold edge along `path`, drawn in code: a dark outline, then the gold. */
+    private goldEdge(path: () => void, y0: number, y1: number, width = 6): void {
+        const ctx = this.ctx;
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#2a1006';
+        ctx.lineWidth = width + 6;
+        path();
+        ctx.stroke();
+        ctx.strokeStyle = goldGradient(ctx, y0, y1);
+        ctx.lineWidth = width;
+        path();
+        ctx.stroke();
+    }
+
+    /** A dark violet fill along `path`, shaded from top to bottom. */
+    private violet(path: () => void, y0: number, y1: number): void {
+        const ctx = this.ctx;
+        const g = ctx.createLinearGradient(0, y0, 0, y1);
+        g.addColorStop(0, '#4a2286');
+        g.addColorStop(0.5, '#22103f');
+        g.addColorStop(1, '#341660');
+        ctx.fillStyle = g;
+        path();
+        ctx.fill();
+    }
+
+    /**
+     * The stage plate, difficulty, blurb, monsters heading and monster cards, all drawn in code with the game's own
+     * words and pictures on them.
+     */
     private paintedInfo(
         map: MapTheme,
         index: number,
         locked: boolean,
         stage: { trophies: number; blurb: string },
         t: number,
-        piece: (name: string, b: readonly number[], phase?: number) => void,
+        R: number,
     ): void {
         const ctx = this.ctx;
-        // The emblem: the stage's icon on its sky, inside the plate's ring.
-        const [ex, ey, er] = MOCK.emblem;
+        // The plate: a pointed violet banner round the emblem and the name, edged in gold twice over.
+        const bx0 = 92,
+            by0 = 256,
+            bh = 196;
+        // The emblem sits in the banner's left end, centred on its height, its ring wholly inside.
+        const ex = MOCK.emblem[0],
+            ey = by0 + bh / 2,
+            er = 74;
+        const banner = () => pointed(ctx, bx0, by0, 1090 - bx0, bh, 56);
+        ctx.save();
+        ctx.shadowColor = 'rgba(150,80,255,0.45)';
+        ctx.shadowBlur = 34;
+        this.violet(banner, by0, by0 + bh);
+        ctx.restore();
+        this.goldEdge(banner, by0, by0 + bh, 7);
+        ctx.strokeStyle = 'rgba(255,214,120,0.75)';
+        ctx.lineWidth = 3;
+        pointed(ctx, bx0 + 16, by0 + 12, 1090 - bx0 - 32, bh - 24, 48);
+        ctx.stroke();
         ctx.save();
         ctx.beginPath();
         ctx.arc(ex, ey, er + 2, 0, Math.PI * 2);
@@ -263,7 +374,26 @@ export class MapsScreen {
             KIT.draw(ctx, `icon${index}`, ex - w / 2, ey - h / 2 + Math.sin(t * 2) * 3, w, h);
         }
         ctx.restore();
-        piece('plate', MOCK.plate, 0.6);
+        ctx.save();
+        ctx.shadowColor = 'rgba(255,200,80,0.8)';
+        ctx.shadowBlur = 24;
+        ctx.strokeStyle = '#2a1006';
+        ctx.lineWidth = 22;
+        ctx.beginPath();
+        ctx.arc(ex, ey, er + 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+        ctx.strokeStyle = goldGradient(ctx, ey - er, ey + er);
+        ctx.lineWidth = 14;
+        ctx.beginPath();
+        ctx.arc(ex, ey, er + 10, 0, Math.PI * 2);
+        ctx.stroke();
+        // The plaque with its place on the trophy road, pointed at both ends, over the banner's foot.
+        const plaque = () => pointed(ctx, 392, 418, 560, 82, 30);
+        ctx.fillStyle = '#1a0a30';
+        plaque();
+        ctx.fill();
+        this.goldEdge(plaque, 418, 500, 5);
         const [nx, ny] = MOCK.name;
         ctx.textAlign = 'left';
         ctx.font = `italic 700 104px ${FONT}`;
@@ -272,7 +402,7 @@ export class MapsScreen {
         ng.addColorStop(0.6, '#ffd45c');
         ng.addColorStop(1, '#e08a1c');
         ctx.fillStyle = ng;
-        ctx.fillText(map.name.toUpperCase(), nx, ny, 560);
+        ctx.fillText(map.name.toUpperCase(), nx, ny - 6, 620);
         // Its place on the trophy road, and whether it's open.
         const [sx, sy] = MOCK.sub;
         ctx.font = `36px ${ARCADE}`;
@@ -288,9 +418,16 @@ export class MapsScreen {
             drawTrophy(ctx, tx + 14, sy - 12, 22);
             ctx.fillText(tail, tx + 40, sy);
         } else ctx.fillText(tail, tx, sy);
-        // How hard: a pip per stage, lit up to this one.
-        piece('difficulty', MOCK.difficulty, 1.1);
-        const [px, py, pw, ph] = MOCK.pips;
+        // How hard: a pointed plate with a pip per stage, lit up to this one.
+        // At the right of the room, however wide it is.
+        const [, dy, dw, dh] = MOCK.difficulty,
+            dx = R - dw;
+        const diff = () => pointed(ctx, dx + 10, dy + 14, dw - 20, dh - 28, 34);
+        this.violet(diff, dy, dy + dh);
+        this.goldEdge(diff, dy, dy + dh, 5);
+        arcadeText(ctx, 'DIFFICULTY', dx + 64, dy + dh / 2 + 14, 38, ['#ffffff', '#f6efff', '#d8c8ff'], 'left', 280);
+        const [, py, pw, ph] = MOCK.pips,
+            px = dx + (MOCK.pips[0] - MOCK.difficulty[0]);
         for (let i = 0; i < STAGES.length; i++) {
             ctx.fillStyle =
                 i <= index ? (i >= 5 ? '#ff7a6a' : i >= 3 ? '#ffd45c' : '#6af07a') : 'rgba(255,255,255,0.12)';
@@ -301,17 +438,53 @@ export class MapsScreen {
         ctx.font = `italic 600 48px ${FONT}`;
         ctx.fillStyle = '#f0e8ff';
         ctx.fillText(`${stage.blurb}.`, bx, by, 1740);
-        piece('monsters', MOCK.monsters, 1.7);
+        // The monsters heading: a pointed tag with a sparkle, then a gold rule out to a gem.
+        const [hx, hy, , hh] = MOCK.monsters,
+            hw = R - hx;
+        const tag = () => pointed(ctx, hx + 6, hy + 10, 420, hh - 20, 30);
+        this.violet(tag, hy, hy + hh);
+        this.goldEdge(tag, hy, hy + hh, 5);
+        ctx.fillStyle = '#ffd45c';
+        sparkle(ctx, hx + 76, hy + hh / 2, 24);
+        arcadeText(ctx, 'MONSTERS', hx + 120, hy + hh / 2 + 16, 46, ['#fff6d0', '#ffd45c', '#e88a1c'], 'left', 280);
+        ctx.strokeStyle = goldGradient(ctx, hy, hy + hh);
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(hx + 440, hy + hh / 2);
+        ctx.lineTo(hx + hw - 30, hy + hh / 2);
+        ctx.stroke();
+        gem(ctx, hx + hw - 20, hy + hh / 2, 12);
+        // The cards.
         const sheet = monstersFor(map.id);
-        MOCK.cards.forEach(([x0, x1], i) => {
-            piece(`card${i}`, [x0 - 8, 718, x1 - x0 + 16, 432], 2 + i * 0.35);
+        // The five cards share the room's width.
+        const cardGap = 24,
+            cw = (R - 53 - 4 * cardGap) / 5;
+        MOCK.cards.forEach((_, i) => {
+            const x0 = 53 + i * (cw + cardGap),
+                x1 = x0 + cw;
+            const cx = (x0 + x1) / 2,
+                card = () => roundRect(ctx, x0, 726, x1 - x0, 416, 40);
+            ctx.save();
+            ctx.shadowColor = 'rgba(150,80,255,0.4)';
+            ctx.shadowBlur = 24;
+            this.violet(card, 726, 1142);
+            ctx.restore();
+            this.goldEdge(card, 726, 1142, 6);
+            arcadeText(ctx, ROLES[i][0], cx, 790, 38, ['#fff6d0', '#ffd45c', '#e88a1c'], 'center', x1 - x0 - 40);
+            const pill = () => roundRect(ctx, x0 + 22, 1062, x1 - x0 - 44, 60, 30);
+            ctx.fillStyle = 'rgba(10,4,24,0.75)';
+            pill();
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,214,120,0.6)';
+            ctx.lineWidth = 3;
+            pill();
+            ctx.stroke();
             if (!sheet) return;
-            const kind = ROLES[i][1](sheet),
-                cx = (x0 + x1) / 2;
+            const kind = ROLES[i][1](sheet);
             if (sheet.img.complete && sheet.img.naturalWidth) {
                 const c = ((t + i * 0.7) * 0.5) % 4;
                 const frame = c < 0.4 ? 6 : c > 3.6 ? 7 : 5;
-                const s = 300,
+                const sz = 280,
                     bob = Math.sin((t + i * 0.7) * 3) * 6;
                 ctx.drawImage(
                     sheet.img,
@@ -319,42 +492,70 @@ export class MapsScreen {
                     (sheet.rows[kind] ?? 0) * sheet.cell,
                     sheet.cell,
                     sheet.cell,
-                    cx - s / 2,
-                    920 - s / 2 + bob,
-                    s,
-                    s,
+                    cx - sz / 2,
+                    925 - sz / 2 + bob,
+                    sz,
+                    sz,
                 );
             }
             ctx.textAlign = 'center';
             ctx.font = `700 38px ${FONT}`;
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(sheet.names[kind] ?? kind, cx, 1100, x1 - x0 - 60);
+            ctx.fillText(sheet.names[kind] ?? kind, cx, 1105, x1 - x0 - 70);
         });
     }
 
-    /** One stage's painted disc on the tray: its picture in a gold ring (glowing when it's in view), and its name. */
-    private paintedDisc(map: MapTheme, i: number, locked: boolean, on: boolean, t: number): void {
+    /**
+     * One stage on the tray, at `x` across it: its picture, a gold ring round it drawn in code (thick and glowing when
+     * it's in view), and its name on a pill.
+     */
+    private paintedDisc(map: MapTheme, i: number, x: number, locked: boolean, on: boolean, t: number): void {
         const ctx = this.ctx,
-            cx = MOCK.discs.x[i],
-            cy = MOCK.discs.y,
-            k = on ? 1.1 : 1;
+            cy = TRAY.discY,
+            r = TRAY.discR * (on ? 1.08 : 1);
         if (locked) ctx.filter = 'grayscale(0.7) brightness(0.55)';
-        KIT.draw(ctx, `disc${i}`, cx - 92 * k, cy - 92 * k, 184 * k, 184 * k);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x, cy, r, 0, Math.PI * 2);
+        ctx.clip();
+        KIT.draw(ctx, `disc${i}`, x - r * 1.05, cy - r * 1.05, r * 2.1, r * 2.1);
+        ctx.restore();
         ctx.filter = 'none';
-        if (locked) drawPadlock(ctx, cx, cy - 22, 70);
+        if (locked) drawPadlock(ctx, x, cy - 22, 70);
+        ctx.save();
         if (on) {
-            KIT.draw(ctx, 'medOn', cx - 211, cy - 135, 425, 283);
-            KIT.glint(ctx, 'medOn', cx - 211, cy - 135, 425, 283, t, 0.4, 4);
-        } else KIT.draw(ctx, 'medOff', cx - 139, cy - 120, 280, 260);
+            ctx.shadowColor = 'rgba(255,200,80,0.95)';
+            ctx.shadowBlur = 36 + 6 * Math.sin(t * 3);
+        }
+        ctx.strokeStyle = '#2a1006';
+        ctx.lineWidth = on ? 18 : 10;
+        ctx.beginPath();
+        ctx.arc(x, cy, r + (on ? 6 : 3), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+        ctx.strokeStyle = goldGradient(ctx, cy - r, cy + r);
+        ctx.lineWidth = on ? 10 : 5;
+        ctx.beginPath();
+        ctx.arc(x, cy, r + (on ? 6 : 3), 0, Math.PI * 2);
+        ctx.stroke();
+        const pw = on ? 230 : 190,
+            pill = () => roundRect(ctx, x - pw / 2, TRAY.nameY - 30, pw, 56, 28);
+        ctx.fillStyle = on ? '#3a1a10' : 'rgba(20,8,40,0.95)';
+        pill();
+        ctx.fill();
+        ctx.strokeStyle = on ? goldGradient(ctx, TRAY.nameY - 30, TRAY.nameY + 26) : 'rgba(255,214,120,0.55)';
+        ctx.lineWidth = on ? 5 : 3;
+        pill();
+        ctx.stroke();
         arcadeText(
             ctx,
             map.name.toUpperCase(),
-            cx,
-            cy + 113,
+            x,
+            TRAY.nameY + 11,
             30,
             on ? ['#fff6d0', '#ffd45c', '#e88a1c'] : ['#ffffff', '#efe6ff', '#c9b8ff'],
             'center',
-            on ? 250 : 170,
+            pw - 30,
         );
     }
 
