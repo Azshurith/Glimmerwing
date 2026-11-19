@@ -13,6 +13,14 @@ export function drawBadge(
     on: boolean,
     t: number,
 ): void {
+    // A solid disc first, so nothing behind shows through the badge's tinted glass.
+    const base = ctx.createRadialGradient(x - r * 0.3, y - r * 0.4, 1, x, y, r);
+    base.addColorStop(0, '#3a1c70');
+    base.addColorStop(1, '#140828');
+    ctx.fillStyle = base;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
     const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.4, 2, x, y, r);
     g.addColorStop(0, hexA(color, on ? 0.75 : 0.5));
     g.addColorStop(0.7, hexA(color, on ? 0.35 : 0.22));
