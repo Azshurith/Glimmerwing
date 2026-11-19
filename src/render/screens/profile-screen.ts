@@ -324,7 +324,7 @@ export class ProfileScreen {
         enter(ctx, 'bar', () =>
             inFit(main, () => {
                 const [, ty, tw, th] = MOCK.title,
-                    tx = (MAIN_L + R) / 2 - tw / 2;
+                    tx = (W / 2 - main.x) / main.s - tw / 2;
                 KIT.draw(ctx, 'title', tx, ty, tw, th);
                 KIT.glint(ctx, 'title', tx, ty, tw, th, t, 0, 7);
             }),
