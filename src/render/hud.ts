@@ -33,10 +33,12 @@ export class Hud {
 
     // ---- per-meadow HUD (drawn inside the meadow's translated, clipped space) ----------
 
-    /** Draw one meadow's HUD strip (hearts, bombs, gauge and wins) in that meadow's coordinates. */
-    meadow(f: Field, wins: number, time: number, tag: HudTag): void {
+    /**
+     * Draw one meadow's HUD strip (hearts, bombs, gauge and wins) in that meadow's coordinates, `W` wide (wider
+     * than the meadow when an Endless replay's HUD reaches out to the screen's edges).
+     */
+    meadow(f: Field, wins: number, time: number, tag: HudTag, W: number = C.FIELD_W): void {
         const ctx = this.ctx;
-        const W = C.FIELD_W;
 
         // Top plate: violet glass in a gold edge, its lower corners cut away.
         const plate = () => {
@@ -141,14 +143,13 @@ export class Hud {
             ctx.restore();
         }
 
-        this.gauge(f, time);
+        this.gauge(f, time, W);
     }
 
     /** Power gauge: three slanted segments filling in turn, with a level tag. MAX pulses so the rival sees it. */
-    private gauge(f: Field, time: number): void {
+    private gauge(f: Field, time: number, W: number): void {
         const ctx = this.ctx;
-        const W = C.FIELD_W,
-            H = C.FIELD_H;
+        const H = C.FIELD_H;
         // Bottom plate: violet glass in a gold edge, its upper corners cut away.
         const plate = () => {
             ctx.beginPath();
