@@ -10,7 +10,7 @@ import { ARCADE, FONT } from '@/render/theme';
 import { drawPadlock } from './map-screen';
 import { tallMenuFit } from './menu-fit';
 import type { DemoDraw } from './roster-screen';
-import { drawDemoMeadow, paintedDemo } from './roster-screen';
+import { demoFrame, drawDemoMeadow, paintedDemo } from './roster-screen';
 import { PieceAtlas } from './kit';
 import { kitReady, mockFit } from './kit-ui';
 import type { MockFit } from './kit-ui';
@@ -213,16 +213,7 @@ export class MapsScreen {
             KIT.glint(ctx, name, b[0], b[1], b[2], b[3], t, phase, 7);
         };
         enter(ctx, 'bar', () => piece('title', MOCK.title, 0.2));
-        enter(
-            ctx,
-            'panels',
-            () => {
-                const b = d.frame;
-                KIT.draw9(ctx, 'preview', b.x, b.y, b.w, b.h, 70, 1 / 0.75);
-                KIT.glint9(ctx, 'preview', b.x, b.y, b.w, b.h, 70, 1 / 0.75, t, 2.4);
-            },
-            { dx: 22 },
-        );
+        enter(ctx, 'panels', () => demoFrame(ctx, d), { dx: 22 });
         enter(ctx, 'panels', () => this.paintedInfo(map, v.index, locked, stage, t, piece), { dx: -22 });
         enter(ctx, 'buttons', () => piece('tray', MOCK.tray, 1.2));
         MAPS.forEach((m, i) =>

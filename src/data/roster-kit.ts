@@ -3,18 +3,8 @@ import type { KitPiece } from '@/types';
 
 /** Where each of the roster screen's painted pieces sits in `assets/ui/roster-kit.png`. */
 export const ROSTER_KIT: Record<string, KitPiece> = {
-    portrait: {
-        x: 0,
-        y: 0,
-        w: 610,
-        h: 832,
-        bx: 0,
-        by: 0,
-        bw: 610,
-        bh: 832,
-    },
     demo: {
-        x: 612,
+        x: 0,
         y: 0,
         w: 752,
         h: 684,
@@ -25,7 +15,7 @@ export const ROSTER_KIT: Record<string, KitPiece> = {
     },
     tray: {
         x: 0,
-        y: 834,
+        y: 686,
         w: 1350,
         h: 191,
         bx: 0,
@@ -35,7 +25,7 @@ export const ROSTER_KIT: Record<string, KitPiece> = {
     },
     medOn: {
         x: 1352,
-        y: 834,
+        y: 686,
         w: 180,
         h: 180,
         bx: 0,
@@ -45,7 +35,7 @@ export const ROSTER_KIT: Record<string, KitPiece> = {
     },
     title: {
         x: 0,
-        y: 1027,
+        y: 879,
         w: 1390,
         h: 174,
         bx: 0,
@@ -55,7 +45,7 @@ export const ROSTER_KIT: Record<string, KitPiece> = {
     },
     statsL: {
         x: 1392,
-        y: 1027,
+        y: 879,
         w: 561,
         h: 137,
         bx: 0,
@@ -65,7 +55,7 @@ export const ROSTER_KIT: Record<string, KitPiece> = {
     },
     statsR: {
         x: 0,
-        y: 1203,
+        y: 1055,
         w: 565,
         h: 137,
         bx: 0,
@@ -75,7 +65,7 @@ export const ROSTER_KIT: Record<string, KitPiece> = {
     },
     medOff: {
         x: 567,
-        y: 1203,
+        y: 1055,
         w: 135,
         h: 135,
         bx: 0,
@@ -85,7 +75,7 @@ export const ROSTER_KIT: Record<string, KitPiece> = {
     },
     skill0: {
         x: 704,
-        y: 1203,
+        y: 1055,
         w: 1130,
         h: 102,
         bx: 0,
@@ -95,7 +85,7 @@ export const ROSTER_KIT: Record<string, KitPiece> = {
     },
     skill1: {
         x: 0,
-        y: 1342,
+        y: 1194,
         w: 1130,
         h: 102,
         bx: 0,
@@ -105,7 +95,7 @@ export const ROSTER_KIT: Record<string, KitPiece> = {
     },
     skill2: {
         x: 0,
-        y: 1446,
+        y: 1298,
         w: 1130,
         h: 102,
         bx: 0,
@@ -115,7 +105,7 @@ export const ROSTER_KIT: Record<string, KitPiece> = {
     },
     skill3: {
         x: 0,
-        y: 1550,
+        y: 1402,
         w: 1130,
         h: 102,
         bx: 0,
