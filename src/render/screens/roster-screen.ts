@@ -742,7 +742,9 @@ export class RosterScreen {
         enter(ctx, 'panels', () => inFit(f.left, () => this.paintedPortrait(fy, locked, t)), { dx: -22 });
         enter(ctx, 'panels', () => inFit(f.right, () => demoFrame(ctx, d)), { dx: 22 });
         enter(ctx, 'panels', () => inFit(f.mid, () => this.paintedInfo(fy, locked, t)), { dx: 0, dy: 10 });
-        enter(ctx, 'buttons', () => inFit(f.tray, () => trayBar(ctx, MOCK.tray[0], MOCK.tray[1] + 30, MOCK.tray[2], MOCK.tray[3] - 50)));
+        enter(ctx, 'buttons', () =>
+            inFit(f.tray, () => trayBar(ctx, MOCK.tray[0], MOCK.tray[1] + 30, MOCK.tray[2], MOCK.tray[3] - 50)),
+        );
         const m = MOCK.meds;
         FAIRIES.forEach((other, i) =>
             enter(

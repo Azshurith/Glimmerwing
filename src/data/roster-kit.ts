@@ -3,24 +3,24 @@ import type { KitPiece } from '@/types';
 
 /** Where each of the roster screen's painted pieces sits in `assets/ui/roster-kit.png`. */
 export const ROSTER_KIT: Record<string, KitPiece> = {
-    'demo': {
-        'x': 0,
-        'y': 0,
-        'w': 752,
-        'h': 684,
-        'bx': 0,
-        'by': 0,
-        'bw': 752,
-        'bh': 684
+    demo: {
+        x: 0,
+        y: 0,
+        w: 752,
+        h: 684,
+        bx: 0,
+        by: 0,
+        bw: 752,
+        bh: 684,
     },
-    'title': {
-        'x': 0,
-        'y': 686,
-        'w': 1390,
-        'h': 174,
-        'bx': 0,
-        'by': 0,
-        'bw': 1390,
-        'bh': 174
-    }
+    title: {
+        x: 0,
+        y: 686,
+        w: 1390,
+        h: 174,
+        bx: 0,
+        by: 0,
+        bw: 1390,
+        bh: 174,
+    },
 };
