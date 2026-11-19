@@ -210,14 +210,7 @@ export function paintedDemo(spec: readonly number[]): PaintedDemo {
  * A dark violet glass panel drawn in code, rounded `r`: a soft violet glow behind, a deep gradient fill, an edge that
  * runs from gold at the left to violet at the right, and a faint light along its top.
  */
-export function glassPanel(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    r: number,
-): void {
+export function glassPanel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
     ctx.save();
     ctx.shadowColor = 'rgba(150,80,255,0.35)';
     ctx.shadowBlur = 30;
