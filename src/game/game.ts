@@ -111,7 +111,7 @@ interface Picker {
 
 /**
  * Where the two meadows sit side by side in the wide layout: scaled together with the console between them so they
- * fill the view's height (a meadow can be taller than the view, ROUND_H), centred across it.
+ * fill the view's height (a replay's meadow can be taller than the view), centred across it.
  */
 const wide = (): readonly [Placement, Placement] => {
     const s = C.VIEW_H / C.FIELD_H,
@@ -133,6 +133,10 @@ const endlessWide = (): Placement => {
 
 /** How far up the replay's controls reach from the bottom of the tall view (Hud.replayPanel). */
 const REPLAY_PANEL_ROOM = 64;
+/** Room kept at the top of the tall view for the replay's Back button, above the band. */
+const BACK_ROOM = 30;
+/** How long the hint to turn the phone sideways shows when an upright screen opens a wider recording (seconds). */
+const ROTATE_HINT_TIME = 8;
 
 /**
  * Where they sit in the tall layout: yours full width against the bottom edge, the rival's small at the top.
@@ -144,13 +148,13 @@ function tallPlacement(
     fit = false,
     solo = false,
     followX = 0,
-): { at: readonly [Placement, Placement]; band: Placement } {
+): { at: readonly [Placement, Placement]; band: Placement; rise: number; sink: number } {
     // A replay's meadow may be wider (recorded on a wide screen) or taller (recorded on a longer phone) than
     // this screen's: `fit` shows it at a live round's scale (scaled down only to fit a taller one under the band or
     // the solo bar), so it looks as it does in play; a meadow wider than the screen then follows its fairy across
     // (`followX`, her x in the meadow), and a narrower one is centred.
     // A lone meadow (Endless) fills the whole height under its bar, as it does in play.
-    // A live round's meadow (ROUND_H tall) also shrinks on a short screen so the band keeps TALL_TOP_MIN.
+    // A live round's meadow also shrinks on a short screen so the band keeps TALL_TOP_MIN.
     const s = !fit
         ? solo
             ? C.TALL_OWN_S
@@ -168,16 +172,22 @@ function tallPlacement(
         fit && !solo && s < C.TALL_OWN_S ? Math.max(0, Math.min(REPLAY_PANEL_ROOM, h - C.FIELD_H * s - C.TALL_TOP)) : 0;
     const ownY = h - C.FIELD_H * s - lift;
     const k = Math.min(1, ownY / C.TALL_TOP);
-    const band = { x: (C.TALL_W * (1 - k)) / 2, y: Math.max(0, (ownY - C.TALL_TOP * k) / 2), s: k };
+    // Shrunk to show a wider recording whole, the band keeps to the top (under the Back button) and the meadow's
+    // scenery fills the room between them (`rise`) and below it under the replay's controls (`sink`).
+    const shrunk = fit && !solo && s < C.TALL_OWN_S - 1e-6;
+    const centred = Math.max(0, (ownY - C.TALL_TOP * k) / 2);
+    const band = { x: (C.TALL_W * (1 - k)) / 2, y: shrunk ? Math.min(centred, BACK_ROOM) : centred, s: k };
     const R = C.TALL_RIVAL;
-    // The rival's meadow keeps its usual width in the band, however wide its meadow is.
-    const rs = R.s * k * (fit ? C.FIELD_W_BASE / C.FIELD_W : 1);
+    // The rival's meadow keeps to its usual size in the band, however wide or tall its meadow is.
+    const rs = R.s * k * (fit ? Math.min(C.FIELD_W_BASE / C.FIELD_W, C.FIELD_H_BASE / C.FIELD_H) : 1);
     return {
         at: [
             { x: ownX, y: ownY, s },
             { x: band.x + R.x * k, y: band.y + R.y * k, s: rs },
         ],
         band,
+        rise: shrunk ? Math.max(0, ownY - band.y - C.TALL_TOP * k) : 0,
+        sink: shrunk ? Math.max(0, h - ownY - C.FIELD_H * s) : 0,
     };
 }
 const IDLE: Controls = { left: false, right: false, up: false, down: false, fire: false };
@@ -746,6 +756,8 @@ export class Game {
         this.resetReplay(data);
         this.replaySpeed = 1;
         this.paused = false;
+        // After the silent run-through, which moves the clock on.
+        this.watchStarted = this.time;
     }
 
     /** Set a replay up from its start: its fairies, map and first round. */
@@ -1429,6 +1441,8 @@ export class Game {
         }
     }
 
+    /** When the replay being watched was opened (Game.time), for the hint to turn the phone. */
+    private watchStarted = -Infinity;
     /** Whether this round plays with the rival's meadow hidden (Settings, on an upright phone), in taller meadows. */
     private rivalHidden = false;
 
@@ -1471,9 +1485,9 @@ export class Game {
             C.setFieldHeight(recorded.field.h);
         } else {
             const endless = this.mode === 'endless';
-            // Every round plays in meadows of the usual width, so one played on a landscape screen looks the same as one
-            // played upright, and a replay of either fits both.
-            C.setFieldWidth(C.FIELD_W_BASE, endless);
+            // On a wide landscape screen a local VS round plays in wider meadows, so its play area fills the screen;
+            // online both players must share one width, so it stays the usual one there (as it does upright).
+            C.setFieldWidth(this.online || endless ? C.FIELD_W_BASE : this.r.fieldWidthToFill, endless);
             // With the rival's meadow hidden on an upright phone, the meadows grow to reach the top of the screen
             // (both, so the round stays fair), leaving a slim bar for the round and the rival's hearts. Endless on a
             // landscape screen plays in an upright meadow shaped like a phone's.
@@ -1482,7 +1496,7 @@ export class Game {
                     ? (this.r.tallH - C.TALL_SOLO_BAR) / C.TALL_OWN_S
                     : endless
                       ? C.ENDLESS_DESK_H
-                      : C.ROUND_H,
+                      : C.FIELD_H_BASE,
             );
         }
         const crowHere = (seed & 1) === 0;
@@ -2556,8 +2570,19 @@ export class Game {
                   ? { x: Math.max(0, mine.x) + 3 * hs, y: mine.y + 23 * hs }
                   : { x: 4, y: 4 }
               : { x: (endless ? r.viewX + mine.x : 0) + 3 * mine.s, y: mine.y + 23 * mine.s };
-        r.field(this.fields[0], at[0].x, this.wins[0], this.time, tags[0], at[0].y, at[0].s);
-        if (!soloTall && !endless) r.field(this.fields[1], at[1].x, this.wins[1], this.time, tags[1], at[1].y, at[1].s);
+        // A wider recording shrunk to fit an upright screen has its scenery reach up to the band and down to the foot.
+        for (const i of [0, 1] as const) {
+            if (i === 1 && (soloTall || endless)) continue;
+            if (tall && i === own) {
+                r.riseTop = tall.rise;
+                r.riseBottom = tall.sink;
+            }
+            r.field(this.fields[i], at[i].x, this.wins[i], this.time, tags[i], at[i].y, at[i].s);
+            r.riseTop = r.riseBottom = 0;
+        }
+        // Watching a wider recording upright, a hint for a moment that turning the phone shows it full size.
+        if (tall && tall.rise > 0 && watching && this.time - this.watchStarted < ROTATE_HINT_TIME)
+            r.rotateHint(at[own].y - tall.rise + 12, Math.min(1, (ROTATE_HINT_TIME - (this.time - this.watchStarted)) / 0.6));
         // Between rounds the console still shows the round just played.
         const played = this.wins[0] + this.wins[1];
         const between = this.phase === 'roundOver' || this.phase === 'matchOver';
