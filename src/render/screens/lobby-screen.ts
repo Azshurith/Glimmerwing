@@ -1833,7 +1833,14 @@ export function goldEdge(
 }
 
 /** A glossy light across the top of a shape traced by `trace`, inside its box (x, y, w, h). */
-export function gloss(ctx: CanvasRenderingContext2D, trace: () => void, x: number, y: number, w: number, h: number): void {
+export function gloss(
+    ctx: CanvasRenderingContext2D,
+    trace: () => void,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+): void {
     ctx.save();
     trace();
     ctx.clip();

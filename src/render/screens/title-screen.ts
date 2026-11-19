@@ -272,7 +272,14 @@ export class TitleScreen {
             ctx.lineWidth = 1.4 * k;
             ctx.beginPath();
             ctx.moveTo(x0, y + 8 * k);
-            ctx.bezierCurveTo(x0 + dir * 14 * k, y + 10 * k, x0 + dir * 18 * k, y - 2 * k, x0 + dir * 10 * k, y - 6 * k);
+            ctx.bezierCurveTo(
+                x0 + dir * 14 * k,
+                y + 10 * k,
+                x0 + dir * 18 * k,
+                y - 2 * k,
+                x0 + dir * 10 * k,
+                y - 6 * k,
+            );
             ctx.bezierCurveTo(x0 + dir * 4 * k, y - 8 * k, x0 + dir * 3 * k, y - 1 * k, x0 + dir * 8 * k, y);
             ctx.stroke();
         }
@@ -446,7 +453,7 @@ export class TitleScreen {
         const k = (t * 0.12) % 1,
             sx = x0 + (x1 - x0) * k;
         ctx.fillStyle = `rgba(255,248,220,${0.6 + 0.4 * Math.sin(t * 4)})`;
-        const sy = fy - 8 + (Math.sin(k * Math.PI * 2.2) * 9) * (1 - Math.abs(0.5 - k));
+        const sy = fy - 8 + Math.sin(k * Math.PI * 2.2) * 9 * (1 - Math.abs(0.5 - k));
         sparkle(ctx, sx, sy, 3);
     }
 }
