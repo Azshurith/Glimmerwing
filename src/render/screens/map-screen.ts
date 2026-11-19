@@ -12,15 +12,12 @@ import { drawTopBar, TOP_BAR_H } from './top-bar';
 import { stageFor } from '@/data/stages';
 import { drawTrophy } from '@/render/icons';
 import { enter } from '@/render/transition';
-import { PieceAtlas } from './kit';
-import { kitReady, mockFit } from './kit-ui';
+import { mockFit } from './kit-ui';
 import type { MockFit } from './kit-ui';
-import { MAPSELECT_KIT } from '@/data/mapselect-kit';
-import kitUrl from '@/../assets/ui/mapselect-kit.png';
-import goldUrl from '@/../assets/ui/mapselect-kit-gold.png';
-
-/** The painted map select's pieces (cut from its mockup by tools/extract-screen-kit.py). */
-const KIT = new PieceAtlas(kitUrl, goldUrl, MAPSELECT_KIT);
+import { roundRect } from './emblems';
+import { goldEdge } from './lobby-screen';
+import { shine } from './kit';
+import { tracedPlate, tracedStar, tracedTitle } from './traced';
 
 /**
  * The painted landscape map select's layout, in its mockup's 2x pixels: the heading, the trophies plate, the cards'
@@ -46,8 +43,8 @@ function mapSelectFit(bleed: number): MockFit {
     return mockFit(C.VIEW_W, C.VIEW_H, bleed, x0, y0, x1, y1, 2);
 }
 
-/** Whether landscape map select is drawn from its painted pieces (once they've loaded). */
-const painted = () => KIT.ready() && kitReady();
+/** Whether landscape map select is drawn to its mockup's layout (always: its pieces are traced in code). */
+const painted = () => true;
 
 /** Card `i`'s middle in the painted layout, in its mockup's pixels. */
 function paintedCard(i: number): { x: number; y: number } {
@@ -196,11 +193,6 @@ export class MapScreen {
     private drawPainted(v: MapSelectView, t: number, bleed: number, preview: MapPreviewDraw): void {
         const ctx = this.ctx,
             f = mapSelectFit(bleed);
-        /** Draws piece `name` into a box of the mockup, with its glint every so often. */
-        const piece = (name: string, b: readonly number[], phase = 0) => {
-            KIT.draw(ctx, name, b[0], b[1], b[2], b[3]);
-            KIT.glint(ctx, name, b[0], b[1], b[2], b[3], t, phase, 7);
-        };
         /** Runs `draw` in the mockup's pixels. */
         const inMock = (draw: () => void) => {
             ctx.save();
@@ -211,8 +203,10 @@ export class MapScreen {
         };
         enter(ctx, 'bar', () =>
             inMock(() => {
-                piece('title', MOCK.title, 0.3);
-                piece('trophies', MOCK.trophies, 1);
+                tracedTitle(ctx, 'CHOOSE A STAGE', MOCK.title, t);
+                const [x, y, w, h] = MOCK.trophies;
+                tracedPlate(ctx, x, y, w, h, 46, t, 1, 'gold', 9);
+                drawTrophy(ctx, x + 110, y + h / 2, 52);
                 arcadeText(ctx, String(v.trophies), 3330, 158, 78, ['#fff6d0', '#ffd45c', '#e88a1c'], 'center', 220);
             }),
         );
@@ -220,12 +214,14 @@ export class MapScreen {
             const c = paintedCard(i),
                 on = i === v.index,
                 locked = i > 0 && v.locked[i - 1];
-            enter(ctx, 'buttons', () => this.paintedCard(c, i, on, locked, t, f, preview, inMock, piece), { i });
+            enter(ctx, 'buttons', () => this.paintedCard(c, i, on, locked, t, f, preview, inMock), { i });
         }
         enter(ctx, 'hint', () =>
             inMock(() => {
                 const [x, y, w, h] = MOCK.hint;
-                piece('hint', MOCK.hint, 2);
+                tracedPlate(ctx, x, y + 14, w, h - 28, 60, t, 2, 'gold', 10);
+                tracedStar(ctx, x + 110, y + h / 2, 34, t);
+                tracedStar(ctx, x + w - 110, y + h / 2, 34, t);
                 const hint = v.touch
                     ? 'TAP A STAGE  ·  WIN VS CPU OR ONLINE FOR TROPHIES'
                     : 'ARROWS CHOOSE  ·  ENTER OR Z PLAY  ·  WIN VS CPU OR ONLINE FOR TROPHIES';
@@ -247,7 +243,6 @@ export class MapScreen {
         f: MockFit,
         preview: MapPreviewDraw,
         inMock: (draw: () => void) => void,
-        piece: (name: string, b: readonly number[], phase?: number) => void,
     ): void {
         const ctx = this.ctx;
         const random = i === 0;
@@ -278,7 +273,7 @@ export class MapScreen {
         inMock(() => {
             const cy = c.y + lift;
             const b = on ? MOCK.on : MOCK.off;
-            piece(on ? 'cardOn' : 'cardOff', [c.x + b[0], cy + b[1], b[2], b[3]], on ? 0.5 : 1.5 + i * 0.3);
+            this.cardFrame(c.x, cy, b, on, t, on ? 0.5 : 1.5 + i * 0.3);
             if (random) arcadeText(ctx, '?', c.x, cy - 10, 300, ['#ffffff', '#ffe08a', '#ff9a2e'], 'center');
             else if (locked) {
                 drawPadlock(ctx, c.x, cy - 110, 170);
@@ -314,6 +309,62 @@ export class MapScreen {
                 500,
             );
         });
+    }
+
+    /**
+     * A painted card's frame round its window, centred on (cx, cy) in the mockup's pixels, its outer box `b` from the
+     * middle: dark violet round the window (the scenery shows through it, and on under the name pill), a heavy gold
+     * edge (glowing pink and gold when chosen), a thin gold line round the window, and the name pill.
+     */
+    private cardFrame(cx: number, cy: number, b: readonly number[], on: boolean, t: number, phase: number): void {
+        const ctx = this.ctx;
+        const [ox, oy, ow, oh] = b,
+            [wx, wy, ww, wh] = MOCK.window;
+        // Inset a little inside its box, so neighbouring cards keep a gap between them.
+        const x = cx + ox + 22,
+            y = cy + oy + 10,
+            w = ow - 44,
+            h = oh - 20;
+        const outer = () => roundRect(ctx, x, y, w, h, 44);
+        // The frame: the card less its window (which reaches down behind the pill).
+        ctx.save();
+        ctx.beginPath();
+        roundRect(ctx, x, y, w, h, 44);
+        ctx.rect(cx + wx + ww, cy + wy, -ww, wh + 150);
+        const fg = ctx.createLinearGradient(0, y, 0, y + h);
+        fg.addColorStop(0, '#3a1474');
+        fg.addColorStop(1, '#14062e');
+        ctx.fillStyle = fg;
+        ctx.fill('evenodd');
+        ctx.restore();
+        ctx.save();
+        if (on) {
+            ctx.shadowColor = 'rgba(255,160,230,0.8)';
+            ctx.shadowBlur = 60;
+        }
+        goldEdge(ctx, outer, y, y + h, undefined, on ? 20 : 14);
+        ctx.restore();
+        if (on) shine(ctx, outer, x, y, w, h, t, phase, 4);
+        const win = () => roundRect(ctx, cx + wx, cy + wy, ww, wh + 150, 24);
+        ctx.save();
+        ctx.beginPath();
+        roundRect(ctx, x, y, w, h, 44);
+        ctx.clip();
+        goldEdge(ctx, win, cy + wy, cy + wy + wh, undefined, 5);
+        ctx.restore();
+        // The name pill.
+        const px = cx + wx + 18,
+            pw = ww - 36,
+            ph = 112,
+            py = cy + MOCK.name - 62;
+        const pill = () => roundRect(ctx, px, py, pw, ph, ph / 2);
+        const pg = ctx.createLinearGradient(0, py, 0, py + ph);
+        pg.addColorStop(0, on ? '#7a34c8' : '#5a2aa8');
+        pg.addColorStop(1, '#22104e');
+        ctx.fillStyle = pg;
+        pill();
+        ctx.fill();
+        goldEdge(ctx, pill, py, py + ph, on ? undefined : ['#f6e0ff', '#c690ff', '#6a3aa8'], 7);
     }
 
     /**
