@@ -101,6 +101,12 @@ export class Renderer {
      * another width): the meadows stay centred and their scenery fills the bands either side. Game sets it.
      */
     fillRound = false;
+    /**
+     * How far a lone meadow's scenery and HUD reach out past it on each side (an Endless replay recorded narrower
+     * than this screen): its scenery is painted across the whole screen as one picture, and its bars and stat cards
+     * span it, while play stays in the recorded meadow. 0 otherwise. Game sets it.
+     */
+    meadowBleed = 0;
     /** Width of the view in view units, for the current layout. */
     get viewW(): number {
         if (this.layout === 'tall') return C.TALL_W;
@@ -217,14 +223,25 @@ export class Renderer {
         const sy = f.shake ? (Math.random() - 0.5) * f.shake : 0;
         ctx.translate(ox + sx * scale, oy + sy * scale);
         ctx.scale(scale, scale);
+        const bleed = scale === 1 ? this.meadowBleed : 0;
+        const map = mapById(f.mapId) ?? mapForSeed(f.sceneSeed);
+        if (bleed > 0) {
+            // A lone meadow reaching out to the screen's edges: its scenery painted as one wide picture behind it.
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-bleed, 0, C.FIELD_W + 2 * bleed, C.FIELD_H);
+            ctx.clip();
+            ctx.translate(-bleed, 0);
+            this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W + 2 * bleed, C.FIELD_H, map);
+            ctx.restore();
+        }
         ctx.beginPath();
         ctx.rect(0, 0, C.FIELD_W, C.FIELD_H);
         ctx.clip();
-        const map = mapById(f.mapId) ?? mapForSeed(f.sceneSeed);
         // The two meadows look into one world, the right-hand one (whose rival is to its left) GAP across from
         // the left-hand one, so the scenery runs on from one into the other behind the console.
         const side = f.rivalSide < 0 ? 1 : 0;
-        this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W, C.FIELD_H, map, side, C.GAP);
+        if (bleed <= 0) this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W, C.FIELD_H, map, side, C.GAP);
 
         if (f.fever > 0) {
             ctx.fillStyle = `rgba(255,170,120,${0.08 + 0.05 * Math.sin(time * 10)})`;
@@ -415,7 +432,13 @@ export class Renderer {
 
         for (const pu of f.popups) this.hudLayer.popup(pu.text, pu.x, pu.y, pu.age);
 
-        this.hudLayer.meadow(f, wins, time, tag);
+        if (bleed > 0) {
+            // Its bars reach out to the screen's edges, past the meadow's clip.
+            ctx.restore();
+            ctx.save();
+            ctx.translate(ox - bleed, oy);
+            this.hudLayer.meadow(f, wins, time, tag, C.FIELD_W + 2 * bleed);
+        } else this.hudLayer.meadow(f, wins, time, tag);
         ctx.restore();
     }
 
@@ -500,7 +523,13 @@ export class Renderer {
     /** Endless mode's readout: see-through cards at the lone meadow's sides (wide layout) or a slim top bar (tall). */
     endless(v: EndlessView, time: number): void {
         if (this.layout === 'tall') this.hudLayer.endlessBar(v, time, C.TALL_W, C.TALL_SOLO_BAR);
-        else this.hudLayer.endlessSides(v, time, C.FIELD_W);
+        else {
+            const b = this.meadowBleed;
+            this.ctx.save();
+            this.ctx.translate(-b, 0);
+            this.hudLayer.endlessSides(v, time, C.FIELD_W + 2 * b);
+            this.ctx.restore();
+        }
     }
 
     /** The slim top bar standing in for the rival's meadow and console when it's hidden (tall layout only). */
