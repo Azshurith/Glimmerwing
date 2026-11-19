@@ -425,22 +425,26 @@ export function rosterMedallions(
     return designMedallions('tall', tallShift(f.h)).map(m => ({ x: f.x + m.x * f.s, y: m.y * f.s, r: m.r * f.s }));
 }
 
-/** A small gold icon for a stat, about 9 across round (x, y): wings for speed, lightning for charge, a bomb for burst,
+/** A small gold icon for a stat, about 9 across round (x, y): a wing for speed, lightning for charge, a bomb for burst,
  * a diamond for dodge. */
 function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: number): void {
     ctx.fillStyle = goldGradient(ctx, y - 4, y + 4);
     ctx.beginPath();
     if (kind === 'speed') {
-        // A pair of wings: three feathers each, swept up and out from the middle.
-        for (const d of [-1, 1]) {
-            for (let f = 0; f < 3; f++) {
-                const tipX = x + d * (4.6 - f * 0.9),
-                    tipY = y - 3.2 + f * 2;
-                ctx.moveTo(x + d * 0.4, y + 0.6);
-                ctx.quadraticCurveTo(x + d * 2.2, tipY - 0.6, tipX, tipY);
-                ctx.quadraticCurveTo(x + d * 2, tipY + 1.6, x + d * 0.4, y + 1.6);
-                ctx.closePath();
-            }
+        // One wing: five feathers fanned up and out from its root at the lower left, the top ones longest.
+        const rx = x - 3.6,
+            ry = y + 3.4;
+        for (let f = 0; f < 5; f++) {
+            const a = -1.25 + f * 0.27,
+                len = 8.4 - f * 0.9,
+                tx = rx + Math.cos(a) * len,
+                ty = ry + Math.sin(a) * len,
+                nx = -Math.sin(a) * 1.15,
+                ny = Math.cos(a) * 1.15;
+            ctx.moveTo(rx, ry);
+            ctx.quadraticCurveTo(rx + (tx - rx) * 0.55 - nx, ry + (ty - ry) * 0.55 - ny, tx, ty);
+            ctx.quadraticCurveTo(rx + (tx - rx) * 0.55 + nx, ry + (ty - ry) * 0.55 + ny, rx, ry);
+            ctx.closePath();
         }
     } else if (kind === 'charge') {
         ctx.moveTo(x + 1, y - 4);
@@ -478,6 +482,88 @@ function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: num
     }
     ctx.closePath();
     ctx.fill();
+}
+
+/**
+ * The fairies' tray, drawn in code into the box (x, y, w, h): a dark violet bar edged in gold top and bottom, its ends
+ * pointed violet caps each holding a gold arrow, the left one pointing left and the right one right.
+ */
+function trayBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+    const cy = y + h / 2,
+        cap = h * 0.62;
+    /** Traces the tray's outline, `inset` in from its edge. */
+    const outline = (inset: number) => {
+        const y0 = y + inset,
+            y1 = y + h - inset,
+            x0 = x + inset * 1.6,
+            x1 = x + w - inset * 1.6;
+        ctx.beginPath();
+        ctx.moveTo(x0, cy);
+        ctx.quadraticCurveTo(x0 + cap * 0.35, y0, x0 + cap, y0);
+        ctx.lineTo(x1 - cap, y0);
+        ctx.quadraticCurveTo(x1 - cap * 0.35, y0, x1, cy);
+        ctx.quadraticCurveTo(x1 - cap * 0.35, y1, x1 - cap, y1);
+        ctx.lineTo(x0 + cap, y1);
+        ctx.quadraticCurveTo(x0 + cap * 0.35, y1, x0, cy);
+        ctx.closePath();
+    };
+    ctx.save();
+    ctx.shadowColor = 'rgba(150,80,255,0.4)';
+    ctx.shadowBlur = 40;
+    const fill = ctx.createLinearGradient(0, y, 0, y + h);
+    fill.addColorStop(0, '#3a1a6e');
+    fill.addColorStop(0.5, '#1c0b3a');
+    fill.addColorStop(1, '#2c1256');
+    ctx.fillStyle = fill;
+    outline(0);
+    ctx.fill();
+    ctx.restore();
+    // The dark middle where the fairies sit, between the two caps.
+    const band = ctx.createLinearGradient(0, y + 22, 0, y + h - 22);
+    band.addColorStop(0, '#160828');
+    band.addColorStop(0.5, '#0e0520');
+    band.addColorStop(1, '#1a0a30');
+    ctx.fillStyle = band;
+    ctx.fillRect(x + cap + 40, y + 22, w - 2 * (cap + 40), h - 44);
+    // Gold edges: the outline, and a line along the band's top and foot.
+    const gold = ctx.createLinearGradient(0, y, 0, y + h);
+    gold.addColorStop(0, '#fff4c0');
+    gold.addColorStop(0.5, '#e0a030');
+    gold.addColorStop(1, '#fff0b0');
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 6;
+    outline(3);
+    ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(x + cap + 40, y + 22);
+    ctx.lineTo(x + w - cap - 40, y + 22);
+    ctx.moveTo(x + cap + 40, y + h - 22);
+    ctx.lineTo(x + w - cap - 40, y + h - 22);
+    ctx.stroke();
+    // The arrows.
+    for (const d of [-1, 1]) {
+        const ax = d < 0 ? x + cap * 0.7 : x + w - cap * 0.7,
+            s = h * 0.2;
+        const ag = ctx.createLinearGradient(0, cy - s, 0, cy + s);
+        ag.addColorStop(0, '#fff6d0');
+        ag.addColorStop(0.5, '#ffc23a');
+        ag.addColorStop(1, '#d97a10');
+        ctx.save();
+        ctx.shadowColor = 'rgba(255,190,70,0.7)';
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = ag;
+        ctx.beginPath();
+        ctx.moveTo(ax + d * s, cy);
+        ctx.lineTo(ax - d * s * 0.6, cy - s);
+        ctx.lineTo(ax - d * s * 0.6, cy + s);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = '#4a1e06';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
 }
 
 /** Each skill's orb colours: the glow, the ring and the glyph's light. */
@@ -656,7 +742,7 @@ export class RosterScreen {
         enter(ctx, 'panels', () => inFit(f.left, () => this.paintedPortrait(fy, locked, t)), { dx: -22 });
         enter(ctx, 'panels', () => inFit(f.right, () => demoFrame(ctx, d)), { dx: 22 });
         enter(ctx, 'panels', () => inFit(f.mid, () => this.paintedInfo(fy, locked, t)), { dx: 0, dy: 10 });
-        enter(ctx, 'buttons', () => inFit(f.tray, () => piece('tray', MOCK.tray, 1.2)));
+        enter(ctx, 'buttons', () => inFit(f.tray, () => trayBar(ctx, MOCK.tray[0], MOCK.tray[1] + 30, MOCK.tray[2], MOCK.tray[3] - 50)));
         const m = MOCK.meds;
         FAIRIES.forEach((other, i) =>
             enter(
@@ -882,8 +968,29 @@ export class RosterScreen {
         ctx.restore();
         if (on) {
             // Its ring holds still: no shine sweeping round it.
-            KIT.draw(ctx, 'medOn', x - 120, y - 122, 240, 240);
-        } else KIT.draw(ctx, 'medOff', x - 90, y - 90, 180, 180);
+            // A thick gold ring that glows.
+            ctx.save();
+            ctx.shadowColor = 'rgba(255,200,80,0.9)';
+            ctx.shadowBlur = 40;
+            ctx.strokeStyle = goldGradient(ctx, y - r, y + r);
+            ctx.lineWidth = 12;
+            ctx.beginPath();
+            ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+            ctx.strokeStyle = 'rgba(255,250,220,0.9)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(x, y, r + 10, 0, Math.PI * 2);
+            ctx.stroke();
+        } else {
+            // A thin gold ring.
+            ctx.strokeStyle = goldGradient(ctx, y - r, y + r);
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+            ctx.stroke();
+        }
     }
 
     /** The PREVIEW button in the corner of her portrait (phones only), glowing gently. */
