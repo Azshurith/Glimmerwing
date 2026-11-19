@@ -2542,7 +2542,7 @@ export class Game {
         // With the rival's meadow hidden it's placed far off screen, so nothing of it (or flying to it) shows.
         const offscreen: Placement = { x: 0, y: -10000, s: tall ? tall.at[0].s : 1 };
         const ew = !tall && endless ? endlessWide() : null;
-        const at: readonly [Placement, Placement] = !tall
+        let at: readonly [Placement, Placement] = !tall
             ? ew
                 ? [ew, offscreen]
                 : wide()
@@ -2558,9 +2558,23 @@ export class Game {
         r.fillRound = r.layout === 'wide';
         r.roundW = r.fillRound && endless ? C.FIELD_W * at[0].s : 0;
         r.begin();
-        // Meadows narrower than the screen reach out to its edges: their scenery and bars, not their play.
-        // Endless's sides hold its stats instead.
-        r.meadowBleed = r.fillRound && !endless ? r.viewX + at[0].x : 0;
+        // On a screen wider than the meadows they zoom in to fill its width (up to WIDE_ZOOM_MAX), standing on its
+        // foot with the top of the meadow (where critters glide in) running off the top; their top plates stay
+        // pinned at the top of the screen. Past that zoom they reach out to its edges: their scenery and bars, not
+        // their play. Endless's sides hold its stats instead.
+        r.hudLift = 0;
+        if (r.fillRound && !endless) {
+            const s = at[0].s * Math.max(1, Math.min(C.WIDE_ZOOM_MAX, r.viewW / C.VIEW_W)),
+                x = (C.VIEW_W - (2 * C.FIELD_W + C.GAP) * s) / 2,
+                y = Math.min(0, C.VIEW_H - C.FIELD_H * s);
+            at = [
+                { x, y, s },
+                { x: x + (C.FIELD_W + C.GAP) * s, y, s },
+            ];
+            r.hudLift = -y;
+        }
+        r.wideAt = r.fillRound && !endless ? at : null;
+        r.meadowBleed = r.fillRound && !endless ? Math.max(0, r.viewX + at[0].x) : 0;
         const solo = this.mode !== 'versus';
         // Online the meadows keep the server's seat order (and colours); YOU is whichever is this player's.
         const tags: [HudTag, HudTag] = this.online
@@ -2584,7 +2598,7 @@ export class Game {
               ? soloTall || endless
                   ? { x: Math.max(0, mine.x) + 3 * hs, y: mine.y + 23 * hs }
                   : { x: 4, y: 4 }
-              : { x: (endless ? r.viewX + mine.x : 0) + 3 * mine.s, y: mine.y + 23 * mine.s };
+              : { x: (endless ? r.viewX + mine.x : 0) + 3 * mine.s, y: mine.y + r.hudLift + 23 * mine.s };
         // A wider recording shrunk to fit an upright screen has its scenery reach up to the band and down to the foot
         // (both meadows' when it's shown side by side).
         r.consoleAt = tall?.console ?? null;
