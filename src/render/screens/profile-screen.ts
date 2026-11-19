@@ -1595,8 +1595,8 @@ export function capsuleTab(
     on: boolean,
     t: number,
 ): void {
-const r = h / 2,
-    k = h / 140;
+    const r = h / 2,
+        k = h / 140;
     // A soft glow under the chosen tab.
     if (on) {
         ctx.save();
