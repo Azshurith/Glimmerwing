@@ -11,7 +11,7 @@ import { ARCADE, FONT, SANS } from '@/render/theme';
 import { roundRect } from './emblems';
 import { tallMenuFit } from './menu-fit';
 import { drawKit } from './kit';
-import { PieceAtlas } from './kit';
+import { PieceAtlas, shine } from './kit';
 import { kitButton, kitHintBar, kitPanel, kitPill, kitReady, kitTab, mockBox } from './kit-ui';
 import type { MockFit } from './kit-ui';
 import kitUrl from '@/../assets/ui/match-kit.png';
@@ -381,7 +381,7 @@ export class MatchScreen {
     /** A slanted tab drawn in code, gold when it's showing (lilac for the graphs' own tabs), with its label. */
     private paintedTab(b: readonly number[], label: string, on: boolean, size: number, graph = false): void {
         const ctx = this.ctx;
-        slantPlate(ctx, b[0], b[1], b[2], b[3], on ? (graph ? 'lilac' : 'gold') : 'violet', this.t);
+        slantPlate(ctx, b[0], b[1], b[2], b[3], on ? (graph ? 'lilac' : 'gold') : 'violet', this.t, 1);
         ctx.textAlign = 'center';
         ctx.font = `800 ${size}px ${SANS}`;
         ctx.fillStyle = on ? (graph ? '#1e0c3c' : '#2e1004') : '#ffffff';
@@ -397,14 +397,14 @@ export class MatchScreen {
         const room = overviewRoom(L, R),
             mid = room.mid;
         const [, ty, tw, th] = MOCK.tag;
-        slantPlate(ctx, mid - tw / 2, ty, tw, th, 'gold', t);
+        slantPlate(ctx, mid - tw / 2, ty, tw, th, 'gold', t, 2);
         ctx.textAlign = 'center';
         ctx.font = `800 40px ${SANS}`;
         ctx.fillStyle = '#2e1004';
         ctx.fillText(v.tag, mid, ty + th * 0.68, tw - 60);
         const [, by, , bh] = MOCK.banner,
             bw = Math.min(1500, (room.b - room.a) * 0.55);
-        banner(ctx, mid - bw / 2, by, bw, bh);
+        banner(ctx, mid - bw / 2, by, bw, bh, t);
         const blue: [string, string, string] = ['#ffffff', '#c9d8ff', '#7d8cff'];
         arcadeText(ctx, v.banner, mid, by + 132, 110, v.won ? this.gold : blue, 'center', bw - 380);
         ctx.font = `italic 600 44px ${FONT}`;
@@ -422,6 +422,17 @@ export class MatchScreen {
             medalRing(ctx, cx, y + 232, 150);
             plate(ctx, cx - 100, y + 18, 200, 66, false);
             plate(ctx, cx - w / 2 + 20, y + 392, w - 40, 92, false);
+            shine(
+                ctx,
+                () => roundRect(ctx, cx - w / 2 + 20, y + 392, w - 40, 92, 46),
+                cx - w / 2,
+                y + 392,
+                w,
+                92,
+                t,
+                side + 0.7,
+            );
+            ringShine(ctx, cx, y + 232, 150, t, side + 3.4);
             ctx.textAlign = 'center';
             ctx.font = `800 40px ${SANS}`;
             ctx.fillStyle = '#ffffff';
@@ -451,6 +462,7 @@ export class MatchScreen {
             ctx.lineWidth = 6;
             roundRect(ctx, x, T.y, w, T.h, 30);
             ctx.stroke();
+            shine(ctx, () => roundRect(ctx, x, T.y, w, T.h, 30), x, T.y, w, T.h, t, 3 + i * 0.4);
             ctx.textAlign = 'left';
             ctx.font = `800 40px ${SANS}`;
             ctx.fillStyle = '#ffffff';
@@ -462,7 +474,7 @@ export class MatchScreen {
             [cx2, cy2, cw2, ch2] = room.copy;
         ctx.save();
         if (!v.hasReplay) ctx.globalAlpha = 0.45;
-        slantPlate(ctx, wx, wy, ww, wh, 'gold', t);
+        slantPlate(ctx, wx, wy, ww, wh, 'gold', t, v.hasReplay ? 0.2 : undefined);
         ctx.textAlign = 'center';
         ctx.font = `900 64px ${SANS}`;
         ctx.fillStyle = '#2e1004';
@@ -470,7 +482,7 @@ export class MatchScreen {
         ctx.restore();
         ctx.save();
         if (!v.link) ctx.globalAlpha = 0.45;
-        slantPlate(ctx, cx2, cy2, cw2, ch2, 'lilac', t);
+        slantPlate(ctx, cx2, cy2, cw2, ch2, 'lilac', t, v.link ? 1.2 : undefined);
         ctx.textAlign = 'center';
         ctx.font = `900 64px ${SANS}`;
         ctx.fillStyle = '#1e0c3c';
@@ -538,7 +550,9 @@ export class MatchScreen {
                 roundRect(ctx, x, y, w, h, h / 2);
                 ctx.stroke();
                 ctx.restore();
+                shine(ctx, () => roundRect(ctx, x, y, w, h, h / 2), x, y, w, h, t, 1.5, 7);
             }
+            ringShine(ctx, x + 120, y + h / 2, 86, t, side * 1.3 + 2.2);
             const my = y + h / 2;
             drawMedal(ctx, fairyById(s.fairies[side]), x + 120, my, 86, t);
             medalRing(ctx, x + 120, my, 86);
@@ -599,6 +613,7 @@ export class MatchScreen {
             ctx.lineWidth = gold ? 8 : 5;
             roundRect(ctx, x, RD.y, w, RD.h, 60);
             ctx.stroke();
+            if (gold) shine(ctx, () => roundRect(ctx, x, RD.y, w, RD.h, 60), x, RD.y, w, RD.h, t, 2 + i * 0.3);
             ctx.textAlign = 'center';
             ctx.font = `800 40px ${SANS}`;
             ctx.fillStyle = '#ffffff';
@@ -1134,7 +1149,10 @@ export class MatchScreen {
     }
 }
 
-/** A slanted plate drawn in code over (x, y, w, h): a dark outline, a gold rim and a glossy gold, lilac or violet fill. */
+/**
+ * A slanted plate drawn in code over (x, y, w, h): a dark outline, a gold rim and a glossy gold, lilac or violet fill,
+ * with a band of light sweeping across it now and then when given a `phase`.
+ */
 function slantPlate(
     ctx: CanvasRenderingContext2D,
     x: number,
@@ -1143,6 +1161,7 @@ function slantPlate(
     h: number,
     kind: 'gold' | 'lilac' | 'violet',
     t: number,
+    phase?: number,
 ): void {
     const k = h * 0.3;
     /** Traces the plate's slanted outline, `i` in from its edge. */
@@ -1195,6 +1214,7 @@ function slantPlate(
     ctx.fillStyle = hl;
     ctx.fillRect(x, y, w, h * 0.5);
     ctx.restore();
+    if (phase !== undefined && kind !== 'violet') shine(ctx, () => shape(7), x, y, w, h, t, phase);
 }
 
 /** A rounded plate over (x, y, w, h): deep violet with a gold edge (or a lilac one when `gold` is false). */
@@ -1223,8 +1243,11 @@ function medalRing(ctx: CanvasRenderingContext2D, x: number, y: number, r: numbe
     ctx.stroke();
 }
 
-/** The result's banner over (x, y, w, h): a pointed violet ribbon with a double gold edge and gold wing tips. */
-function banner(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+/**
+ * The result's banner over (x, y, w, h): a pointed violet ribbon with a double gold edge and gold feathered wings, and
+ * a band of light sweeping across it now and then.
+ */
+function banner(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, t: number): void {
     const by = y + h * 0.18,
         bh = h * 0.56;
     // Gold feathered wings fanning out and up from the ends.
@@ -1264,6 +1287,25 @@ function banner(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, 
     ctx.lineWidth = 7;
     shape();
     ctx.stroke();
+    shine(ctx, shape, x + 60, by, w - 120, bh, t, 2.5);
+}
+
+/** Now and then a glint running round a medal's gold ring (`r` across, centred on (x, y)), `phase` into its cycle. */
+function ringShine(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, t: number, phase: number): void {
+    const at = (t + phase) % 5;
+    if (at > 1.4) return;
+    const a = -Math.PI / 2 + (at / 1.4) * Math.PI * 2;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(255,244,210,0.75)';
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(x, y, r + 8, a, a + 0.5);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,250,230,0.9)';
+    sparkle(ctx, x + Math.cos(a + 0.5) * (r + 8), y + Math.sin(a + 0.5) * (r + 8), 16);
+    ctx.restore();
 }
 
 /** The hint bar along the foot over (x, y, w, h): a dark capsule in a gold rim. */
