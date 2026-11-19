@@ -3,12 +3,16 @@ import { powi } from './dmath';
 // all times in seconds.
 
 /**
- * A meadow's width. It's FIELD_W_BASE, except that a local match on a wide landscape screen plays in wider meadows
- * (up to FIELD_W_MAX) so the side-by-side view fills the screen, and a replay keeps the width it was recorded at:
- * Game sets it with setFieldWidth at the start of each round. Online play, the menus and the tall layout always use
- * FIELD_W_BASE.
+ * A meadow's width, set by Game with setFieldWidth at the start of each round: FIELD_W_STD for every VS round
+ * (local or online, on any screen), FIELD_W_BASE for Endless and the menus, and a replay keeps the width it was
+ * recorded at (older ones up to FIELD_W_MAX).
  */
 export let FIELD_W = 240;
+/**
+ * The standard VS meadow's width: two of them and the console fill a 16:9 landscape screen at full height, and one
+ * fits an upright phone's width a touch smaller than FIELD_W_BASE's, so a game looks the same on every screen.
+ */
+export const FIELD_W_STD = 272;
 export const FIELD_W_BASE = 240,
     FIELD_W_MAX = 380;
 /**
@@ -398,5 +402,5 @@ export const TROPHY_LOSS = 20;
 /** Online play. */
 /** How long each round's countdown lasts before play starts (s): the announcer's call, Ready, then Fight!. */
 export const COUNTDOWN_TIME = 3;
-export const NET_VERSION = '46'; // bump when the wire format changes; only matching versions are paired
+export const NET_VERSION = '47'; // bump when the wire format changes; only matching versions are paired
 export const LOCAL_SERVER = 'ws://localhost:8787/ws';

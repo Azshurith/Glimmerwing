@@ -85,12 +85,6 @@ export class Renderer {
     /** Where the tall view's top band (rival's meadow and console) sits and how much it shrinks; Game sets it. */
     tallBand: Placement = { x: 0, y: 0, s: 1 };
 
-    /**
-     * The meadow width that would make the side-by-side view fill the screen, worked out by the page from a
-     * landscape screen's shape (FIELD_W_BASE on an upright or narrower one); Game plays a local round at it.
-     */
-    fieldWidthToFill: number = C.FIELD_W_BASE;
-
     /** The title and select screens' view width on a landscape screen, fitted by the page to its shape. */
     menuW: number = C.VIEW_W;
     /** Whether a menu (title or select) is showing; Game sets it each frame. */

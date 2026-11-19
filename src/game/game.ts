@@ -155,10 +155,11 @@ function tallPlacement(
     sink: number;
     console: Placement | null;
 } {
-    // A replay played side by side in wider meadows (on a landscape screen) shows just as it was played: both
-    // meadows side by side with the console between, scaled to the screen's width and centred between the Back
-    // button and the replay's controls, each meadow's scenery filling the room above and below it.
-    if (fit && !solo && C.FIELD_W > C.FIELD_W_BASE) {
+    // An older replay played side by side in wider meadows (on a landscape screen, before every VS round used the
+    // standard meadow) shows just as it was played: both meadows side by side with the console between, scaled to
+    // the screen's width and centred between the Back button and the replay's controls, each meadow's scenery
+    // filling the room above and below it.
+    if (fit && !solo && C.FIELD_W > C.FIELD_W_STD) {
         const s = C.TALL_W / C.VIEW_W,
             top = BACK_ROOM,
             room = h - REPLAY_PANEL_ROOM - top,
@@ -174,45 +175,32 @@ function tallPlacement(
             console: { x: 0, y, s },
         };
     }
-    // A replay's meadow may be wider (recorded on a wide screen) or taller (recorded on a longer phone) than
-    // this screen's: `fit` shows it at a live round's scale (scaled down only to fit a taller one under the band or
-    // the solo bar), so it looks as it does in play; a meadow wider than the screen then follows its fairy across
-    // (`followX`, her x in the meadow), and a narrower one is centred.
-    // A lone meadow (Endless) fills the whole height under its bar, as it does in play.
-    // A live round's meadow also shrinks on a short screen so the band keeps TALL_TOP_MIN.
-    const s = !fit
-        ? solo
-            ? C.TALL_OWN_S
-            : Math.min(C.TALL_OWN_S, (h - C.TALL_TOP_MIN) / C.FIELD_H)
-        : solo
-          ? (h - C.TALL_SOLO_BAR) / C.FIELD_H
-          : // One recorded in wider meadows (on a landscape screen) shrinks to show its whole width, never zoomed
-            // in; the band above it grows to take the room.
-            Math.min(C.TALL_OWN_S, (h - C.TALL_TOP_MIN) / C.FIELD_H, C.TALL_W / C.FIELD_W);
+    // Your meadow fills the screen's width at a live round's scale (a standard meadow a touch smaller, so it fits),
+    // against the bottom edge; it shrinks further only to keep the band at least TALL_TOP_MIN high (a taller one, or
+    // a short screen). A lone meadow (Endless) fills the whole height under its bar.
+    const s = solo
+        ? fit
+            ? (h - C.TALL_SOLO_BAR) / C.FIELD_H
+            : Math.min(C.TALL_OWN_S, C.TALL_W / C.FIELD_W)
+        : Math.min(C.TALL_OWN_S, (h - C.TALL_TOP_MIN) / C.FIELD_H, C.TALL_W / C.FIELD_W);
     const over = C.FIELD_W * s - C.TALL_W;
-    const ownX = !fit ? 0 : over <= 0 ? -over / 2 : Math.max(-over, Math.min(0, C.TALL_W / 2 - followX * s));
-    // Your meadow sits against the bottom edge, as in play; one shrunk to show a wider recording whole rises above
-    // the replay's controls as far as the room allows (keeping the band at least TALL_TOP high).
-    const lift =
-        fit && !solo && s < C.TALL_OWN_S ? Math.max(0, Math.min(REPLAY_PANEL_ROOM, h - C.FIELD_H * s - C.TALL_TOP)) : 0;
-    const ownY = h - C.FIELD_H * s - lift;
+    // A replay's meadow wider than the screen (an Endless one shown full height) follows its fairy across
+    // (`followX`, her x in the meadow); a narrower one is centred.
+    const ownX = over <= 0 ? -over / 2 : Math.max(-over, Math.min(0, C.TALL_W / 2 - followX * s));
+    const ownY = h - C.FIELD_H * s;
     const k = Math.min(1, ownY / C.TALL_TOP);
-    // Shrunk to show a wider recording whole, the band keeps to the top (under the Back button) and the meadow's
-    // scenery fills the room between them (`rise`) and below it under the replay's controls (`sink`).
-    const shrunk = fit && !solo && s < C.TALL_OWN_S - 1e-6;
-    const centred = Math.max(0, (ownY - C.TALL_TOP * k) / 2);
-    const band = { x: (C.TALL_W * (1 - k)) / 2, y: shrunk ? Math.min(centred, BACK_ROOM) : centred, s: k };
+    const band = { x: (C.TALL_W * (1 - k)) / 2, y: Math.max(0, (ownY - C.TALL_TOP * k) / 2), s: k };
     const R = C.TALL_RIVAL;
     // The rival's meadow keeps to its usual size in the band, however wide or tall its meadow is.
-    const rs = R.s * k * (fit ? Math.min(C.FIELD_W_BASE / C.FIELD_W, C.FIELD_H_BASE / C.FIELD_H) : 1);
+    const rs = R.s * k * Math.min(C.FIELD_W_BASE / C.FIELD_W, C.FIELD_H_BASE / C.FIELD_H);
     return {
         at: [
             { x: ownX, y: ownY, s },
             { x: band.x + R.x * k, y: band.y + R.y * k, s: rs },
         ],
         band,
-        rise: shrunk ? Math.max(0, ownY - band.y - C.TALL_TOP * k) : 0,
-        sink: shrunk ? Math.max(0, h - ownY - C.FIELD_H * s) : 0,
+        rise: 0,
+        sink: 0,
         console: null,
     };
 }
@@ -1511,15 +1499,16 @@ export class Game {
             C.setFieldHeight(recorded.field.h);
         } else {
             const endless = this.mode === 'endless';
-            // On a wide landscape screen a local VS round plays in wider meadows, so its play area fills the screen;
-            // online both players must share one width, so it stays the usual one there (as it does upright).
-            C.setFieldWidth(this.online || endless ? C.FIELD_W_BASE : this.r.fieldWidthToFill, endless);
+            // Every VS round, local or online, landscape or upright, plays in the standard meadow, so a game and its
+            // replay look the same on every screen (only the zoom differs); Endless keeps its upright one.
+            C.setFieldWidth(endless ? C.FIELD_W_BASE : C.FIELD_W_STD, endless);
             // With the rival's meadow hidden on an upright phone, the meadows grow to reach the top of the screen
             // (both, so the round stays fair), leaving a slim bar for the round and the rival's hearts. Endless on a
             // landscape screen plays in an upright meadow shaped like a phone's.
             C.setFieldHeight(
                 this.soloView
-                    ? (this.r.tallH - C.TALL_SOLO_BAR) / C.TALL_OWN_S
+                    ? (this.r.tallH - C.TALL_SOLO_BAR) /
+                      Math.min(C.TALL_OWN_S, C.TALL_W / (endless ? C.FIELD_W_BASE : C.FIELD_W_STD))
                     : endless
                       ? C.ENDLESS_DESK_H
                       : C.FIELD_H_BASE,
@@ -2538,7 +2527,7 @@ export class Game {
         const watching = inRound && this.replay !== null;
         r.layout =
             soloTall ||
-            (r.portrait && (watching || (!(inRound && this.mode === 'versus') && C.FIELD_W === C.FIELD_W_BASE)))
+            (r.portrait && (watching || (!(inRound && this.mode === 'versus') && C.FIELD_W <= C.FIELD_W_STD)))
                 ? 'tall'
                 : 'wide';
         // Endless side by side: one meadow in the middle, between its panels.
