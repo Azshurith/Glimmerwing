@@ -1508,7 +1508,7 @@ export class Game {
             C.setFieldHeight(
                 this.soloView
                     ? (this.r.tallH - C.TALL_SOLO_BAR) /
-                      Math.min(C.TALL_OWN_S, C.TALL_W / (endless ? C.FIELD_W_BASE : C.FIELD_W_STD))
+                          Math.min(C.TALL_OWN_S, C.TALL_W / (endless ? C.FIELD_W_BASE : C.FIELD_W_STD))
                     : endless
                       ? C.ENDLESS_DESK_H
                       : C.FIELD_H_BASE,
