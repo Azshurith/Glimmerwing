@@ -42,6 +42,7 @@ import { mapById, mapForSeed } from '@/data/maps';
 import { Hud } from './hud';
 import { SkyScenery } from './scenery/scenery';
 import { drawNight } from './screens/ornate';
+import { ARCADE } from './theme';
 import { MapScreen } from './screens/map-screen';
 import { LobbyScreen } from './screens/lobby-screen';
 import { ProfileScreen } from './screens/profile-screen';
@@ -84,6 +85,12 @@ export class Renderer {
     /** Where the tall view's top band (rival's meadow and console) sits and how much it shrinks; Game sets it. */
     tallBand: Placement = { x: 0, y: 0, s: 1 };
 
+    /**
+     * The meadow width that would make the side-by-side view fill the screen, worked out by the page from a
+     * landscape screen's shape (FIELD_W_BASE on an upright or narrower one); Game plays a local round at it.
+     */
+    fieldWidthToFill: number = C.FIELD_W_BASE;
+
     /** The title and select screens' view width on a landscape screen, fitted by the page to its shape. */
     menuW: number = C.VIEW_W;
     /** Whether a menu (title or select) is showing; Game sets it each frame. */
@@ -103,6 +110,15 @@ export class Renderer {
      * right one right. 0 otherwise. Game sets it.
      */
     meadowBleed = 0;
+    /**
+     * How far (screen units) the next meadow drawn paints its scenery above its top and below its foot: a wider
+     * recording shrunk to fit an upright screen fills the room around it. Dimmed past a fine gold line, as the bleed
+     * at its sides is. Game sets it for the one meadow and puts it back to 0.
+     */
+    riseTop = 0;
+    riseBottom = 0;
+    /** Where the side-by-side console sits when a wider recording is shown side by side on an upright screen. */
+    consoleAt: Placement | null = null;
     /**
      * How wide the round's content shows on screen when that's narrower than the view's own width (Endless's lone
      * meadow, scaled down under its top bar), so a filling view needn't be any wider than that; 0 otherwise.
@@ -218,13 +234,32 @@ export class Renderer {
             if (bl > 0) ctx.fillRect(-0.75, 0, 0.75, C.FIELD_H);
             if (br > 0) ctx.fillRect(C.FIELD_W, 0, 0.75, C.FIELD_H);
         }
+        const rt = this.layout === 'tall' ? this.riseTop / scale : 0,
+            rb = this.layout === 'tall' ? this.riseBottom / scale : 0;
+        if (rt > 0 || rb > 0) {
+            // A shrunk wider recording: its scenery painted from the band down to the screen's foot as one picture.
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(0, -rt, C.FIELD_W, C.FIELD_H + rt + rb);
+            ctx.clip();
+            ctx.translate(0, -rt);
+            this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W, C.FIELD_H + rt + rb, map);
+            ctx.restore();
+            ctx.fillStyle = 'rgba(14,6,36,0.5)';
+            if (rt > 0) ctx.fillRect(0, -rt, C.FIELD_W, rt);
+            if (rb > 0) ctx.fillRect(0, C.FIELD_H, C.FIELD_W, rb);
+            ctx.fillStyle = 'rgba(232,190,100,0.55)';
+            if (rt > 0) ctx.fillRect(0, -0.75, C.FIELD_W, 0.75);
+            if (rb > 0) ctx.fillRect(0, C.FIELD_H, C.FIELD_W, 0.75);
+        }
         ctx.beginPath();
         ctx.rect(0, 0, C.FIELD_W, C.FIELD_H);
         ctx.clip();
         // The two meadows look into one world, the right-hand one (whose rival is to its left) GAP across from
         // the left-hand one, so the scenery runs on from one into the other behind the console.
         const side = f.rivalSide < 0 ? 1 : 0;
-        if (bleed <= 0) this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W, C.FIELD_H, map, side, C.GAP);
+        if (bleed <= 0 && rt <= 0 && rb <= 0)
+            this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W, C.FIELD_H, map, side, C.GAP);
 
         if (f.fever > 0) {
             ctx.fillStyle = `rgba(255,170,120,${0.08 + 0.05 * Math.sin(time * 10)})`;
@@ -515,8 +550,62 @@ export class Renderer {
         ctx.shadowBlur = 0;
     }
 
+    /**
+     * A hint, centred across the tall view at `y`, that turning the phone sideways shows a wider recording full size:
+     * a dark capsule in a gold edge with a turning-arrows mark, fading by `alpha`.
+     */
+    rotateHint(y: number, alpha: number): void {
+        const ctx = this.ctx;
+        const text = 'TURN SIDEWAYS FOR THE FULL VIEW';
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+        ctx.font = `7px ${ARCADE}`;
+        const w = ctx.measureText(text).width + 30,
+            h = 16,
+            x = (C.TALL_W - w) / 2;
+        ctx.fillStyle = 'rgba(20,10,46,0.85)';
+        ctx.beginPath();
+        ctx.roundRect(x, y - h / 2, w, h, h / 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(232,190,100,0.9)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+        // Two arrows chasing round a circle.
+        const cx = x + 11,
+            r = 4;
+        ctx.strokeStyle = '#ffe08a';
+        ctx.lineWidth = 1;
+        for (const a0 of [0.2, Math.PI + 0.2]) {
+            ctx.beginPath();
+            ctx.arc(cx, y, r, a0, a0 + 2.3);
+            ctx.stroke();
+            const ax = cx + r * Math.cos(a0 + 2.3),
+                ay = y + r * Math.sin(a0 + 2.3);
+            ctx.beginPath();
+            ctx.moveTo(ax - 1.6, ay - 0.4);
+            ctx.lineTo(ax, ay);
+            ctx.lineTo(ax - 0.2, ay - 1.8);
+            ctx.stroke();
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, x + 20, y + 0.5);
+        ctx.restore();
+    }
+
     /** The console between the two meadows: round, VS, the shared speed meter. */
     console(v: ConsoleView, time: number): void {
+        if (this.layout === 'tall' && this.consoleAt) {
+            const p = this.consoleAt;
+            this.ctx.save();
+            this.ctx.translate(p.x, p.y);
+            this.ctx.scale(p.s, p.s);
+            this.hudLayer.frameX = 0;
+            this.hudLayer.console(v, time);
+            this.ctx.restore();
+            return;
+        }
         if (this.layout === 'tall') {
             const b = C.TALL_CONSOLE;
             const band = this.tallBand;
