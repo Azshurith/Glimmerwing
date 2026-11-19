@@ -576,8 +576,8 @@ export class RosterScreen {
         else drawFairy(ctx, fy, x, y + 10, on ? 4.6 : 3.8, t);
         ctx.restore();
         if (on) {
+            // Its ring holds still: no shine sweeping round it.
             KIT.draw(ctx, 'medOn', x - 120, y - 122, 240, 240);
-            KIT.glint(ctx, 'medOn', x - 120, y - 122, 240, 240, t, 0.5, 4);
         } else KIT.draw(ctx, 'medOff', x - 90, y - 90, 180, 180);
     }
 
