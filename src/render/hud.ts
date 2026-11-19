@@ -25,6 +25,9 @@ export class Hud {
 
     constructor(private ctx: CanvasRenderingContext2D) {}
 
+    /** How far past the meadows the screen reaches on each side (its frame goes round the screen). */
+    frameX = 0;
+
     /** Set the size of the view the banners span. */
     setView(w: number, h: number): void {
         this.viewW = w;
@@ -296,10 +299,11 @@ export class Hud {
         ctx.fillStyle = 'rgba(200,150,255,0.35)';
         ctx.fillRect(x + 3, 0, 0.5, H);
         ctx.fillRect(x + w - 3.5, 0, 0.5, H);
-        // A thin gold frame round the whole screen, so both meadows and the console read as one cabinet.
+        // A thin gold frame round the whole screen, so both meadows and the console read as one cabinet (round the
+        // view as wide as the screen, `frameX` out past it on each side, when the meadows reach out to its edges).
         ctx.strokeStyle = 'rgba(224,168,62,0.85)';
         ctx.lineWidth = 1;
-        ctx.strokeRect(0.5, 0.5, C.VIEW_W - 1, H - 1);
+        ctx.strokeRect(0.5 - this.frameX, 0.5, C.VIEW_W - 1 + 2 * this.frameX, H - 1);
         // Violet gems at the console's ends.
         gemDiamond(ctx, cx, 6, 5, time);
         gemDiamond(ctx, cx, H - 6, 5, time + 1.5);
@@ -369,8 +373,9 @@ export class Hud {
      */
     endlessSides(v: EndlessView, time: number, w: number): void {
         const ctx = this.ctx;
+        // Set a little below the top plate, clear of a replay's Back button under her face.
         const cw = 84,
-            y = 38,
+            y = 48,
             ch = 128;
         const card = (x: number) => {
             ctx.fillStyle = 'rgba(14,9,36,0.45)';

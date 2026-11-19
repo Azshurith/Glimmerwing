@@ -2489,8 +2489,9 @@ export class Game {
         r.fillRound = (watching || this.online) && r.layout === 'wide';
         r.begin();
         // An Endless replay's lone meadow paints its scenery across the whole screen and spans it with its bars.
-        r.meadowBleed = r.fillRound && endless ? r.viewX : 0;
-        if (r.fillRound && !endless) r.roundMargins(this.fields[0], this.fields[1], this.time);
+        // Meadows narrower than the screen reach out to its edges: their scenery and bars, not their play.
+        r.meadowBleed = r.fillRound ? r.viewX : 0;
+        r.bleedBoth = endless;
         const solo = this.mode !== 'versus';
         // Online the meadows keep the server's seat order (and colours); YOU is whichever is this player's.
         const tags: [HudTag, HudTag] = this.online
@@ -2506,7 +2507,13 @@ export class Game {
         // plate, below her face.
         const mine = at[own];
         const hs = Math.min(mine.s, C.TALL_OWN_S);
-        this.backAt = tall && watching ? { x: Math.max(0, mine.x) + 3 * hs, y: mine.y + 23 * hs } : null;
+        // Side by side, the left meadow's plate starts at the screen's left edge (it reaches out there when the
+        // meadows are narrower than the screen), so Back goes under the face there.
+        this.backAt = !watching
+            ? null
+            : tall
+              ? { x: Math.max(0, mine.x) + 3 * hs, y: mine.y + 23 * hs }
+              : { x: 3, y: 23 };
         r.field(this.fields[0], at[0].x, this.wins[0], this.time, tags[0], at[0].y, at[0].s);
         if (!soloTall && !endless) r.field(this.fields[1], at[1].x, this.wins[1], this.time, tags[1], at[1].y, at[1].s);
         // Between rounds the console still shows the round just played.
