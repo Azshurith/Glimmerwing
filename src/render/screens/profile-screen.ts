@@ -140,13 +140,20 @@ function profileFits(bleed: number): ProfileFits {
     /** A fit drawing the mockup's point (mx, my) at the view's (vx, vy). */
     const at = (mx: number, my: number, vx: number, vy: number): MockFit => ({ s, x: vx - mx * s, y: vy - my * s });
     const band = (y0 + y1) / 2;
-    const mainX = x0 + (cw + gap) * s;
+    // The card starts under the page's Back button (its crest reaches up to `crestTop` in its pixels), shrinking a
+    // little if it has to.
+    const crestTop = cy - 52,
+        cardS = Math.min(s, (y1 - BACK_CLEAR) / (cy + ch - crestTop));
+    const mainX = x0 + cw * cardS + gap * s;
     return {
-        card: at(cx, cy + ch / 2, x0, band),
+        card: { s: cardS, x: x0 - cx * cardS, y: BACK_CLEAR - crestTop * cardS },
         main: at(MAIN_L, 740, mainX, band),
         R: MAIN_L + (x1 - mainX) / s - 6,
     };
 }
+
+/** How far down the view the player card's crest must start, clear of the page's Back button. */
+const BACK_CLEAR = 30;
 
 /** Where the history's rows sit across the main area that ends at `R`: their left, width and the scroll bar's x. */
 function rowSpan(R: number): { x: number; w: number; scroll: number } {
@@ -330,7 +337,9 @@ export class ProfileScreen {
             }),
         );
         enter(ctx, 'panels', () =>
-            inFit(main, () => (v.tab === 'history' ? this.paintedHistory(v, t, R, stage) : this.paintedRecord(v, t, R))),
+            inFit(main, () =>
+                v.tab === 'history' ? this.paintedHistory(v, t, R, stage) : this.paintedRecord(v, t, R),
+            ),
         );
         enter(ctx, 'hint', () =>
             keyHints(
@@ -398,7 +407,8 @@ export class ProfileScreen {
                 ctx.fillStyle = '#e2ccff';
                 ctx.fillText(`AT ${nextStage.trophies}`, x + w - 34, y + 70);
             }
-            if (kind === 'clock' && v.rank) capsule(ctx, `#${v.rank.rank} OF ${v.rank.players}`, x + w - 340, y + 50, 300, 80);
+            if (kind === 'clock' && v.rank)
+                capsule(ctx, `#${v.rank.rank} OF ${v.rank.players}`, x + w - 340, y + 50, 300, 80);
         });
         // The fairies: a heading tag on a gold rule, what unlocks the next, and a framed panel with a ring each.
         const py = 1000,
@@ -1236,7 +1246,7 @@ export function drawPlayerCard(
     for (let i = 0; i < 3; i++) {
         const ry = rows0 + i * 88,
             e = top[i],
-            mine = e && e.playerId === card.me;
+            mine = e?.playerId === card.me;
         ctx.fillStyle = mine ? 'rgba(255,212,92,0.14)' : 'rgba(10,4,26,0.55)';
         roundRect(ctx, x + 40, ry, w - 80, 72, 36);
         ctx.fill();
@@ -1363,7 +1373,13 @@ function tileIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: num
         ctx.lineWidth = 0.14;
         for (const d of [-1, 1]) {
             ctx.beginPath();
-            ctx.arc(d * 0.66, -0.5, 0.26, d < 0 ? Math.PI * 0.5 : -Math.PI * 0.5, d < 0 ? Math.PI * 1.5 : Math.PI * 0.5);
+            ctx.arc(
+                d * 0.66,
+                -0.5,
+                0.26,
+                d < 0 ? Math.PI * 0.5 : -Math.PI * 0.5,
+                d < 0 ? Math.PI * 1.5 : Math.PI * 0.5,
+            );
             ctx.stroke();
         }
         ctx.fillStyle = gold;
