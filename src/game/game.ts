@@ -538,7 +538,8 @@ export class Game {
      */
     get screenTab(): number {
         if (this.phase === 'profile') return this.profileTab === 'history' ? 1 : 0;
-        if (this.phase === 'matchinfo') return MATCH_TABS.indexOf(this.matchTab) * 10 + (this.matchTab === 'graphs' ? this.matchGraph : 0);
+        if (this.phase === 'matchinfo')
+            return MATCH_TABS.indexOf(this.matchTab) * 10 + (this.matchTab === 'graphs' ? this.matchGraph : 0);
         return -1;
     }
     /** The map shown on the Maps screen, for the page to play its music. */
