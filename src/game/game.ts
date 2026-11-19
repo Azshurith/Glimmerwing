@@ -116,6 +116,15 @@ const wide = (): readonly [Placement, Placement] => [
 ];
 
 /**
+ * Where Endless's lone meadow sits on a landscape screen: in the middle, filling the height (its stats are at its
+ * sides, so it needs no bar over it).
+ */
+const endlessWide = (): Placement => {
+    const s = C.VIEW_H / C.FIELD_H;
+    return { x: (C.VIEW_W - C.FIELD_W * s) / 2, y: 0, s };
+};
+
+/**
  * Where they sit in the tall layout: yours full width against the bottom edge, the rival's small at the top.
  * The band left above your meadow holds the rival's meadow and the console, designed TALL_TOP high: on a
  * shorter screen the band shrinks to fit, on a longer one it stays centred in the spare height.
@@ -1440,11 +1449,18 @@ export class Game {
             C.setFieldWidth(recorded.field.w, recorded.field.single);
             C.setFieldHeight(recorded.field.h);
         } else {
-            if (this.mode === 'endless' && !this.r.portrait) C.setFieldWidth(this.r.viewWidthToFill, true);
-            else C.setFieldWidth(this.online || this.mode === 'endless' ? C.FIELD_W_BASE : this.r.fieldWidthToFill);
+            const endless = this.mode === 'endless';
+            C.setFieldWidth(this.online || endless ? C.FIELD_W_BASE : this.r.fieldWidthToFill, endless);
             // With the rival's meadow hidden on an upright phone, the meadows grow to reach the top of the screen
-            // (both, so the round stays fair), leaving a slim bar for the round and the rival's hearts.
-            C.setFieldHeight(this.soloView ? (this.r.tallH - C.TALL_SOLO_BAR) / C.TALL_OWN_S : C.FIELD_H_BASE);
+            // (both, so the round stays fair), leaving a slim bar for the round and the rival's hearts. Endless on a
+            // landscape screen plays in an upright meadow shaped like a phone's.
+            C.setFieldHeight(
+                this.soloView
+                    ? (this.r.tallH - C.TALL_SOLO_BAR) / C.TALL_OWN_S
+                    : endless
+                      ? C.ENDLESS_DESK_H
+                      : C.FIELD_H_BASE,
+            );
         }
         const crowHere = (seed & 1) === 0;
         const map = this.replay ? this.replay.data.map : (this.forcedMap?.id ?? (this.matchMap || mapForSeed(seed).id));
@@ -2453,7 +2469,7 @@ export class Game {
         }
         // A round in wider meadows stays side by side even if the screen turns upright mid-round.
         // A round in taller meadows (rival hidden) stays tall even if the screen turns sideways.
-        const soloTall = inRound && C.FIELD_H !== C.FIELD_H_BASE;
+        const soloTall = inRound && C.FIELD_H !== C.FIELD_H_BASE && this.mode !== 'endless';
         // A replay on an upright screen always takes the tall layout, its meadows scaled to fit whatever size
         // they were recorded at.
         const watching = inRound && this.replay !== null;
@@ -2473,9 +2489,10 @@ export class Game {
                 : null;
         // With the rival's meadow hidden it's placed far off screen, so nothing of it (or flying to it) shows.
         const offscreen: Placement = { x: 0, y: -10000, s: tall ? tall.at[0].s : 1 };
+        const ew = !tall && endless ? endlessWide() : null;
         const at: readonly [Placement, Placement] = !tall
-            ? endless
-                ? [{ x: 0, y: 0, s: 1 }, offscreen]
+            ? ew
+                ? [ew, offscreen]
                 : wide()
             : soloTall || endless
               ? [tall.at[0], offscreen]
@@ -2486,12 +2503,12 @@ export class Game {
         if (tall) r.tallBand = tall.band;
         // A replay recorded in meadows narrower than this screen, or an online round (always the usual width), keeps
         // them centred, the view filling the screen.
-        r.fillRound = (watching || this.online) && r.layout === 'wide';
+        r.fillRound = (watching || this.online || endless) && r.layout === 'wide';
+        r.roundW = r.fillRound && endless ? C.FIELD_W * at[0].s : 0;
         r.begin();
-        // An Endless replay's lone meadow paints its scenery across the whole screen and spans it with its bars.
         // Meadows narrower than the screen reach out to its edges: their scenery and bars, not their play.
-        r.meadowBleed = r.fillRound ? r.viewX : 0;
-        r.bleedBoth = endless;
+        // Endless's sides hold its stats instead.
+        r.meadowBleed = r.fillRound && !endless ? r.viewX : 0;
         const solo = this.mode !== 'versus';
         // Online the meadows keep the server's seat order (and colours); YOU is whichever is this player's.
         const tags: [HudTag, HudTag] = this.online
@@ -2503,8 +2520,8 @@ export class Game {
                   { label: solo ? 'YOU' : '1P', color: PLAYER_COLORS.p1 },
                   this.vsCpu ? { label: 'CPU', color: PLAYER_COLORS.cpu } : { label: '2P', color: PLAYER_COLORS.p2 },
               ];
-        // Watching a replay on an upright screen, the page's Back button sits just under this player's meadow's top
-        // plate, below her face.
+        // Watching a replay on an upright screen, the page's Back button sits at the top left, above the rival's
+        // meadow, clear of the round banners; a lone meadow's (Endless) sits just under its top plate, below her face.
         const mine = at[own];
         const hs = Math.min(mine.s, C.TALL_OWN_S);
         // Side by side, the left meadow's plate starts at the screen's left edge (it reaches out there when the
@@ -2512,8 +2529,10 @@ export class Game {
         this.backAt = !watching
             ? null
             : tall
-              ? { x: Math.max(0, mine.x) + 3 * hs, y: mine.y + 23 * hs }
-              : { x: 3, y: 23 };
+              ? soloTall || endless
+                  ? { x: Math.max(0, mine.x) + 3 * hs, y: mine.y + 23 * hs }
+                  : { x: 4, y: 4 }
+              : { x: (endless ? r.viewX + mine.x : 0) + 3 * mine.s, y: mine.y + 23 * mine.s };
         r.field(this.fields[0], at[0].x, this.wins[0], this.time, tags[0], at[0].y, at[0].s);
         if (!soloTall && !endless) r.field(this.fields[1], at[1].x, this.wins[1], this.time, tags[1], at[1].y, at[1].s);
         // Between rounds the console still shows the round just played.
@@ -2535,6 +2554,7 @@ export class Game {
                     tempo: this.fields[0].tempo,
                 },
                 this.time,
+                ew,
             );
         else if (soloTall) r.soloBar(consoleView, this.fields[1], tags[1], this.time);
         else r.console(consoleView, this.time);
