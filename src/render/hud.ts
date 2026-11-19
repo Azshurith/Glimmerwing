@@ -638,7 +638,7 @@ export class Hud {
         }
         if (open < 1) return;
 
-        // Title punches in big, then settles: leaning gold lettering between two gold wings.
+        // Title punches in big, then settles: leaning gold lettering.
         const tAge = age - 0.18;
         const s = tAge < 0.16 ? 1.8 - (tAge / 0.16) * 0.8 : 1 + 0.03 * Math.sin(age * 6);
         const tone = v.tone ?? 'gold';
@@ -651,18 +651,10 @@ export class Hud {
         const size = v.size ?? 30;
         const ty = cy + (v.sub || v.extra ? -6 : size * 0.36);
         const text = v.title.toUpperCase();
-        ctx.font = `${size}px ${ARCADE}`;
-        const tw = Math.min(W - 40, ctx.measureText(text).width);
         ctx.save();
         ctx.translate(W / 2, ty);
         ctx.scale(s, s);
         ctx.globalAlpha = Math.min(1, tAge / 0.1 + 0.2);
-        if (tw + size * 3.4 < W) {
-            const wy = -size * 0.42,
-                wl = size * 1.15;
-            sweptWing(ctx, -tw / 2 - size * 0.2, wy, wl, -1);
-            sweptWing(ctx, tw / 2 + size * 0.2, wy, wl, 1);
-        }
         ctx.transform(1, 0, -0.18, 1, 0, 0);
         ctx.shadowColor = tone === 'pink' ? '#ff6b8a' : tone === 'blue' ? '#4fb8ff' : '#ffb43c';
         ctx.shadowBlur = 14;
