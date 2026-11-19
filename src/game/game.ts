@@ -6,7 +6,15 @@ import { sanitizeKeys } from '@/input/keys';
 import type { Net } from '@/net/net';
 import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
-import { inTile, LOBBY_NAV, LOBBY_QUICK, lobbyLayout, roadAt, roadGeometry } from '@/render/screens/lobby-screen';
+import {
+    inTile,
+    LOBBY_NAV,
+    LOBBY_QUICK,
+    lobbyLayout,
+    roadAt,
+    roadGeometry,
+    roadThumb,
+} from '@/render/screens/lobby-screen';
 import { tallMenuFit } from '@/render/screens/menu-fit';
 import { modeAvailable } from '@/data/availability';
 import { rosterMedallions, rosterPreviewButton } from '@/render/screens/roster-screen';
@@ -217,6 +225,8 @@ export class Game {
     private roadScroll = 0;
     private roadVel = 0;
     private roadDrag: number | null = null;
+    /** Whether the held pointer took hold of the trophy road's scroll bar (it then sets the scroll, not drags). */
+    private roadBarHeld = false;
     /** Whether the chat panel (the page's #chat) is open, and World chat's latest lines for the lobby's ticker. */
     chatOpen = false;
     chatLines: { name: string; body: string }[] = [];
@@ -1708,7 +1718,17 @@ export class Game {
         const g = roadGeometry(this.r.layout, this.lobbyH);
         const scale = this.r.layout === 'tall' ? tallMenuFit(this.r.viewH).s : 1;
         const p = this.input.pointer;
-        if (p) {
+        // A press on the scroll bar (or just beside it) takes hold of it: the thumb follows the pointer.
+        const bar = lay.roadBar;
+        if (p && this.roadDrag === null && !this.roadBarHeld)
+            this.roadBarHeld = inBox(p, { x: bar.x - 10 * scale, y: bar.y, w: bar.w + 20 * scale, h: bar.h });
+        if (p && this.roadBarHeld) {
+            const th = roadThumb(bar, scale);
+            const k = (th.track1 - th.thumb / 2 - p.y) / Math.max(1, th.span - th.thumb);
+            this.roadScroll = Math.max(0, Math.min(1, k)) * g.max;
+            this.roadVel = 0;
+            this.roadDrag = p.y;
+        } else if (p) {
             // Dragging down shows what's further up the road.
             if (this.roadDrag !== null) {
                 const d = (p.y - this.roadDrag) / scale;
@@ -1718,6 +1738,7 @@ export class Game {
             this.roadDrag = p.y;
         } else {
             this.roadDrag = null;
+            this.roadBarHeld = false;
             this.roadScroll += this.roadVel;
             this.roadVel *= 0.9;
             if (Math.abs(this.roadVel) < 0.05) this.roadVel = 0;

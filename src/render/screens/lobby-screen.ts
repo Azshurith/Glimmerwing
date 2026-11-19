@@ -99,6 +99,17 @@ export function roadGeometry(layout: Layout, H: number): { anchor: number; step:
     return { anchor, step: ROAD_STAGE, max: Math.max(0, (STAGES.length - 1) * ROAD_STAGE - anchor + top) };
 }
 
+/**
+ * The trophy road's scroll bar's track inside `bar` (the box between its arrows), its thumb's length (at least 18
+ * design units, `s` being how many view units a design unit is) and how far it runs.
+ */
+export function roadThumb(bar: Box, s: number): { track0: number; track1: number; span: number; thumb: number } {
+    const track0 = bar.y + 12 * s,
+        track1 = bar.y + bar.h - 12 * s,
+        span = track1 - track0;
+    return { track0, track1, span, thumb: Math.max(18 * s, span * 0.22) };
+}
+
 /** Where `trophies` sit on the trophy road, in design units up from its start (the first stage's gate). */
 export function roadAt(trophies: number): number {
     for (let k = 0; k < STAGES.length - 1; k++) {
@@ -128,6 +139,8 @@ export interface LobbyLayout {
     next: Box;
     isle: Box;
     roadOk: Box;
+    /** The trophy road's scroll bar: its track, from the arrow at its top to the one at its foot. */
+    roadBar: Box;
     /** World chat's ticker (a tap opens the panel), and where the panel opens: the whole height, at the left. */
     ticker: Box;
     chat: Box;
@@ -185,6 +198,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
             next: { x: road.x + road.w + 4, y: road.y - 3, w: 22, h: 23 },
             isle: { x: W / 2 - 100, y: iy - 44, w: 200, h: 140 },
             roadOk: { x: W / 2 - 60, y: H - 54, w: 120, h: 38 },
+            roadBar: { x: R - 12 - 3.5, y: 76, w: 7, h: H - 70 - 76 },
             ticker: { x: L + 8, y: H - 162, w: R - L - 16, h: 46 },
             chat: { x: L, y: 0, w: R - L, h: H },
             friends: { x: R - 170, y: 44, w: 162, h: Math.min(300, H - 200) },
@@ -218,6 +232,7 @@ function designLayout(layout: Layout, H: number, bleed: number): LobbyLayout {
         next: { x: road.x + road.w + 4, y: road.y - 3, w: 20, h: 23 },
         isle: { x: W / 2 - isle, y: 104 - isle * 0.45, w: isle * 2, h: isle * 1.2 },
         roadOk: { x: W / 2 - 56, y: C.VIEW_H - 40, w: 112, h: 32 },
+        roadBar: { x: R + 6 - 16 - 3.5, y: 50, w: 7, h: C.VIEW_H - 36 - 50 },
         ticker: { x: L, y: 186, w: side + 10, h: 56 },
         chat: { x: -bleed, y: 0, w: Math.max(210, Math.min(280, W / 2 - 108 + bleed)), h: C.VIEW_H },
         friends: { x: R - side, y: 36, w: side, h: 206 },
@@ -246,6 +261,7 @@ export function lobbyLayout(layout: Layout, h: number = C.TALL_H, bleed = 0): Lo
         next: view(d.next),
         isle: view(d.isle),
         roadOk: view(d.roadOk),
+        roadBar: view(d.roadBar),
         ticker: view(d.ticker),
         chat: view(d.chat),
         friends: view(d.friends),
@@ -903,8 +919,7 @@ export class LobbyScreen {
 
     /**
      * The trophy road, over everything, on the painted castle night: a beam of light runs up the middle with a card
-     * at each stage (its island, STAGE n on a pointed plate, its name on a dark ribbon between gold laurels and the
-     * trophies it needs; framed in glowing gold once open, dim and padlocked until then) and a gold milestone bar
+     * at each stage (its island, STAGE n on a pointed plate, its name and the trophies it needs; framed in glowing gold once open, dim and padlocked until then) and a gold milestone bar
      * halfway between each two; the player's avatar and trophies on a plate at their place on it. The winged heading
      * on top (the page's Back tab beside it, as on the other screens), the trophies at the top right, a scroll bar down the right and OK at the foot.
      * It scrolls (`v.roadScroll`, design units up from its start): drag, the wheel or ▲ ▼; OK, Back or Esc closes it.
@@ -1023,10 +1038,11 @@ export class LobbyScreen {
         ctx.fillStyle = '#ffffff';
         ctx.fillText(label, px + 23, py + ph / 2 + 4);
         // The scroll bar down the right: a dark track in a lilac edge, arrows at its ends, a gold thumb.
-        const sx = W + bleed - (tall ? 12 : 16),
-            st0 = tall ? 76 : 50,
-            st1 = H - (tall ? 70 : 36),
-            sw = 7;
+        const sb = lay.roadBar,
+            sx = sb.x + sb.w / 2,
+            st0 = sb.y,
+            st1 = sb.y + sb.h,
+            sw = sb.w;
         ctx.fillStyle = 'rgba(14,6,36,0.8)';
         roundRect(ctx, sx - sw / 2, st0, sw, st1 - st0, sw / 2);
         ctx.fill();
@@ -1045,18 +1061,15 @@ export class LobbyScreen {
             ctx.closePath();
             ctx.fill();
         }
-        const track0 = st0 + 12,
-            track1 = st1 - 12,
-            span = track1 - track0;
-        const thumb = Math.max(18, span * 0.22);
+        const th = roadThumb(sb, 1);
         const k = g.max > 0 ? v.roadScroll / g.max : 0;
-        const ty = track1 - thumb - (span - thumb) * k;
+        const ty = th.track1 - th.thumb - (th.span - th.thumb) * k;
         const tg = ctx.createLinearGradient(sx - 3, 0, sx + 3, 0);
         tg.addColorStop(0, '#fff3b0');
         tg.addColorStop(0.5, '#ffd23e');
         tg.addColorStop(1, '#c87010');
         ctx.fillStyle = tg;
-        roundRect(ctx, sx - 2.5, ty, 5, thumb, 2.5);
+        roundRect(ctx, sx - 2.5, ty, 5, th.thumb, 2.5);
         ctx.fill();
         // OK at the foot, over a fade, with the scroll hint beside it.
         const fade = ctx.createLinearGradient(0, H - 60, 0, H);
@@ -1168,8 +1181,8 @@ export class LobbyScreen {
 
     /**
      * One stage's card on the trophy road, centred on (cx, y), `w` wide: a rounded card in a glowing gold frame (dim
-     * until open), STAGE n on a pointed plate at its top, the stage's floating island, and its name on a dark ribbon
-     * between gold laurels with the trophies it needs; a padlock over the island until it's open.
+     * until open), STAGE n on a pointed plate at its top, the stage's floating island, and its name with the trophies
+     * it needs; a padlock over the island until it's open.
      */
     private roadCard(
         map: string,
@@ -1247,18 +1260,9 @@ export class LobbyScreen {
         ctx.fillStyle = open ? '#ffd45c' : '#8a78b8';
         sparkle(ctx, cx - sw / 2 + 12, sy + sh / 2, 2.2);
         sparkle(ctx, cx + sw / 2 - 12, sy + sh / 2, 2.2);
-        // The name on a dark ribbon between gold laurels, and the trophies it needs.
+        // The name, and the trophies it needs.
         const by = top + h - 40,
-            bw = w * 0.74,
-            bh = 32;
-        const ribbon = slanted(cx - bw / 2, by, bw, bh, -8);
-        ctx.fillStyle = 'rgba(10,4,26,0.85)';
-        ribbon(ctx);
-        ctx.fill();
-        if (open) {
-            laurel(ctx, cx - bw / 2 + 18, by + bh / 2 + 2, 1);
-            laurel(ctx, cx + bw / 2 - 18, by + bh / 2 + 2, -1);
-        }
+            bw = w * 0.74;
         const name = (mapById(map)?.name ?? map).toUpperCase();
         arcadeText(
             ctx,
@@ -2099,38 +2103,6 @@ export function sweptWing(ctx: CanvasRenderingContext2D, x: number, y: number, l
         feather(0);
         ctx.fill();
         ctx.restore();
-    }
-    ctx.restore();
-}
-
-/**
- * A gold laurel sprig rising from (x, y), leaning out toward `dir` (1 to the left of a name, -1 to its right): a curved
- * stem with leaves along it.
- */
-function laurel(ctx: CanvasRenderingContext2D, x: number, y: number, dir: number): void {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(-dir, 1);
-    ctx.fillStyle = goldGradient(ctx, -14, 6);
-    ctx.strokeStyle = goldGradient(ctx, -14, 6);
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(-4, 6);
-    ctx.quadraticCurveTo(6, 0, 6, -14);
-    ctx.stroke();
-    for (let i = 0; i < 4; i++) {
-        const k = i / 4;
-        const px = -4 + 10 * k * (2 - k),
-            py = 6 - 20 * k;
-        for (const side of [-1, 1]) {
-            ctx.save();
-            ctx.translate(px, py);
-            ctx.rotate(side * 0.9 - 0.4);
-            ctx.beginPath();
-            ctx.ellipse(0, -3, 1.4, 3.2, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        }
     }
     ctx.restore();
 }
