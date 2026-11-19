@@ -2610,10 +2610,7 @@ export class Game {
         }
         // Watching a wider recording upright, a hint for a moment that turning the phone shows it full size.
         if (tall && tall.rise > 0 && watching && this.time - this.watchStarted < ROTATE_HINT_TIME)
-            r.rotateHint(
-                at[own].y - 14,
-                Math.min(1, (ROTATE_HINT_TIME - (this.time - this.watchStarted)) / 0.6),
-            );
+            r.rotateHint(at[own].y - 14, Math.min(1, (ROTATE_HINT_TIME - (this.time - this.watchStarted)) / 0.6));
         // Between rounds the console still shows the round just played.
         const played = this.wins[0] + this.wins[1];
         const between = this.phase === 'roundOver' || this.phase === 'matchOver';
