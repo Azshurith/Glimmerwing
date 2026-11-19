@@ -82,9 +82,7 @@ const MOCK = {
     plate: [30, 232, 1070, 268],
     emblem: [244, 365, 90],
     name: [400, 372],
-    sub: [657, 460],
     difficulty: [1110, 333, 712, 121],
-    pips: [1424, 375, 46.6, 40],
     blurb: [70, 552],
     monsters: [78, 588, 1709, 109],
     cards: [
@@ -404,7 +402,9 @@ export class MapsScreen {
         ctx.fillStyle = ng;
         ctx.fillText(map.name.toUpperCase(), nx, ny - 6, 620);
         // Its place on the trophy road, and whether it's open.
-        const [sx, sy] = MOCK.sub;
+        // Centred in the plaque, both across and up and down.
+        const sx = 392 + 560 / 2,
+            sy = 418 + 82 / 2 + 13;
         ctx.font = `36px ${ARCADE}`;
         const st = `STAGE ${index + 1} OF ${STAGES.length}  ·  `,
             tail = locked ? `${stage.trophies}` : 'OPEN',
@@ -420,18 +420,24 @@ export class MapsScreen {
         } else ctx.fillText(tail, tx, sy);
         // How hard: a pointed plate with a pip per stage, lit up to this one.
         // At the right of the room, however wide it is.
-        const [, dy, dw, dh] = MOCK.difficulty,
+        // At the right of the room, however wide it is, as wide as the room between it and the banner allows.
+        const [, dy, , dh] = MOCK.difficulty,
+            dw = Math.min(980, R - 1150),
             dx = R - dw;
         const diff = () => pointed(ctx, dx + 10, dy + 14, dw - 20, dh - 28, 34);
         this.violet(diff, dy, dy + dh);
         this.goldEdge(diff, dy, dy + dh, 5);
         arcadeText(ctx, 'DIFFICULTY', dx + 64, dy + dh / 2 + 14, 38, ['#ffffff', '#f6efff', '#d8c8ff'], 'left', 280);
-        const [, py, pw, ph] = MOCK.pips,
-            px = dx + (MOCK.pips[0] - MOCK.difficulty[0]);
+        ctx.font = `38px ${ARCADE}`;
+        const p0 = dx + 64 + Math.min(280, ctx.measureText('DIFFICULTY').width) + 36,
+            p1 = dx + dw - 76,
+            pw = (p1 - p0) / STAGES.length,
+            ph = 40,
+            py = dy + (dh - ph) / 2;
         for (let i = 0; i < STAGES.length; i++) {
             ctx.fillStyle =
                 i <= index ? (i >= 5 ? '#ff7a6a' : i >= 3 ? '#ffd45c' : '#6af07a') : 'rgba(255,255,255,0.12)';
-            ctx.fillRect(px + i * pw, py, pw - 8, ph);
+            ctx.fillRect(p0 + i * pw, py, pw - 10, ph);
         }
         const [bx, by] = MOCK.blurb;
         ctx.textAlign = 'left';
