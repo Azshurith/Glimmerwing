@@ -164,8 +164,8 @@ export class OnlineMatch {
             if (this.hooks.mapOn(mapForSeed(this.seed).id) || tries >= 64) break;
         }
         const map = mapForSeed(this.seed).id;
-        // Online meadows are always the usual size, so both screens agree.
-        C.setFieldWidth(C.FIELD_W_BASE);
+        // Online meadows are always the standard size, so both screens agree.
+        C.setFieldWidth(C.FIELD_W_STD);
         C.setFieldHeight(C.FIELD_H_BASE);
         const roundIndex = this.wins[0] + this.wins[1];
         this.sim = new RoundSim('online', this.seed, [f0, f1], roundIndex, map, (this.seed & 1) === 0);
