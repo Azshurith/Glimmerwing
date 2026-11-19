@@ -425,14 +425,23 @@ export function rosterMedallions(
     return designMedallions('tall', tallShift(f.h)).map(m => ({ x: f.x + m.x * f.s, y: m.y * f.s, r: m.r * f.s }));
 }
 
-/** A small gold icon for a stat: wings for speed, a bolt for charge, a star for burst, a diamond for dodge. */
+/** A small gold icon for a stat, about 9 across round (x, y): wings for speed, lightning for charge, a bomb for burst,
+ * a diamond for dodge. */
 function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: number): void {
     ctx.fillStyle = goldGradient(ctx, y - 4, y + 4);
     ctx.beginPath();
     if (kind === 'speed') {
-        ctx.moveTo(x - 4, y + 2);
-        ctx.quadraticCurveTo(x, y - 4, x + 4, y - 3);
-        ctx.quadraticCurveTo(x + 1, y, x - 4, y + 2);
+        // A pair of wings: three feathers each, swept up and out from the middle.
+        for (const d of [-1, 1]) {
+            for (let f = 0; f < 3; f++) {
+                const tipX = x + d * (4.6 - f * 0.9),
+                    tipY = y - 3.2 + f * 2;
+                ctx.moveTo(x + d * 0.4, y + 0.6);
+                ctx.quadraticCurveTo(x + d * 2.2, tipY - 0.6, tipX, tipY);
+                ctx.quadraticCurveTo(x + d * 2, tipY + 1.6, x + d * 0.4, y + 1.6);
+                ctx.closePath();
+            }
+        }
     } else if (kind === 'charge') {
         ctx.moveTo(x + 1, y - 4);
         ctx.lineTo(x - 3, y + 1);
@@ -441,7 +450,25 @@ function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: num
         ctx.lineTo(x + 3, y - 1);
         ctx.lineTo(x, y - 1);
     } else if (kind === 'burst') {
-        sparkle(ctx, x, y, 4);
+        // A round bomb with its cap and a fuse ending in a spark.
+        ctx.arc(x - 0.4, y + 0.8, 3.1, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.rect(x + 0.6, y - 3.1, 1.8, 1.4);
+        ctx.fill();
+        ctx.strokeStyle = goldGradient(ctx, y - 4, y);
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(x + 1.5, y - 3.1);
+        ctx.quadraticCurveTo(x + 2.2, y - 4.4, x + 3.4, y - 4);
+        ctx.stroke();
+        ctx.fillStyle = '#fff6d0';
+        sparkle(ctx, x + 3.6, y - 4.1, 1.4);
+        // A shine on the bomb.
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.beginPath();
+        ctx.arc(x - 1.5, y - 0.3, 0.7, 0, Math.PI * 2);
+        ctx.fill();
         return;
     } else {
         ctx.moveTo(x, y - 4);
@@ -821,10 +848,13 @@ export class RosterScreen {
         skillsOf(fy, locked).forEach(([kind, name, text], i) => {
             const y = MOCK.skills[i],
                 cy = y + 71;
-            glassPanel(ctx, 1046, cy - 61, 1460, 122, 61);
-            skillOrb(ctx, kind, 1112, cy, 62, t);
-            arcadeText(ctx, kind, 1224, y + 50, 34, ['#ffffff', '#f6efff', '#d8c8ff'], 'left', 480);
-            arcadeText(ctx, name.toUpperCase(), 1224, y + 104, 48, ['#fff3c0', '#ffd45c', '#e08a1c'], 'left', 480);
+            // As wide as the two stat panels together.
+            const sx0 = MOCK.statsL[0],
+                sx1 = MOCK.statsR[0] + MOCK.statsR[2];
+            glassPanel(ctx, sx0, cy - 61, sx1 - sx0, 122, 61);
+            skillOrb(ctx, kind, sx0 + 68, cy, 60, t);
+            arcadeText(ctx, kind, sx0 + 156, y + 50, 34, ['#ffffff', '#f6efff', '#d8c8ff'], 'left', 480);
+            arcadeText(ctx, name.toUpperCase(), sx0 + 156, y + 104, 48, ['#fff3c0', '#ffd45c', '#e08a1c'], 'left', 480);
             if (text) {
                 ctx.textAlign = 'left';
                 ctx.font = `italic 600 38px ${FONT}`;
