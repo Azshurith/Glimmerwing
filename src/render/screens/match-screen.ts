@@ -93,7 +93,7 @@ const MOCK = {
         [1513, 231, 580, 122],
         [2103, 231, 580, 122],
     ],
-    // The graphs' own tabs, a clear gap under the main tabs (which end at 353) and above the chart (560).
+    // The graphs' own tabs, a clear gap under the main tabs (which end at 353) and above the chart (640).
     graphs: [
         [588, 386, 575, 92],
         [1176, 386, 575, 92],
@@ -119,8 +119,8 @@ const MOCK = {
     ],
     roundsHead: [900, 950, 1762, 112],
     round: { y: 1063, w: 811, h: 248, gap: 25, mid: 1790 },
-    chart: [160, 560, 3360, 760],
-    plot: [250, 632, 3190, 562],
+    chart: [160, 640, 3360, 780],
+    plot: [250, 712, 3190, 582],
     hint: [960, 1600, 1660, 140],
 } as const;
 
