@@ -134,7 +134,8 @@ export function shine(
 ): void {
     const at = sweep(t, phase, period);
     if (at === null) return;
-    const band = Math.max(h * 0.8, w * 0.14),
+    // As wide as a seventh of the shape, or a third of its smaller side, so tall panels get a band, not a wash.
+    const band = Math.max(w * 0.14, Math.min(h * 0.8, w * 0.3)),
         cx = x - band + (w + 2 * band) * at;
     ctx.save();
     trace();

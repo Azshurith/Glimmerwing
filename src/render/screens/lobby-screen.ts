@@ -19,10 +19,9 @@ import { drawMedal } from './profile-screen';
 import { enter } from '@/render/transition';
 import { STAGES } from '@/data/stages';
 import { drawPadlock } from './map-screen';
-import { LOBBY_KIT } from '@/data/lobby-kit';
-import { drawKit, drawKit9, kitGlint, kitGlint9, kitPoint, kitReady, twinkle } from './kit';
-import type { KitName } from './kit';
-import { drawFlowers, drawNight, goldGradient, ornatePanel, pointed, wing } from './ornate';
+import { shine } from './kit';
+import { frameCrest } from './roster-screen';
+import { drawFlowers, drawNight, goldGradient, pointed } from './ornate';
 
 /** A box, in design or view units. */
 export interface Box {
@@ -39,14 +38,6 @@ export const LOBBY_NAV: { action: TitleAction; label: string; sub: string; color
     { action: 'profile', label: 'PROFILE', sub: 'Record, history, ranking', color: '#8fd8ff' },
     { action: 'settings', label: 'SETTINGS', sub: 'Sound, display, keys', color: '#c9b8ff' },
 ];
-
-/** The painted orb of each bar button (from the lobby kit). */
-const NAV_ORBS: Record<string, KitName> = {
-    characters: 'orbCharacters',
-    maps: 'orbMaps',
-    profile: 'orbProfile',
-    settings: 'orbSettings',
-};
 
 /** The quick buttons under the player's plate: the match history and the ranking (both on Profile), and the guide. */
 export const LOBBY_QUICK = [
@@ -619,26 +610,13 @@ export class LobbyScreen {
     /** The friends panel: online count, empty places where friends will be, and the buttons that will add them. */
     private friends(b: Box, t: number): void {
         const ctx = this.ctx;
-        const kit = kitReady();
-        if (kit) {
-            drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 36, 0.2);
-            kitGlint9(ctx, 'panel', b.x, b.y, b.w, b.h, 36, 0.2, t, 2.5);
-        } else ornatePanel(ctx, b, 8);
+        lobbyPanel(ctx, b, 9, t, 2.5);
         // Online count and the switch beside it.
         ctx.textAlign = 'left';
         ctx.font = `6px ${ARCADE}`;
         ctx.fillStyle = '#cbbcf5';
         ctx.fillText('ONLINE 0/0', b.x + 10, b.y + 12);
-        if (kit) drawKit(ctx, 'toggleOn', b.x + b.w - 30, b.y + 5.5, 19, 9.5);
-        else {
-            ctx.fillStyle = 'rgba(0,0,0,0.5)';
-            roundRect(ctx, b.x + 58, b.y + 6, 16, 8, 4);
-            ctx.fill();
-            ctx.fillStyle = '#8ff0a0';
-            ctx.beginPath();
-            ctx.arc(b.x + 70, b.y + 10, 3, 0, Math.PI * 2);
-            ctx.fill();
-        }
+        toggle(ctx, b.x + b.w - 30, b.y + 5.5, 19, 9.5, true);
         // Friend rows, empty for now.
         const rows = Math.max(3, Math.min(5, Math.floor((b.h - 80) / 32)));
         for (let i = 0; i < rows; i++) {
@@ -675,18 +653,17 @@ export class LobbyScreen {
         const by = b.y + b.h - 16;
         ctx.fillStyle = 'rgba(214,204,250,0.12)';
         ctx.fillRect(b.x + 6, by - 8, b.w - 12, 0.6);
-        const icons: KitName[] = ['friendProfile', 'friendAdd', 'friendRequests'];
         [0, 1, 2].forEach(i => {
             const x = b.x + b.w * (0.2 + i * 0.3);
-            if (kit) drawKit(ctx, icons[i], x - 8, by - 8, 16, 16);
-            else this.person(x, by, i);
+            smallOrb(ctx, x, by, 8);
+            this.person(x, by + 0.5, i, '#f4ecff');
         });
     }
 
     /** A small person icon for the friends panel's buttons: with a friend, with a plus, or with a letter. */
-    private person(x: number, y: number, kind: number): void {
+    private person(x: number, y: number, kind: number, ink = 'rgba(214,204,250,0.6)'): void {
         const ctx = this.ctx;
-        ctx.fillStyle = 'rgba(214,204,250,0.6)';
+        ctx.fillStyle = ink;
         ctx.beginPath();
         ctx.arc(x, y - 3, 2.6, 0, Math.PI * 2);
         ctx.fill();
@@ -701,7 +678,7 @@ export class LobbyScreen {
             ctx.fillRect(x + 4, y - 4.5, 4, 1.2);
             ctx.fillRect(x + 5.4, y - 6, 1.2, 4);
         } else {
-            ctx.strokeStyle = 'rgba(214,204,250,0.6)';
+            ctx.strokeStyle = ink;
             ctx.lineWidth = 1;
             ctx.strokeRect(x + 3.5, y - 6, 5, 3.5);
         }
@@ -1185,11 +1162,6 @@ export class LobbyScreen {
      */
     private header(v: LobbyView, b: Box, t: number, W: number, bleed: number, tall: boolean): void {
         const ctx = this.ctx;
-        if (kitReady()) {
-            this.kitHeader(v, b, t);
-            this.counters(v, t, W, bleed, tall);
-            return;
-        }
         const r = tall ? 13 : 15;
         const ax = b.x + r + 7,
             ay = b.y + b.h / 2;
@@ -1201,17 +1173,16 @@ export class LobbyScreen {
         const g = ctx.createLinearGradient(0, py, 0, py + ph);
         g.addColorStop(0, 'rgba(46,22,92,0.94)');
         g.addColorStop(1, 'rgba(20,8,46,0.94)');
+        ctx.save();
+        ctx.shadowColor = 'rgba(150,80,255,0.4)';
+        ctx.shadowBlur = 14;
         ctx.fillStyle = g;
         roundRect(ctx, px, py, pw, ph, 7);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(176,146,255,0.5)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-        ctx.beginPath();
-        ctx.moveTo(px + 7, py + 1.5);
-        ctx.lineTo(px + pw - 7, py + 1.5);
-        ctx.stroke();
+        ctx.restore();
+        gloss(ctx, () => roundRect(ctx, px, py, pw, ph, 7), px, py, pw, ph);
+        goldEdge(ctx, () => roundRect(ctx, px, py, pw, ph, 7), py, py + ph);
+        shine(ctx, () => roundRect(ctx, px, py, pw, ph, 7), px, py, pw, ph, t, 0, 6);
         // Sparkles in its top-right corner.
         const tw = 0.6 + Math.abs(Math.sin(t * 1.7)) * 0.4;
         ctx.fillStyle = `rgba(255,236,190,${0.75 * tw})`;
@@ -1284,26 +1255,34 @@ export class LobbyScreen {
             this.online(v, right - 2, 14);
             return;
         }
-        if (kitReady()) {
-            this.kitCounters(v, right, t);
-            return;
-        }
-        ctx.font = `7px ${ARCADE}`;
-        const onW = ctx.measureText(v.online ? 'ONLINE' : 'OFFLINE').width + 26;
+        ctx.font = `800 8.5px ${SANS}`;
+        const onW = ctx.measureText(v.online ? 'ONLINE' : 'OFFLINE').width + 28;
         let x = right - onW;
-        ctx.fillStyle = 'rgba(16,6,40,0.9)';
-        roundRect(ctx, x, 7, onW, 17, 8.5);
+        // The server light on a capsule of its own, green while the server's reached; the light breathes.
+        const cap = () => roundRect(ctx, x, 6, onW, 19, 9.5);
+        const cg = ctx.createLinearGradient(0, 6, 0, 25);
+        cg.addColorStop(0, v.online ? '#1c5a34' : '#3a3058');
+        cg.addColorStop(1, v.online ? '#0a2a18' : '#1a1430');
+        ctx.fillStyle = cg;
+        cap();
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,230,160,0.35)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        gloss(ctx, cap, x, 6, onW, 19);
+        goldEdge(ctx, cap, 6, 25, v.online ? ['#c8ffd8', '#5ef08a', '#1e8a48'] : undefined);
+        shine(ctx, cap, x, 6, onW, 19, t, 2.2, 6);
+        const lx = x + 11;
+        if (v.online) {
+            ctx.fillStyle = `rgba(120,255,150,${0.3 + 0.2 * Math.sin(t * 3)})`;
+            ctx.beginPath();
+            ctx.arc(lx, 15.5, 5.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
         ctx.fillStyle = v.online ? '#5ef08a' : '#a99fc8';
         ctx.beginPath();
-        ctx.arc(x + 11, 15.5, 3, 0, Math.PI * 2);
+        ctx.arc(lx, 15.5, 3.2, 0, Math.PI * 2);
         ctx.fill();
         ctx.textAlign = 'left';
-        ctx.fillStyle = v.online ? '#8ff0a0' : '#cbbcf5';
-        ctx.fillText(v.online ? 'ONLINE' : 'OFFLINE', x + 18, 18.5);
+        ctx.fillStyle = v.online ? '#b8ffc8' : '#cbbcf5';
+        ctx.fillText(v.online ? 'ONLINE' : 'OFFLINE', x + 19, 19);
         const pills: { text: string; icon: (x: number, y: number) => void }[] = [
             { text: String(v.trophies), icon: (px, py) => drawTrophy(ctx, px, py + 0.5, 6.5) },
             {
@@ -1314,94 +1293,31 @@ export class LobbyScreen {
                 },
             },
         ];
-        for (const p of pills) {
-            const w = ctx.measureText(p.text).width + 34;
+        pills.forEach((p, i) => {
+            const w = ctx.measureText(p.text).width + 38;
             x -= w + 6;
-            this.counterPlate(x, 7, w, 17);
-            p.icon(x + 15, 15.5);
-            ctx.fillStyle = '#fff3c9';
-            ctx.textAlign = 'left';
-            ctx.fillText(p.text, x + 24, 18.5);
-        }
-    }
-
-    /**
-     * The player's plate on the kit's painting: the gold-ringed avatar with its swoosh, the violet card stretched to
-     * the box, then the name, and the stage reached in gold, a divider and the wins.
-     */
-    private kitHeader(v: LobbyView, b: Box, t: number): void {
-        const ctx = this.ctx;
-        drawKit(ctx, 'name', b.x, b.y, b.w, b.h);
-        kitGlint(ctx, 'name', b.x, b.y, b.w, b.h, t, 0, 6);
-        // The painted star at the card's corner twinkles.
-        const star = kitPoint('name', 818, 37, b.x, b.y, b.w, b.h);
-        twinkle(ctx, star.x, star.y, b.h * 0.13, t, 0);
-        // Placed by the sheet: its body is 270 sheet pixels high, the ring's middle 175, 125 into it.
-        const s = b.h / 270;
-        const ax = b.x + 175 * s,
-            ay = b.y + 125 * s;
-        this.framedAvatar(v.fairy, v.frame, ax, ay, 80 * s, t);
-        const tx = b.x + 300 * s,
-            maxW = b.x + b.w - tx - 50 * s;
-        ctx.textAlign = 'left';
-        ctx.font = `800 ${Math.round(70 * s)}px ${SANS}`;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(v.name, tx, b.y + 108 * s, maxW);
-        const ly = b.y + 178 * s;
-        ctx.font = `800 ${Math.round(46 * s * 10) / 10}px ${SANS}`;
-        ctx.fillStyle = '#ffd45c';
-        const lv = `Stage ${v.stages[0]}`;
-        ctx.fillText(lv, tx, ly);
-        const dx = tx + ctx.measureText(lv).width + 18 * s;
-        ctx.fillStyle = 'rgba(232,224,255,0.75)';
-        ctx.fillRect(dx, ly - 40 * s, 0.8, 48 * s);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(`${v.wins} WINS`, dx + 18 * s, ly, b.x + b.w - dx - 60 * s);
-    }
-
-    /** The counters at the top right on the kit's plates: the stages open, the trophies, and the server light. */
-    private kitCounters(v: LobbyView, right: number, t: number): void {
-        const ctx = this.ctx;
-        const h = 17,
-            y = 7;
-        const pill = v.online ? 'online' : 'offline';
-        const onW = (h * LOBBY_KIT[pill].bw) / LOBBY_KIT[pill].bh;
-        let x = right - onW;
-        drawKit(ctx, pill, x, y, onW, h);
-        kitGlint(ctx, pill, x, y, onW, h, t, 2.2, 6);
-        if (v.online) {
-            // The light breathes.
-            ctx.fillStyle = `rgba(120,255,150,${0.25 + 0.2 * Math.sin(t * 3)})`;
-            ctx.beginPath();
-            ctx.arc(x + (h * 54) / 102, y + h / 2, 4.5, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        ctx.font = `800 9px ${SANS}`;
-        ctx.textAlign = 'left';
-        const plates: [KitName, string, number, number][] = [
-            ['counterTrophy', String(v.trophies), 150, 55],
-            ['counterStage', `${v.stages[0]}/${v.stages[1]}`, 170, 48],
-        ];
-        plates.forEach(([name, text, head, tail], i) => {
-            const k = h / LOBBY_KIT[name].bh;
-            const w = Math.max(text.length * 6, ctx.measureText(text).width) + (head + tail) * k + 4;
-            x -= w + 5;
-            drawKit(ctx, name, x, y, w, h);
-            kitGlint(ctx, name, x, y, w, h, t, 1.4 + i * 0.5, 6);
+            this.counterPlate(x, 6, w, 19, t, 1.4 + i * 0.5);
+            p.icon(x + 16, 15.5);
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(text, x + head * k + 2, y + h / 2 + 3.2);
+            ctx.textAlign = 'left';
+            ctx.fillText(p.text, x + 26, 19);
         });
     }
 
-    /** A counter's plate: dark, slanted, in a gold edge. */
-    private counterPlate(x: number, y: number, w: number, h: number): void {
+    /** A counter's plate: deep violet and glossy, slanted, in a gold edge, a light sweeping over it now and then. */
+    private counterPlate(x: number, y: number, w: number, h: number, t: number, phase: number): void {
         const ctx = this.ctx;
-        ctx.fillStyle = 'rgba(16,6,40,0.9)';
-        slanted(x, y, w, h, 6)(ctx);
+        const plate = () => slanted(x, y, w, h, 6)(ctx);
+        const g = ctx.createLinearGradient(0, y, 0, y + h);
+        g.addColorStop(0, '#4a2486');
+        g.addColorStop(0.55, '#22103f');
+        g.addColorStop(1, '#341762');
+        ctx.fillStyle = g;
+        plate();
         ctx.fill();
-        ctx.strokeStyle = goldGradient(ctx, y, y + h);
-        ctx.lineWidth = 1.3;
-        ctx.stroke();
+        gloss(ctx, plate, x, y, w, h);
+        goldEdge(ctx, plate, y, y + h);
+        shine(ctx, plate, x, y, w, h, t, phase, 6);
     }
 
     /**
@@ -1411,12 +1327,6 @@ export class LobbyScreen {
     private quickPill(b: Box, i: number, t: number, tall: boolean): void {
         const ctx = this.ctx;
         const q = LOBBY_QUICK[i];
-        if (kitReady()) {
-            const key = q.label.charAt(0) + q.label.slice(1).toLowerCase();
-            drawKit(ctx, (tall ? 'badge' : 'quick') + key, b.x, b.y, b.w, b.h);
-            kitGlint(ctx, (tall ? 'badge' : 'quick') + key, b.x, b.y, b.w, b.h, t, i * 0.35, 5);
-            return;
-        }
         const r = b.h / 2 + (tall ? 0 : 2),
             cx = b.x + r,
             cy = b.y + b.h / 2;
@@ -1439,26 +1349,22 @@ export class LobbyScreen {
                 ctx.closePath();
             };
             const g = ctx.createLinearGradient(0, y0, 0, y1);
-            g.addColorStop(0, 'rgba(56,28,108,0.95)');
-            g.addColorStop(1, 'rgba(20,8,48,0.95)');
+            g.addColorStop(0, '#4a2486');
+            g.addColorStop(0.55, '#22103f');
+            g.addColorStop(1, '#341762');
             ctx.fillStyle = g;
             plate();
             ctx.fill();
-            ctx.strokeStyle = goldGradient(ctx, y0, y1);
-            ctx.lineWidth = 1.4;
-            plate();
-            ctx.stroke();
+            gloss(ctx, plate, x0, y0, x1 - x0, y1 - y0);
+            goldEdge(ctx, plate, y0, y1);
+            shine(ctx, plate, x0, y0, x1 - x0, y1 - y0, t, i * 0.35, 5);
             ctx.textAlign = 'center';
-            ctx.font = `7px ${ARCADE}`;
-            ctx.fillStyle = '#fff3c9';
+            ctx.font = `800 8px ${SANS}`;
+            ctx.fillStyle = '#ffffff';
             ctx.fillText(q.label, (x0 + r + x1 - tip) / 2, cy + 2.6, x1 - tip - x0 - r - 4);
         }
         this.quickIcon({ x: cx - r, y: cy - r, w: r * 2, h: r * 2 }, i, t);
-        ctx.strokeStyle = goldGradient(ctx, cy - r, cy + r);
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r - 0.5, 0, Math.PI * 2);
-        ctx.stroke();
+        goldRing(ctx, cx, cy, r - 0.5, 1.8);
     }
 
     /**
@@ -1468,29 +1374,32 @@ export class LobbyScreen {
     private stagePlate(v: LobbyView, lay: LobbyLayout, t: number): void {
         const ctx = this.ctx;
         const b = lay.road,
-            on = v.focus === 'stage',
-            kit = kitReady();
+            on = v.focus === 'stage';
+        const plate = () => pointed(ctx, b.x, b.y, b.w, b.h, 8);
         ctx.save();
         if (on) {
             ctx.shadowColor = '#ffb43c';
-            ctx.shadowBlur = 10;
+            ctx.shadowBlur = 12 + 4 * Math.sin(t * 5);
         }
-        ctx.fillStyle = 'rgba(22,10,50,0.9)';
-        pointed(ctx, b.x, b.y, b.w, b.h, 8);
+        const g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
+        g.addColorStop(0, '#4a2486');
+        g.addColorStop(0.55, '#1c0c38');
+        g.addColorStop(1, '#2e1458');
+        ctx.fillStyle = g;
+        plate();
         ctx.fill();
         ctx.restore();
-        if (kit) {
-            drawKit(ctx, 'stage', b.x, b.y, b.w, b.h);
-            kitGlint(ctx, 'stage', b.x, b.y, b.w, b.h, t, 3, 5);
-        } else {
-            ctx.strokeStyle = on ? '#ffe9a0' : goldGradient(ctx, b.y, b.y + b.h);
-            ctx.lineWidth = on ? 1.6 : 1.2;
-            pointed(ctx, b.x, b.y, b.w, b.h, 8);
-            ctx.stroke();
-        }
+        gloss(ctx, plate, b.x, b.y, b.w, b.h);
+        goldEdge(ctx, plate, b.y, b.y + b.h, on ? ['#ffffff', '#ffe9a0', '#f2b53a'] : undefined);
+        // A second, finer gold line just inside the first.
+        ctx.strokeStyle = 'rgba(255,214,120,0.45)';
+        ctx.lineWidth = 0.6;
+        pointed(ctx, b.x + 3, b.y + 3, b.w - 6, b.h - 6, 6.5);
+        ctx.stroke();
+        shine(ctx, plate, b.x, b.y, b.w, b.h, t, 3, 5);
         ctx.textAlign = 'center';
-        ctx.font = kit ? `800 8px ${SANS}` : `6.5px ${ARCADE}`;
-        ctx.fillStyle = kit ? '#ffffff' : '#fff3c9';
+        ctx.font = `800 8px ${SANS}`;
+        ctx.fillStyle = '#ffffff';
         ctx.fillText(
             `STAGE ${v.stageNo}/${v.stages[1]}  ·  ${v.mapName.toUpperCase()}`,
             b.x + b.w / 2,
@@ -1504,21 +1413,31 @@ export class LobbyScreen {
             const k = Math.max(0, Math.sin(t * 4)) * (on ? 1.6 : 0.8) * dir;
             const ax = box.x + box.w / 2 + dir * 5 + k,
                 ay = box.y + box.h / 2;
-            if (kit) {
-                drawKit(ctx, 'arrow', ax - (dir < 0 ? 2 : 13), ay - 10, 15, 21, dir > 0);
-                kitGlint(ctx, 'arrow', ax - (dir < 0 ? 2 : 13), ay - 10, 15, 21, t, dir < 0 ? 3.6 : 3.8, 5, dir > 0);
-                continue;
-            }
+            /** Traces the arrow: a gold triangle pointing out, its corners softened. */
+            const arrow = () => {
+                ctx.beginPath();
+                ctx.moveTo(ax + dir * 2, ay);
+                ctx.lineTo(ax - dir * 11, ay - 10);
+                ctx.lineTo(ax - dir * 11, ay + 10);
+                ctx.closePath();
+            };
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#1a0a10';
+            ctx.lineWidth = 3;
+            arrow();
+            ctx.stroke();
             ctx.fillStyle = goldGradient(ctx, ay - 10, ay + 10);
+            arrow();
+            ctx.fill();
+            // The lit upper face.
+            ctx.fillStyle = 'rgba(255,250,220,0.45)';
             ctx.beginPath();
             ctx.moveTo(ax + dir * 2, ay);
             ctx.lineTo(ax - dir * 11, ay - 10);
-            ctx.lineTo(ax - dir * 11, ay + 10);
+            ctx.lineTo(ax - dir * 11, ay - 1);
             ctx.closePath();
             ctx.fill();
-            ctx.strokeStyle = 'rgba(80,40,10,0.6)';
-            ctx.lineWidth = 0.8;
-            ctx.stroke();
+            shine(ctx, arrow, ax - 12, ay - 10, 15, 20, t, dir < 0 ? 3.6 : 3.8, 5);
         }
         const n = v.stages[0],
             gap = 7;
@@ -1542,16 +1461,16 @@ export class LobbyScreen {
     private ticker(v: LobbyView, b: Box, t: number): void {
         if (v.chatOpen) return;
         const ctx = this.ctx;
-        if (kitReady()) {
-            drawKit9(ctx, 'panel', b.x, b.y, b.w, b.h, 36, 0.19);
-            kitGlint9(ctx, 'panel', b.x, b.y, b.w, b.h, 36, 0.19, t, 4);
-        } else ornatePanel(ctx, b, 7);
+        lobbyPanel(ctx, b, 8, t, 4);
         const tg = ctx.createLinearGradient(0, b.y + 5, 0, b.y + 16);
         tg.addColorStop(0, '#8fd8ff');
         tg.addColorStop(1, '#3a7ad8');
         ctx.fillStyle = tg;
         roundRect(ctx, b.x + 6, b.y + 6, 38, 11, 5.5);
         ctx.fill();
+        ctx.strokeStyle = 'rgba(220,245,255,0.8)';
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
         ctx.textAlign = 'center';
         ctx.font = `5.5px ${ARCADE}`;
         ctx.fillStyle = '#0c2350';
@@ -1590,13 +1509,9 @@ export class LobbyScreen {
     /** On a phone, the tab on the right edge that pulls the friends panel out. */
     private friendsTab(b: Box, t: number): void {
         const ctx = this.ctx;
-        if (kitReady()) {
-            drawKit9(ctx, 'panel', b.x, b.y, b.w + 10, b.h, 36, 0.15);
-            drawKit(ctx, 'friendProfile', b.x + b.w / 2 - 6, b.y + 7, 14, 14);
-        } else {
-            ornatePanel(ctx, { x: b.x, y: b.y, w: b.w + 10, h: b.h }, 6);
-            this.person(b.x + b.w / 2 + 1, b.y + 14, 0);
-        }
+        lobbyPanel(ctx, { x: b.x, y: b.y, w: b.w + 10, h: b.h }, 6, t, 3);
+        smallOrb(ctx, b.x + b.w / 2 + 1, b.y + 14, 7);
+        this.person(b.x + b.w / 2 + 1, b.y + 14.5, 0, '#f4ecff');
         ctx.save();
         ctx.translate(b.x + b.w / 2 + 2, b.y + b.h / 2 + 8);
         ctx.rotate(-Math.PI / 2);
@@ -1618,25 +1533,9 @@ export class LobbyScreen {
         const b = lay.bar,
             p = lay.play,
             tip = tall ? 9 : 18,
-            r = b.h / 2,
-            kit = kitReady();
-        // In landscape the kit's halves, flush against PLAY's face as on the sheet; on a phone the bar is too short
-        // for them.
-        if (kit && !tall) {
-            const lw = p.x - b.x,
-                rx = p.x + p.w,
-                rw = b.x + b.w - rx;
-            drawKit(ctx, 'barLeft', b.x, b.y, lw, b.h);
-            drawKit(ctx, 'barRight', rx, b.y, rw, b.h);
-            kitGlint(ctx, 'barLeft', b.x, b.y, lw, b.h, t, 0, 6);
-            kitGlint(ctx, 'barRight', rx, b.y, rw, b.h, t, 0.6, 6);
-            // The painted stars at the bar's points twinkle.
-            const star = kitPoint('barLeft', 110, 105, b.x, b.y, lw, b.h);
-            twinkle(ctx, star.x, star.y, b.h * 0.16, t, 1);
-            twinkle(ctx, b.x + b.w - (star.x - b.x), star.y, b.h * 0.16, t, 2);
-        }
+            r = b.h / 2;
         if (tall) this.phoneBar(b, t);
-        for (const dir of tall || (kit && !tall) ? [] : [-1, 1]) {
+        for (const dir of tall ? [] : [-1, 1]) {
             const outer = dir < 0 ? b.x : b.x + b.w,
                 inner = dir < 0 ? p.x + 10 : p.x + p.w - 10;
             /** Trace this half: a point at the outer end, rounded at the inner end, under PLAY's edge. */
@@ -1657,20 +1556,22 @@ export class LobbyScreen {
             ctx.shadowColor = 'rgba(0,0,0,0.6)';
             ctx.shadowBlur = 10;
             const g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
-            g.addColorStop(0, 'rgba(60,30,116,0.96)');
-            g.addColorStop(1, 'rgba(20,8,48,0.97)');
+            g.addColorStop(0, '#4a2486');
+            g.addColorStop(0.5, '#1c0c38');
+            g.addColorStop(1, '#2e1458');
             ctx.fillStyle = g;
             half(0);
             ctx.fill();
             ctx.restore();
-            ctx.strokeStyle = goldGradient(ctx, b.y, b.y + b.h);
-            ctx.lineWidth = 1.8;
-            half(0);
-            ctx.stroke();
-            ctx.strokeStyle = 'rgba(255,230,160,0.25)';
+            const x0 = Math.min(outer, inner),
+                bw = Math.abs(inner - outer) + r;
+            gloss(ctx, () => half(0), x0 - (dir > 0 ? r : 0), b.y, bw, b.h);
+            goldEdge(ctx, () => half(0), b.y, b.y + b.h, undefined, 2);
+            ctx.strokeStyle = 'rgba(255,214,120,0.4)';
             ctx.lineWidth = 0.7;
             half(3.5);
             ctx.stroke();
+            shine(ctx, () => half(0), x0 - (dir > 0 ? r : 0), b.y, bw, b.h, t, dir < 0 ? 0 : 0.6, 6);
             // A star at the point, and a curl of gold rising off the outer end.
             ctx.fillStyle = '#fff3c0';
             sparkle(ctx, outer + dir * 2, b.y + b.h / 2, 4 + Math.abs(Math.sin(t * 2 + dir)) * 1.5);
@@ -1702,19 +1603,13 @@ export class LobbyScreen {
             }
             if (tall ? i > 0 : i === 1 || i === 3) {
                 ctx.fillStyle = 'rgba(233,185,73,0.5)';
-                // Between the second pair it moves with the last, which keeps clear of the bar's end.
-                const dx = kitReady() && !tall && i === 3 ? -14 : 0;
-                ctx.fillRect(n.x + dx, n.y + n.h * 0.25, 1, n.h * 0.5);
+                ctx.fillRect(n.x, n.y + n.h * 0.25, 1, n.h * 0.5);
             }
             const orb = (x: number, y: number, rr: number) => {
-                if (kit) {
-                    const k = on ? 1.08 + 0.03 * Math.sin(t * 5) : 1;
-                    drawKit(ctx, NAV_ORBS[it.action], x - rr * k, y - rr * k, rr * 2 * k, rr * 2 * k);
-                    kitGlint(ctx, NAV_ORBS[it.action], x - rr * k, y - rr * k, rr * 2 * k, rr * 2 * k, t, i * 0.7, 5);
-                } else {
-                    drawBadge(ctx, it.color, x, y, rr, on, t);
-                    drawEmblem(ctx, it.action, x, y, rr / 34, t, on);
-                }
+                const k = on ? 1.08 + 0.03 * Math.sin(t * 5) : 1;
+                drawBadge(ctx, it.color, x, y, rr * k, on, t);
+                drawEmblem(ctx, it.action, x, y, (rr * k) / 34, t, on);
+                goldRing(ctx, x, y, rr * k, 1.6);
             };
             if (tall) {
                 const rr = 12.5;
@@ -1725,12 +1620,10 @@ export class LobbyScreen {
                 ctx.fillText(it.label, n.x + n.w / 2, n.y + n.h - 7, n.w - 4);
                 return;
             }
-            const rr = kit ? 11 : 12;
-            ctx.font = kit ? `800 8px ${SANS}` : `8.5px ${ARCADE}`;
+            const rr = 12;
+            ctx.font = `800 9px ${SANS}`;
             const lw = Math.min(n.w - rr * 2 - 14, ctx.measureText(it.label).width);
-            // The last keeps clear of the star at the bar's pointed end.
-            const nudge = kit && i === lay.nav.length - 1 ? -9 : 0;
-            const x0 = n.x + n.w / 2 - (lw + rr * 2 + 7) / 2 + nudge;
+            const x0 = n.x + n.w / 2 - (lw + rr * 2 + 7) / 2;
             orb(x0 + rr, n.y + n.h / 2, rr);
             ctx.textAlign = 'left';
             ctx.fillStyle = on ? '#ffe27a' : '#ffffff';
@@ -1796,118 +1689,292 @@ export class LobbyScreen {
     }
 
     /**
-     * The PLAY button, raised in the middle of the bar: a gold capsule with gold wings either side, a gold star crest
-     * on top and PLAY across it, a light sweeping over it; it glows while it has the cursor.
+     * The PLAY button, raised in the middle of the bar, as on the painted kit: a heavy setting (a dark outline, a broad
+     * band of gold lit from above, a bright bead and a dark groove), a glossy gold face, PLAY in big dark letters with a
+     * light rim, a swept gold wing either side of it, and the jewelled star crest standing on top; light sweeps over
+     * it, more often while it has the cursor, when it also glows.
      */
     private playButton(v: LobbyView, b: Box, t: number, tall: boolean): void {
         const ctx = this.ctx;
         const on = v.focus === 'mode';
-        const r = b.h / 2;
-        if (kitReady()) {
-            // The painted button, glowing while it has the cursor, a light sweeping over it now and then.
-            if (on) {
-                ctx.save();
-                ctx.shadowColor = '#ffb43c';
-                ctx.shadowBlur = 16 + 5 * Math.sin(t * 5);
-                ctx.fillStyle = 'rgba(255,180,60,0.5)';
-                roundRect(ctx, b.x + 2, b.y + 2, b.w - 4, b.h - 4, b.h / 2 - 2);
-                ctx.fill();
-                ctx.restore();
-            }
-            const pw = b.w,
-                ph = b.h,
-                px = b.x,
-                py = b.y;
-            // The painting's side scrolls were cut where the bar's halves meet it; in landscape the bar covers that,
-            // but on a phone PLAY stands on its own, so it's kept to its rounded frame and crest (in the piece's
-            // pixels, where the face is 680 by 218 at (84, 84)).
-            ctx.save();
-            if (tall) {
-                const k = pw / 680,
-                    fx = px - 84 * k,
-                    fy = py - 84 * k;
-                ctx.beginPath();
-                roundRect(ctx, fx + 54 * k, fy + 60 * k, 732 * k, 264 * k, 132 * k);
-                ctx.rect(fx + 320 * k, fy + 10 * k, 210 * k, 120 * k);
-                ctx.clip();
-            }
-            drawKit(ctx, 'play', px, py, pw, ph);
-            // Light sweeps across its gold, more often while it has the cursor, and its crest twinkles.
-            kitGlint(ctx, 'play', px, py, pw, ph, t, 1, on ? 2.6 : 4);
-            ctx.restore();
-            const crest = kitPoint('play', 314, -30, px, py, pw, ph);
-            twinkle(ctx, crest.x, crest.y, ph * 0.18, t, 0.3);
-            return;
-        }
-        // A frame of dark gold round the capsule, like a setting.
+        const r = b.h / 2,
+            o = tall ? 4.5 : 6,
+            cx = b.x + b.w / 2,
+            cy = b.y + b.h / 2;
+        /** Traces the capsule grown by `d` all round. */
+        const cap = (d: number) => roundRect(ctx, b.x - d, b.y - d, b.w + 2 * d, b.h + 2 * d, r + d);
+        // The setting: the dark outline (glowing while it has the cursor), then the band of gold.
         ctx.save();
-        ctx.shadowColor = on ? '#ffb43c' : 'rgba(0,0,0,0.6)';
-        ctx.shadowBlur = on ? 16 + 5 * Math.sin(t * 5) : 8;
-        ctx.fillStyle = '#3a1c10';
-        roundRect(ctx, b.x - 3, b.y - 3, b.w + 6, b.h + 6, r + 3);
+        ctx.shadowColor = on ? '#ffb43c' : 'rgba(0,0,0,0.65)';
+        ctx.shadowBlur = on ? 20 + 6 * Math.sin(t * 5) : 12;
+        ctx.fillStyle = '#1a0a08';
+        cap(o + 1.8);
         ctx.fill();
         ctx.restore();
-        ctx.strokeStyle = goldGradient(ctx, b.y - 3, b.y + b.h + 3);
-        ctx.lineWidth = 2;
-        roundRect(ctx, b.x - 3, b.y - 3, b.w + 6, b.h + 6, r + 3);
+        const band = ctx.createLinearGradient(0, b.y - o, 0, b.y + b.h + o);
+        band.addColorStop(0, '#fffbe0');
+        band.addColorStop(0.22, '#ffd860');
+        band.addColorStop(0.55, '#c47812');
+        band.addColorStop(0.8, '#e8a42a');
+        band.addColorStop(1, '#fff0b0');
+        ctx.fillStyle = band;
+        cap(o);
+        ctx.fill();
+        // A bright bead along the band's middle, then the dark groove round the face.
+        ctx.strokeStyle = 'rgba(255,248,215,0.75)';
+        ctx.lineWidth = 0.7;
+        cap(o * 0.5);
         ctx.stroke();
+        ctx.fillStyle = '#4a2008';
+        cap(1.3);
+        ctx.fill();
+        // The face: bright gold, lighter while it has the cursor, with a gloss across its top and a warm glow at its
+        // heart.
+        const face = () => cap(0);
         const g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
-        g.addColorStop(0, on ? '#fff3b0' : '#f6dc8a');
-        g.addColorStop(0.5, on ? '#ffc93c' : '#e0aa36');
-        g.addColorStop(1, on ? '#d87a10' : '#b26a14');
+        g.addColorStop(0, on ? '#fffbd0' : '#fff2b0');
+        g.addColorStop(0.42, on ? '#ffd640' : '#ffcc34');
+        g.addColorStop(0.8, on ? '#f29a10' : '#e48a0c');
+        g.addColorStop(1, on ? '#ffc840' : '#f6b432');
         ctx.fillStyle = g;
-        roundRect(ctx, b.x, b.y, b.w, b.h, r);
+        face();
         ctx.fill();
         ctx.save();
-        roundRect(ctx, b.x, b.y, b.w, b.h, r);
+        face();
         ctx.clip();
-        ctx.fillStyle = 'rgba(255,255,255,0.28)';
-        ctx.fillRect(b.x, b.y, b.w, b.h * 0.42);
-        const sweep = ((t % 2.6) / 2.6) * (b.w + 120) - 60;
-        const sg = ctx.createLinearGradient(b.x + sweep - 16, 0, b.x + sweep + 16, 0);
-        sg.addColorStop(0, 'rgba(255,255,255,0)');
-        sg.addColorStop(0.5, 'rgba(255,255,255,0.55)');
-        sg.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = sg;
+        const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, b.w * 0.5);
+        glow.addColorStop(0, 'rgba(255,255,230,0.45)');
+        glow.addColorStop(1, 'rgba(255,255,230,0)');
+        ctx.fillStyle = glow;
         ctx.fillRect(b.x, b.y, b.w, b.h);
-        ctx.restore();
-        // Wings out from either side, and the star crest on top.
-        const wy = b.y + b.h * 0.5;
-        ctx.font = `${tall ? 17 : 21}px ${ARCADE}`;
-        const half = ctx.measureText('PLAY').width / 2 + 3;
-        for (const dir of [-1, 1]) {
-            const wx = b.x + b.w / 2 + dir * half;
-            ctx.save();
-            ctx.globalAlpha = 0.95;
-            wing(ctx, wx, wy, b.h * (tall ? 0.36 : 0.34), dir, '#fff8e0');
-            ctx.restore();
-        }
-        // The crest: a gold four-pointed star standing on the frame's top, a sparkle at its heart.
-        const sx = b.x + b.w / 2,
-            sy = b.y - 4,
-            sr = tall ? 9 : 11;
-        ctx.fillStyle = goldGradient(ctx, sy - sr, sy + sr);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
         ctx.beginPath();
-        for (let k = 0; k < 8; k++) {
-            const a = (k * Math.PI) / 4 - Math.PI / 2,
-                rr = k % 2 ? sr * 0.3 : k === 0 ? sr * 1.15 : sr * 0.85;
-            ctx.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr);
+        ctx.ellipse(cx, b.y + b.h * 0.2, b.w * 0.44, b.h * 0.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,252,230,0.8)';
+        ctx.lineWidth = 0.9;
+        roundRect(ctx, b.x + 1.3, b.y + 1.3, b.w - 2.6, b.h - 2.6, r - 1.3);
+        ctx.stroke();
+        ctx.restore();
+        // PLAY, big and dark with a light rim, between its two wings.
+        const size = tall ? 20 : 27;
+        ctx.font = `${size}px ${ARCADE}`;
+        const half = ctx.measureText('PLAY').width / 2;
+        for (const dir of [-1, 1]) sweptWing(ctx, cx + dir * (half + 2), cy + b.h * 0.12, b.h * 0.7, dir);
+        const ty = cy + size * 0.36;
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.lineJoin = 'round';
+        // A soft shadow, a dark outer edge, a light rim, then the letters in dark brown shading down.
+        ctx.fillStyle = 'rgba(90,40,0,0.35)';
+        ctx.fillText('PLAY', cx + 0.8, ty + 1.6);
+        ctx.strokeStyle = '#2a0e04';
+        ctx.lineWidth = size * 0.26;
+        ctx.strokeText('PLAY', cx, ty);
+        ctx.strokeStyle = '#fff4c8';
+        ctx.lineWidth = size * 0.1;
+        ctx.strokeText('PLAY', cx, ty);
+        const ink = ctx.createLinearGradient(0, ty - size * 0.8, 0, ty);
+        ink.addColorStop(0, '#6a2e10');
+        ink.addColorStop(0.5, '#3a1206');
+        ink.addColorStop(1, '#1e0a04');
+        ctx.fillStyle = ink;
+        ctx.fillText('PLAY', cx, ty);
+        ctx.restore();
+        // The light sweeping over the face and the setting.
+        shine(ctx, face, b.x, b.y, b.w, b.h, t, 1, on ? 2.6 : 4);
+        shine(ctx, () => cap(o), b.x - o, b.y - o, b.w + 2 * o, b.h + 2 * o, t, 1.3, on ? 2.6 : 4);
+        // The crest: the jewelled gold star standing on the setting's top, little stars twinkling beside it.
+        ctx.save();
+        ctx.translate(cx, b.y - o - 0.5);
+        const ck = tall ? 0.13 : 0.19;
+        ctx.scale(ck, ck);
+        frameCrest(ctx, 0, 0, t);
+        ctx.restore();
+        ctx.fillStyle = '#fff6d8';
+        for (const dir of [-1, 1]) {
+            const k = Math.abs(Math.sin(t * 2.2 + dir));
+            sparkle(ctx, cx + dir * b.w * 0.17, b.y - o + 2, 1.5 + k * 1.5);
         }
+        sparkle(ctx, b.x + b.w * 0.12, b.y + b.h * 0.3, 1.2 + Math.abs(Math.sin(t * 3)) * 1.4);
+        sparkle(ctx, b.x + b.w * 0.88, b.y + b.h * 0.72, 1.2 + Math.abs(Math.sin(t * 3 + 1.5)) * 1.4);
+    }
+}
+
+/**
+ * A gold edge round a shape traced by `trace` (between y0 and y1): a dark outline under a band of gold shaded from
+ * light to dark (or the three colours of `tones`), `w` wide.
+ */
+function goldEdge(
+    ctx: CanvasRenderingContext2D,
+    trace: () => void,
+    y0: number,
+    y1: number,
+    tones?: [string, string, string],
+    w = 1.5,
+): void {
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1a0a10';
+    ctx.lineWidth = w + 1.6;
+    trace();
+    ctx.stroke();
+    if (tones) {
+        const g = ctx.createLinearGradient(0, y0, 0, y1);
+        g.addColorStop(0, tones[0]);
+        g.addColorStop(0.45, tones[1]);
+        g.addColorStop(1, tones[2]);
+        ctx.strokeStyle = g;
+    } else ctx.strokeStyle = goldGradient(ctx, y0, y1);
+    ctx.lineWidth = w;
+    trace();
+    ctx.stroke();
+    ctx.restore();
+}
+
+/** A glossy light across the top of a shape traced by `trace`, inside its box (x, y, w, h). */
+function gloss(ctx: CanvasRenderingContext2D, trace: () => void, x: number, y: number, w: number, h: number): void {
+    ctx.save();
+    trace();
+    ctx.clip();
+    const g = ctx.createLinearGradient(0, y, 0, y + h * 0.55);
+    g.addColorStop(0, 'rgba(230,190,255,0.28)');
+    g.addColorStop(1, 'rgba(230,190,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h * 0.55);
+    ctx.restore();
+}
+
+/** A gold ring `w` wide round a circle `r` across centred on (x, y), on a dark outline. */
+function goldRing(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, w: number): void {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.strokeStyle = '#1a0a10';
+    ctx.lineWidth = w + 1.4;
+    ctx.stroke();
+    ctx.strokeStyle = goldGradient(ctx, y - r, y + r);
+    ctx.lineWidth = w;
+    ctx.stroke();
+}
+
+/**
+ * A lobby panel over the box `b`, rounded `r`: violet glass (a soft glow behind, a deep gradient, a light across its
+ * top) in a gold frame with a finer gold line inside it and a gem at the middle of its top and foot, a light sweeping
+ * over the gold every few seconds (`phase` into its cycle).
+ */
+function lobbyPanel(
+    ctx: CanvasRenderingContext2D,
+    b: { x: number; y: number; w: number; h: number },
+    r: number,
+    t: number,
+    phase: number,
+): void {
+    const trace = () => roundRect(ctx, b.x, b.y, b.w, b.h, r);
+    ctx.save();
+    ctx.shadowColor = 'rgba(150,80,255,0.45)';
+    ctx.shadowBlur = 16;
+    const g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
+    g.addColorStop(0, 'rgba(58,28,112,0.94)');
+    g.addColorStop(0.5, 'rgba(28,12,62,0.94)');
+    g.addColorStop(1, 'rgba(40,18,84,0.94)');
+    ctx.fillStyle = g;
+    trace();
+    ctx.fill();
+    ctx.restore();
+    gloss(ctx, trace, b.x, b.y, b.w, Math.min(b.h, 60));
+    goldEdge(ctx, trace, b.y, b.y + b.h, undefined, 1.8);
+    ctx.strokeStyle = 'rgba(255,214,120,0.35)';
+    ctx.lineWidth = 0.6;
+    roundRect(ctx, b.x + 3, b.y + 3, b.w - 6, b.h - 6, Math.max(1, r - 3));
+    ctx.stroke();
+    for (const y of [b.y, b.y + b.h]) {
+        const cx = b.x + b.w / 2;
+        ctx.fillStyle = '#1a0a10';
+        ctx.beginPath();
+        ctx.moveTo(cx, y - 4);
+        ctx.lineTo(cx + 3.2, y);
+        ctx.lineTo(cx, y + 4);
+        ctx.lineTo(cx - 3.2, y);
         ctx.closePath();
         ctx.fill();
-        ctx.strokeStyle = 'rgba(90,40,10,0.6)';
-        ctx.lineWidth = 0.8;
-        ctx.stroke();
-        ctx.fillStyle = '#fff6d8';
-        sparkle(ctx, sx, sy, 2 + Math.abs(Math.sin(t * 2.4)) * 1.5);
-        arcadeText(
-            ctx,
-            'PLAY',
-            b.x + b.w / 2,
-            b.y + b.h / 2 + (tall ? 6 : 7),
-            tall ? 17 : 21,
-            ['#5a2410', '#3a140a', '#2a0f0a'],
-            'center',
-        );
+        ctx.fillStyle = goldGradient(ctx, y - 3, y + 3);
+        ctx.beginPath();
+        ctx.moveTo(cx, y - 3);
+        ctx.lineTo(cx + 2.2, y);
+        ctx.lineTo(cx, y + 3);
+        ctx.lineTo(cx - 2.2, y);
+        ctx.closePath();
+        ctx.fill();
     }
+    shine(ctx, trace, b.x, b.y, b.w, b.h, t, phase, 7);
+}
+
+/** A switch over (x, y, w, h): a dark track in a gold edge with its knob, green and to the right when `on`. */
+function toggle(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, on: boolean): void {
+    const trace = () => roundRect(ctx, x, y, w, h, h / 2);
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, on ? '#1e8a48' : '#2a2048');
+    g.addColorStop(1, on ? '#5ef08a' : '#4a3a78');
+    ctx.fillStyle = g;
+    trace();
+    ctx.fill();
+    goldEdge(ctx, trace, y, y + h, undefined, 0.9);
+    const kx = on ? x + w - h / 2 : x + h / 2;
+    const kg = ctx.createRadialGradient(kx - 1, y + h / 2 - 1.5, 0.5, kx, y + h / 2, h / 2);
+    kg.addColorStop(0, '#ffffff');
+    kg.addColorStop(1, '#d8d0f0');
+    ctx.fillStyle = kg;
+    ctx.beginPath();
+    ctx.arc(kx, y + h / 2, h / 2 - 1.2, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+/** A small round violet orb `r` across centred on (x, y) in a gold ring, for an icon to sit in. */
+function smallOrb(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+    const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
+    g.addColorStop(0, '#6a3ab8');
+    g.addColorStop(1, '#1e0c44');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    goldRing(ctx, x, y, r, 1.1);
+}
+
+/**
+ * A swept gold wing from (x, y), `len` long, reaching out and up toward `dir` (−1 left, 1 right) as on the painted
+ * PLAY: five feathers, the upper ones longest, each pale gold shading to deep gold on a dark outline.
+ */
+function sweptWing(ctx: CanvasRenderingContext2D, x: number, y: number, len: number, dir: number): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(dir, 1);
+    // Lowest feather first, so the upper ones lie over them.
+    for (let i = 0; i < 5; i++) {
+        const a = -0.12 - i * 0.2,
+            l = len * (0.55 + i * 0.11),
+            w = len * (0.13 + i * 0.008);
+        ctx.save();
+        ctx.rotate(a);
+        /** Traces a feather: a long leaf, round at its root and pointed at its tip. */
+        const feather = (d: number) => {
+            ctx.beginPath();
+            ctx.moveTo(-d, 0);
+            ctx.quadraticCurveTo(l * 0.35, -w - d, l + d, -w * 0.15);
+            ctx.quadraticCurveTo(l * 0.45, w + d, -d, 0);
+            ctx.closePath();
+        };
+        ctx.fillStyle = '#2a0e04';
+        feather(0.8);
+        ctx.fill();
+        const g = ctx.createLinearGradient(0, -w, 0, w);
+        g.addColorStop(0, '#fffbe8');
+        g.addColorStop(0.4, '#ffd65a');
+        g.addColorStop(1, '#b8640c');
+        ctx.fillStyle = g;
+        feather(0);
+        ctx.fill();
+        ctx.restore();
+    }
+    ctx.restore();
 }
