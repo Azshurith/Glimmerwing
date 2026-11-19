@@ -190,7 +190,8 @@ let shownMode = '',
     shownPhase = '',
     shownLayout = '',
     shownTouch: boolean | null = null,
-    shownWatching = false;
+    shownWatching = false,
+    shownRoad = false;
 /** The view width the page was last fitted to (it changes when a round plays in wider meadows). */
 let shownViewW = 0;
 /** Keeps the page's touch layer in step with the game: which buttons show, and what the top one does. */
@@ -206,6 +207,11 @@ function syncPage(): void {
     if (input.touchActive !== shownTouch) {
         shownTouch = input.touchActive;
         document.documentElement.classList.toggle('touch', shownTouch);
+    }
+    // The lobby has no Back tab, but the trophy road over it does, as the other screens.
+    if (game.roadShowing !== shownRoad) {
+        shownRoad = game.roadShowing;
+        screenEl.toggleAttribute('data-road', shownRoad);
     }
     if (game.modeName !== shownMode || game.phaseName !== shownPhase || game.watching !== shownWatching) {
         shownMode = screenEl.dataset.mode = game.modeName;

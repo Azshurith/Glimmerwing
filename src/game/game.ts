@@ -674,6 +674,11 @@ export class Game {
         return this.replay && this.phase === 'playing' ? this.replaySpeed : 1;
     }
 
+    /** Whether the trophy road is open over the lobby (the page shows its Back tab for it). */
+    get roadShowing(): boolean {
+        return this.phase === 'modes' && this.roadOpen;
+    }
+
     /** Whether a replay is being watched. */
     get watching(): boolean {
         return this.replay !== null;
