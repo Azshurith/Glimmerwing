@@ -485,7 +485,7 @@ function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: num
 }
 
 /**
- * The fairies' tray, drawn in code into the box (x, y, w, h): a dark violet bar edged in gold top and bottom, its ends
+ * The fairies' tray, drawn in code into the box (x, y, w, h): a dark violet bar with one gold edge all round, its ends
  * pointed violet caps each holding a gold arrow, the left one pointing left and the right one right.
  */
 function trayBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
@@ -518,14 +518,7 @@ function trayBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
     outline(0);
     ctx.fill();
     ctx.restore();
-    // The dark middle where the fairies sit, between the two caps.
-    const band = ctx.createLinearGradient(0, y + 22, 0, y + h - 22);
-    band.addColorStop(0, '#160828');
-    band.addColorStop(0.5, '#0e0520');
-    band.addColorStop(1, '#1a0a30');
-    ctx.fillStyle = band;
-    ctx.fillRect(x + cap + 40, y + 22, w - 2 * (cap + 40), h - 44);
-    // Gold edges: the outline, and a line along the band's top and foot.
+    // One gold edge round the whole tray.
     const gold = ctx.createLinearGradient(0, y, 0, y + h);
     gold.addColorStop(0, '#fff4c0');
     gold.addColorStop(0.5, '#e0a030');
@@ -533,13 +526,6 @@ function trayBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
     ctx.strokeStyle = gold;
     ctx.lineWidth = 6;
     outline(3);
-    ctx.stroke();
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(x + cap + 40, y + 22);
-    ctx.lineTo(x + w - cap - 40, y + 22);
-    ctx.moveTo(x + cap + 40, y + h - 22);
-    ctx.lineTo(x + w - cap - 40, y + h - 22);
     ctx.stroke();
     // The arrows.
     for (const d of [-1, 1]) {
