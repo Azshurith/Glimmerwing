@@ -305,7 +305,8 @@ function frame(now: number) {
         renderer.resize();
     }
     last = now;
-    const was = game.phaseName;
+    const was = game.phaseName,
+        wasTab = game.screenTab;
     while (acc >= C.STEP) {
         // A replay can be fast-forwarded: several steps in each step's time.
         for (let i = game.speed; i > 0; i--) {
@@ -319,6 +320,9 @@ function frame(now: number) {
     const now2 = game.phaseName;
     if (ScreenTransition.between(was, now2) && !game.watching && !reducedMotion.matches)
         wipe.begin(canvas, now2 === 'modes' || now2 === 'title');
+    else if (was === now2 && game.screenTab !== wasTab && wasTab >= 0 && !reducedMotion.matches)
+        // A change of tab: the old tab's content fades away as the new one slides in from the side moved to.
+        wipe.begin(canvas, game.screenTab < wasTab, true);
     game.draw();
     wipe.draw(canvas);
     syncPage();

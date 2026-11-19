@@ -7,6 +7,8 @@
 const DURATION = 1400;
 /** How long the screen being left takes to fade away (ms). */
 const FADE_OUT = 180;
+/** How long a new tab's content takes to come in when a screen switches tabs (ms). */
+const TAB_DURATION = 420;
 /** How far apart, as a share of the entrance, buttons drawn one after another start. */
 const STAGGER = 0.045;
 
@@ -30,12 +32,20 @@ const easeOut = (k: number) => 1 - (1 - k) ** 3;
 /** Eased progress with a little overshoot, for things that pop in. */
 const easeBack = (k: number) => 1 + 2.2 * (k - 1) ** 3 + 1.2 * (k - 1) ** 2;
 
-/** The entrance under way, shared by every menu screen. */
-const state = { start: 0, back: false };
+/**
+ * The entrance under way, shared by every menu screen: when it started, whether the player is going back, and whether
+ * it's only a change of tab (just the panels come in; the heading, tabs and background stay put).
+ */
+const state = { start: 0, back: false, tab: false };
 
 /** How far `part` has come in (0 to 1, eased; 1 once no entrance is under way), `i` places it in a staggered row. */
 export function entering(part: EnterPart, i = 0): number {
     if (!state.start) return 1;
+    if (state.tab) {
+        if (part !== 'panels') return 1;
+        const k = (performance.now() - state.start) / TAB_DURATION;
+        return k >= 1 ? 1 : Math.max(0, k);
+    }
     const [a, b] = PARTS[part];
     const from = a + i * STAGGER;
     const k = ((performance.now() - state.start) / DURATION - from) / (b - a);
@@ -121,9 +131,10 @@ export class ScreenTransition {
 
     /**
      * Start an entrance from what `canvas` shows now (the screen being left; call before drawing the new one).
-     * `back` says the player is going back, so panels slide in from the other side.
+     * `back` says the player is going back, so panels slide in from the other side; `tab` makes it a change of tab,
+     * where only the panels come in, quickly.
      */
-    begin(canvas: HTMLCanvasElement, back: boolean): void {
+    begin(canvas: HTMLCanvasElement, back: boolean, tab = false): void {
         // The last transition's canvas is kept and reused (resized to fit).
         const c = this.old ?? document.createElement('canvas');
         c.width = canvas.width;
@@ -134,13 +145,14 @@ export class ScreenTransition {
         this.old = c;
         state.start = performance.now();
         state.back = back;
+        state.tab = tab;
     }
 
     /** Draw the screen being left fading away over the new one, and end the entrance once it's done. */
     draw(canvas: HTMLCanvasElement): void {
         if (!state.start) return;
         const ms = performance.now() - state.start;
-        if (ms >= DURATION) {
+        if (ms >= (state.tab ? TAB_DURATION : DURATION)) {
             state.start = 0;
             return;
         }
