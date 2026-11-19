@@ -15,7 +15,6 @@ import { roundRect } from './emblems';
 import { goldEdge } from './lobby-screen';
 import { edgeTones, tracedPlate, tracedRing, tracedStar, tracedTitle, tracedVs } from './traced';
 
-
 /**
  * The painted landscape fairy select's layout, in its mockup's 2x pixels: each piece's box (the piece fills it), each
  * card's portrait window and where the game writes on it, and the roster's medallions.
