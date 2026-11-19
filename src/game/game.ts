@@ -531,6 +531,16 @@ export class Game {
     get phaseName(): Phase {
         return this.phase;
     }
+    /**
+     * Which tab a menu screen with tabs is showing, as a number that grows from left to right (Profile's two tabs;
+     * the match details' tabs, and on Graphs which graph), or -1 on a screen without them: the page plays a short
+     * entrance for the new tab's content when it changes.
+     */
+    get screenTab(): number {
+        if (this.phase === 'profile') return this.profileTab === 'history' ? 1 : 0;
+        if (this.phase === 'matchinfo') return MATCH_TABS.indexOf(this.matchTab) * 10 + (this.matchTab === 'graphs' ? this.matchGraph : 0);
+        return -1;
+    }
     /** The map shown on the Maps screen, for the page to play its music. */
     get browsedMap(): string {
         return MAPS[this.mapsIndex].id;
