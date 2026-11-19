@@ -148,7 +148,32 @@ function tallPlacement(
     fit = false,
     solo = false,
     followX = 0,
-): { at: readonly [Placement, Placement]; band: Placement; rise: number; sink: number } {
+): {
+    at: readonly [Placement, Placement];
+    band: Placement;
+    rise: number;
+    sink: number;
+    console: Placement | null;
+} {
+    // A replay played side by side in wider meadows (on a landscape screen) shows just as it was played: both
+    // meadows side by side with the console between, scaled to the screen's width and centred between the Back
+    // button and the replay's controls, each meadow's scenery filling the room above and below it.
+    if (fit && !solo && C.FIELD_W > C.FIELD_W_BASE) {
+        const s = C.TALL_W / C.VIEW_W,
+            top = BACK_ROOM,
+            room = h - REPLAY_PANEL_ROOM - top,
+            y = top + Math.max(0, (room - C.FIELD_H * s) / 2);
+        return {
+            at: [
+                { x: 0, y, s },
+                { x: (C.FIELD_W + C.GAP) * s, y, s },
+            ],
+            band: { x: 0, y: 0, s: 1 },
+            rise: y,
+            sink: Math.max(0, h - y - C.FIELD_H * s),
+            console: { x: 0, y, s },
+        };
+    }
     // A replay's meadow may be wider (recorded on a wide screen) or taller (recorded on a longer phone) than
     // this screen's: `fit` shows it at a live round's scale (scaled down only to fit a taller one under the band or
     // the solo bar), so it looks as it does in play; a meadow wider than the screen then follows its fairy across
@@ -188,6 +213,7 @@ function tallPlacement(
         band,
         rise: shrunk ? Math.max(0, ownY - band.y - C.TALL_TOP * k) : 0,
         sink: shrunk ? Math.max(0, h - ownY - C.FIELD_H * s) : 0,
+        console: null,
     };
 }
 const IDLE: Controls = { left: false, right: false, up: false, down: false, fire: false };
@@ -2570,10 +2596,12 @@ export class Game {
                   ? { x: Math.max(0, mine.x) + 3 * hs, y: mine.y + 23 * hs }
                   : { x: 4, y: 4 }
               : { x: (endless ? r.viewX + mine.x : 0) + 3 * mine.s, y: mine.y + 23 * mine.s };
-        // A wider recording shrunk to fit an upright screen has its scenery reach up to the band and down to the foot.
+        // A wider recording shrunk to fit an upright screen has its scenery reach up to the band and down to the foot
+        // (both meadows' when it's shown side by side).
+        r.consoleAt = tall?.console ?? null;
         for (const i of [0, 1] as const) {
             if (i === 1 && (soloTall || endless)) continue;
-            if (tall && i === own) {
+            if (tall && (i === own || tall.console)) {
                 r.riseTop = tall.rise;
                 r.riseBottom = tall.sink;
             }
@@ -2583,7 +2611,7 @@ export class Game {
         // Watching a wider recording upright, a hint for a moment that turning the phone shows it full size.
         if (tall && tall.rise > 0 && watching && this.time - this.watchStarted < ROTATE_HINT_TIME)
             r.rotateHint(
-                at[own].y - tall.rise + 12,
+                at[own].y - 14,
                 Math.min(1, (ROTATE_HINT_TIME - (this.time - this.watchStarted)) / 0.6),
             );
         // Between rounds the console still shows the round just played.

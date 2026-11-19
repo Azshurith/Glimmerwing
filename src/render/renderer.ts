@@ -117,6 +117,8 @@ export class Renderer {
      */
     riseTop = 0;
     riseBottom = 0;
+    /** Where the side-by-side console sits when a wider recording is shown side by side on an upright screen. */
+    consoleAt: Placement | null = null;
     /**
      * How wide the round's content shows on screen when that's narrower than the view's own width (Endless's lone
      * meadow, scaled down under its top bar), so a filling view needn't be any wider than that; 0 otherwise.
@@ -243,7 +245,7 @@ export class Renderer {
             ctx.translate(0, -rt);
             this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W, C.FIELD_H + rt + rb, map);
             ctx.restore();
-            ctx.fillStyle = 'rgba(14,6,36,0.32)';
+            ctx.fillStyle = 'rgba(14,6,36,0.5)';
             if (rt > 0) ctx.fillRect(0, -rt, C.FIELD_W, rt);
             if (rb > 0) ctx.fillRect(0, C.FIELD_H, C.FIELD_W, rb);
             ctx.fillStyle = 'rgba(232,190,100,0.55)';
@@ -594,6 +596,16 @@ export class Renderer {
 
     /** The console between the two meadows: round, VS, the shared speed meter. */
     console(v: ConsoleView, time: number): void {
+        if (this.layout === 'tall' && this.consoleAt) {
+            const p = this.consoleAt;
+            this.ctx.save();
+            this.ctx.translate(p.x, p.y);
+            this.ctx.scale(p.s, p.s);
+            this.hudLayer.frameX = 0;
+            this.hudLayer.console(v, time);
+            this.ctx.restore();
+            return;
+        }
         if (this.layout === 'tall') {
             const b = C.TALL_CONSOLE;
             const band = this.tallBand;
