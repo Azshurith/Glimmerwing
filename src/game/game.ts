@@ -6,7 +6,15 @@ import { sanitizeKeys } from '@/input/keys';
 import type { Net } from '@/net/net';
 import type { Renderer } from '@/render/renderer';
 import { medallionAt, SELECT_COLS } from '@/render/screens/select-screen';
-import { inTile, LOBBY_NAV, LOBBY_QUICK, lobbyLayout, roadAt, roadGeometry, roadThumb } from '@/render/screens/lobby-screen';
+import {
+    inTile,
+    LOBBY_NAV,
+    LOBBY_QUICK,
+    lobbyLayout,
+    roadAt,
+    roadGeometry,
+    roadThumb,
+} from '@/render/screens/lobby-screen';
 import { tallMenuFit } from '@/render/screens/menu-fit';
 import { modeAvailable } from '@/data/availability';
 import { rosterMedallions, rosterPreviewButton } from '@/render/screens/roster-screen';
