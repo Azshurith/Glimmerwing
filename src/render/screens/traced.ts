@@ -87,13 +87,11 @@ export function tracedRing(
     shine(ctx, ring, x - r, y - r, r * 2, r * 2, t, phase, 5);
 }
 
-/** VS in box `b` (x, y, w, h): big leaning gold-to-pink letters between two gold wings, a crest under them. */
+/** VS in box `b` (x, y, w, h): big leaning gold-to-pink letters with a crest under them. */
 export function tracedVs(ctx: CanvasRenderingContext2D, b: readonly number[], t: number): void {
     const [x, y, w, h] = b;
     const cx = x + w / 2,
         size = h * 0.82;
-    sweptWing(ctx, cx - size * 0.72, y + h * 0.42, size * 0.95, -1);
-    sweptWing(ctx, cx + size * 0.72, y + h * 0.42, size * 0.95, 1);
     ctx.save();
     ctx.translate(cx, y + h * 0.74);
     ctx.transform(1, 0, -0.16, 1, 0, 0);

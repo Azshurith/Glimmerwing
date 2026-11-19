@@ -367,7 +367,7 @@ export class SelectScreen {
     /**
      * Side `i`'s card frame round its portrait window (traced by `win`), in the mockup's pixels: the window's heavy
      * edge, the player's tag on a slanted plate at its top corner, the name plate across the card under the window,
-     * and the stats panel below; gold on the left, lilac for the rival on the right.
+     * and the stats panel below (no edge of its own); gold on the left, lilac for the rival on the right.
      */
     private cardFrame(i: number, win: () => void, t: number): void {
         const ctx = this.ctx,
@@ -385,7 +385,6 @@ export class SelectScreen {
         ctx.fillStyle = pg;
         panel();
         ctx.fill();
-        goldEdge(ctx, panel, sy, sy + sh, edgeTones(tone), 10);
         // The window's edge.
         ctx.save();
         ctx.shadowColor = i === 0 ? 'rgba(255,190,70,0.6)' : 'rgba(190,120,255,0.6)';
