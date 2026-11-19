@@ -193,6 +193,29 @@ export class Renderer {
         }
     }
 
+    /**
+     * Fill the empty space above a lone meadow in the tall view (an Endless replay recorded in a shorter meadow than
+     * this screen's), from `y0` down to `y1`, with its scenery under a dark violet veil.
+     */
+    tallFill(f: Field, y0: number, y1: number, time: number): void {
+        if (y1 - y0 < 1) return;
+        const ctx = this.ctx,
+            w = this.viewW;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, y0, w, y1 - y0);
+        ctx.clip();
+        ctx.translate(0, y0);
+        const map = mapById(f.mapId) ?? mapForSeed(f.sceneSeed);
+        this.scenery.draw(ctx, f.sceneSeed, f.time, time, w, y1 - y0, map);
+        const g = ctx.createLinearGradient(0, 0, 0, y1 - y0);
+        g.addColorStop(0, 'rgba(16,8,40,0.85)');
+        g.addColorStop(1, 'rgba(16,8,40,0.45)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, y1 - y0);
+        ctx.restore();
+    }
+
     /** One critter: as its map's monster where the map has a sheet, else in its code-drawn look. */
     private critter(
         ctx: CanvasRenderingContext2D,
@@ -432,12 +455,22 @@ export class Renderer {
 
         for (const pu of f.popups) this.hudLayer.popup(pu.text, pu.x, pu.y, pu.age);
 
+        // A meadow wider than the tall view (a replay recorded on a wide screen, following its fairy) keeps its bars
+        // on the part that's on screen.
+        const v0 = this.layout === 'tall' ? Math.max(0, -ox / scale) : 0,
+            v1 = this.layout === 'tall' ? Math.min(C.FIELD_W, (this.viewW - ox) / scale) : C.FIELD_W;
         if (bleed > 0) {
             // Its bars reach out to the screen's edges, past the meadow's clip.
             ctx.restore();
             ctx.save();
             ctx.translate(ox - bleed, oy);
             this.hudLayer.meadow(f, wins, time, tag, C.FIELD_W + 2 * bleed);
+        } else if (v0 > 0.5 || v1 < C.FIELD_W - 0.5) {
+            ctx.restore();
+            ctx.save();
+            ctx.translate(ox + v0 * scale, oy);
+            ctx.scale(scale, scale);
+            this.hudLayer.meadow(f, wins, time, tag, v1 - v0);
         } else this.hudLayer.meadow(f, wins, time, tag);
         ctx.restore();
     }
