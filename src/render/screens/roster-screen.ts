@@ -120,8 +120,15 @@ const MOCK = {
         [2054, 392],
     ],
     barRows: [379, 457],
-    skills: [521, 661, 801, 941],
-    skillX: [1000, 1506, 136],
+    skills: [519, 655, 795, 935],
+    // The stat icons' boxes (as cut), and where each panel's labels start.
+    statIcons: [
+        [1022, 348, 70, 64],
+        [1022, 426, 66, 66],
+        [1798, 346, 68, 66],
+        [1798, 424, 68, 66],
+    ],
+    statLabels: [1105, 1883],
     // The demo frame: its middle across, its top, its height, and how far in its window starts (sides, top, foot).
     demo: [3021, 218, 912, 36, 23, 37],
     tray: [900, 1095, 1800, 255],
@@ -197,6 +204,48 @@ export function paintedDemo(spec: readonly number[]): PaintedDemo {
     const h = height - head - foot,
         w = (h * C.FIELD_W_BASE) / C.FIELD_H_BASE;
     return { frame: { x: cx - w / 2 - side, y: top, w: w + side * 2, h: height }, x: cx - w / 2, y: top + head, w, h };
+}
+
+/**
+ * A dark violet glass panel drawn in code, rounded `r`: a soft violet glow behind, a deep gradient fill, an edge that
+ * runs from gold at the left to violet at the right, and a faint light along its top.
+ */
+export function glassPanel(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r: number,
+): void {
+    ctx.save();
+    ctx.shadowColor = 'rgba(150,80,255,0.35)';
+    ctx.shadowBlur = 30;
+    const fill = ctx.createLinearGradient(0, y, 0, y + h);
+    fill.addColorStop(0, '#2e1658');
+    fill.addColorStop(0.5, '#1a0b36');
+    fill.addColorStop(1, '#241048');
+    ctx.fillStyle = fill;
+    roundRect(ctx, x, y, w, h, r);
+    ctx.fill();
+    ctx.restore();
+    const edge = ctx.createLinearGradient(x, 0, x + w, 0);
+    edge.addColorStop(0, 'rgba(255,205,110,0.95)');
+    edge.addColorStop(0.35, 'rgba(214,140,255,0.8)');
+    edge.addColorStop(1, 'rgba(160,100,240,0.7)');
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 4;
+    roundRect(ctx, x, y, w, h, r);
+    ctx.stroke();
+    ctx.save();
+    roundRect(ctx, x, y, w, h, r);
+    ctx.clip();
+    const hl = ctx.createLinearGradient(0, y, 0, y + h * 0.45);
+    hl.addColorStop(0, 'rgba(220,180,255,0.18)');
+    hl.addColorStop(1, 'rgba(220,180,255,0)');
+    ctx.fillStyle = hl;
+    ctx.fillRect(x, y, w, h * 0.45);
+    ctx.restore();
 }
 
 /** How thick the code-drawn gold frames are, and the rounding of their inside, in a mockup's pixels. */
@@ -507,7 +556,7 @@ export class RosterScreen {
         enter(ctx, 'bar', () => inFit(f.title, () => piece('title', MOCK.title, 0.2)));
         enter(ctx, 'panels', () => inFit(f.left, () => this.paintedPortrait(fy, locked, t)), { dx: -22 });
         enter(ctx, 'panels', () => inFit(f.right, () => demoFrame(ctx, d)), { dx: 22 });
-        enter(ctx, 'panels', () => inFit(f.mid, () => this.paintedInfo(fy, locked, t, piece)), { dx: 0, dy: 10 });
+        enter(ctx, 'panels', () => inFit(f.mid, () => this.paintedInfo(fy, locked, t)), { dx: 0, dy: 10 });
         enter(ctx, 'buttons', () => inFit(f.tray, () => piece('tray', MOCK.tray, 1.2)));
         const m = MOCK.meds;
         FAIRIES.forEach((other, i) =>
@@ -663,26 +712,24 @@ export class RosterScreen {
         arcadeText(ctx, name, cx, py + ph / 2 + 28, 80, ['#fff7d8', '#ffd98a', '#e0a040'], 'center', pw - 220);
     }
 
-    /** Her blurb, the stat panels with her bars, and her four skills on their painted rows. */
-    private paintedInfo(
-        fy: Fairy,
-        locked: boolean,
-        t: number,
-        piece: (name: string, b: readonly number[], phase?: number) => void,
-    ): void {
+    /** Her blurb, the stat panels with her bars, and her four skills, on panels drawn in code with their painted icons. */
+    private paintedInfo(fy: Fairy, locked: boolean, t: number): void {
         const ctx = this.ctx;
         ctx.textAlign = 'left';
         ctx.font = `italic 600 50px ${FONT}`;
         ctx.fillStyle = locked ? '#ffe27a' : '#f6f0ff';
         const [bx, by] = MOCK.blurb;
         ctx.fillText(locked ? `To unlock: ${fy.unlock?.hint ?? ''}` : `${fy.blurb}.`, bx, by, 1500);
-        piece('statsL', MOCK.statsL, 1.6);
-        piece('statsR', MOCK.statsR, 2.1);
+        glassPanel(ctx, MOCK.statsL[0], MOCK.statsL[1], MOCK.statsL[2], MOCK.statsL[3], 56);
+        glassPanel(ctx, MOCK.statsR[0], MOCK.statsR[1], MOCK.statsR[2], MOCK.statsR[3], 56);
         const stats = statsOf(fy);
-        stats.forEach(([, n], i) => {
+        stats.forEach(([label, n], i) => {
             const [x0, w] = MOCK.bars[i >> 1],
                 y = MOCK.barRows[i & 1],
                 bw = w / 5;
+            const ib = MOCK.statIcons[i];
+            KIT.draw(ctx, `statIcon${i}`, ib[0], ib[1], ib[2], ib[3]);
+            arcadeText(ctx, label, MOCK.statLabels[i >> 1], y + 15, 40, ['#ffffff', '#f6efff', '#d8c8ff'], 'left', 150);
             for (let k = 0; k < 5; k++) {
                 const on = !locked && k < n;
                 ctx.fillStyle = on ? '#6af07a' : 'rgba(255,255,255,0.1)';
@@ -695,10 +742,12 @@ export class RosterScreen {
                 }
             }
         });
-        const [sx, sw, sh] = MOCK.skillX;
-        skillsOf(fy, locked).forEach(([, name, text], i) => {
-            const y = MOCK.skills[i];
-            piece(`skill${i}`, [sx, y - 6, sw, sh], 2.6 + i * 0.4);
+        skillsOf(fy, locked).forEach(([kind, name, text], i) => {
+            const y = MOCK.skills[i],
+                cy = y + 71;
+            glassPanel(ctx, 1046, cy - 61, 1460, 122, 61);
+            KIT.draw(ctx, `skillIcon${i}`, 1040, y + 2, 146, 138);
+            arcadeText(ctx, kind, 1224, y + 50, 34, ['#ffffff', '#f6efff', '#d8c8ff'], 'left', 480);
             arcadeText(ctx, name.toUpperCase(), 1224, y + 104, 48, ['#fff3c0', '#ffd45c', '#e08a1c'], 'left', 480);
             if (text) {
                 ctx.textAlign = 'left';

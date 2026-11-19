@@ -34,12 +34,6 @@ STORED = 0.75
 # medallion lifted off the tray it sits on).
 
 
-def roster_skill(y):
-    """One of the Characters mockup's four skill rows, its top at `y`: its orb and kind kept, its name and what it
-    does wiped."""
-    return ('roster', (1000, y - 6, 2506, y + 130), [(1212, y + 52, 1720, y + 117, 1200), (1720, y + 12, 2455, y + 117, 1700)])
-
-
 def maps_card(x0, x1):
     """One of the Maps mockup's five monster cards, from x0 to x1: its role kept, the monster and its name wiped."""
     return ('maps', (x0 - 8, 718, x1 + 8, 1150), [(x0 + 24, 795, x1 - 24, 1046, x0 + 20), (x0 + 26, 1060, x1 - 26, 1114, 'dark')])
@@ -135,12 +129,15 @@ SCREENS = {
     },
     'roster': {
         'title': ('roster', (846, 0, 2698, 232), []),
-        'statsL': ('roster', (980, 326, 1728, 508), [(1262, 350, 1690, 488, 1252)]),
-        'statsR': ('roster', (1753, 326, 2507, 508), [(2040, 350, 2470, 488, 2028)]),
-        'skill0': roster_skill(521),
-        'skill1': roster_skill(661),
-        'skill2': roster_skill(801),
-        'skill3': roster_skill(941),
+        # The panels and rows are drawn in code; only their painted icons are kept, lifted off the dark behind them.
+        'statIcon0': ('roster', (1022, 348, 1092, 412), [('bright',)]),
+        'statIcon1': ('roster', (1022, 426, 1088, 492), [('bright',)]),
+        'statIcon2': ('roster', (1798, 346, 1866, 412), [('bright',)]),
+        'statIcon3': ('roster', (1798, 424, 1866, 490), [('bright',)]),
+        **{
+            f'skillIcon{i}': ('roster', (1040, y + 2, 1186, y + 140), [('keep', 1112, y + 70, 66, None)])
+            for i, y in enumerate((519, 655, 795, 935))
+        },
         'demo': ('roster', (2520, 218, 3523, 1130), [('rrect', 2556, 241, 3487, 1093, 50)]),
         'tray': ('roster', (900, 1095, 2700, 1350), [(1085, 1095, 2520, 1345, 1497), ('mirrorleft', 186)]),
         'medOn': ('roster', (1080, 1100, 1320, 1340), [('circle', 1200, 1222, 78), ('keep', 1200, 1222, 116, None)]),
@@ -269,6 +266,12 @@ def main(group):
         piece = sheet[y0:y1, x0:x1].copy()
         keep = None
         for wipe in wipes:
+            if wipe[0] == 'bright':
+                # An icon lifted off a dark panel: as opaque as it is bright.
+                lum = piece[:, :, :3].astype(np.float32) @ np.array([0.3, 0.59, 0.11], np.float32)
+                k = np.clip((lum - 55) / 70, 0, 1)
+                piece[:, :, 3] = np.round(piece[:, :, 3] * k).astype(np.uint8)
+                continue
             if wipe[0] == 'mirrorleft':
                 # The right end made the left end turned round (the painting's two ends differ).
                 n = at(wipe[1])
@@ -352,7 +355,7 @@ def main(group):
             # The red the background left round the edges: see-through and far redder than green.
             r, g, b, a = (piece[:, :, k].astype(np.int32) for k in range(4))
             piece[(a < 235) & (r > 110) & (r * 10 > g * 16) & (b * 10 < r * 9), 3] = 0
-        if not any(w[0] == 'lum' for w in wipes):
+        if not any(w[0] in ('lum', 'bright') for w in wipes):
             piece[:, :, 3] = piece[:, :, 3] * own(piece[:, :, 3])
         if keep is not None:
             piece[:, :, 3] = np.round(piece[:, :, 3] * keep).astype(np.uint8)
