@@ -496,62 +496,8 @@ export class ProfileScreen {
      */
     private paintedTab(b: readonly number[], label: string, icon: 'record' | 'history', on: boolean, t: number): void {
         const ctx = this.ctx,
-            [x, y, w, h] = b,
-            r = h / 2;
-        // A soft glow under the chosen tab.
-        if (on) {
-            ctx.save();
-            ctx.shadowColor = 'rgba(255,190,60,0.55)';
-            ctx.shadowBlur = 40 + 8 * Math.sin(t * 3);
-            ctx.fillStyle = 'rgba(255,190,60,0.3)';
-            roundRect(ctx, x, y, w, h, r);
-            ctx.fill();
-            ctx.restore();
-        }
-        // Outline, then the gold rim.
-        ctx.fillStyle = '#1a0a10';
-        roundRect(ctx, x - 6, y - 6, w + 12, h + 12, r + 6);
-        ctx.fill();
-        const rim = ctx.createLinearGradient(0, y, 0, y + h);
-        rim.addColorStop(0, '#fff3b0');
-        rim.addColorStop(0.45, '#f2b53a');
-        rim.addColorStop(1, '#b8640c');
-        ctx.fillStyle = rim;
-        roundRect(ctx, x, y, w, h, r);
-        ctx.fill();
-        // The fill, inset inside the rim.
-        const i = on ? 7 : 8,
-            fill = ctx.createLinearGradient(0, y + i, 0, y + h - i);
-        if (on) {
-            fill.addColorStop(0, '#fff7b8');
-            fill.addColorStop(0.42, '#ffd23e');
-            fill.addColorStop(0.58, '#f9b912');
-            fill.addColorStop(1, '#f6a40a');
-        } else {
-            fill.addColorStop(0, '#4a2486');
-            fill.addColorStop(0.5, '#25103f');
-            fill.addColorStop(1, '#341762');
-        }
-        ctx.fillStyle = fill;
-        roundRect(ctx, x + i, y + i, w - 2 * i, h - 2 * i, r - i);
-        ctx.fill();
-        // The highlight across the top, and on violet a pink sheen along the inner edge.
-        ctx.save();
-        roundRect(ctx, x + i, y + i, w - 2 * i, h - 2 * i, r - i);
-        ctx.clip();
-        const hl = ctx.createLinearGradient(0, y + i, 0, y + h * 0.5);
-        hl.addColorStop(0, on ? 'rgba(255,255,255,0.75)' : 'rgba(255,190,255,0.45)');
-        hl.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = hl;
-        roundRect(ctx, x + i + r * 0.35, y + i + 4, w - 2 * i - r * 0.7, h * 0.32, h * 0.16);
-        ctx.fill();
-        if (!on) {
-            ctx.strokeStyle = 'rgba(255,170,255,0.55)';
-            ctx.lineWidth = 3;
-            roundRect(ctx, x + i + 3, y + i + 3, w - 2 * i - 6, h - 2 * i - 6, r - i - 3);
-            ctx.stroke();
-        }
-        ctx.restore();
+            [x, y, w, h] = b;
+        capsuleTab(ctx, x, y, w, h, on, t);
         // Icon and label, centred together.
         const size = 60,
             iconW = 78,
@@ -1633,4 +1579,76 @@ export function drawMedal(ctx: CanvasRenderingContext2D, fy: Fairy, x: number, y
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.stroke();
+}
+
+/**
+ * Profile's tab capsule over (x, y, w, h), shared with other screens' buttons: a dark outline, a gold rim, a glossy
+ * fill (gold when `on`, deep violet otherwise) with a highlight across its top. Its parts scale with its height (laid
+ * out at 140 high). The caller writes the label.
+ */
+export function capsuleTab(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    on: boolean,
+    t: number,
+): void {
+const r = h / 2,
+    k = h / 140;
+    // A soft glow under the chosen tab.
+    if (on) {
+        ctx.save();
+        ctx.shadowColor = 'rgba(255,190,60,0.55)';
+        ctx.shadowBlur = (40 + 8 * Math.sin(t * 3)) * k;
+        ctx.fillStyle = 'rgba(255,190,60,0.3)';
+        roundRect(ctx, x, y, w, h, r);
+        ctx.fill();
+        ctx.restore();
+    }
+    // Outline, then the gold rim.
+    ctx.fillStyle = '#1a0a10';
+    roundRect(ctx, x - 6 * k, y - 6 * k, w + 12 * k, h + 12 * k, r + 6 * k);
+    ctx.fill();
+    const rim = ctx.createLinearGradient(0, y, 0, y + h);
+    rim.addColorStop(0, '#fff3b0');
+    rim.addColorStop(0.45, '#f2b53a');
+    rim.addColorStop(1, '#b8640c');
+    ctx.fillStyle = rim;
+    roundRect(ctx, x, y, w, h, r);
+    ctx.fill();
+    // The fill, inset inside the rim.
+    const i = (on ? 7 : 8) * k,
+        fill = ctx.createLinearGradient(0, y + i, 0, y + h - i);
+    if (on) {
+        fill.addColorStop(0, '#fff7b8');
+        fill.addColorStop(0.42, '#ffd23e');
+        fill.addColorStop(0.58, '#f9b912');
+        fill.addColorStop(1, '#f6a40a');
+    } else {
+        fill.addColorStop(0, '#4a2486');
+        fill.addColorStop(0.5, '#25103f');
+        fill.addColorStop(1, '#341762');
+    }
+    ctx.fillStyle = fill;
+    roundRect(ctx, x + i, y + i, w - 2 * i, h - 2 * i, r - i);
+    ctx.fill();
+    // The highlight across the top, and on violet a pink sheen along the inner edge.
+    ctx.save();
+    roundRect(ctx, x + i, y + i, w - 2 * i, h - 2 * i, r - i);
+    ctx.clip();
+    const hl = ctx.createLinearGradient(0, y + i, 0, y + h * 0.5);
+    hl.addColorStop(0, on ? 'rgba(255,255,255,0.75)' : 'rgba(255,190,255,0.45)');
+    hl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hl;
+    roundRect(ctx, x + i + r * 0.35, y + i + 4 * k, w - 2 * i - r * 0.7, h * 0.32, h * 0.16);
+    ctx.fill();
+    if (!on) {
+        ctx.strokeStyle = 'rgba(255,170,255,0.55)';
+        ctx.lineWidth = 3 * k;
+        roundRect(ctx, x + i + 3 * k, y + i + 3 * k, w - 2 * i - 6 * k, h - 2 * i - 6 * k, r - i - 3 * k);
+        ctx.stroke();
+    }
+    ctx.restore();
 }
