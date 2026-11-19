@@ -3,9 +3,9 @@ import { powi } from './dmath';
 // all times in seconds.
 
 /**
- * A meadow's width. It's FIELD_W_BASE, except that a local match on a wide landscape screen plays in wider meadows
- * (up to FIELD_W_MAX) so the side-by-side view fills the screen: Game sets it with setFieldWidth at the start of each
- * round. Online play, the menus and the tall layout always use FIELD_W_BASE.
+ * A meadow's width. Every round plays at FIELD_W_BASE; a replay keeps the width it was recorded at (older local
+ * matches on wide landscape screens played in wider meadows, up to FIELD_W_MAX). Game sets it with setFieldWidth at
+ * the start of each round.
  */
 export let FIELD_W = 240;
 export const FIELD_W_BASE = 240,

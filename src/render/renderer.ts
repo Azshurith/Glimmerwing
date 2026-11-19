@@ -84,12 +84,6 @@ export class Renderer {
     /** Where the tall view's top band (rival's meadow and console) sits and how much it shrinks; Game sets it. */
     tallBand: Placement = { x: 0, y: 0, s: 1 };
 
-    /**
-     * The meadow width that would make the side-by-side view fill the screen, worked out by the page from a
-     * landscape screen's shape (FIELD_W_BASE on an upright or narrower one); Game plays a local round at it.
-     */
-    fieldWidthToFill: number = C.FIELD_W_BASE;
-
     /** The title and select screens' view width on a landscape screen, fitted by the page to its shape. */
     menuW: number = C.VIEW_W;
     /** Whether a menu (title or select) is showing; Game sets it each frame. */
@@ -215,6 +209,14 @@ export class Renderer {
             ctx.translate(-bl, 0);
             this.scenery.draw(ctx, f.sceneSeed, f.time, time, C.FIELD_W + bl + br, C.FIELD_H, map);
             ctx.restore();
+            // Past the play area the scenery is only dressing: dimmed a little, with a fine gold line at the edge,
+            // so it's plain where the fairy can fly.
+            ctx.fillStyle = 'rgba(14,6,36,0.32)';
+            if (bl > 0) ctx.fillRect(-bl, 0, bl, C.FIELD_H);
+            if (br > 0) ctx.fillRect(C.FIELD_W, 0, br, C.FIELD_H);
+            ctx.fillStyle = 'rgba(232,190,100,0.55)';
+            if (bl > 0) ctx.fillRect(-0.75, 0, 0.75, C.FIELD_H);
+            if (br > 0) ctx.fillRect(C.FIELD_W, 0, 0.75, C.FIELD_H);
         }
         ctx.beginPath();
         ctx.rect(0, 0, C.FIELD_W, C.FIELD_H);
