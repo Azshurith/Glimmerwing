@@ -5,6 +5,7 @@ import { arcadeText, shade, slanted, sparkle } from './draw';
 import { drawFairy } from './entities/fairy';
 import { drawBlossom, drawHeart } from './icons';
 import { shine } from './screens/kit';
+import { ornatePanel } from './screens/ornate';
 import { gloss, goldEdge, sweptWing } from './screens/lobby-screen';
 import { frameCrest } from './screens/roster-screen';
 import { ARCADE } from './theme';
@@ -367,78 +368,76 @@ export class Hud {
     }
 
     /**
-     * Endless mode's readout on the lone, full-width meadow (landscape): two see-through cards over its left and
-     * right edges, so the scenery shows through. The time and the best run on the left; the guardians, the time to
-     * the next and the speed on the right.
+     * One side of Endless's stats on a landscape screen, in the space `w` wide from `x` beside the meadow: the run
+     * (time survived and the best, with NEW RECORD once it's beaten) or the threat (guardians weathered, the time to
+     * the next and the speed), each in a gold-framed panel centred in the space. Nothing where the space is too narrow.
      */
-    endlessSides(v: EndlessView, time: number, w: number): void {
+    endlessStats(v: EndlessView, time: number, x: number, w: number, H: number, side: 'run' | 'threat'): void {
+        if (w < 70) return;
         const ctx = this.ctx;
-        // Set a little below the top plate, clear of a replay's Back button under her face.
-        const cw = 84,
-            y = 48,
-            ch = 128;
-        const card = (x: number) => {
-            ctx.fillStyle = 'rgba(14,9,36,0.45)';
-            ctx.fillRect(x, y, cw, ch);
-            ctx.strokeStyle = 'rgba(201,162,74,0.55)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, ch - 1);
-        };
-        const label = (text: string, x: number, ly: number) => {
+        const pw = Math.min(w - 20, 150),
+            ph = 172,
+            px = x + (w - pw) / 2,
+            py = (H - ph) / 2,
+            cx = px + pw / 2;
+        ornatePanel(ctx, { x: px, y: py, w: pw, h: ph }, 10, true);
+        const label = (text: string, ly: number) => {
             ctx.textAlign = 'center';
-            ctx.font = `6.5px ${ARCADE}`;
-            ctx.fillStyle = '#e4dcff';
-            ctx.fillText(text, x, ly);
+            ctx.font = `7px ${ARCADE}`;
+            ctx.fillStyle = '#cbbcf5';
+            ctx.fillText(text, cx, ly);
         };
-        // Left: the run.
-        const lx = 8,
-            L = lx + cw / 2;
-        card(lx);
-        arcadeText(ctx, 'ENDLESS', L, y + 16, 10, ['#ffffff', '#ffd2a8', '#ff8a5c'], 'center');
-        label('TIME', L, y + 36);
-        arcadeText(ctx, clock(v.time), L, y + 60, 20, ['#ffffff', '#ffe08a', '#ff9a2e'], 'center');
-        label('BEST', L, y + 84);
-        const record = v.best > 0 && v.time > v.best;
-        arcadeText(
-            ctx,
-            clock(Math.max(v.best, v.time)),
-            L,
-            y + 102,
-            12,
-            record ? ['#ffffff', '#ffb6e0', '#ff5aa8'] : ['#ffffff', '#d8ccff', '#9a86e8'],
-            'center',
-        );
-        if (record) {
-            ctx.font = `6px ${ARCADE}`;
-            ctx.fillStyle = `rgba(255,154,200,${0.6 + 0.4 * Math.sin(time * 6)})`;
-            ctx.fillText('NEW RECORD', L, y + 118);
+        const meter = (ly: number, k: number, color: string) => {
+            const bw = pw - 36,
+                bx = cx - bw / 2;
+            ctx.fillStyle = 'rgba(246,240,255,0.14)';
+            ctx.fillRect(bx, ly, bw, 6);
+            ctx.fillStyle = color;
+            ctx.fillRect(bx, ly, bw * Math.max(0, Math.min(1, k)), 6);
+            ctx.strokeStyle = 'rgba(232,190,100,0.7)';
+            ctx.lineWidth = 0.75;
+            ctx.strokeRect(bx - 0.5, ly - 0.5, bw + 1, 7);
+        };
+        if (side === 'run') {
+            arcadeText(ctx, 'ENDLESS', cx, py + 24, 14, ['#ffffff', '#ffe08a', '#e0a23a'], 'center');
+            label('TIME', py + 50);
+            arcadeText(ctx, clock(v.time), cx, py + 82, 26, ['#ffffff', '#ffe08a', '#ff9a2e'], 'center');
+            label('BEST', py + 110);
+            const record = v.best > 0 && v.time > v.best;
+            arcadeText(
+                ctx,
+                clock(Math.max(v.best, v.time)),
+                cx,
+                py + 134,
+                16,
+                record ? ['#ffffff', '#ffb6e0', '#ff5aa8'] : ['#ffffff', '#d8ccff', '#9a86e8'],
+                'center',
+            );
+            if (record) {
+                ctx.font = `7px ${ARCADE}`;
+                ctx.fillStyle = `rgba(255,154,200,${0.6 + 0.4 * Math.sin(time * 6)})`;
+                ctx.fillText('NEW RECORD', cx, py + 156);
+            }
+            return;
         }
-        // Right: the guardians and the speed.
-        const rx = w - 8 - cw,
-            R = rx + cw / 2,
-            bw = cw - 18,
-            bx = R - bw / 2;
-        card(rx);
-        label('GUARDIANS', R, y + 14);
-        arcadeText(ctx, String(v.bosses), R, y + 40, 20, ['#ffffff', '#ffd2a8', '#ff8a5c'], 'center');
-        label('NEXT IN', R, y + 60);
+        label('GUARDIANS', py + 24);
+        arcadeText(ctx, String(v.bosses), cx, py + 58, 26, ['#ffffff', '#ffd2a8', '#ff8a5c'], 'center');
         const soon = v.nextBoss < 5;
-        ctx.fillStyle = 'rgba(246,240,255,0.15)';
-        ctx.fillRect(bx, y + 66, bw, 5);
-        ctx.fillStyle = soon ? `rgba(255,${90 + Math.round(60 * Math.sin(time * 12))},110,1)` : '#ffd45c';
-        ctx.fillRect(bx, y + 66, bw * Math.min(1, v.nextBoss / C.ENDLESS_BOSS_EVERY), 5);
-        ctx.font = `7px ${ARCADE}`;
+        label('NEXT GUARDIAN', py + 84);
+        meter(
+            py + 92,
+            v.nextBoss / C.ENDLESS_BOSS_EVERY,
+            soon ? `rgba(255,${90 + Math.round(60 * Math.sin(time * 12))},110,1)` : '#ffd45c',
+        );
+        ctx.font = `8px ${ARCADE}`;
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(`${Math.ceil(v.nextBoss)}s`, R, y + 82);
-        label('SPEED', R, y + 102);
+        ctx.fillText(`${Math.ceil(v.nextBoss)}s`, cx, py + 112);
+        label('SPEED', py + 136);
         const k = Math.max(0, Math.min(1, (v.tempo - 1) / (C.TEMPO_MAX - 1)));
-        ctx.fillStyle = 'rgba(246,240,255,0.15)';
-        ctx.fillRect(bx, y + 108, bw, 5);
-        ctx.fillStyle = k > 0.7 ? `rgba(255,${120 + Math.round(60 * Math.sin(time * 10))},90,1)` : '#8ff0a0';
-        ctx.fillRect(bx, y + 108, bw * k, 5);
+        meter(py + 144, k, k > 0.7 ? `rgba(255,${120 + Math.round(60 * Math.sin(time * 10))},90,1)` : '#8ff0a0');
     }
 
-    /** Endless mode's slim top bar in the tall layout: time survived, best run and the next guardian. */
+    /** Endless mode's slim top bar above the lone meadow: time survived, best run and the next guardian. */
     endlessBar(v: EndlessView, time: number, w: number, h: number): void {
         const ctx = this.ctx;
         const g = ctx.createLinearGradient(0, 0, 0, h);

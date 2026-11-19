@@ -41,6 +41,7 @@ import { drawChargeRing, drawChargeShot, drawFairy } from './entities/fairy';
 import { mapById, mapForSeed } from '@/data/maps';
 import { Hud } from './hud';
 import { SkyScenery } from './scenery/scenery';
+import { drawNight } from './screens/ornate';
 import { MapScreen } from './screens/map-screen';
 import { LobbyScreen } from './screens/lobby-screen';
 import { ProfileScreen } from './screens/profile-screen';
@@ -104,17 +105,20 @@ export class Renderer {
     /**
      * How far a meadow's scenery and HUD reach out past it to the screen's edge (a round in meadows narrower than
      * this screen: a replay recorded at another width, or an online round): its scenery is painted out to the edge
-     * as one picture and its bars span it, while play stays in the meadow. A lone meadow (Endless, `bleedBoth`)
-     * reaches out both ways; of two, the left one reaches left and the right one right. 0 otherwise. Game sets it.
+     * as one picture and its bars span it, while play stays in the meadow. The left meadow reaches left and the
+     * right one right. 0 otherwise. Game sets it.
      */
     meadowBleed = 0;
-    /** Whether the bleed reaches out on both sides (a lone meadow) rather than only on the meadow's outer side. */
-    bleedBoth = false;
+    /**
+     * How wide the round's content shows on screen when that's narrower than the view's own width (Endless's lone
+     * meadow, scaled down under its top bar), so a filling view needn't be any wider than that; 0 otherwise.
+     */
+    roundW = 0;
     /** Width of the view in view units, for the current layout. */
     get viewW(): number {
         if (this.layout === 'tall') return C.TALL_W;
         if (this.inMenu) return Math.max(C.VIEW_W, this.menuW);
-        return this.fillRound ? Math.max(C.VIEW_W, this.viewWidthToFill) : C.VIEW_W;
+        return this.fillRound ? Math.max(this.roundW || C.VIEW_W, this.viewWidthToFill) : C.VIEW_W;
     }
     /** How far a widened menu sits in from the left edge (its sky and bars reach out over that much each side). */
     get viewX(): number {
@@ -196,10 +200,11 @@ export class Renderer {
         const sy = f.shake ? (Math.random() - 0.5) * f.shake : 0;
         ctx.translate(ox + sx * scale, oy + sy * scale);
         ctx.scale(scale, scale);
-        const bleed = scale === 1 ? this.meadowBleed : 0;
+        // The bleed is in screen units; the meadow may be drawn a little smaller (Endless under its top bar).
+        const bleed = this.layout === 'wide' ? this.meadowBleed / scale : 0;
         const outer = f.rivalSide < 0 ? 1 : 0;
-        const bl = bleed > 0 && (this.bleedBoth || outer === 0) ? bleed : 0,
-            br = bleed > 0 && (this.bleedBoth || outer === 1) ? bleed : 0;
+        const bl = bleed > 0 && outer === 0 ? bleed : 0,
+            br = bleed > 0 && outer === 1 ? bleed : 0;
         const map = mapById(f.mapId) ?? mapForSeed(f.sceneSeed);
         if (bleed > 0) {
             // A meadow reaching out to the screen's edge: its scenery painted as one wide picture behind it.
@@ -416,7 +421,8 @@ export class Renderer {
             // Its bars reach out to the screen's edges, past the meadow's clip.
             ctx.restore();
             ctx.save();
-            ctx.translate(ox - bl, oy);
+            ctx.translate(ox - bl * scale, oy);
+            ctx.scale(scale, scale);
             this.hudLayer.meadow(f, wins, time, tag, C.FIELD_W + bl + br);
         } else if (v0 > 0.5 || v1 < C.FIELD_W - 0.5) {
             // Its bars stay at a live round's size across the screen however far the meadow is zoomed: the top plate
@@ -523,16 +529,40 @@ export class Renderer {
         this.hudLayer.console(v, time);
     }
 
-    /** Endless mode's readout: see-through cards at the lone meadow's sides (wide layout) or a slim top bar (tall). */
-    endless(v: EndlessView, time: number): void {
-        if (this.layout === 'tall') this.hudLayer.endlessBar(v, time, C.TALL_W, C.TALL_SOLO_BAR);
-        else {
-            const b = this.meadowBleed;
-            this.ctx.save();
-            this.ctx.translate(-b, 0);
-            this.hudLayer.endlessSides(v, time, C.FIELD_W + 2 * b);
-            this.ctx.restore();
+    /**
+     * Endless mode's readout: on a phone a slim bar across the top. On a landscape screen the meadow stands in the
+     * middle, filling the height, and the run's stats fill the screen either side of it on the castle night.
+     */
+    endless(v: EndlessView, time: number, at: Placement | null): void {
+        if (this.layout === 'tall' || !at) {
+            this.hudLayer.endlessBar(v, time, C.TALL_W, C.TALL_SOLO_BAR);
+            return;
         }
+        const ctx = this.ctx;
+        // In view units: the screen runs from -x0 to C.VIEW_W + x0, the meadow from at.x to at.x + mw.
+        const x0 = this.fillRound ? this.viewX : 0,
+            mw = C.FIELD_W * at.s,
+            H = C.VIEW_H;
+        const left = { x: -x0, w: at.x + x0 },
+            right = { x: at.x + mw, w: C.VIEW_W + x0 - at.x - mw };
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(left.x, 0, left.w, H);
+        ctx.rect(right.x, 0, right.w, H);
+        ctx.clip();
+        drawNight(ctx, time, -x0, C.VIEW_W + 2 * x0, H, {
+            planet: { x: C.VIEW_W + x0 - 70, y: 60, r: 40 },
+            horizon: H * 0.8,
+        });
+        ctx.fillStyle = 'rgba(14,6,36,0.45)';
+        ctx.fillRect(-x0, 0, C.VIEW_W + 2 * x0, H);
+        ctx.restore();
+        // A gold line down each side of the meadow.
+        ctx.fillStyle = 'rgba(232,190,100,0.85)';
+        ctx.fillRect(at.x - 1, 0, 1, H);
+        ctx.fillRect(at.x + mw, 0, 1, H);
+        this.hudLayer.endlessStats(v, time, left.x, left.w, H, 'run');
+        this.hudLayer.endlessStats(v, time, right.x, right.w, H, 'threat');
     }
 
     /** The slim top bar standing in for the rival's meadow and console when it's hidden (tall layout only). */

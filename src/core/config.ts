@@ -66,6 +66,11 @@ export const TALL_RIVAL = { x: 8, y: 6, s: 0.5 } as const;
 export const TALL_CONSOLE = { x: 136, y: 6, w: 120, h: FIELD_H_BASE / 2 } as const;
 /** With the rival's meadow hidden in the tall layout, the slim bar across the top (round, rival's hearts, speed). */
 export const TALL_SOLO_BAR = 22;
+/**
+ * Endless on a landscape screen plays in an upright meadow shaped like a phone's (FIELD_W_BASE wide, this tall), shown
+ * as on a phone in the middle of the screen under its slim bar, with the run's stats either side.
+ */
+export const ENDLESS_DESK_H = 500;
 
 export const STEP = 1 / 60;
 
