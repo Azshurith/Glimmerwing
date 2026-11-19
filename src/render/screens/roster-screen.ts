@@ -431,16 +431,16 @@ function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: num
     ctx.fillStyle = goldGradient(ctx, y - 4, y + 4);
     ctx.beginPath();
     if (kind === 'speed') {
-        // One wing: five feathers fanned up and out from its root at the lower left, the top ones longest.
-        const rx = x - 3.6,
-            ry = y + 3.4;
+        // One wing: five feathers fanned up and out from its root at the lower left, wide, the top ones longest.
+        const rx = x - 4.6,
+            ry = y + 3.2;
         for (let f = 0; f < 5; f++) {
-            const a = -1.25 + f * 0.27,
-                len = 8.4 - f * 0.9,
-                tx = rx + Math.cos(a) * len,
-                ty = ry + Math.sin(a) * len,
-                nx = -Math.sin(a) * 1.15,
-                ny = Math.cos(a) * 1.15;
+            const a = -1.15 + f * 0.3,
+                len = 9.4 - f * 0.9,
+                tx = rx + Math.cos(a) * len * 1.25,
+                ty = ry + Math.sin(a) * len * 0.82,
+                nx = -Math.sin(a) * 1.25,
+                ny = Math.cos(a) * 1.25;
             ctx.moveTo(rx, ry);
             ctx.quadraticCurveTo(rx + (tx - rx) * 0.55 - nx, ry + (ty - ry) * 0.55 - ny, tx, ty);
             ctx.quadraticCurveTo(rx + (tx - rx) * 0.55 + nx, ry + (ty - ry) * 0.55 + ny, rx, ry);
@@ -485,70 +485,77 @@ function statIcon(ctx: CanvasRenderingContext2D, kind: string, x: number, y: num
 }
 
 /**
- * The fairies' tray, drawn in code into the box (x, y, w, h): a dark violet bar with one gold edge all round, its ends
- * pointed violet caps each holding a gold arrow, the left one pointing left and the right one right.
+ * The fairies' tray, drawn in code into the box (x, y, w, h): a rounded violet capsule with one gold edge and a dark
+ * outline, a darker track along its middle for the medallions, and a round gold-ringed button at each end with a gold
+ * arrow, the left one pointing left and the right one right.
  */
 function trayBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
     const cy = y + h / 2,
-        cap = h * 0.62;
-    /** Traces the tray's outline, `inset` in from its edge. */
-    const outline = (inset: number) => {
-        const y0 = y + inset,
-            y1 = y + h - inset,
-            x0 = x + inset * 1.6,
-            x1 = x + w - inset * 1.6;
-        ctx.beginPath();
-        ctx.moveTo(x0, cy);
-        ctx.quadraticCurveTo(x0 + cap * 0.35, y0, x0 + cap, y0);
-        ctx.lineTo(x1 - cap, y0);
-        ctx.quadraticCurveTo(x1 - cap * 0.35, y0, x1, cy);
-        ctx.quadraticCurveTo(x1 - cap * 0.35, y1, x1 - cap, y1);
-        ctx.lineTo(x0 + cap, y1);
-        ctx.quadraticCurveTo(x0 + cap * 0.35, y1, x0, cy);
-        ctx.closePath();
-    };
+        r = h / 2;
     ctx.save();
-    ctx.shadowColor = 'rgba(150,80,255,0.4)';
+    ctx.shadowColor = 'rgba(150,80,255,0.45)';
     ctx.shadowBlur = 40;
-    const fill = ctx.createLinearGradient(0, y, 0, y + h);
-    fill.addColorStop(0, '#3a1a6e');
-    fill.addColorStop(0.5, '#1c0b3a');
-    fill.addColorStop(1, '#2c1256');
-    ctx.fillStyle = fill;
-    outline(0);
+    ctx.fillStyle = '#12061f';
+    roundRect(ctx, x - 6, y - 6, w + 12, h + 12, r + 6);
     ctx.fill();
     ctx.restore();
-    // One gold edge round the whole tray.
+    const fill = ctx.createLinearGradient(0, y, 0, y + h);
+    fill.addColorStop(0, '#4a2286');
+    fill.addColorStop(0.5, '#25103f');
+    fill.addColorStop(1, '#341660');
+    ctx.fillStyle = fill;
+    roundRect(ctx, x, y, w, h, r);
+    ctx.fill();
+    // The track: a darker band between the two buttons, shaded so it looks set in.
+    const bx = x + h * 0.86,
+        bw = w - 2 * h * 0.86,
+        th = h - 36;
+    const track = ctx.createLinearGradient(0, cy - th / 2, 0, cy + th / 2);
+    track.addColorStop(0, '#07020f');
+    track.addColorStop(0.25, '#12061f');
+    track.addColorStop(1, '#1b0a33');
+    ctx.fillStyle = track;
+    roundRect(ctx, bx, cy - th / 2, bw, th, th / 2);
+    ctx.fill();
+    // The one gold edge.
     const gold = ctx.createLinearGradient(0, y, 0, y + h);
     gold.addColorStop(0, '#fff4c0');
-    gold.addColorStop(0.5, '#e0a030');
-    gold.addColorStop(1, '#fff0b0');
+    gold.addColorStop(0.5, '#d99a2a');
+    gold.addColorStop(1, '#ffe7a0');
     ctx.strokeStyle = gold;
     ctx.lineWidth = 6;
-    outline(3);
+    roundRect(ctx, x + 3, y + 3, w - 6, h - 6, r - 3);
     ctx.stroke();
-    // The arrows.
+    // The buttons.
     for (const d of [-1, 1]) {
-        const ax = d < 0 ? x + cap * 0.7 : x + w - cap * 0.7,
-            s = h * 0.2;
+        const bxc = d < 0 ? x + r : x + w - r,
+            br = r * 0.62,
+            s = br * 0.5;
+        const disc = ctx.createRadialGradient(bxc, cy - br * 0.4, br * 0.1, bxc, cy, br);
+        disc.addColorStop(0, '#6a36b8');
+        disc.addColorStop(1, '#22103e');
+        ctx.fillStyle = disc;
+        ctx.beginPath();
+        ctx.arc(bxc, cy, br, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = gold;
+        ctx.lineWidth = 5;
+        ctx.stroke();
         const ag = ctx.createLinearGradient(0, cy - s, 0, cy + s);
         ag.addColorStop(0, '#fff6d0');
         ag.addColorStop(0.5, '#ffc23a');
         ag.addColorStop(1, '#d97a10');
         ctx.save();
         ctx.shadowColor = 'rgba(255,190,70,0.7)';
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = 16;
         ctx.fillStyle = ag;
         ctx.beginPath();
-        ctx.moveTo(ax + d * s, cy);
-        ctx.lineTo(ax - d * s * 0.6, cy - s);
-        ctx.lineTo(ax - d * s * 0.6, cy + s);
+        ctx.moveTo(bxc + d * s * 1.05, cy);
+        ctx.lineTo(bxc - d * s * 0.6, cy - s);
+        ctx.lineTo(bxc - d * s * 0.6, cy + s);
         ctx.closePath();
         ctx.fill();
         ctx.restore();
-        ctx.strokeStyle = '#4a1e06';
-        ctx.lineWidth = 3;
-        ctx.stroke();
     }
 }
 
@@ -729,7 +736,13 @@ export class RosterScreen {
         enter(ctx, 'panels', () => inFit(f.right, () => demoFrame(ctx, d)), { dx: 22 });
         enter(ctx, 'panels', () => inFit(f.mid, () => this.paintedInfo(fy, locked, t)), { dx: 0, dy: 10 });
         enter(ctx, 'buttons', () =>
-            inFit(f.tray, () => trayBar(ctx, MOCK.tray[0], MOCK.tray[1] + 30, MOCK.tray[2], MOCK.tray[3] - 50)),
+            inFit(f.tray, () => {
+                // Round the fairies' row, its buttons just clear of the first and last.
+                const m = MOCK.meds,
+                    x0 = m.x0 - 96 - 210,
+                    x1 = m.x0 + (FAIRIES.length - 1) * m.gap + 96 + 210;
+                trayBar(ctx, x0, m.y - 118, x1 - x0, 236);
+            }),
         );
         const m = MOCK.meds;
         FAIRIES.forEach((other, i) =>
@@ -956,25 +969,30 @@ export class RosterScreen {
         ctx.restore();
         if (on) {
             // Its ring holds still: no shine sweeping round it.
-            // A thick gold ring that glows.
+            // A thick gold ring that glows, inside a dark outline.
             ctx.save();
-            ctx.shadowColor = 'rgba(255,200,80,0.9)';
-            ctx.shadowBlur = 40;
-            ctx.strokeStyle = goldGradient(ctx, y - r, y + r);
-            ctx.lineWidth = 12;
+            ctx.shadowColor = 'rgba(255,200,80,0.95)';
+            ctx.shadowBlur = 36;
+            ctx.strokeStyle = '#2a1006';
+            ctx.lineWidth = 18;
             ctx.beginPath();
             ctx.arc(x, y, r + 6, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
-            ctx.strokeStyle = 'rgba(255,250,220,0.9)';
-            ctx.lineWidth = 3;
+            ctx.strokeStyle = goldGradient(ctx, y - r, y + r);
+            ctx.lineWidth = 10;
             ctx.beginPath();
-            ctx.arc(x, y, r + 10, 0, Math.PI * 2);
+            ctx.arc(x, y, r + 6, 0, Math.PI * 2);
             ctx.stroke();
         } else {
-            // A thin gold ring.
+            // A thin gold ring inside a dark outline.
+            ctx.strokeStyle = '#2a1006';
+            ctx.lineWidth = 10;
+            ctx.beginPath();
+            ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+            ctx.stroke();
             ctx.strokeStyle = goldGradient(ctx, y - r, y + r);
-            ctx.lineWidth = 6;
+            ctx.lineWidth = 5;
             ctx.beginPath();
             ctx.arc(x, y, r + 3, 0, Math.PI * 2);
             ctx.stroke();
