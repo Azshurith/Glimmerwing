@@ -5,7 +5,6 @@ import { arcadeText, sparkle } from '@/render/draw';
 import { shine } from './kit';
 import { gloss, goldEdge, sweptWing } from './lobby-screen';
 import { pointed } from './ornate';
-import { frameCrest } from './roster-screen';
 
 /** An edge's colours from top to bottom: gold, or lilac for the rival's side. */
 export type EdgeTone = 'gold' | 'lilac';
@@ -87,8 +86,8 @@ export function tracedRing(
     shine(ctx, ring, x - r, y - r, r * 2, r * 2, t, phase, 5);
 }
 
-/** VS in box `b` (x, y, w, h): big leaning gold-to-pink letters with a crest under them. */
-export function tracedVs(ctx: CanvasRenderingContext2D, b: readonly number[], t: number): void {
+/** VS in box `b` (x, y, w, h): big leaning gold-to-pink letters. */
+export function tracedVs(ctx: CanvasRenderingContext2D, b: readonly number[]): void {
     const [x, y, w, h] = b;
     const cx = x + w / 2,
         size = h * 0.82;
@@ -96,10 +95,5 @@ export function tracedVs(ctx: CanvasRenderingContext2D, b: readonly number[], t:
     ctx.translate(cx, y + h * 0.74);
     ctx.transform(1, 0, -0.16, 1, 0, 0);
     arcadeText(ctx, 'VS', 0, 0, size, ['#fff6c0', '#ffb040', '#ff4a8a'], 'center');
-    ctx.restore();
-    ctx.save();
-    ctx.translate(cx, y + h * 0.9);
-    ctx.scale(h / 380, h / 380);
-    frameCrest(ctx, 0, 0, t);
     ctx.restore();
 }

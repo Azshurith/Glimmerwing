@@ -11,7 +11,6 @@ import { tallMenuFit } from './menu-fit';
 import { enter } from '@/render/transition';
 import { mockFit } from './kit-ui';
 import type { MockFit } from './kit-ui';
-import { roundRect } from './emblems';
 import { goldEdge } from './lobby-screen';
 import { edgeTones, tracedPlate, tracedRing, tracedStar, tracedTitle, tracedVs } from './traced';
 
@@ -308,7 +307,7 @@ export class SelectScreen {
             ctx.restore();
         }
         this.cardFrame(i, win, t);
-        arcadeText(ctx, s.tag, c.tag[0], c.tag[1] + 26, 72, ['#2a0f2a', '#1b0a24', '#140a1a'], 'center', 200);
+        arcadeText(ctx, s.tag, c.tag[0], c.tag[1] + 26, 72, ['#ffffff', '#fff6fa', '#f2e4ff'], 'center', 200);
         const off = !fairyAvailable(fy.id);
         const name = s.cpu ? '? ? ?' : s.locked ? (off ? 'UNAVAILABLE' : 'LOCKED') : fy.name.toUpperCase();
         arcadeText(
@@ -367,29 +366,31 @@ export class SelectScreen {
     /**
      * Side `i`'s card frame round its portrait window (traced by `win`), in the mockup's pixels: the window's heavy
      * edge, the player's tag on a slanted plate at its top corner, the name plate across the card under the window,
-     * and the stats panel below (no edge of its own); gold on the left, lilac for the rival on the right.
+     * the stats sitting on the screen's own backdrop below; gold on the left, lilac for the rival on the right.
      */
     private cardFrame(i: number, win: () => void, t: number): void {
         const ctx = this.ctx,
             c = MOCK.cards[i],
             R = MOCK.rows;
         const tone = i === 0 ? 'gold' : 'lilac';
-        const [bx, by, bw, bh] = c.box;
-        // The stats panel, from under the name plate to the card's foot.
-        const sy = R.name + 50,
-            sh = by + bh - 12 - sy;
-        const panel = () => roundRect(ctx, bx + 24, sy, bw - 48, sh, 36);
-        const pg = ctx.createLinearGradient(0, sy, 0, sy + sh);
-        pg.addColorStop(0, 'rgba(40,16,88,0.94)');
-        pg.addColorStop(1, 'rgba(16,6,40,0.96)');
-        ctx.fillStyle = pg;
-        panel();
-        ctx.fill();
-        // The window's edge.
+        const [bx, , bw] = c.box;
+        // The window's edge, the same on both sides but for its colour: a soft halo, the heavy edge, and a bright line
+        // down its middle.
+        const glow = i === 0 ? 'rgba(255,190,70,' : 'rgba(200,140,255,';
         ctx.save();
-        ctx.shadowColor = i === 0 ? 'rgba(255,190,70,0.6)' : 'rgba(190,120,255,0.6)';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = glow + '0.35)';
+        ctx.lineWidth = 46;
+        win();
+        ctx.stroke();
+        ctx.shadowColor = glow + '0.7)';
         ctx.shadowBlur = 40;
         goldEdge(ctx, win, c.window[0][1], c.window[2][1], edgeTones(tone), 18);
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = i === 0 ? 'rgba(255,248,220,0.9)' : 'rgba(250,240,255,0.9)';
+        ctx.lineWidth = 4;
+        win();
+        ctx.stroke();
         ctx.restore();
         // The name plate across the card.
         tracedPlate(ctx, bx + 6, R.name - 92, bw - 12, 130, 70, t, i * 0.9 + 0.5, tone, 12);
@@ -420,11 +421,8 @@ export class SelectScreen {
     private paintedCentre(v: SelectView, t: number): void {
         const ctx = this.ctx;
         if (v.timer !== null) {
-            // The timer: a pointed plate between two small stars, TIME over the seconds.
-            const [x, y, w, h] = MOCK.time;
-            tracedPlate(ctx, x + 70, y + 20, w - 140, h - 40, 80, t, 1.4, 'gold', 10);
-            tracedStar(ctx, x + 40, y + h / 2, 22, t);
-            tracedStar(ctx, x + w - 40, y + h / 2, 22, t);
+            // The timer: TIME over the seconds, straight on the backdrop.
+            const [x, y, w] = MOCK.time;
             arcadeText(ctx, 'TIME', x + w / 2, y + 112, 58, ['#ffffff', '#f6eaff', '#d8c8ff'], 'center');
             const low = v.timer <= 5,
                 pulse = low ? 1 + 0.12 * Math.max(0, Math.sin(t * 12)) : 1;
@@ -509,7 +507,7 @@ export class SelectScreen {
         } else {
             const [x, y, w, h] = MOCK.vs,
                 k = 1 + 0.04 * Math.sin(t * 3);
-            tracedVs(ctx, [x + (w * (1 - k)) / 2, y + (h * (1 - k)) / 2, w * k, h * k], t);
+            tracedVs(ctx, [x + (w * (1 - k)) / 2, y + (h * (1 - k)) / 2, w * k, h * k]);
         }
         if (v.hints[0]) {
             const [x, y, w, h] = MOCK.prompt;
