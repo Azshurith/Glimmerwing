@@ -1,7 +1,7 @@
 /* Small icons for the HUD and warning cues. */
 
 /** Draw a heart for the HUD. */
-export function drawHeart(ctx: CanvasRenderingContext2D, x: number, y: number, color: string): void {
+export function drawHeart(ctx: CanvasRenderingContext2D, x: number, y: number, color: string | CanvasGradient): void {
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.moveTo(x, y + 3.5);
