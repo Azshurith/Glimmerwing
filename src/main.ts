@@ -191,7 +191,8 @@ let shownMode = '',
     shownLayout = '',
     shownTouch: boolean | null = null,
     shownWatching = false,
-    shownRoad = false;
+    shownRoad = false,
+    shownBackAt = '';
 /** The view width the page was last fitted to (it changes when a round plays in wider meadows). */
 let shownViewW = 0;
 /** Keeps the page's touch layer in step with the game: which buttons show, and what the top one does. */
@@ -207,6 +208,18 @@ function syncPage(): void {
     if (input.touchActive !== shownTouch) {
         shownTouch = input.touchActive;
         document.documentElement.classList.toggle('touch', shownTouch);
+    }
+    // Watching a replay on an upright screen, Back sits under the meadow's top plate (Game.backAt, in view units).
+    const at = game.backAt;
+    const backKey = at ? `${Math.round(at.x * 10)},${Math.round(at.y * 10)},${screenEl.clientWidth}` : '';
+    if (backKey !== shownBackAt) {
+        shownBackAt = backKey;
+        screenEl.toggleAttribute('data-back-at', at !== null);
+        if (at) {
+            const px = screenEl.clientWidth / renderer.viewW;
+            screenEl.style.setProperty('--back-x', `${at.x * px}px`);
+            screenEl.style.setProperty('--back-y', `${at.y * px}px`);
+        }
     }
     // The lobby has no Back tab, but the trophy road over it does, as the other screens.
     if (game.roadShowing !== shownRoad) {

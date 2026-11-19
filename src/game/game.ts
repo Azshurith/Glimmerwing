@@ -130,7 +130,12 @@ function tallPlacement(
     // this screen's: `fit` shows it at a live round's scale (scaled down only to fit a taller one under the band or
     // the solo bar), so it looks as it does in play; a meadow wider than the screen then follows its fairy across
     // (`followX`, her x in the meadow), and a narrower one is centred.
-    const s = fit ? Math.min(C.TALL_OWN_S, (h - (solo ? C.TALL_SOLO_BAR : C.TALL_TOP_MIN)) / C.FIELD_H) : C.TALL_OWN_S;
+    // A lone meadow (Endless) fills the whole height under its bar, as it does in play.
+    const s = !fit
+        ? C.TALL_OWN_S
+        : solo
+          ? (h - C.TALL_SOLO_BAR) / C.FIELD_H
+          : Math.min(C.TALL_OWN_S, (h - C.TALL_TOP_MIN) / C.FIELD_H);
     const over = C.FIELD_W * s - C.TALL_W;
     const ownX = !fit ? 0 : over <= 0 ? -over / 2 : Math.max(-over, Math.min(0, C.TALL_W / 2 - followX * s));
     // Your meadow sits against the bottom edge, as in play.
@@ -2415,6 +2420,9 @@ export class Game {
         saveProgress(this.progress);
     }
 
+    /** Where the page's Back button goes in view units (a replay on an upright screen), or null where it's usual. */
+    backAt: { x: number; y: number } | null = null;
+
     /** The Paused banner, telling the player how to carry on (a tap on the pause button, or P). */
     private pauseBanner(touch: boolean): void {
         this.r.banner({
@@ -2429,6 +2437,7 @@ export class Game {
     /** Draw the current screen. */
     draw(): void {
         const r = this.r;
+        this.backAt = null;
         // Prompts follow whatever the player last used: a touchscreen or keys/pad.
         const touch = this.input.touchActive;
         // A portrait screen gets the tall layout: the menus are redrawn for it, and so is a
@@ -2493,8 +2502,11 @@ export class Game {
                   { label: solo ? 'YOU' : '1P', color: PLAYER_COLORS.p1 },
                   this.vsCpu ? { label: 'CPU', color: PLAYER_COLORS.cpu } : { label: '2P', color: PLAYER_COLORS.p2 },
               ];
-        // An Endless replay recorded in a shorter meadow leaves room above it on a phone: its scenery fills it.
-        if (tall && watching && (soloTall || endless)) r.tallFill(this.fields[0], 0, at[0].y, this.time);
+        // Watching a replay on an upright screen, the page's Back button sits just under this player's meadow's top
+        // plate, below her face.
+        const mine = at[own];
+        const hs = Math.min(mine.s, C.TALL_OWN_S);
+        this.backAt = tall && watching ? { x: Math.max(0, mine.x) + 3 * hs, y: mine.y + 23 * hs } : null;
         r.field(this.fields[0], at[0].x, this.wins[0], this.time, tags[0], at[0].y, at[0].s);
         if (!soloTall && !endless) r.field(this.fields[1], at[1].x, this.wins[1], this.time, tags[1], at[1].y, at[1].s);
         // Between rounds the console still shows the round just played.

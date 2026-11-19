@@ -193,29 +193,6 @@ export class Renderer {
         }
     }
 
-    /**
-     * Fill the empty space above a lone meadow in the tall view (an Endless replay recorded in a shorter meadow than
-     * this screen's), from `y0` down to `y1`, with its scenery under a dark violet veil.
-     */
-    tallFill(f: Field, y0: number, y1: number, time: number): void {
-        if (y1 - y0 < 1) return;
-        const ctx = this.ctx,
-            w = this.viewW;
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, y0, w, y1 - y0);
-        ctx.clip();
-        ctx.translate(0, y0);
-        const map = mapById(f.mapId) ?? mapForSeed(f.sceneSeed);
-        this.scenery.draw(ctx, f.sceneSeed, f.time, time, w, y1 - y0, map);
-        const g = ctx.createLinearGradient(0, 0, 0, y1 - y0);
-        g.addColorStop(0, 'rgba(16,8,40,0.85)');
-        g.addColorStop(1, 'rgba(16,8,40,0.45)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, w, y1 - y0);
-        ctx.restore();
-    }
-
     /** One critter: as its map's monster where the map has a sheet, else in its code-drawn look. */
     private critter(
         ctx: CanvasRenderingContext2D,
@@ -466,11 +443,27 @@ export class Renderer {
             ctx.translate(ox - bleed, oy);
             this.hudLayer.meadow(f, wins, time, tag, C.FIELD_W + 2 * bleed);
         } else if (v0 > 0.5 || v1 < C.FIELD_W - 0.5) {
+            // Its bars stay at a live round's size across the screen however far the meadow is zoomed: the top plate
+            // against its top edge and the charge bar against its foot, each drawn in its own half.
             ctx.restore();
+            const hs = Math.min(scale, C.TALL_OWN_S),
+                x = ox + v0 * scale,
+                w = ((v1 - v0) * scale) / hs,
+                mid = oy + (C.FIELD_H * scale) / 2;
+            for (const [y, y0, y1] of [
+                [oy, oy, mid],
+                [oy + C.FIELD_H * (scale - hs), mid, oy + C.FIELD_H * scale],
+            ]) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(x, y0, w * hs, y1 - y0);
+                ctx.clip();
+                ctx.translate(x, y);
+                ctx.scale(hs, hs);
+                this.hudLayer.meadow(f, wins, time, tag, w);
+                ctx.restore();
+            }
             ctx.save();
-            ctx.translate(ox + v0 * scale, oy);
-            ctx.scale(scale, scale);
-            this.hudLayer.meadow(f, wins, time, tag, v1 - v0);
         } else this.hudLayer.meadow(f, wins, time, tag);
         ctx.restore();
     }
