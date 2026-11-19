@@ -321,7 +321,9 @@ export class MatchScreen {
         ctx.save();
         ctx.translate(f.x, f.y);
         ctx.scale(f.s, f.s);
-        enter(ctx, 'bar', () => this.piece('title', [MID - MOCK.title[2] / 2, MOCK.title[1], MOCK.title[2], MOCK.title[3]], 0));
+        enter(ctx, 'bar', () =>
+            this.piece('title', [MID - MOCK.title[2] / 2, MOCK.title[1], MOCK.title[2], MOCK.title[3]], 0),
+        );
         MOCK.tabs.forEach((b, i) =>
             enter(ctx, 'buttons', () => this.paintedTab(b, TAB_LABELS[MATCH_TABS[i]], MATCH_TABS[i] === v.tab, 56), {
                 i,
@@ -364,9 +366,7 @@ export class MatchScreen {
         // The chart is drawn in view units inside its frame, so its lines and lettering stay crisp.
         if (v.tab === 'graphs' && stats) {
             const [, py, , ph] = MOCK.plot;
-            enter(ctx, 'panels', () =>
-                this.graph(v, stats, false, W, bleed, mockBox(f, L + 160, py, R - L - 300, ph)),
-            );
+            enter(ctx, 'panels', () => this.graph(v, stats, false, W, bleed, mockBox(f, L + 160, py, R - L - 300, ph)));
         }
         ctx.restore();
     }
