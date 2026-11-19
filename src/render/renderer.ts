@@ -432,12 +432,38 @@ export class Renderer {
 
         for (const pu of f.popups) this.hudLayer.popup(pu.text, pu.x, pu.y, pu.age);
 
+        // A meadow wider than the tall view (a replay recorded on a wide screen, following its fairy) keeps its bars
+        // on the part that's on screen.
+        const v0 = this.layout === 'tall' ? Math.max(0, -ox / scale) : 0,
+            v1 = this.layout === 'tall' ? Math.min(C.FIELD_W, (this.viewW - ox) / scale) : C.FIELD_W;
         if (bleed > 0) {
             // Its bars reach out to the screen's edges, past the meadow's clip.
             ctx.restore();
             ctx.save();
             ctx.translate(ox - bleed, oy);
             this.hudLayer.meadow(f, wins, time, tag, C.FIELD_W + 2 * bleed);
+        } else if (v0 > 0.5 || v1 < C.FIELD_W - 0.5) {
+            // Its bars stay at a live round's size across the screen however far the meadow is zoomed: the top plate
+            // against its top edge and the charge bar against its foot, each drawn in its own half.
+            ctx.restore();
+            const hs = Math.min(scale, C.TALL_OWN_S),
+                x = ox + v0 * scale,
+                w = ((v1 - v0) * scale) / hs,
+                mid = oy + (C.FIELD_H * scale) / 2;
+            for (const [y, y0, y1] of [
+                [oy, oy, mid],
+                [oy + C.FIELD_H * (scale - hs), mid, oy + C.FIELD_H * scale],
+            ]) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(x, y0, w * hs, y1 - y0);
+                ctx.clip();
+                ctx.translate(x, y);
+                ctx.scale(hs, hs);
+                this.hudLayer.meadow(f, wins, time, tag, w);
+                ctx.restore();
+            }
+            ctx.save();
         } else this.hudLayer.meadow(f, wins, time, tag);
         ctx.restore();
     }

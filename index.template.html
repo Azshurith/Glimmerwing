@@ -213,6 +213,7 @@
             }
             /* On those screens Back is a slanted gold-edged tab, like the game's own buttons, not a round one. */
             .screen:is(
+                    [data-back-at],
                     [data-phase='select'],
                     [data-phase='mapselect'],
                     [data-phase='modes'],
@@ -259,7 +260,8 @@
                     [data-phase='profile'],
                     [data-phase='maps'],
                     [data-phase='settings'],
-                    [data-phase='matchinfo']
+                    [data-phase='matchinfo'],
+                    [data-back-at]
                 )
                 .tb-menu::before {
                 content: '';
@@ -277,7 +279,8 @@
                     [data-phase='profile'],
                     [data-phase='maps'],
                     [data-phase='settings'],
-                    [data-phase='matchinfo']
+                    [data-phase='matchinfo'],
+                    [data-back-at]
                 )
                 .tb-menu:hover {
                 filter: brightness(1.2) drop-shadow(0 0 6px rgba(255, 216, 107, 0.6));
@@ -1314,7 +1317,8 @@
                     [data-phase='maps'],
                     [data-phase='settings'],
                     [data-phase='matchinfo'],
-                    [data-phase='modes'][data-road]
+                    [data-phase='modes'][data-road],
+                    [data-back-at]
                 )
                 .tb-menu {
                 --sl: 0px;
@@ -1331,7 +1335,8 @@
                     [data-phase='maps'],
                     [data-phase='settings'],
                     [data-phase='matchinfo'],
-                    [data-phase='modes'][data-road]
+                    [data-phase='modes'][data-road],
+                    [data-back-at]
                 )
                 .tb-menu::before {
                 clip-path: none;
@@ -1341,6 +1346,16 @@
             }
             .screen[data-phase='modes']:not([data-road]) .tb-menu {
                 display: none !important;
+            }
+            /* Watching a replay on an upright screen: Back is Maps' rounded gold-edged capsule (the rules above), just
+               under the meadow's top plate, below her face (--back-x/--back-y, from Game.backAt). */
+            .screen[data-back-at] .tb-menu {
+                --btn: clamp(34px, calc(var(--sw, 400px) * 0.1), 48px);
+                top: var(--back-y) !important;
+                left: var(--back-x) !important;
+                right: auto !important;
+                bottom: auto !important;
+                white-space: nowrap;
             }
             /* Controls: whose keys, then a key table. */
             .set-schemes {
