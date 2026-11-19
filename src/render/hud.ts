@@ -1,13 +1,16 @@
 import * as C from '@/core/config';
 import type { Field } from '@/game/field';
 import type { BannerView, ConsoleView, EndlessView, HighlightKind, HudTag, ReplayPanelView } from '@/types';
-import { arcadeText, slanted, sparkle } from './draw';
+import { arcadeText, shade, slanted, sparkle } from './draw';
+import { drawFairy } from './entities/fairy';
 import { drawBlossom, drawHeart } from './icons';
+import { shine } from './screens/kit';
+import { gloss, goldEdge, sweptWing } from './screens/lobby-screen';
+import { frameCrest } from './screens/roster-screen';
 import { ARCADE } from './theme';
 
 /** Gauge segment colours by level: green, gold, then hot orange for MAX. */
 const LEVEL_COLORS = ['#8ff0a0', '#ffd45c', '#ff8a5b'];
-const GOLD = '#c9a24a';
 const INK = '#2a0f2e';
 
 /**
@@ -34,41 +37,54 @@ export class Hud {
     meadow(f: Field, wins: number, time: number, tag: HudTag): void {
         const ctx = this.ctx;
         const W = C.FIELD_W;
-        const color = f.fairy.color;
 
-        // Top strip: dark glass with a gold rule.
-        const top = ctx.createLinearGradient(0, 0, 0, 24);
-        top.addColorStop(0, 'rgba(10,6,28,0.92)');
-        top.addColorStop(0.75, 'rgba(10,6,28,0.6)');
-        top.addColorStop(1, 'rgba(10,6,28,0)');
+        // Top plate: violet glass in a gold edge, its lower corners cut away.
+        const plate = () => {
+            ctx.beginPath();
+            ctx.moveTo(1, 1);
+            ctx.lineTo(W - 1, 1);
+            ctx.lineTo(W - 1, 14);
+            ctx.lineTo(W - 7, 20);
+            ctx.lineTo(7, 20);
+            ctx.lineTo(1, 14);
+            ctx.closePath();
+        };
+        const top = ctx.createLinearGradient(0, 1, 0, 20);
+        top.addColorStop(0, 'rgba(52,24,112,0.94)');
+        top.addColorStop(1, 'rgba(18,8,46,0.94)');
         ctx.fillStyle = top;
-        ctx.fillRect(0, 0, W, 24);
-        ctx.fillStyle = GOLD;
-        ctx.globalAlpha = 0.75;
-        ctx.fillRect(4, 19.5, W - 8, 0.8);
-        ctx.globalAlpha = 1;
+        plate();
+        ctx.fill();
+        gloss(ctx, plate, 1, 1, W - 2, 19);
+        goldEdge(ctx, plate, 1, 20, undefined, 1);
+        shine(ctx, plate, 1, 1, W - 2, 19, time, tag.label.length * 0.7, 7);
+
+        // Her face in a gold ring, standing out over the plate's left end.
+        hudFace(ctx, f, 12, 11, 9.5);
 
         // Hearts (life is kept in half-hearts) and bombs.
+        const hx = 30;
         for (let i = 0; i < C.MAX_HULL / 2; i++) {
-            const x = 10 + i * 12;
+            const x = hx + i * 11.5;
             const have = f.player.hull - i * 2;
             drawHeart(ctx, x, 10, 'rgba(246,240,255,0.16)');
-            if (have >= 2) drawHeart(ctx, x, 10, color);
+            if (have >= 2) goldHeart(ctx, x, 10);
             else if (have === 1) {
                 ctx.save();
                 ctx.beginPath();
                 ctx.rect(x - 7, 0, 7, 20);
                 ctx.clip();
-                drawHeart(ctx, x, 10, color);
+                goldHeart(ctx, x, 10);
                 ctx.restore();
             }
         }
+        const bx0 = hx + (C.MAX_HULL / 2) * 11.5 + 3;
         for (let i = 0; i < C.BLOOMS_PER_ROUND; i++)
-            drawBlossom(ctx, 74 + i * 11, 10, i < f.player.blooms ? f.fairy.bomb.color : 'rgba(246,240,255,0.15)');
+            drawBlossom(ctx, bx0 + i * 11, 10, i < f.player.blooms ? '#ffcf4a' : 'rgba(246,240,255,0.15)');
 
         // Right side, right to left: round stars, player badge, name.
         for (let i = 0; i < C.ROUNDS_TO_WIN; i++) {
-            const x = W - 9 - i * 12;
+            const x = W - 11 - i * 12;
             const won = i < wins;
             ctx.save();
             if (won) {
@@ -80,23 +96,36 @@ export class Hud {
             ctx.fill();
             ctx.restore();
             star(ctx, x, 10, 5, 2.2);
-            ctx.strokeStyle = won ? '#fff6c8' : 'rgba(246,240,255,0.45)';
+            ctx.strokeStyle = won ? '#fff6c8' : 'rgba(220,200,255,0.6)';
             ctx.lineWidth = 0.8;
             ctx.stroke();
         }
         ctx.font = `8px ${ARCADE}`;
-        const bw = ctx.measureText(tag.label).width + 9;
-        const bx = W - 9 - C.ROUNDS_TO_WIN * 12 - bw;
-        ctx.fillStyle = tag.color;
-        slanted(bx, 4, bw, 11, 3)(ctx);
+        const bw = ctx.measureText(tag.label).width + 10;
+        const bx = W - 11 - C.ROUNDS_TO_WIN * 12 - bw;
+        const badge = slanted(bx, 4, bw, 12, 3);
+        const bg = ctx.createLinearGradient(0, 4, 0, 16);
+        bg.addColorStop(0, tag.color);
+        bg.addColorStop(1, shade(tag.color, 0.7));
+        ctx.fillStyle = bg;
+        badge(ctx);
         ctx.fill();
-        ctx.fillStyle = '#140a26';
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 0.6;
+        badge(ctx);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
-        ctx.fillText(tag.label, bx + bw / 2, 12.5);
+        ctx.fillText(tag.label, bx + bw / 2, 13.2);
         ctx.textAlign = 'right';
         ctx.font = `9px ${ARCADE}`;
-        ctx.fillStyle = '#fff3c9';
-        ctx.fillText(f.fairy.name.toUpperCase(), bx - 4, 13, bx - 100);
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#1a0a30';
+        ctx.lineWidth = 2;
+        const nameMax = Math.max(20, bx - 4 - (bx0 + C.BLOOMS_PER_ROUND * 11 + 2));
+        ctx.strokeText(f.fairy.name.toUpperCase(), bx - 4, 13.5, nameMax);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(f.fairy.name.toUpperCase(), bx - 4, 13.5, nameMax);
 
         // Fever: a hot bar under the strip.
         if (f.fever > 0) {
@@ -108,7 +137,7 @@ export class Hud {
             ctx.shadowColor = '#ff8a3d';
             ctx.shadowBlur = 6;
             ctx.fillStyle = g;
-            ctx.fillRect(4, 19, (W - 8) * k, 2);
+            ctx.fillRect(8, 20, (W - 16) * k, 2);
             ctx.restore();
         }
 
@@ -120,50 +149,77 @@ export class Hud {
         const ctx = this.ctx;
         const W = C.FIELD_W,
             H = C.FIELD_H;
-        const bottom = ctx.createLinearGradient(0, H - 18, 0, H);
-        bottom.addColorStop(0, 'rgba(10,6,28,0)');
-        bottom.addColorStop(1, 'rgba(10,6,28,0.85)');
-        ctx.fillStyle = bottom;
-        ctx.fillRect(0, H - 18, W, 18);
+        // Bottom plate: violet glass in a gold edge, its upper corners cut away.
+        const plate = () => {
+            ctx.beginPath();
+            ctx.moveTo(7, H - 15);
+            ctx.lineTo(W - 7, H - 15);
+            ctx.lineTo(W - 1, H - 9);
+            ctx.lineTo(W - 1, H - 1);
+            ctx.lineTo(1, H - 1);
+            ctx.lineTo(1, H - 9);
+            ctx.closePath();
+        };
+        const bg = ctx.createLinearGradient(0, H - 15, 0, H);
+        bg.addColorStop(0, 'rgba(52,24,112,0.92)');
+        bg.addColorStop(1, 'rgba(18,8,46,0.94)');
+        ctx.fillStyle = bg;
+        plate();
+        ctx.fill();
+        goldEdge(ctx, plate, H - 15, H, undefined, 1);
 
         const lv = Math.min(3, Math.floor(f.gauge / C.GAUGE_LEVEL + 1e-6));
         const full = lv >= 3;
-        const x0 = 34,
-            y = H - 10,
-            gap = 3;
-        const segW = (W - x0 - 8 - gap * 2) / 3;
+        const x0 = 32,
+            y = H - 11,
+            sh = 6.5,
+            gap = 4;
+        const segW = (W - x0 - 10 - gap * 2) / 3;
         for (let i = 0; i < 3; i++) {
             const sx = x0 + i * (segW + gap);
-            const seg = slanted(sx, y, segW, 6, 3);
-            ctx.fillStyle = 'rgba(10,6,28,0.85)';
+            const seg = slanted(sx, y, segW, sh, 3);
+            ctx.fillStyle = 'rgba(8,4,22,0.95)';
             seg(ctx);
             ctx.fill();
             const fill = Math.max(0, Math.min(1, f.gauge / C.GAUGE_LEVEL - i));
             if (fill > 0) {
+                const c = full ? f.fairy.guardian.color : LEVEL_COLORS[i];
                 ctx.save();
                 seg(ctx);
                 ctx.clip();
-                ctx.fillStyle = full ? f.fairy.guardian.color : LEVEL_COLORS[i];
-                ctx.globalAlpha = full ? 0.75 + 0.25 * Math.sin(time * 8) : fill < 1 ? 0.7 : 1;
-                ctx.fillRect(sx, y, segW * fill, 6);
+                const g = ctx.createLinearGradient(0, y, 0, y + sh);
+                g.addColorStop(0, '#ffffff');
+                g.addColorStop(0.35, c);
+                g.addColorStop(1, shade(c, 0.6));
+                ctx.fillStyle = g;
+                ctx.globalAlpha = full ? 0.75 + 0.25 * Math.sin(time * 8) : fill < 1 ? 0.75 : 1;
+                ctx.fillRect(sx, y, segW * fill, sh);
                 ctx.restore();
             }
-            ctx.strokeStyle = fill >= 1 ? 'rgba(255,246,200,0.8)' : 'rgba(201,162,74,0.55)';
+            ctx.strokeStyle = fill >= 1 ? 'rgba(255,246,200,0.85)' : 'rgba(201,162,74,0.7)';
             ctx.lineWidth = 0.7;
             seg(ctx);
             ctx.stroke();
         }
         const label = full ? 'MAX' : `LV${lv}`;
         ctx.textAlign = 'left';
-        ctx.font = `8px ${ARCADE}`;
-        ctx.fillStyle = full ? f.fairy.guardian.color : lv === 0 ? 'rgba(246,240,255,0.4)' : LEVEL_COLORS[lv - 1];
+        ctx.save();
         if (full) {
-            ctx.save();
             ctx.shadowColor = f.fairy.guardian.color;
             ctx.shadowBlur = 6 + 4 * Math.sin(time * 8);
-            ctx.fillText(label, 7, H - 4);
-            ctx.restore();
-        } else ctx.fillText(label, 7, H - 4);
+        }
+        arcadeText(
+            ctx,
+            label,
+            7,
+            H - 4,
+            8,
+            full
+                ? ['#ffffff', f.fairy.guardian.color, shade(f.fairy.guardian.color, 0.7)]
+                : ['#fffbe0', '#ffd45c', '#e88a1c'],
+            'left',
+        );
+        ctx.restore();
     }
 
     /** Floating text in a meadow (chains, attacks, bombs): arcade lettering, fading as it rises. */
@@ -220,48 +276,56 @@ export class Hud {
             H = C.VIEW_H,
             cx = x + w / 2;
         const g = ctx.createLinearGradient(x, 0, x + w, 0);
-        g.addColorStop(0, '#0b0720');
-        g.addColorStop(0.5, '#1c1240');
-        g.addColorStop(1, '#0b0720');
+        g.addColorStop(0, '#120830');
+        g.addColorStop(0.5, '#2c1460');
+        g.addColorStop(1, '#120830');
         ctx.fillStyle = g;
         ctx.fillRect(x, 0, w, H);
-        // Gold rails on both edges.
-        ctx.fillStyle = GOLD;
-        ctx.fillRect(x, 0, 1, H);
-        ctx.fillRect(x + w - 1, 0, 1, H);
-        ctx.fillStyle = 'rgba(255,230,160,0.25)';
-        ctx.fillRect(x + 1.5, 0, 0.5, H);
-        ctx.fillRect(x + w - 2, 0, 0.5, H);
+        // Gold rails on both edges, each a dark line and a gold one.
+        const rail = ctx.createLinearGradient(0, 0, 0, H);
+        rail.addColorStop(0, '#fff0b0');
+        rail.addColorStop(0.5, '#e0a83e');
+        rail.addColorStop(1, '#fff0b0');
+        for (const rx of [x + 1, x + w - 1]) {
+            ctx.fillStyle = '#1a0a10';
+            ctx.fillRect(rx - 1.2, 0, 2.4, H);
+            ctx.fillStyle = rail;
+            ctx.fillRect(rx - 0.7, 0, 1.4, H);
+        }
+        ctx.fillStyle = 'rgba(200,150,255,0.35)';
+        ctx.fillRect(x + 3, 0, 0.5, H);
+        ctx.fillRect(x + w - 3.5, 0, 0.5, H);
         // A thin gold frame round the whole screen, so both meadows and the console read as one cabinet.
-        ctx.strokeStyle = 'rgba(201,162,74,0.7)';
+        ctx.strokeStyle = 'rgba(224,168,62,0.85)';
         ctx.lineWidth = 1;
         ctx.strokeRect(0.5, 0.5, C.VIEW_W - 1, H - 1);
+        // Violet gems at the console's ends.
+        gemDiamond(ctx, cx, 6, 5, time);
+        gemDiamond(ctx, cx, H - 6, 5, time + 1.5);
 
         // Round number. The top of the console stays clear: on touchscreens the pause
         // and fullscreen-exit buttons sit there.
         ctx.textAlign = 'center';
-        ctx.font = `6px ${ARCADE}`;
-        ctx.fillStyle = '#cbbcf5';
-        ctx.fillText('RD', cx, 98);
-        arcadeText(ctx, String(v.round), cx, 116, 15, ['#ffffff', '#ffe08a', '#ff9a2e'], 'center');
-
-        // Stacked VS with a glow.
-        ctx.save();
-        ctx.shadowColor = '#ff6b8a';
-        ctx.shadowBlur = 8 + 3 * Math.sin(time * 3);
-        arcadeText(ctx, 'V', cx, 146, 12, ['#ffffff', '#ffd1dc', '#ff3d6e'], 'center');
-        arcadeText(ctx, 'S', cx, 160, 12, ['#ffffff', '#ffd1dc', '#ff3d6e'], 'center');
-        ctx.restore();
         ctx.fillStyle = '#ffe7a0';
-        sparkle(ctx, cx, 128, 2 + Math.max(0, Math.sin(time * 2.5)) * 2);
-        sparkle(ctx, cx, 172, 2 + Math.max(0, Math.sin(time * 2.5 + 2)) * 2);
+        sparkle(ctx, cx, 86, 2 + Math.max(0, Math.sin(time * 2.5)) * 1.5);
+        arcadeText(ctx, 'RD', cx, 101, 7, ['#ffffff', '#f2eaff', '#cbbcf5'], 'center');
+        arcadeText(ctx, String(v.round), cx, 120, 16, ['#fffbe0', '#ffd45c', '#e88a1c'], 'center');
+
+        // A winged crest with a violet gem below the round.
+        sweptWing(ctx, cx - 4, 146, 20, -1);
+        sweptWing(ctx, cx + 4, 146, 20, 1);
+        ctx.save();
+        ctx.translate(cx, 144);
+        ctx.scale(0.13, 0.13);
+        frameCrest(ctx, 0, 0, time);
+        ctx.restore();
 
         // Speed meter: the shared tempo, filling from the bottom and running hot.
         const mTop = 192,
             mBot = H - 36,
             mw = 8;
         const k = Math.max(0, Math.min(1, (v.tempo - 1) / (C.TEMPO_MAX - 1)));
-        ctx.fillStyle = 'rgba(10,6,28,0.9)';
+        ctx.fillStyle = 'rgba(8,4,22,0.95)';
         ctx.fillRect(cx - mw / 2, mTop, mw, mBot - mTop);
         const steps = 12;
         const stepH = (mBot - mTop) / steps;
@@ -277,13 +341,18 @@ export class Hud {
                 : 'rgba(246,240,255,0.08)';
             ctx.fillRect(cx - mw / 2 + 1.5, mBot - (i + 1) * stepH + 1, mw - 3, stepH - 1.5);
         }
-        ctx.strokeStyle = 'rgba(201,162,74,0.6)';
-        ctx.lineWidth = 0.7;
-        ctx.strokeRect(cx - mw / 2, mTop, mw, mBot - mTop);
+        const meter = () => {
+            ctx.beginPath();
+            ctx.rect(cx - mw / 2, mTop, mw, mBot - mTop);
+        };
+        goldEdge(ctx, meter, mTop, mBot, undefined, 0.8);
+        ctx.fillStyle = '#ffe7a0';
+        sparkle(ctx, cx, mTop - 12, 2.2);
+        sparkle(ctx, cx, mBot + 14, 2.2);
         ctx.font = `5.5px ${ARCADE}`;
-        ctx.fillStyle = k > 0.66 ? '#ff8a5b' : '#cbbcf5';
-        ctx.fillText('SPD', cx, mBot + 9);
-        ctx.fillText(`${v.tempo.toFixed(1)}`, cx, mTop - 4);
+        ctx.fillStyle = k > 0.66 ? '#ff8a5b' : '#fff3c9';
+        ctx.fillText('SPD', cx, mBot + 8);
+        ctx.fillText(`${v.tempo.toFixed(1)}`, cx, mTop - 3);
         if (v.ping !== undefined) {
             ctx.font = `5px ${ARCADE}`;
             ctx.fillStyle = v.ping > 150 ? '#ff8a5b' : 'rgba(203,188,245,0.8)';
@@ -520,33 +589,56 @@ export class Hud {
         ctx.fillStyle = `rgba(10,6,28,${v.dim ?? 0.45})`;
         ctx.fillRect(0, 0, W, H);
 
-        // The band sweeps open from the centre.
+        // The band sweeps open from the centre: deep violet, gold-ruled, with a magenta glow along its edges and
+        // light swooping across it.
         const open = Math.min(1, age / 0.18);
-        const bandH = (v.extra ? 92 : 74) * (0.2 + 0.8 * easeOut(open));
-        const band = ctx.createLinearGradient(0, cy - bandH / 2, 0, cy + bandH / 2);
-        band.addColorStop(0, 'rgba(29,15,69,0.92)');
-        band.addColorStop(0.5, 'rgba(20,12,52,0.96)');
-        band.addColorStop(1, 'rgba(8,22,44,0.92)');
+        const bandH = (v.extra ? 92 : 76) * (0.2 + 0.8 * easeOut(open));
+        const y0 = cy - bandH / 2,
+            y1 = cy + bandH / 2;
+        const band = ctx.createLinearGradient(0, y0, 0, y1);
+        band.addColorStop(0, 'rgba(58,20,120,0.95)');
+        band.addColorStop(0.5, 'rgba(24,8,58,0.97)');
+        band.addColorStop(1, 'rgba(58,20,120,0.95)');
         ctx.fillStyle = band;
-        ctx.fillRect(0, cy - bandH / 2, W, bandH);
-        ctx.fillStyle = GOLD;
-        ctx.fillRect(0, cy - bandH / 2, W, 1.2);
-        ctx.fillRect(0, cy + bandH / 2 - 1.2, W, 1.2);
-        // Light streaks sliding along the band.
+        ctx.fillRect(0, y0, W, bandH);
         ctx.save();
         ctx.beginPath();
-        ctx.rect(0, cy - bandH / 2, W, bandH);
+        ctx.rect(0, y0, W, bandH);
         ctx.clip();
+        // Swoops of light, drifting slowly.
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 3; i++) {
+            const d = Math.sin(age * 0.8 + i * 2) * 10;
+            ctx.strokeStyle = i === 1 ? 'rgba(255,140,240,0.22)' : 'rgba(170,110,255,0.25)';
+            ctx.lineWidth = 2.5 - i * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(-20, y1 - 4 - i * 6);
+            ctx.bezierCurveTo(W * 0.25, y0 + 6 + d, W * 0.4, y1 - 8, W * 0.5, cy + i * 4);
+            ctx.bezierCurveTo(W * 0.6, y1 - 8, W * 0.75, y0 + 6 - d, W + 20, y1 - 4 - i * 6);
+            ctx.stroke();
+        }
         ctx.fillStyle = 'rgba(255,240,200,0.05)';
         for (let i = 0; i < 4; i++) {
             const sx = ((age * 160 + i * 150) % (W + 120)) - 60;
-            slanted(sx, cy - bandH / 2, 40, bandH, 20)(ctx);
+            slanted(sx, y0, 40, bandH, 20)(ctx);
             ctx.fill();
         }
         ctx.restore();
+        for (const ey of [y0, y1]) {
+            const glow = ctx.createLinearGradient(0, ey - 5, 0, ey + 5);
+            glow.addColorStop(0, 'rgba(255,90,230,0)');
+            glow.addColorStop(0.5, 'rgba(255,110,240,0.55)');
+            glow.addColorStop(1, 'rgba(255,90,230,0)');
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, ey - 5, W, 10);
+            ctx.fillStyle = '#ffd36a';
+            ctx.fillRect(0, ey - 0.7, W, 1.4);
+            ctx.fillStyle = 'rgba(255,240,255,0.9)';
+            ctx.fillRect(W * 0.2, ey - 0.3, W * 0.6, 0.6);
+        }
         if (open < 1) return;
 
-        // Title punches in big, then settles.
+        // Title punches in big, then settles: leaning gold lettering between two gold wings.
         const tAge = age - 0.18;
         const s = tAge < 0.16 ? 1.8 - (tAge / 0.16) * 0.8 : 1 + 0.03 * Math.sin(age * 6);
         const tone = v.tone ?? 'gold';
@@ -556,14 +648,25 @@ export class Hud {
                 : tone === 'blue'
                   ? ['#ffffff', '#bfe8ff', '#4fb8ff']
                   : ['#fffbe0', '#ffd45c', '#ff8a2e'];
-        const ty = cy + (v.sub || v.extra ? -6 : 10);
+        const size = v.size ?? 30;
+        const ty = cy + (v.sub || v.extra ? -6 : size * 0.36);
+        const text = v.title.toUpperCase();
+        ctx.font = `${size}px ${ARCADE}`;
+        const tw = Math.min(W - 40, ctx.measureText(text).width);
         ctx.save();
         ctx.translate(W / 2, ty);
         ctx.scale(s, s);
         ctx.globalAlpha = Math.min(1, tAge / 0.1 + 0.2);
+        if (tw + size * 3.4 < W) {
+            const wy = -size * 0.42,
+                wl = size * 1.15;
+            sweptWing(ctx, -tw / 2 - size * 0.2, wy, wl, -1);
+            sweptWing(ctx, tw / 2 + size * 0.2, wy, wl, 1);
+        }
+        ctx.transform(1, 0, -0.18, 1, 0, 0);
         ctx.shadowColor = tone === 'pink' ? '#ff6b8a' : tone === 'blue' ? '#4fb8ff' : '#ffb43c';
         ctx.shadowBlur = 14;
-        arcadeText(ctx, v.title.toUpperCase(), 0, 0, v.size ?? 30, stops, 'center', W - 40);
+        arcadeText(ctx, text, 0, 0, size, stops, 'center', W - 40);
         ctx.restore();
         if (v.sub) {
             ctx.textAlign = 'center';
@@ -892,4 +995,68 @@ const easeOut = (k: number) => 1 - (1 - k) * (1 - k);
 export function clock(t: number): string {
     const s = Math.floor(t);
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** A gold heart with a dark edge, as on the HUD's plate. */
+function goldHeart(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1.18, 1.18);
+    drawHeart(ctx, 0, 0.3, '#5a2a08');
+    ctx.restore();
+    const g = ctx.createLinearGradient(0, y - 4, 0, y + 4);
+    g.addColorStop(0, '#fff3b0');
+    g.addColorStop(0.5, '#ffd23e');
+    g.addColorStop(1, '#e88a10');
+    drawHeart(ctx, x, y, g);
+}
+
+/** A meadow's fairy as a small round face in a gold ring: her portrait if it has loaded, else her in-game look. */
+function hudFace(ctx: CanvasRenderingContext2D, f: Field, x: number, y: number, r: number): void {
+    const fy = f.fairy;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    const bg = ctx.createRadialGradient(x - r * 0.3, y - r * 0.4, 1, x, y, r);
+    bg.addColorStop(0, fy.color);
+    bg.addColorStop(1, shade(fy.color, 0.3));
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.clip();
+    const p = fy.portrait;
+    if (p && p.img.complete && p.img.naturalWidth > 0) {
+        const [fx, fyy, fr] = p.face;
+        ctx.drawImage(p.img, fx - fr, fyy - fr, fr * 2, fr * 2, x - r, y - r, r * 2, r * 2);
+    } else drawFairy(ctx, fy, x, y + r * 0.15, (r * 2) / 33, 0);
+    ctx.restore();
+    const ring = () => {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+    };
+    goldEdge(ctx, ring, y - r, y + r, undefined, 1.3);
+}
+
+/** A small violet gem in a gold diamond setting, glinting now and then. */
+function gemDiamond(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, t: number): void {
+    const d = (k: number) => {
+        ctx.beginPath();
+        ctx.moveTo(x, y - k * 1.3);
+        ctx.lineTo(x + k, y);
+        ctx.lineTo(x, y + k * 1.3);
+        ctx.lineTo(x - k, y);
+        ctx.closePath();
+    };
+    goldEdge(ctx, () => d(r), y - r * 1.3, y + r * 1.3, undefined, 1);
+    const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.4, 0.3, x, y, r);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.45, '#e2c8ff');
+    g.addColorStop(1, '#8a4ad8');
+    ctx.fillStyle = g;
+    d(r * 0.8);
+    ctx.fill();
+    const k = Math.max(0, Math.sin(t * 1.7));
+    if (k > 0.6) {
+        ctx.fillStyle = `rgba(255,255,255,${(k - 0.6) * 2})`;
+        sparkle(ctx, x, y, r * 1.6);
+    }
 }
